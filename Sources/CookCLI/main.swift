@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import CookInterpreter
+import CookInSwift
 
 if CommandLine.arguments.count == 2 {
     let recipe = try String(contentsOfFile: CommandLine.arguments[1], encoding: String.Encoding.utf8)

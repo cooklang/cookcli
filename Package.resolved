@@ -1,0 +1,25 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "CookInSwift",
+        "repositoryURL": "https://github.com/cooklang/CookInSwift",
+        "state": {
+          "branch": null,
+          "revision": "5004e61e9adcd1bb7742264cbbdd1ecaa41df1a8",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "package": "swift-argument-parser",
+        "repositoryURL": "https://github.com/apple/swift-argument-parser",
+        "state": {
+          "branch": null,
+          "revision": "831ed5e860a70e745bc1337830af4786b2576881",
+          "version": "0.4.1"
+        }
+      }
+    ]
+  },
+  "version": 1
+}
