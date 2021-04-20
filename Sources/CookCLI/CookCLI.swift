@@ -36,6 +36,31 @@ struct CookCLI: ParsableCommand {
         }
     }
 
+    struct ShoppingList: ParsableCommand {
+
+        @Argument(help: "List all ingredients from recipes")
+        var files: [String]
+
+        // MARK: ParsableCommand
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "List all ingredients from recipes")
+
+        func run() throws {
+            var ingredientTable = IngredientTable()
+
+            try files.forEach { file in
+                let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
+                let parser = Parser(recipe)
+                let node = parser.parse()
+                let analyzer = SemanticAnalyzer()
+                let parsed = analyzer.analyze(node: node)
+
+                ingredientTable = ingredientTable + parsed.ingredientsTable
+            }
+
+            print(ingredientTable.description)
+        }
+    }
+
     struct Version: ParsableCommand {
         func run() throws {
             print("v0.0.1 – in food we trust")
@@ -44,9 +69,10 @@ struct CookCLI: ParsableCommand {
 
     // MARK: ParsableCommand
     static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A Swift command-line tool to manage recipes",
-        discussion: "Requires a ",
+        discussion: "Requires a thing",
         subcommands: [
             Read.self,
+            ShoppingList.self,
             Version.self
         ]
     )
