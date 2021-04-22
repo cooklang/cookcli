@@ -39,13 +39,24 @@ struct CookCLI: ParsableCommand {
     struct ShoppingList: ParsableCommand {
 
         @Argument(help: "List all ingredients from recipes")
-        var files: [String]
+        var filesOrDirectory: [String]
 
         // MARK: ParsableCommand
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "List all ingredients from recipes")
 
         func run() throws {
             var ingredientTable = IngredientTable()
+
+            var files: [String]
+
+            if filesOrDirectory.count == 1 && directoryExistsAtPath(filesOrDirectory[0]) {
+                let directory = filesOrDirectory[0]
+                let directoryContents = try FileManager.default.contentsOfDirectory(atPath: directory)
+                files = directoryContents.filter{ $0.hasSuffix("cook") }.map { "\(directory)/\($0)" }
+            } else {
+                files = filesOrDirectory
+            }
+
 
             try files.forEach { file in
                 let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
@@ -57,7 +68,16 @@ struct CookCLI: ParsableCommand {
                 ingredientTable = ingredientTable + parsed.ingredientsTable
             }
 
-            print(ingredientTable.description)
+            for (ingredient, amounts) in ingredientTable.ingredients {
+                print(ingredient.padding(toLength: 30, withPad: " ", startingAt: 0), "\t", amounts.description)
+            }
+
+        }
+
+        fileprivate func directoryExistsAtPath(_ path: String) -> Bool {
+            var isDirectory = ObjCBool(true)
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            return exists && isDirectory.boolValue
         }
     }
 
@@ -76,4 +96,6 @@ struct CookCLI: ParsableCommand {
             Version.self
         ]
     )
+
+
 }
