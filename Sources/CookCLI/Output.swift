@@ -10,17 +10,26 @@ import CookInSwift
 
 struct TextRecipePrinter {
 
-    func print(_ recipe: SemanticRecipe) -> [String] {
+    func print(_ recipe: SemanticRecipe, onlyIngredients: Bool, onlySteps: Bool) -> [String] {
         var lines: [String] = []
 
-        lines.append("===========================")
-        lines.append("Ingredients")
-        lines.append(recipe.ingredientsTable.description)
-        lines.append("============================")
-        lines.append("Steps")
+        if (!onlySteps) {
+            lines.append("Ingredients")
+            lines.append("+++++++++++")
+            lines.append(recipe.ingredientsTable.description)
+        }
 
-        for (index, step) in recipe.steps.enumerated() {
-            lines.append("\(index): \(step.directions)")
+        if (!onlyIngredients && !onlySteps) {
+            lines.append("")
+        }
+
+        if (!onlyIngredients) {
+            lines.append("Steps")
+            lines.append("+++++")
+
+            for (index, step) in recipe.steps.enumerated() {
+                lines.append("\(index): \(step.directions.map{ $0.description }.joined())")
+            }
         }
 
         return lines

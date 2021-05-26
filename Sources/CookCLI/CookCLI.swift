@@ -20,8 +20,10 @@ struct CookCLI: ParsableCommand {
         // MARK: ParsableCommand
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Read cook file and dispay it.")
 
-        func run() throws {
+        @Flag var onlyIngredients = false
+        @Flag var onlySteps = false
 
+        func run() throws {
             let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
             let parser = Parser(recipe)
             let node = parser.parse()
@@ -30,7 +32,7 @@ struct CookCLI: ParsableCommand {
 
             let printer = TextRecipePrinter()
 
-            printer.print(parsed).forEach { line in
+            printer.print(parsed, onlyIngredients: onlyIngredients, onlySteps: onlySteps).forEach { line in
                 print(line)
             }
         }
