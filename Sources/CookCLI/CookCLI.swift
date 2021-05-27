@@ -7,35 +7,45 @@
 
 import Foundation
 import ArgumentParser
-
+import App
 import CookInSwift
 
 struct CookCLI: ParsableCommand {
 
-    struct Read: ParsableCommand {
+    struct Recipe: ParsableCommand {
+        struct Read: ParsableCommand {
 
-        @Argument(help: "Set cook file")
-        var file: String
+            @Argument(help: "Set cook file")
+            var file: String
 
-        // MARK: ParsableCommand
-        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Read cook file and dispay it.")
+            // MARK: ParsableCommand
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Read cook file and dispay it.")
 
-        @Flag var onlyIngredients = false
-        @Flag var onlySteps = false
+            @Flag var onlyIngredients = false
+            @Flag var onlySteps = false
 
-        func run() throws {
-            let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
-            let parser = Parser(recipe)
-            let node = parser.parse()
-            let analyzer = SemanticAnalyzer()
-            let parsed = analyzer.analyze(node: node)
+            func run() throws {
+                let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
+                let parser = Parser(recipe)
+                let node = parser.parse()
+                let analyzer = SemanticAnalyzer()
+                let parsed = analyzer.analyze(node: node)
 
-            let printer = TextRecipePrinter()
+                let printer = TextRecipePrinter()
 
-            printer.print(parsed, onlyIngredients: onlyIngredients, onlySteps: onlySteps).forEach { line in
-                print(line)
+                printer.print(parsed, onlyIngredients: onlyIngredients, onlySteps: onlySteps).forEach { line in
+                    print(line)
+                }
             }
         }
+
+        // MARK: ParsableCommand
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A Swift command-line tool to manage recipes",
+            discussion: "Recipe",
+            subcommands: [
+                Read.self
+            ]
+        )
     }
 
     struct ShoppingList: ParsableCommand {
@@ -83,6 +93,12 @@ struct CookCLI: ParsableCommand {
         }
     }
 
+    struct Server: ParsableCommand {
+        func run() throws {
+            try startServer()
+        }
+    }
+
     struct Version: ParsableCommand {
         func run() throws {
             print("v0.0.1 – in food we trust")
@@ -93,8 +109,9 @@ struct CookCLI: ParsableCommand {
     static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A Swift command-line tool to manage recipes",
         discussion: "Requires a thing",
         subcommands: [
-            Read.self,
+            Recipe.self,
             ShoppingList.self,
+            Server.self,
             Version.self
         ]
     )
