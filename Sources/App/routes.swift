@@ -2,7 +2,7 @@ import Foundation
 import Vapor
 
 func routes(_ app: Application) throws {
-    app.get { req -> String in
+    app.get { req -> EventLoopFuture<View> in
         let pwd = Environment.get("PWD")!
         let url = URL(fileURLWithPath: pwd)
 
@@ -18,10 +18,10 @@ func routes(_ app: Application) throws {
             }
         }
 
-        return files.joined(separator: "\n")
+        return req.view.render("hello", ["files": files])
     }
 
-    app.get("hello") { req -> String in
-        return "Hello, world!"
+    app.get("hello") { req -> EventLoopFuture<View> in
+        return req.view.render("hello", ["name": "Leaf"])
     }
 }

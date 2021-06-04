@@ -7,22 +7,34 @@
 
 import Foundation
 import ArgumentParser
-import App
+//import App
 import CookInSwift
 
-struct CookCLI: ParsableCommand {
+struct Cook: ParsableCommand {
+    enum OutputFormat: String, ExpressibleByArgument {
+        case text, json, yaml
+    }
 
     struct Recipe: ParsableCommand {
         struct Read: ParsableCommand {
 
-            @Argument(help: "Set cook file")
+            @Argument(help: "A .cook file")
             var file: String
 
             // MARK: ParsableCommand
-            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Read cook file and dispay it.")
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Parse and print a CookLang recipe file")
 
-            @Flag var onlyIngredients = false
-            @Flag var onlySteps = false
+            @Option(help: "Set the output format to json or yaml (default text) (TODO)")
+            var outputFormat: OutputFormat?
+
+            @Flag(help: "Print only the steps section of the output")
+            var onlySteps = false
+
+            @Flag(help: "Print only the ingredients section of the output")
+            var onlyIngredients = false
+
+            @Flag(help: "Print a machine-friendly version of the output (TODO)")
+            var compact = false
 
             func run() throws {
                 let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
@@ -39,22 +51,72 @@ struct CookCLI: ParsableCommand {
             }
         }
 
+        struct Validate: ParsableCommand {
+
+            @Argument(help: "A .cook file")
+            var file: String
+
+            // MARK: ParsableCommand
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Check for syntax errors in one or more CookLang recipe files (TODO)")
+
+            func run() throws {
+
+            }
+        }
+
+        struct Prettify: ParsableCommand {
+
+            @Argument(help: "A .cook file")
+            var file: String
+
+            // MARK: ParsableCommand
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Edit a CookLang recipe file for style consistency (TODO)")
+
+            func run() throws {
+
+            }
+        }
+
+        struct Image: ParsableCommand {
+
+            @Argument(help: "A .cook file")
+            var file: String
+
+            // MARK: ParsableCommand
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from upsplash.com to match the recipe title (TODO)")
+
+            func run() throws {
+
+            }
+        }
+
         // MARK: ParsableCommand
-        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A Swift command-line tool to manage recipes",
-            discussion: "Recipe",
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Manage recipes and recipe files",
             subcommands: [
-                Read.self
+                Read.self,
+                Validate.self,
+                Prettify.self,
+                Image.self,
             ]
         )
     }
 
     struct ShoppingList: ParsableCommand {
 
-        @Argument(help: "List all ingredients from recipes")
+        @Argument(help: "File or directory with .cook files")
         var filesOrDirectory: [String]
 
+        @Option(help: "Set the output format to json or yaml (default text) (TODO)")
+        var outputFormat: OutputFormat?
+
+        @Flag(help: "Print only the ingredients section of the output (TODO)")
+        var onlyIngredients = false
+
+        @Flag(help: "Print a machine-friendly version of the output (TODO)")
+        var compact = false
+
         // MARK: ParsableCommand
-        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "List all ingredients from recipes")
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Create a shopping list")
 
         func run() throws {
             var ingredientTable = IngredientTable()
@@ -94,24 +156,57 @@ struct CookCLI: ParsableCommand {
     }
 
     struct Server: ParsableCommand {
+
+        @Option(name: .shortAndLong, help: "Set the port on which the webserver should listen (default 8080) (TODO)")
+        var port: Int = 8080
+
+        @Option(name: .shortAndLong, help: "Set the IP to which the server should bind (default 127.0.0.1) (TODO)")
+        var bind: String = "127.0.0.1"
+
+        // MARK: ParsableCommand
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Run a webserver to serve your recipes on the web (TODO)")
+
         func run() throws {
-            try startServer()
+//            try startServer()
+        }
+    }
+
+    struct Fetch: ParsableCommand {
+
+        // MARK: ParsableCommand
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Pull recipes from the community recipe repository (TODO)")
+
+        func run() throws {
+
         }
     }
 
     struct Version: ParsableCommand {
+
+        // MARK: ParsableCommand
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Show the CookCLI version information (TODO)")
+
         func run() throws {
             print("v0.0.1 – in food we trust")
         }
     }
 
+    @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings (TODO)")
+    var aisle: String?
+
+    @Option(name: .shortAndLong, help: "Specify a units.conf file to override units default settings (TODO)")
+    var units: String?
+
+    @Option(name: .shortAndLong, help: "Specify an inflection.conf file to override default inflection settings (TODO)")
+    var inflection: String?
+
     // MARK: ParsableCommand
-    static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A Swift command-line tool to manage recipes",
-        discussion: "Requires a thing",
+    static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A toolkit for command-line interaction with CookLang text files",
         subcommands: [
             Recipe.self,
             ShoppingList.self,
             Server.self,
+            Fetch.self,
             Version.self
         ]
     )

@@ -6,4 +6,4 @@
 //  Copyright © 2020 Alexey Dubovskoy. All rights reserved.
 //
 
-CookCLI.main()
+Cook.main()

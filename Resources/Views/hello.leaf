@@ -1,0 +1,10 @@
+#extend("base"):
+    #export("body"):
+        Files:
+        <ul class="bold">
+        #for(file in files):
+            <li>#(file)</li>
+        #endfor
+        </ul>
+    #endexport
+#endextend
