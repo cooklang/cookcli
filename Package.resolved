@@ -2,12 +2,30 @@
   "object": {
     "pins": [
       {
+        "package": "Ambassador",
+        "repositoryURL": "https://github.com/envoy/Ambassador.git",
+        "state": {
+          "branch": null,
+          "revision": "447cf56f692999153bd261b1775ea4a58f7f7be9",
+          "version": "4.0.5"
+        }
+      },
+      {
         "package": "CookInSwift",
         "repositoryURL": "https://github.com/cooklang/CookInSwift",
         "state": {
           "branch": null,
           "revision": "0f3ad5044e3ac36adf8a40d341264e45d82e4d54",
           "version": "1.2.1"
+        }
+      },
+      {
+        "package": "Embassy",
+        "repositoryURL": "https://github.com/envoy/Embassy.git",
+        "state": {
+          "branch": null,
+          "revision": "065b6ce52596bd06b867cfe17fea2c56dcb53b30",
+          "version": "4.1.3"
         }
       },
       {
