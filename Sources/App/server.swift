@@ -11,8 +11,6 @@ import Foundation
 
 public func startServer() throws {
 
-
-
     let loop = try! SelectorEventLoop(selector: try! SelectSelector())
     let router = Router()
     let server = DefaultHTTPServer(eventLoop: loop, interface: "::", port: 9080, app: router.app)
