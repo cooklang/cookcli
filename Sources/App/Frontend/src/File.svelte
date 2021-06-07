@@ -1,14 +1,12 @@
 <script>
-    export let name;
-    $: type = name.slice(name.lastIndexOf('.') + 1);
+    export let message = 'Default message';
 </script>
 
-<span style="background-image: url(tutorial/icons/{type}.svg)">{name}</span>
-
 <style>
-    span {
-        padding: 0 0 0 1.5em;
-        background: 0 0.1em no-repeat;
-        background-size: 1em 1em;
+    h2 {
+        font-size: 2rem;
+        text-align: center;
     }
 </style>
+
+<h2>🎉 {message} 🍾</h2>
