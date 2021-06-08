@@ -1,7 +1,8 @@
 <script>
+    import { onMount } from 'svelte';
     import Folder from './Folder.svelte';
     import File from './File.svelte';
-    import {fileTree, recipe} from './data.js';
+    import {fetchFileTree, fetchRecipe} from './data.js';
     import { bind } from 'svelte-simple-modal';
     import Modal from 'svelte-simple-modal';
     import Recipe from './Recipe.svelte';
@@ -10,7 +11,8 @@
 
     let path = [];
     let selected;
-    let currentTree = fileTree;
+    let fileTree;
+    let currentTree;
 
     function navigate(path) {
         currentTree = fileTree;
@@ -19,6 +21,11 @@
             currentTree = currentTree[chunk]["children"];
         });
     }
+
+    onMount(async () => {
+        fileTree = await fetchFileTree();
+        currentTree = fileTree
+    });
 
     function up() {
         path = path.slice(0, -1);
@@ -32,7 +39,8 @@
         navigate(path);
     }
 
-    function showRecipe(path) {
+    async function showRecipe(path) {
+        let recipe = await fetchRecipe(path)
         modal = bind(Recipe, { recipe: recipe })
     }
 </script>
@@ -44,15 +52,19 @@
         <div on:click={up}>...</div>
     {/if}
 
-    {#each Object.entries(currentTree) as [name, file] (name)}
-        {#if file.type === 'directory'}
-            <div on:click={() => diveIn(name) }>[{name}]</div>
-        {/if}
+    {#if currentTree}
 
-        {#if file.type === 'file'}
-            <div on:click={() => showRecipe([...path, file]) }>{name}</div>
-        {/if}
-    {/each}
+        {#each Object.entries(currentTree) as [name, file] (name)}
+            {#if file.type === 'directory'}
+                <div on:click={() => diveIn(name) }>[{name}]</div>
+            {/if}
+
+            {#if file.type === 'file'}
+                <div on:click={() => showRecipe([...path, name]) }>{name}</div>
+            {/if}
+        {/each}
+
+    {/if}
 </div>
 
 <style>
