@@ -23,8 +23,9 @@
     }
 
     onMount(async () => {
-        fileTree = await fetchFileTree();
-        currentTree = fileTree
+        let fullTree = await fetchFileTree();
+        fileTree = fullTree["children"]
+        currentTree = fullTree["children"]
     });
 
     function up() {
@@ -53,12 +54,13 @@
     {/if}
 
     {#if currentTree}
-
         {#each Object.entries(currentTree) as [name, file] (name)}
             {#if file.type === 'directory'}
                 <div on:click={() => diveIn(name) }>[{name}]</div>
             {/if}
+        {/each}
 
+        {#each Object.entries(currentTree) as [name, file] (name)}
             {#if file.type === 'file'}
                 <div on:click={() => showRecipe([...path, name]) }>{name}</div>
             {/if}
