@@ -7,7 +7,7 @@
 
 import Foundation
 import ArgumentParser
-import App
+import Server
 import CookInSwift
 
 struct Cook: ParsableCommand {
@@ -167,7 +167,8 @@ struct Cook: ParsableCommand {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Run a webserver to serve your recipes on the web (TODO)")
 
         func run() throws {
-            try startServer()
+            let server = WebServer()
+            try server.start()
         }
     }
 

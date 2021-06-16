@@ -21,7 +21,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "App",
+            name: "Server",
             dependencies: [.product(name: "Embassy", package: "Embassy"), .product(name: "Ambassador", package: "Ambassador")],
             exclude: ["Frontend"],
             swiftSettings: [
@@ -32,8 +32,20 @@ let package = Package(
             ]
         ),
         .target(
+            name: "ShoppingList",
+            dependencies: ["CookInSwift"]
+        ),
+        .target(
+            name: "Catalog",
+            dependencies: ["CookInSwift"]
+        ),
+        .target(
             name: "CookCLI",
-            dependencies: ["CookInSwift", .target(name: "App"), .product(name: "ArgumentParser", package: "swift-argument-parser")]),
+            dependencies: ["CookInSwift",
+                           .target(name: "Server"),
+                           .target(name: "ShoppingList"),
+                           .target(name: "Catalog"),
+                           .product(name: "ArgumentParser", package: "swift-argument-parser")]),
         .testTarget(
             name: "CookCLITests",
             dependencies: ["CookCLI"]),
