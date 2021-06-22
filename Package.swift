@@ -18,11 +18,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.0.1"),
         .package(url: "https://github.com/envoy/Embassy.git", from: "4.0.0"),
         .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "4.0.6"),
     ],
     targets: [
         .target(
             name: "Server",
-            dependencies: [.product(name: "Embassy", package: "Embassy"), .product(name: "Ambassador", package: "Ambassador")],
+            dependencies: [.product(name: "Embassy", package: "Embassy"),
+                           .product(name: "Ambassador", package: "Ambassador"),
+                           .target(name: "Catalog")],
             exclude: ["Frontend"],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of
@@ -42,6 +45,7 @@ let package = Package(
         .target(
             name: "CookCLI",
             dependencies: ["CookInSwift",
+                           "Yams",
                            .target(name: "Server"),
                            .target(name: "ShoppingList"),
                            .target(name: "Catalog"),

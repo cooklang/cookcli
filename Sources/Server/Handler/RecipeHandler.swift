@@ -8,6 +8,7 @@
 import Foundation
 
 import CookInSwift
+import Catalog
 
 struct RecipeHandler {
 
@@ -25,28 +26,8 @@ struct RecipeHandler {
         let analyzer = SemanticAnalyzer()
         let parsed = analyzer.analyze(node: node)
 
-        var ingredients: [[String: String]] = []
-        var cookware: [[String: String]] = []
-        var steps: [[String: String]] = []
-
-        parsed.ingredientsTable.ingredients.forEach { ingredient in
-            ingredients.append(["name": ingredient.key, "amount": ingredient.value.description])
-        }
-
-        parsed.equipment.forEach { equipment in
-            cookware.append(["name": equipment.name])
-        }
-
-        parsed.steps.forEach { step in
-            steps.append(["description": step.directions.map{ $0.description }.joined()])
-        }
-
         do {
-            let jsonData = try JSONEncoder().encode([
-                "ingredients": ingredients,
-                "cookware": cookware,
-                "steps": steps
-            ])
+            let jsonData = try JSONEncoder().encode(encodeRecipe(recipe: parsed))
             let jsonString = String(data: jsonData, encoding: .utf8)!
 
             sendData(Data(jsonString.utf8))

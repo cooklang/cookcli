@@ -10,10 +10,12 @@ import ArgumentParser
 import Server
 import CookInSwift
 
+enum OutputFormat: String, ExpressibleByArgument {
+    case text, json, yaml
+}
+
+
 struct Cook: ParsableCommand {
-    enum OutputFormat: String, ExpressibleByArgument {
-        case text, json, yaml
-    }
 
     struct Recipe: ParsableCommand {
         struct Read: ParsableCommand {
@@ -25,29 +27,19 @@ struct Cook: ParsableCommand {
             static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Parse and print a CookLang recipe file")
 
             @Option(help: "Set the output format to json or yaml (default text) (TODO)")
-            var outputFormat: OutputFormat?
-
-            @Flag(help: "Print only the steps section of the output")
-            var onlySteps = false
+            var outputFormat: OutputFormat = .text
 
             @Flag(help: "Print only the ingredients section of the output")
             var onlyIngredients = false
 
-            @Flag(help: "Print a machine-friendly version of the output (TODO)")
-            var compact = false
-
-            func run() throws {
+            func run() throws {                
                 let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
                 let parser = Parser(recipe)
                 let node = parser.parse()
                 let analyzer = SemanticAnalyzer()
                 let parsed = analyzer.analyze(node: node)
 
-                let printer = TextRecipePrinter()
-
-                printer.print(parsed, onlyIngredients: onlyIngredients, onlySteps: onlySteps).forEach { line in
-                    print(line)
-                }
+                parsed.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
             }
         }
 
@@ -202,7 +194,7 @@ struct Cook: ParsableCommand {
     var inflection: String?
 
     // MARK: ParsableCommand
-    static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A toolkit for command-line interaction with CookLang text files",
+    static var configuration: CommandConfiguration = CommandConfiguration(abstract: "A toolkit for command-line interaction with CookLang text files. Documentation https://cooklang.org/cli/help/. Issues https://github.com/CookLang/CookCLI.",
         subcommands: [
             Recipe.self,
             ShoppingList.self,
