@@ -13,6 +13,8 @@ struct TextRecipePrinter {
     func print(_ recipe: SemanticRecipe, onlyIngredients: Bool, onlySteps: Bool) -> [String] {
         var lines: [String] = []
 
+        lines.append(recipe.metadata.description)
+
         if (!onlySteps) {
             lines.append("Ingredients")
             lines.append("+++++++++++")
