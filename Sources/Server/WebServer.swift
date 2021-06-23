@@ -13,7 +13,7 @@ public struct WebServer {
 
     public func start() throws {
 
-        let loop = try SelectorEventLoop(selector: try! SelectSelector())
+        let loop = try SelectorEventLoop(selector: try SelectSelector())
         let router = Router()
 
         let server = DefaultHTTPServer(eventLoop: loop, port: 9080, app: router.app)

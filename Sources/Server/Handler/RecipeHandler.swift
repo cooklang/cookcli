@@ -20,13 +20,13 @@ struct RecipeHandler {
         let pwd = FileManager.default.currentDirectoryPath
         let file = "\(pwd)/samples/\(path).cook"
 
-        let recipe = try! String(contentsOfFile: file, encoding: String.Encoding.utf8)
-        let parser = Parser(recipe)
-        let node = parser.parse()
-        let analyzer = SemanticAnalyzer()
-        let parsed = analyzer.analyze(node: node)
-
         do {
+            let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
+            let parser = Parser(recipe)
+            let node = parser.parse()
+            let analyzer = SemanticAnalyzer()
+            let parsed = analyzer.analyze(node: node)
+            
             let jsonData = try JSONEncoder().encode(encodeRecipe(recipe: parsed))
             let jsonString = String(data: jsonData, encoding: .utf8)!
 

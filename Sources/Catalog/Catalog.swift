@@ -8,12 +8,6 @@
 import Foundation
 import CookInSwift
 
-// to get
-struct CookFileCatalog {
-
-    
-}
-
 
 public func encodeRecipe(recipe: SemanticRecipe) -> [String : [[String : String]]] {
     var ingredients: [[String: String]] = []
