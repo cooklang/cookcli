@@ -15,8 +15,8 @@ extension Cook {
     struct Recipe: ParsableCommand {
         struct Read: ParsableCommand {
 
-            @Argument(help: "A .cook file")
-            var file: String
+            @Argument(help: "A .cook file or STDIN")
+            var recipeFile: String?
 
             // MARK: ParsableCommand
             static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Parse and print a CookLang recipe file")
@@ -28,13 +28,33 @@ extension Cook {
             var onlyIngredients = false
 
             func run() throws {
+                var recipe: String
+
+                if let file = recipeFile {
+                    if let r = try? String(contentsOfFile: file, encoding: String.Encoding.utf8) {
+                        recipe = r
+                    } else {
+                        print("Can't read file \(file)", to: &errStream)
+
+                        throw ExitCode.failure
+                    }
+                } else {
+                    if let r = readSTDIN() {
+                        recipe = r
+                    }  else {
+                        print("Path for community recipe not provided, set recipe name or pass in STDIN", to: &errStream)
+
+                        throw ExitCode.failure
+                    }
+                }
+
                 do {
-                    let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
                     let parsed = parseFile(recipe: recipe)
 
                     try parsed.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
                 } catch {
                     print(error, to: &errStream)
+
                     throw ExitCode.failure
                 }
 
@@ -82,11 +102,13 @@ extension Cook {
 
                 guard  let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] else {
                     print("Couldn't find COOK_UNSPLASH_ACCESS_KEY environment variable, please registry for free at https://unsplash.com/documentation#registering-your-application", to: &errStream)
+
                     throw ExitCode.failure
                 }
 
                 guard let urls = try? URL(string: randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)) else {
                     print("Error downloading information about random image from Unsplash", to: &errStream)
+
                     throw ExitCode.failure
                 }
 
@@ -102,6 +124,7 @@ extension Cook {
                     try data.write(to: destinationPath)
                 } catch {
                     print(error, to: &errStream)
+
                     throw ExitCode.failure
                 }
             }
@@ -174,11 +197,7 @@ func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String 
 
     if imageUrl != nil {
         return imageUrl!
-    } else {
+    } else {        
         throw ImageFetcherError.errorGettingImage
     }
-
-
 }
-
-

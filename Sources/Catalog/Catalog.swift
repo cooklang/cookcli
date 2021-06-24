@@ -12,7 +12,6 @@ import CookInSwift
 public func encodeRecipe(_ recipe: SemanticRecipe) -> [String : [[String : String]]] {
     var cookware: [[String: String]] = []
     var steps: [[String: String]] = []
-    var ingredients: [[String: String]] = encodeIngredients(recipe.ingredientsTable)
 
     recipe.equipment.forEach { equipment in
         cookware.append(["name": equipment.name])
@@ -28,7 +27,7 @@ public func encodeRecipe(_ recipe: SemanticRecipe) -> [String : [[String : Strin
     }
 
     return [
-        "ingredients": ingredients,
+        "ingredients": encodeIngredients(recipe.ingredientsTable),
         "cookware": cookware,
         "steps": steps
     ]

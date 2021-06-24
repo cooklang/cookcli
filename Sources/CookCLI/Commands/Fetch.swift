@@ -23,12 +23,13 @@ extension Cook {
             if let c = communityRecipePath {
                 path = c
             } else {
-                guard let input = readSTDIN() else {
+                guard let c = readSTDIN() else {
                     print("Path for community recipe not provided, set recipe name or pass in STDIN", to: &errStream)
+
                     throw ExitCode.failure
                 }
 
-                path = input
+                path = c
             }
 
             if !path.hasSuffix(".cook") {
@@ -39,11 +40,13 @@ extension Cook {
                   let url = URL(string: raw) else {
 
                 print("Invalid path", to: &errStream)
+
                 throw ExitCode.failure
             }
 
             guard let data = try? Data(contentsOf: url) else {
                 print("Error downloading recipe from \(url), please check that path is correct", to: &errStream)
+
                 throw ExitCode.failure
             }
 

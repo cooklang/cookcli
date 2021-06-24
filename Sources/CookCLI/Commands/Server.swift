@@ -28,6 +28,7 @@ extension Cook {
                 try server.start()
             } catch {
                 print(error, to: &errStream)
+                
                 throw ExitCode.failure
             }
         }

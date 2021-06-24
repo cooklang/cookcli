@@ -20,7 +20,7 @@ extension Cook {
         @Option(help: "Set the output format to json or yaml (default text)")
         var outputFormat: OutputFormat = .text
 
-        @Flag(help: "Print only the ingredients section of the output (TODO)")
+        @Flag(help: "Print only the ingredients section of the output")
         var onlyIngredients = false
 
         // MARK: ParsableCommand
@@ -29,6 +29,7 @@ extension Cook {
         func run() throws {
             guard let files = try? listCookFiles(filesOrDirectory) else {
                 print("Error getting files", to: &errStream)
+
                 throw ExitCode.failure
             }
 
