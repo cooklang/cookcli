@@ -90,7 +90,7 @@ extension Cook {
 
                     let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
 
-                    print("Saving image to \(destinationPath)")
+                    print("Saving image to \(destinationPath)".removingPercentEncoding!)
 
                     try data?.write(to: destinationPath)
                 } else {

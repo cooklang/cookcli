@@ -18,6 +18,20 @@ public struct StderrOutputStream: TextOutputStream {
 }
 public var errStream = StderrOutputStream()
 
+func readSTDIN () -> String? {
+    var input: String?
+
+    while let line = readLine() {
+        if input == nil {
+            input = line
+        } else {
+            input! += "\n" + line
+        }
+    }
+
+    return input
+}
+
 enum OutputFormat: String, ExpressibleByArgument {
     case text, json, yaml
 }
