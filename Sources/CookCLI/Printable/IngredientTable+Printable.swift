@@ -1,8 +1,8 @@
 //
-//  Output.swift
+//  File.swift
+//  
 //
-//
-//  Created by Alexey Dubovskoy on 19/04/2021.
+//  Created by Alexey Dubovskoy on 24/06/2021.
 //
 
 import Foundation
@@ -10,12 +10,13 @@ import CookInSwift
 import Yams
 import Catalog
 
-extension SemanticRecipe {
+
+extension IngredientTable {
 
     public enum Error: Swift.Error {
         case invalidJSON
     }
-    
+
     func print(onlyIngredients: Bool, outputFormat: OutputFormat) throws {
         switch outputFormat {
         case .text:
@@ -34,7 +35,7 @@ extension SemanticRecipe {
     }
 
     private func printJson() throws {
-        let jsonData = try JSONEncoder().encode(encodeRecipe(self))
+        let jsonData = try JSONEncoder().encode(encodeIngredients(self))
 
         guard let jsonString = String(data: jsonData, encoding: .utf8) else {
             throw Error.invalidJSON
@@ -44,7 +45,7 @@ extension SemanticRecipe {
     }
 
     private func printYaml() throws {
-        let yamlData = try YAMLEncoder().encode(encodeRecipe(self))
+        let yamlData = try YAMLEncoder().encode(encodeIngredients(self))
 
         Swift.print(yamlData.utf8)
     }
@@ -53,45 +54,22 @@ extension SemanticRecipe {
         var lines: [PrintableLine] = []
         let fullOutput = !onlyIngredients
 
-        if (!metadata.isEmpty && fullOutput) {
-            lines.append(.text("Metadata:"))
-            lines.append(.metadata(metadata, OFFSET_UNIT))
-            lines.append(.empty)
-        }
-
         if (fullOutput) {
             lines.append(.text("Ingredients:"))
         }
 
         let offset = onlyIngredients ? 0 : OFFSET_UNIT
-        lines.append(.ingredients(ingredientsTable, offset))
+        lines.append(.ingredients(self, offset))
 
         if (fullOutput) {
             lines.append(.empty)
-        }
-
-        if (!equipment.isEmpty && fullOutput) {
-            lines.append(.text("Cookware:"))
-            equipment.forEach { e in
-                lines.append(.cookware(e, OFFSET_UNIT))
-            }
-            lines.append(.empty)
-        }
-
-        if (fullOutput) {
-            lines.append(.text("Steps:"))
-
-            let offset = OFFSET_UNIT
-            for (index, step) in steps.enumerated() {
-                lines.append(.step(step, index, offset))
-            }
         }
 
         return lines
     }
 }
 
-extension SemanticRecipe: Printable {
+extension IngredientTable: Printable {
     func printableLines() -> [PrintableLine] {
         printableLines(onlyIngredients: false)
     }

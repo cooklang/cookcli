@@ -8,6 +8,8 @@
 import Foundation
 import CookInSwift
 
+let OFFSET_UNIT = 4
+
 protocol Printable {
     func printableLines() -> [PrintableLine]
 }

@@ -23,8 +23,13 @@ extension Cook {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Run a webserver to serve your recipes on the web (TODO)")
 
         func run() throws {
-            let server = WebServer()
-            try server.start()
+            do {
+                let server = WebServer()
+                try server.start()
+            } catch {
+                print(error, to: &errStream)
+                throw ExitCode.failure
+            }
         }
     }
 }

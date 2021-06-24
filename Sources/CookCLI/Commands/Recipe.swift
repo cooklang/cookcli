@@ -8,6 +8,7 @@
 import Foundation
 import ArgumentParser
 import CookInSwift
+import Catalog
 
 extension Cook {
 
@@ -29,12 +30,9 @@ extension Cook {
             func run() throws {
                 do {
                     let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
-                    let parser = Parser(recipe)
-                    let node = parser.parse()
-                    let analyzer = SemanticAnalyzer()
-                    let parsed = analyzer.analyze(node: node)
+                    let parsed = parseFile(recipe: recipe)
 
-                    parsed.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
+                    try parsed.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
                 } catch {
                     print(error, to: &errStream)
                     throw ExitCode.failure
@@ -75,26 +73,36 @@ extension Cook {
             var file: String
 
             // MARK: ParsableCommand
-            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from upsplash.com to match the recipe title (TODO)")
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from upsplash.com to match the recipe title")
 
             func run() throws {
                 let fileUrl = URL(fileURLWithPath: file)
 
                 let recipeTitle = fileUrl.deletingPathExtension().lastPathComponent
 
-                if let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] {
-                    let imageUrl = try randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)
+                guard  let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] else {
+                    print("Couldn't find COOK_UNSPLASH_ACCESS_KEY environment variable, please registry for free at https://unsplash.com/documentation#registering-your-application", to: &errStream)
+                    throw ExitCode.failure
+                }
 
-                    let urls = URL(string: imageUrl)
-                    let data = try? Data(contentsOf: urls!) //make sure your image in this url does exist, otherwise unwrap in a if let check / try-catch
+                guard let urls = try? URL(string: randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)) else {
+                    print("Error downloading information about random image from Unsplash", to: &errStream)
+                    throw ExitCode.failure
+                }
 
-                    let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
+                guard let data = try? Data(contentsOf: urls) else {
+                    print("Error downloading image from Unsplash", to: &errStream)
+                    throw ExitCode.failure
+                }
 
+                let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
+                do {
                     print("Saving image to \(destinationPath)".removingPercentEncoding!)
 
-                    try data?.write(to: destinationPath)
-                } else {
-                    print("Couldn't find COOK_UNSPLASH_ACCESS_KEY environment variable, please registry for free at https://unsplash.com/documentation#registering-your-application", to: &errStream)
+                    try data.write(to: destinationPath)
+                } catch {
+                    print(error, to: &errStream)
+                    throw ExitCode.failure
                 }
             }
         }
@@ -114,34 +122,49 @@ enum ImageFetcherError: Error {
     case errorGettingImage
 }
 
-func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
-    var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")
 
-    urlBuilder?.queryItems = [
+enum Unsplash: Swift.Error {
+    case baseUrlError
+}
+
+
+func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
+    var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")!
+
+    urlBuilder.queryItems = [
         URLQueryItem(name: "query", value: query),
         URLQueryItem(name: "orientation", value: "landscape"),
     ]
 
-    let url = urlBuilder?.url
-
-    var request = URLRequest(url: url!)
+    var request = URLRequest(url: urlBuilder.url!)
     request.httpMethod = "GET"
     request.setValue("Client-ID \(unsplashKey)", forHTTPHeaderField: "Authorization")
 
     let semaphore = DispatchSemaphore(value: 0)
     var imageUrl: String?
 
-    URLSession.shared.dataTask(with: request) { (data, response, error) in
-        if error != nil {
+    URLSession.shared.dataTask(with: request) { (maybeData, response, maybeError) in
+        if let error = maybeError {
             print(error, to: &errStream)
-
             semaphore.signal()
+
             return
         }
 
-        let responseJSON = try? JSONSerialization.jsonObject(with: data!, options: [])
-        if let responseJSON = responseJSON as? [String: Any] {
-            imageUrl = (responseJSON["urls"] as! [String: Any])["regular"] as? String
+        guard let data = maybeData else {
+            print("Empty image content", to: &errStream)
+
+            return
+        }
+
+        if let responseJSON = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+            guard let urls = responseJSON["urls"] as? [String: Any] else {
+                print("Invalid JSON response from Unsplash", to: &errStream)
+
+                return
+            }
+
+            imageUrl = urls["regular"] as? String
         }
 
         semaphore.signal()

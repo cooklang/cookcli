@@ -22,12 +22,9 @@ struct RecipeHandler {
 
         do {
             let recipe = try String(contentsOfFile: file, encoding: String.Encoding.utf8)
-            let parser = Parser(recipe)
-            let node = parser.parse()
-            let analyzer = SemanticAnalyzer()
-            let parsed = analyzer.analyze(node: node)
+            let parsed = parseFile(recipe: recipe)
             
-            let jsonData = try JSONEncoder().encode(encodeRecipe(recipe: parsed))
+            let jsonData = try JSONEncoder().encode(encodeRecipe(parsed))
             let jsonString = String(data: jsonData, encoding: .utf8)!
 
             sendData(Data(jsonString.utf8))
