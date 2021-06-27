@@ -1,21 +1,35 @@
 <script>
     import {Link} from "svelte-navigator";
-    import {TabContent, TabPane, ListGroup, ListGroupItem} from "sveltestrap";
+    import {TabContent, TabPane, ListGroup, ListGroupItem, Button, Toast, Col, Container, Row} from "sveltestrap";
     import {fetchRecipe} from "./backend.js";
     import Breadcrumbs from "./Breadcrumbs.svelte";
+
+    import {shoppingListPaths} from "./store.js";
 
     export let recipePath;
 
     // breadcrumbs = ["Breakfasts","Jamie","Easy Pancakes"]
     $: maybeRecipe = fetchRecipe(recipePath);
+
+    let isAddedToShoppingListToastOpen = false;
+
+    function onAddToShoppingList() {
+        shoppingListPaths.add(recipePath);
+        isAddedToShoppingListToastOpen = true
+    }
 </script>
 
-<Breadcrumbs path={recipePath} />
+<Container>
+  <Row>
+    <Col><Breadcrumbs path={recipePath} /></Col>
+    <Col class="text-end"><Button color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button></Col>
+  </Row>
+</Container>
 
 {#await maybeRecipe}
     <p>Loading recipe...</p>
 {:then recipe}
-    <TabContent>
+    <TabContent pills vertical>
 
         {#if recipe.ingredients.length > 0 }
         <TabPane tabId="ingredients" tab="Ingredients" active>
@@ -57,3 +71,13 @@
 {:catch error}
     <p>Something went wrong: {error.message}</p>
 {/await}
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+<Toast
+  autohide
+  body
+  isOpen={isAddedToShoppingListToastOpen}
+  on:close={() => isAddedToShoppingListToastOpen = false}>
+  Added {recipePath} to a shopping list...
+</Toast>
+</div>

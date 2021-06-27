@@ -1,18 +1,22 @@
 <script>
-    import { getContext, onMount } from "svelte";
-    import { fetchShoppingList } from "./backend.js";
-    import { ListGroup, ListGroupItem } from "sveltestrap";
+    import {getContext, onMount} from "svelte";
+    import {fetchShoppingList} from "./backend.js";
+    import {ListGroup, ListGroupItem} from "sveltestrap";
 
-    let shoppingList = [];
+    import {shoppingListPaths} from "./store.js";
 
-    onMount(async () => {
-        shoppingList = await fetchShoppingList(["Root Vegetable Tray Bake.cook"]);
-    })
+    $: maybeShoppingList = fetchShoppingList($shoppingListPaths);
 </script>
 
 
-<ListGroup>
-{#each shoppingList as item }
-    <ListGroupItem>{item.name} {item.amount}</ListGroupItem>
-{/each}
-</ListGroup>
+{#await maybeShoppingList}
+    <p>Loading shopping list...</p>
+{:then shoppingList}
+    <ListGroup>
+    {#each shoppingList as item }
+        <ListGroupItem>{item.name} {item.amount}</ListGroupItem>
+    {:else}
+    <p>Nothing added to a shopping list.</p>
+    {/each}
+    </ListGroup>
+{/await}

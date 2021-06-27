@@ -25,6 +25,7 @@
                 <NavItem>
                     <NavLink href="/">Recipes</NavLink>
                 </NavItem>
+
                 <NavItem>
                     <NavLink href="/shopping-list">Shopping list</NavLink>
                 </NavItem>

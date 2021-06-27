@@ -28,7 +28,7 @@ struct ShoppingListHandler {
         JSONReader.read(input) { json in
             do {
                 let filesOrDirectory: [String] = (json as! [String]).map { file in
-                    return "\(FileManager.default.currentDirectoryPath)/samples/\(file)"
+                    return "\(FileManager.default.currentDirectoryPath)/samples/\(file).cook"
                 }
 
                 guard let files = try? listCookFiles(filesOrDirectory) else {
@@ -49,7 +49,7 @@ struct ShoppingListHandler {
 
                 sendData(Data(jsonString.utf8))
             } catch {
-                sendData(Data("error".utf8))
+                sendData(Data("error \(error)".utf8))
             }
 
         }
