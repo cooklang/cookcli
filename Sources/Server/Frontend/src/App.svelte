@@ -1,26 +1,24 @@
 <script>
-    import { onMount, setContext } from 'svelte';
-    import { Router, Link, Route, links } from "svelte-routing";
+    import {onMount} from "svelte";
+    import {Router, Route, links} from "svelte-navigator";
+    import {Navbar, NavbarBrand, Nav, NavItem, NavLink} from "sveltestrap";
 
-    import {fetchFileTree} from './data.js';
+    import Recipes from "./Recipes.svelte";
+    import Recipe from "./Recipe.svelte";
+    import ShoppingList from "./ShoppingList.svelte";
 
-    import Recipes from './Recipes.svelte';
-    import Recipe from './Recipe.svelte';
-    import ShoppingList from './ShoppingList.svelte';
+    import {fetchFileTree} from "./backend.js";
+    import {fileTree} from "./store.js";
 
-    import {
-        Navbar,
-        NavbarBrand,
-        Nav,
-        NavItem,
-        NavLink
-    } from 'sveltestrap';
+    onMount(async () => {
+        let fullTree = await fetchFileTree();
 
-    export let url = "";
+        fileTree.set(fullTree["children"]);
+    });
 </script>
 
 <div class="viewport" use:links>
-    <Router url="{url}">
+    <Router>
         <Navbar color="light" light expand="md">
             <NavbarBrand href="/">Cook</NavbarBrand>
             <Nav navbar>
@@ -35,15 +33,25 @@
 
         <div class="py-3">
             <Route path="shopping-list" component="{ShoppingList}" />
-            <!-- <Route path=":id" component="{Recipe}" /> -->
-            <Route path="/*"><Recipes /></Route>
+
+            <Route path="recipe/*recipePath" let:params>
+                <Recipe recipePath={params.recipePath} />
+            </Route>
+
+            <Route path="directory/*recipesPath" let:params>
+                <Recipes recipesPath={params.recipesPath} />
+            </Route>
+
+            <Route path="/">
+                <Recipes recipesPath="" />
+            </Route>
         </div>
     </Router>
 </div>
 
 <style>
-.viewport {
-    width: 800px;
-    margin: 50px auto;
-}
+    .viewport {
+        width: 800px;
+        margin: 50px auto;
+    }
 </style>

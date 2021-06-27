@@ -1,79 +1,62 @@
 <script>
-    import { onMount, setContext } from 'svelte';
-    import { Router, Link, Route, links } from "svelte-routing";
-    import { ListGroup, ListGroupItem } from 'sveltestrap';
+    import {Link} from "svelte-navigator";
+    import {ListGroup, ListGroupItem} from "sveltestrap";
 
-    import {fetchFileTree} from './data.js';
+    import Breadcrumbs from "./Breadcrumbs.svelte";
 
-    import Recipe from './Recipe.svelte';
+    import {fileTree} from "./store.js";
 
+    export let recipesPath;
 
-    let path = [];
-    let selected;
-    let fileTree;
-    let currentTree;
-    let selectedRecipe;
+    function getFilePath(prepath, name) {
+        return `/recipe/${prepath}/${name}`;
+    }
 
-    function navigate(path) {
-        currentTree = fileTree;
+    function getDirPath(prepath, name) {
+        return `/directory/${prepath}/${name}`;
+    }
 
-        path.forEach((chunk) => {
+    function calculateCurrentSubtree(path, fullTree) {
+        if (!fullTree) return fullTree;
+        if (path == "") return fullTree;
+
+        let currentTree = fullTree;
+
+        path.split("/").forEach((chunk) => {
             currentTree = currentTree[chunk]["children"];
         });
+
+        return currentTree;
     }
 
-    onMount(async () => {
-        let fullTree = await fetchFileTree();
-        fileTree = fullTree["children"]
-        currentTree = fullTree["children"]
-    });
-
-    function navigateUp() {
-        path = path.slice(0, -1);
-
-        navigate(path);
-    }
-
-    function navigateDown(name) {
-        path = [...path, name];
-
-        navigate(path);
-    }
+    $: currentTree = calculateCurrentSubtree(recipesPath, $fileTree);
 
 </script>
 
-<div use:links>
 <ListGroup>
-    {#if path.length > 0}
-    <ListGroupItem on:click={navigateUp} class="list-group-item">...</ListGroupItem>
-    {/if}
+
+    <Breadcrumbs path={recipesPath} />
 
     {#if currentTree}
     {#each Object.entries(currentTree) as [name, file] (name)}
-        {#if file.type === 'directory'}
+        {#if file.type === "directory"}
         <ListGroupItem>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder" viewBox="0 0 16 16">
               <path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31zM2.19 4a1 1 0 0 0-.996 1.09l.637 7a1 1 0 0 0 .995.91h10.348a1 1 0 0 0 .995-.91l.637-7A1 1 0 0 0 13.81 4H2.19zm4.69-1.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707z"/>
             </svg>
-            <a on:click={() => navigateDown(name)}>{name}</a>
+
+            <Link to={getDirPath(recipesPath, name)}>{name}</Link>
         </ListGroupItem>
         {/if}
     {/each}
 
     {#each Object.entries(currentTree) as [name, file] (name)}
-        {#if file.type === 'file'}
+        {#if file.type === "file"}
         <ListGroupItem>
-            <a href={[...path, name].join('/')}>{name}</a>
+            <Link to={getFilePath(recipesPath, name)}>{name}</Link>
         </ListGroupItem>
         {/if}
     {/each}
     {/if}
 
-    <!-- <Router url="{url}">
-
-    <Route path="recipe/:id" component="{Recipe}" />
-    <Route path="/*"><Recipes /></Route>
-    </Router> -->
-
 </ListGroup>
-</div>

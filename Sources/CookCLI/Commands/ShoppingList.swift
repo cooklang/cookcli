@@ -34,6 +34,7 @@ extension Cook {
             }
 
             do {
+//                TODO add grouping
                 let ingredientTable = try combineShoppingList(files)
 
                 try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
