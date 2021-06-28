@@ -26,7 +26,7 @@ let package = Package(
             dependencies: [.product(name: "Embassy", package: "Embassy"),
                            .product(name: "Ambassador", package: "Ambassador"),
                            .target(name: "Catalog")],
-            exclude: ["Frontend"],
+            exclude: ["Frontend", "inject_frontend.sh"],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of
                 // the `.unsafeFlags` construct required by SwiftPM, this flag is recommended for Release

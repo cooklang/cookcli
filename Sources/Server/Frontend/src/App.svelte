@@ -5,6 +5,7 @@
 
     import Recipes from "./Recipes.svelte";
     import Recipe from "./Recipe.svelte";
+    import Logo from "./Logo.svelte";
     import ShoppingList from "./ShoppingList.svelte";
 
     import {fetchFileTree} from "./backend.js";
@@ -20,7 +21,7 @@
 <div class="viewport" use:links>
     <Router>
         <Navbar color="light" light expand="md">
-            <NavbarBrand href="/">Cook</NavbarBrand>
+            <NavbarBrand href="/"><Logo /> Cook</NavbarBrand>
             <Nav navbar>
                 <NavItem>
                     <NavLink href="/">Recipes</NavLink>

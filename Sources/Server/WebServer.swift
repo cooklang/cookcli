@@ -9,23 +9,40 @@ import Embassy
 import Ambassador
 
 public struct WebServer {
-    public init() {}
+    var interface: String
+    var port: Int
+
+    public init(interface: String = "::1", port: Int = 9080) {
+        self.interface = interface
+        self.port = port
+    }
 
     public func start() throws {
 
         let loop = try SelectorEventLoop(selector: try SelectSelector())
         let router = Router()
 
-        let server = DefaultHTTPServer(eventLoop: loop, port: 9080, app: router.app)
+        let server = DefaultHTTPServer(eventLoop: loop, interface: interface, port: port, app: router.app)
 
         router["/api/v1/file_tree"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: CatalogHandler().callAsFunction)
         router["/api/v1/recipe/(.+)"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: RecipeHandler().callAsFunction)
         router["/api/v1/shopping-list"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: ShoppingListHandler().callAsFunction)
 
+        router["/favicon.png"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.FaviconPng().callAsFunction)
+
+        router["/build/bundle.js"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/javascript; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BundleJs().callAsFunction)
+
+        router["/build/bundle.css"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BundleCss().callAsFunction)
+
+        router["/vendor/bootstrap/css/bootstrap.min.css"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BootstrapCss().callAsFunction)
+
+
+        router["^/$"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.IndexHTML().callAsFunction)
+
         // Start HTTP server to listen on the port
         try server.start()
 
-        print("Started server on http://localhost:9080")
+        print("Started server on http://\(interface):\(port)")
 
         loop.runForever()
     }
