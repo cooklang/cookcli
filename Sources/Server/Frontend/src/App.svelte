@@ -23,6 +23,7 @@
         <Navbar color="light" light expand="md">
             <NavbarBrand href="/"><Logo /> Cook</NavbarBrand>
             <Nav navbar>
+                <!-- TODO select active links -->
                 <NavItem>
                     <NavLink href="/">Recipes</NavLink>
                 </NavItem>

@@ -15,7 +15,13 @@ function createShoppingListPaths() {
     return {
         subscribe,
         add: (item) => update(prev => [...prev, item]),
-        remove: (item) => update(prev => prev.filter((i) => i == item)),
+        remove: (item) => update(prev => {
+            let i = prev.indexOf(item);
+
+            prev.splice(i, 1);
+
+            return [...prev];
+        }),
         reset: () => set([])
     };
 }

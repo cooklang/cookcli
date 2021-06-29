@@ -3,6 +3,7 @@
     import {TabContent, TabPane, ListGroup, ListGroupItem, Button, Toast, Col, Container, Row} from "sveltestrap";
     import {fetchRecipe} from "./backend.js";
     import Breadcrumbs from "./Breadcrumbs.svelte";
+    import Ingredients from "./Ingredients.svelte";
 
     import {shoppingListPaths} from "./store.js";
 
@@ -12,35 +13,33 @@
     $: maybeRecipe = fetchRecipe(recipePath);
 
     let isAddedToShoppingListToastOpen = false;
+    let buttonDisabled = false;
 
-    function onAddToShoppingList() {
+    async function onAddToShoppingList() {
+        buttonDisabled = true;
+        await new Promise(r => setTimeout(r, 500));
         shoppingListPaths.add(recipePath);
         isAddedToShoppingListToastOpen = true
+        buttonDisabled = false;
     }
 </script>
 
 <Container>
   <Row>
     <Col><Breadcrumbs path={recipePath} /></Col>
-    <Col class="text-end"><Button color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button></Col>
+    <Col class="text-end"><Button disabled={buttonDisabled} color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button></Col>
   </Row>
 </Container>
 
+
 {#await maybeRecipe}
-    <p>Loading recipe...</p>
+    <div class="mt-5 mx-auto" style="width: 250px;">Loading recipe...</div>
 {:then recipe}
-    <TabContent pills vertical>
+    <TabContent>
 
         {#if recipe.ingredients.length > 0 }
         <TabPane tabId="ingredients" tab="Ingredients" active>
-            <ListGroup>
-            {#each recipe.ingredients as ingredient}
-                <ListGroupItem class="list-group-item d-flex justify-content-between align-items-center border-0">
-                    {ingredient.name}
-                    <span class="text-muted">{ingredient.amount}</span>
-                </ListGroupItem>
-            {/each}
-            </ListGroup>
+            <Ingredients ingredients={recipe.ingredients} />
         </TabPane>
         {/if}
 
@@ -73,11 +72,11 @@
 {/await}
 
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-<Toast
-  autohide
-  body
-  isOpen={isAddedToShoppingListToastOpen}
-  on:close={() => isAddedToShoppingListToastOpen = false}>
-  Added {recipePath} to a shopping list...
-</Toast>
+    <Toast
+      autohide
+      body
+      isOpen={isAddedToShoppingListToastOpen}
+      on:close={() => isAddedToShoppingListToastOpen = false}>
+      Added {recipePath} to a shopping list...
+    </Toast>
 </div>
