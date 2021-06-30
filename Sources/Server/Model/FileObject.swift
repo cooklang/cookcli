@@ -13,6 +13,7 @@ class FileObject: FileSystemObject, Hashable {
     }
 
     var name: String
+    var image: String?
 
     init(name: String) {
         self.name = name
@@ -24,6 +25,7 @@ class FileObject: FileSystemObject, Hashable {
 
     enum FileKeys: String, CodingKey {
         case type
+        case image
     }
 
 }

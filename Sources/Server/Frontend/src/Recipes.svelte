@@ -50,7 +50,12 @@
     {#each Object.entries(currentTree) as [name, file] (name)}
         {#if file.type === "file"}
         <ListGroupItem>
-            <Link to={getFilePath(recipesPath, name)}>{name}</Link>
+            {#if file.image}
+                <img height="42px" alt={name} src={"http://localhost:9080/" + recipesPath + "/" + file.image} />
+            {/if}
+            <Link to={getFilePath(recipesPath, name)}>
+                {name}
+            </Link>
         </ListGroupItem>
         {/if}
     {/each}

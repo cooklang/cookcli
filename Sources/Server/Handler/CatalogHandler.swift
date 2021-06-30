@@ -37,7 +37,16 @@ struct CatalogHandler {
                                     pointer = dirObject
                                 }
 
-                                pointer.files.insert(FileObject(name: fileURL.deletingPathExtension().lastPathComponent))
+                                let file = FileObject(name: fileURL.deletingPathExtension().lastPathComponent)
+                                pointer.files.insert(file)
+
+                                ["jpg", "png"].forEach { format in
+                                    let picURL = fileURL.deletingPathExtension().appendingPathExtension(format)
+
+                                    if let _ = try? picURL.checkResourceIsReachable() {
+                                        file.image = picURL.lastPathComponent
+                                    }
+                                }
                             }
                         }
                    }

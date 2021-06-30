@@ -12,5 +12,9 @@ extension FileObject: Encodable {
         var container = encoder.container(keyedBy: FileKeys.self)
 
         try container.encode("file", forKey: .type)
+
+        if let i = image {
+            try container.encode(i, forKey: .image)
+        }
     }
 }
