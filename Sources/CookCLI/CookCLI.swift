@@ -38,9 +38,6 @@ enum OutputFormat: String, ExpressibleByArgument {
 
 struct Cook: ParsableCommand {
 
-    @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings (TODO)")
-    var aisle: String?
-
     @Option(name: .shortAndLong, help: "Specify a units.conf file to override units default settings (TODO)")
     var units: String?
 

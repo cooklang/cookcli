@@ -75,6 +75,23 @@ public func combineShoppingList(_ files: [String]) throws -> IngredientTable {
     return ingredientTable
 }
 
+public func findAisleConfig(_ provided: String?) -> String? {
+    var configPath: String?
+
+    let local = FileManager.default.currentDirectoryPath + "/config/aisle.conf"
+    let home = FileManager.default.homeDirectoryForCurrentUser.path + "/.config/cook/aisle.conf"
+
+    if provided != nil {
+        configPath = provided
+    } else if FileManager.default.fileExists(atPath: local) {
+        configPath = local
+    } else if FileManager.default.fileExists(atPath: home) {
+        configPath = home
+    }
+
+    return configPath
+}
+
 fileprivate func directoryExistsAtPath(_ path: String) -> Bool {
     var isDirectory = ObjCBool(true)
     let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)

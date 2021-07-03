@@ -14,6 +14,9 @@ extension Cook {
 
     struct ShoppingList: ParsableCommand {
 
+        @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings")
+        var aisle: String?
+
         @Argument(help: "File or directory with .cook files")
         var filesOrDirectory: [String]
 
@@ -27,6 +30,22 @@ extension Cook {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Create a shopping list")
 
         func run() throws {
+            var config: CookConfig?
+
+            let configPath = findAisleConfig(aisle)
+
+            if let path = configPath {
+                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
+//                    TODO add throw
+                    let parser = ConfigParser(text)
+                    config = parser.parse()
+                } else {
+                    print("Can't read file \(path)", to: &errStream)
+
+                    throw ExitCode.failure
+                }
+            }
+
             guard let files = try? listCookFiles(filesOrDirectory) else {
                 print("Error getting files", to: &errStream)
 
