@@ -8,8 +8,7 @@ Download latest release for your platform from [Releases](https://github.com/coo
 
 For example:
 
-    tar xvfz CookCLI_0.0.1_darwin_amd64.tar.gz; rm CookCLI_0.0.1_darwin_amd64.tar.gz; \
-    mv cook /usr/local/bin/;
+    unzip CookCLI_0.0.1_darwin_amd64.zip -d /usr/local/bin/
     
 ## Usage
 
