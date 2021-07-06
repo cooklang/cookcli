@@ -14,13 +14,13 @@ extension Cook {
 
     struct ShoppingList: ParsableCommand {
 
-        @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings")
+        @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings. Cook automatically checks in ./config/aisle.conf and $HOME/.config/cook/aisle.conf")
         var aisle: String?
 
         @Argument(help: "File or directory with .cook files")
         var filesOrDirectory: [String]
 
-        @Option(help: "Set the output format to json or yaml (default text)")
+        @Option(help: "Set the output format to json or yaml")
         var outputFormat: OutputFormat = .text
 
         @Flag(help: "Print only the ingredients section of the output")
@@ -53,10 +53,10 @@ extension Cook {
             }
 
             do {
-//                TODO add grouping
                 let ingredientTable = try combineShoppingList(files)
 
-                try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
+                try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat, aisle: config)
+
             } catch {
                 print(error, to: &errStream)
 

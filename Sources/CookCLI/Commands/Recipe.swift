@@ -10,6 +10,10 @@ import ArgumentParser
 import CookInSwift
 import Catalog
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 extension Cook {
 
     struct Recipe: ParsableCommand {
@@ -21,7 +25,7 @@ extension Cook {
             // MARK: ParsableCommand
             static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Parse and print a CookLang recipe file")
 
-            @Option(help: "Set the output format to json or yaml (default text)")
+            @Option(help: "Set the output format to json or yaml")
             var outputFormat: OutputFormat = .text
 
             @Flag(help: "Print only the ingredients section of the output")

@@ -90,5 +90,5 @@ fastlane/test_output
 iOSInjectionProject/
 
 .DS_Store
-
+releases
 samples

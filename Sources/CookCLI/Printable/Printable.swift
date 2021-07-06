@@ -42,7 +42,7 @@ enum PrintableLine: CustomStringConvertible {
             }.joined(separator: "\n")
         case .ingredients(let ingredients, let offset):
 //            TODO estimate max length properly
-            return ingredients.ingredients.map { (k, v) in
+            return ingredients.ingredients.sorted(by: { $0.0 < $1.0 }).map { (k, v) in
                 "\(k.padding(toLength: 30, withPad: " ", startingAt: 0) )\(v)".indented(offset)
             }.joined(separator: "\n")
         case .cookware(let cookware, let offset):

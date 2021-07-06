@@ -18,13 +18,16 @@
     {#await maybeShoppingList}
         <div class="mt-5 mx-auto" style="width: 250px;">Loading shopping list...</div>
     {:then shoppingList}
-        <Ingredients ingredients={shoppingList} />
+        {#each Object.entries(shoppingList) as [shelf, ingredients]}
+            <h5 class="pt-4">{shelf}</h5>
+            <Ingredients ingredients={ingredients} />
 
-        {#if shoppingList.length == 0}
-            <div class="mt-5 mx-auto" style="width: 250px;">
-              Nothing added to a shopping list.
-            </div>
-        {/if}
+            <!-- {#if shoppingList.length == 0}
+                <div class="mt-5 mx-auto" style="width: 250px;">
+                  Nothing added to a shopping list.
+                </div>
+            {/if} -->
+        {/each}
     {/await}
     </TabPane>
     <TabPane tabId="recipe" tab="Recipe">

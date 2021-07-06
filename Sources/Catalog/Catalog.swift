@@ -8,6 +8,7 @@
 import Foundation
 import CookInSwift
 
+// Kitchen sink, TODO
 
 public func encodeRecipe(_ recipe: SemanticRecipe) -> [String : [[String : String]]] {
     var cookware: [[String: String]] = []
@@ -62,6 +63,8 @@ public func listCookFiles(_ filesOrDirectory: [String]) throws -> [String] {
     }
 }
 
+
+
 public func combineShoppingList(_ files: [String]) throws -> IngredientTable {
     var ingredientTable = IngredientTable()
 
@@ -73,6 +76,25 @@ public func combineShoppingList(_ files: [String]) throws -> IngredientTable {
     }
 
     return ingredientTable
+}
+
+public func groupShoppingList(ingredients:  [String: IngredientAmountCollection], aisle: CookConfig?) -> [String: IngredientTable] {
+    var sections: [String: IngredientTable] = [:]
+
+    ingredients.forEach { name, amounts in
+        var shelf = aisle?.items[name]?.uppercased() ?? "OTHER (add new items into aisle.conf)"
+
+        if aisle == nil {
+            shelf = "INGREDIENTS"
+        }
+
+        if sections[shelf] == nil {
+            sections[shelf] = IngredientTable()
+        }
+        sections[shelf]?.add(name: name, amounts: amounts)
+    }
+
+    return sections
 }
 
 public func findAisleConfig(_ provided: String?) -> String? {

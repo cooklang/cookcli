@@ -16,6 +16,13 @@ struct ShoppingListHandler {
     enum Error: Swift.Error {
         case problemListingFiles
     }
+
+    var aisle: CookConfig?
+
+    init(aisle: CookConfig?) {
+        self.aisle = aisle
+    }
+
     func callAsFunction(_ environ: [String : Any], _ sendData: @escaping (Data) -> Void) -> Void {
         let input = environ["swsgi.input"] as! SWSGIInput
 
@@ -38,10 +45,14 @@ struct ShoppingListHandler {
 
                 let ingredientTable = try combineShoppingList(files)
 
-                var result: [[String: String]] = []
+                let sections = groupShoppingList(ingredients: ingredientTable.ingredients, aisle: aisle)
 
-                for (ingredient, amounts) in ingredientTable.ingredients {
-                    result.append(["name": ingredient, "amount": amounts.description])
+                var result: [String: [[String : String]] ] = [:]
+
+                sections.sorted(by: { $0.0 < $1.0 }).forEach { section, table in
+                    for (ingredient, amounts) in table.ingredients {
+                        result[section, default: []].append(["name": ingredient, "amount": amounts.description])
+                    }
                 }
 
                 let jsonData = try JSONEncoder().encode(result)
