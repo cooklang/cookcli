@@ -19,7 +19,7 @@ extension Cook {
     struct Recipe: ParsableCommand {
         struct Read: ParsableCommand {
 
-            @Argument(help: "A .cook file or STDIN")
+            @Argument(help: "HELPME A .cook file or STDIN")
             var recipeFile: String?
 
             // MARK: ParsableCommand
@@ -38,7 +38,7 @@ extension Cook {
                     if let r = try? String(contentsOfFile: file, encoding: String.Encoding.utf8) {
                         recipe = r
                     } else {
-                        print("Can't read file \(file)", to: &errStream)
+                        print("HELPME Can't read file \(file), make sure path is correct and permissions are right", to: &errStream)
 
                         throw ExitCode.failure
                     }
@@ -46,7 +46,7 @@ extension Cook {
                     if let r = readSTDIN() {
                         recipe = r
                     }  else {
-                        print("Path for community recipe not provided, set recipe name or pass in STDIN", to: &errStream)
+                        print("HELPME Path to recipe not provided, set recipe name or pass in via STDIN", to: &errStream)
 
                         throw ExitCode.failure
                     }
@@ -67,7 +67,7 @@ extension Cook {
 
         struct Validate: ParsableCommand {
 
-            @Argument(help: "A .cook file")
+            @Argument(help: "HELPME A .cook file or STDIN")
             var file: String
 
             // MARK: ParsableCommand
@@ -80,7 +80,7 @@ extension Cook {
 
         struct Prettify: ParsableCommand {
 
-            @Argument(help: "A .cook file")
+            @Argument(help: "HELPME A .cook file or STDIN")
             var file: String
 
             // MARK: ParsableCommand
@@ -93,7 +93,7 @@ extension Cook {
 
         struct Image: ParsableCommand {
 
-            @Argument(help: "A .cook file")
+            @Argument(help: "HELPME A .cook file or STDIN")
             var file: String
 
             // MARK: ParsableCommand
@@ -105,25 +105,25 @@ extension Cook {
                 let recipeTitle = fileUrl.deletingPathExtension().lastPathComponent
 
                 guard  let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] else {
-                    print("Couldn't find COOK_UNSPLASH_ACCESS_KEY environment variable, please registry for free at https://unsplash.com/documentation#registering-your-application", to: &errStream)
+                    print("HELPME Couldn't find COOK_UNSPLASH_ACCESS_KEY environment variable, please register for free at https://unsplash.com/documentation#registering-your-application and set environment variable", to: &errStream)
 
                     throw ExitCode.failure
                 }
 
                 guard let urls = try? URL(string: randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)) else {
-                    print("Error downloading information about random image from Unsplash", to: &errStream)
+                    print("HELPME Error making request to Unsplash to get image URL, please check that Unsplash is reachable and you set a valid key", to: &errStream)
 
                     throw ExitCode.failure
                 }
 
                 guard let data = try? Data(contentsOf: urls) else {
-                    print("Error downloading image from Unsplash", to: &errStream)
+                    print("HELPME Error downloading image from Unsplash, please check network connection and try again", to: &errStream)
                     throw ExitCode.failure
                 }
 
                 let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
                 do {
-                    print("Saving image to \(destinationPath)".removingPercentEncoding!)
+                    print("HELPME Saving image to \(destinationPath)".removingPercentEncoding!)
 
                     try data.write(to: destinationPath)
                 } catch {
@@ -179,14 +179,14 @@ func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String 
         }
 
         guard let data = maybeData else {
-            print("Empty image content", to: &errStream)
+            print("HELPME Empty image content, please try again", to: &errStream)
 
             return
         }
 
         if let responseJSON = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
             guard let urls = responseJSON["urls"] as? [String: Any] else {
-                print("Invalid JSON response from Unsplash", to: &errStream)
+                print("HELPME Invalid JSON response from Unsplash, please try again", to: &errStream)
 
                 return
             }

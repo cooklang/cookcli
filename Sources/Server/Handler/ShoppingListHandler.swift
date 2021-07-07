@@ -18,9 +18,11 @@ struct ShoppingListHandler {
     }
 
     var aisle: CookConfig?
+    var inflection: CookConfig?
 
-    init(aisle: CookConfig?) {
+    init(aisle: CookConfig?, inflection: CookConfig?) {
         self.aisle = aisle
+        self.inflection = inflection
     }
 
     func callAsFunction(_ environ: [String : Any], _ sendData: @escaping (Data) -> Void) -> Void {
@@ -39,11 +41,11 @@ struct ShoppingListHandler {
                 }
 
                 guard let files = try? listCookFiles(filesOrDirectory) else {
-                    print("Error getting files")
+                    print("HELPME Error getting '.cook' files, please check permissions or file exist")
                     throw Error.problemListingFiles
                 }
 
-                let ingredientTable = try combineShoppingList(files)
+                let ingredientTable = try combineShoppingList(files, inflection: inflection)
 
                 let sections = groupShoppingList(ingredients: ingredientTable.ingredients, aisle: aisle)
 

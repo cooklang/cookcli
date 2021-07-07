@@ -18,7 +18,7 @@ public struct WebServer {
         self.port = port
     }
 
-    public func start(aisle: CookConfig?) throws {
+    public func start(aisle: CookConfig?, inflection: CookConfig?) throws {
 
         let loop = try SelectorEventLoop(selector: try SelectSelector())
         let router = Router()
@@ -27,7 +27,7 @@ public struct WebServer {
 
         router["^/api/v1/file_tree"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: CatalogHandler().callAsFunction)
         router["^/api/v1/recipe/(.+)"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: RecipeHandler().callAsFunction)
-        router["^/api/v1/shopping-list"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: ShoppingListHandler(aisle: aisle).callAsFunction)
+        router["^/api/v1/shopping-list"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "application/json", handler: ShoppingListHandler(aisle: aisle, inflection: inflection).callAsFunction)
 
         router["^/favicon.png"] = DataResponse(statusCode: 200, statusMessage: "ok", contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.FaviconPng().callAsFunction)
 

@@ -14,10 +14,20 @@ extension Cook {
 
     struct ShoppingList: ParsableCommand {
 
-        @Option(name: .shortAndLong, help: "Specify an aisle.conf file to override shopping list default settings. Cook automatically checks in ./config/aisle.conf and $HOME/.config/cook/aisle.conf")
+        @Option(name: .shortAndLong, help:
+                    """
+                    Specify an aisle.conf file to set grouping. Cook automatically checks current directory in ./config/aisle.conf and $HOME/.config/cook/aisle.conf
+                    """)
         var aisle: String?
 
-        @Argument(help: "File or directory with .cook files")
+        @Option(name: .shortAndLong, help:
+                    """
+                    Specify an inflection.conf file to define rules of pluralisation. Cook automatically checks current directory in ./config/inflection.conf and $HOME/.config/cook/inflection.conf
+                    """)
+        var inflection: String?
+
+
+        @Argument(help: "File or directory with .cook files to include to shopping list")
         var filesOrDirectory: [String]
 
         @Option(help: "Set the output format to json or yaml")
@@ -30,32 +40,49 @@ extension Cook {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Create a shopping list")
 
         func run() throws {
-            var config: CookConfig?
+            var aisleConfig: CookConfig?
+            let aisleConfigPath = findConfigFile(type: "aisle", aisle)
 
-            let configPath = findAisleConfig(aisle)
-
-            if let path = configPath {
+            if let path = aisleConfigPath {
                 if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
 //                    TODO add throw
                     let parser = ConfigParser(text)
-                    config = parser.parse()
+                    aisleConfig = parser.parse()
+                    print("HELPME Error loading config file at \(path), please check syntax", to: &errStream)
                 } else {
-                    print("Can't read file \(path)", to: &errStream)
+                    print("HELPME Can't read aisle config file at \(path). Please check permissions", to: &errStream)
+
+                    throw ExitCode.failure
+                }
+            }
+
+            var inflectionConfig: CookConfig?
+            let inflectionConfigPath = findConfigFile(type: "inflection", aisle)
+
+            if let path = inflectionConfigPath {
+                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
+//                    TODO add throw
+                    let parser = ConfigParser(text)
+                    inflectionConfig = parser.parse()
+                    print("HELPME Error loading config file at \(path), please check syntax", to: &errStream)
+                } else {
+                    print("HELPME Can't read inflection config file at \(path). Please check permissions", to: &errStream)
+
 
                     throw ExitCode.failure
                 }
             }
 
             guard let files = try? listCookFiles(filesOrDirectory) else {
-                print("Error getting files", to: &errStream)
+                print("HELPME Error getting .cook files from \(filesOrDirectory), please check file exists and permissions", to: &errStream)
 
                 throw ExitCode.failure
             }
 
             do {
-                let ingredientTable = try combineShoppingList(files)
+                let ingredientTable = try combineShoppingList(files, inflection: inflectionConfig)
 
-                try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat, aisle: config)
+                try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat, aisle: aisleConfig)
 
             } catch {
                 print(error, to: &errStream)

@@ -65,7 +65,7 @@ public func listCookFiles(_ filesOrDirectory: [String]) throws -> [String] {
 
 
 
-public func combineShoppingList(_ files: [String]) throws -> IngredientTable {
+public func combineShoppingList(_ files: [String], inflection: CookConfig?) throws -> IngredientTable {
     var ingredientTable = IngredientTable()
 
     try files.forEach { file in
@@ -97,11 +97,11 @@ public func groupShoppingList(ingredients:  [String: IngredientAmountCollection]
     return sections
 }
 
-public func findAisleConfig(_ provided: String?) -> String? {
+public func findConfigFile(type: String, _ provided: String?) -> String? {
     var configPath: String?
 
-    let local = FileManager.default.currentDirectoryPath + "/config/aisle.conf"
-    let home = FileManager.default.homeDirectoryForCurrentUser.path + "/.config/cook/aisle.conf"
+    let local = FileManager.default.currentDirectoryPath + "/config/\(type).conf"
+    let home = FileManager.default.homeDirectoryForCurrentUser.path + "/.config/cook/\(type).conf"
 
     if provided != nil {
         configPath = provided

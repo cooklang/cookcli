@@ -24,7 +24,7 @@ extension Cook {
                 path = c
             } else {
                 guard let c = readSTDIN() else {
-                    print("Path for community recipe not provided, set recipe name or pass in STDIN", to: &errStream)
+                    print("HELPME Path for community recipe not provided, set recipe name or pass in STDIN", to: &errStream)
 
                     throw ExitCode.failure
                 }
@@ -39,13 +39,13 @@ extension Cook {
             guard let raw = "https://raw.githubusercontent.com/cooklang/recipes/main/\(path)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let url = URL(string: raw) else {
 
-                print("Invalid path", to: &errStream)
+                print("HELPME Invalid path, please make sure path contains only valid characters", to: &errStream)
 
                 throw ExitCode.failure
             }
 
             guard let data = try? Data(contentsOf: url) else {
-                print("Error downloading recipe from \(url), please check that path is correct", to: &errStream)
+                print("HELPME Error downloading recipe from \(url), file doesn't present remotely or network is unreachable", to: &errStream)
 
                 throw ExitCode.failure
             }
@@ -54,7 +54,7 @@ extension Cook {
                 let pwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 let destinationPath = pwd.appendingPathComponent(url.lastPathComponent)
 
-                print("Saving recipe to \(destinationPath)".removingPercentEncoding!)
+                print("HELPME Saving recipe to \(destinationPath)".removingPercentEncoding!)
 
                 try data.write(to: destinationPath)
             } catch {
