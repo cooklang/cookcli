@@ -41,7 +41,7 @@ struct ShoppingListHandler {
                 }
 
                 guard let files = try? listCookFiles(filesOrDirectory) else {
-                    print("HELPME Error getting '.cook' files, please check permissions or file exist")
+                    print("Error reading '.cook' files. Make sure the files exist, and that you have permission to read them.")
                     throw Error.problemListingFiles
                 }
 

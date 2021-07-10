@@ -48,9 +48,9 @@ extension Cook {
 //                    TODO add throw
                     let parser = ConfigParser(text)
                     aisleConfig = parser.parse()
-                    print("HELPME Error loading config file at \(path), please check syntax", to: &errStream)
+                    print("Could not parse aisle config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
                 } else {
-                    print("HELPME Can't read aisle config file at \(path). Please check permissions", to: &errStream)
+                    print("Could not read aisle config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
                     throw ExitCode.failure
                 }
@@ -64,9 +64,9 @@ extension Cook {
 //                    TODO add throw
                     let parser = ConfigParser(text)
                     inflectionConfig = parser.parse()
-                    print("HELPME Error loading config file at \(path), please check syntax", to: &errStream)
+                    print("Could not parse inflection config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
                 } else {
-                    print("HELPME Can't read inflection config file at \(path). Please check permissions", to: &errStream)
+                    print("Could not read inflection config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
 
                     throw ExitCode.failure
@@ -74,7 +74,7 @@ extension Cook {
             }
 
             guard let files = try? listCookFiles(filesOrDirectory) else {
-                print("HELPME Error getting .cook files from \(filesOrDirectory), please check file exists and permissions", to: &errStream)
+                print("Could not read .cook files at \(filesOrDirectory). Make sure the files exist, and that you have permission to read them.", to: &errStream)
 
                 throw ExitCode.failure
             }
