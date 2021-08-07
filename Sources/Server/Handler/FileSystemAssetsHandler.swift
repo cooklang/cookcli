@@ -7,23 +7,6 @@
 
 import Foundation
 
-//
-//  File.swift
-//
-//
-//  Created by Alexey Dubovskoy on 28/06/2021.
-//
-
-import Foundation
-//
-//  File.swift
-//
-//
-//  Created by Alexey Dubovskoy on 16/06/2021.
-//
-
-import Foundation
-
 
 struct FileSystemAssetsHandler {
 

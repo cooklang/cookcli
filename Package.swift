@@ -13,7 +13,6 @@ let package = Package(
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
-        // .package(url: /* package url */, from: "1.0.0"),
         .package(url: "https://github.com/cooklang/CookInSwift", from: "1.2.4"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.0.1"),
         .package(url: "https://github.com/envoy/Embassy.git", from: "4.0.0"),

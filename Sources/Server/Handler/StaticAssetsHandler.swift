@@ -6,14 +6,6 @@
 //
 
 import Foundation
-//
-//  File.swift
-//
-//
-//  Created by Alexey Dubovskoy on 16/06/2021.
-//
-
-import Foundation
 
 
 struct StaticAssetsHandler {

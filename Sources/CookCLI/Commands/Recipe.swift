@@ -10,10 +10,6 @@ import ArgumentParser
 import CookInSwift
 import Catalog
 
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
-
 extension Cook {
 
     struct Recipe: ParsableCommand {
@@ -100,37 +96,37 @@ extension Cook {
             static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from upsplash.com to match the recipe title")
 
             func run() throws {
-                let fileUrl = URL(fileURLWithPath: file)
+                 let fileUrl = URL(fileURLWithPath: file)
 
-                let recipeTitle = fileUrl.deletingPathExtension().lastPathComponent
+                 let recipeTitle = fileUrl.deletingPathExtension().lastPathComponent
 
-                guard  let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] else {
-                    print("Could not find COOK_UNSPLASH_ACCESS_KEY environment variable, please register for free at https://unsplash.com/documentation#registering-your-application and set environment variable.", to: &errStream)
+                 guard  let unsplashKey = ProcessInfo.processInfo.environment["COOK_UNSPLASH_ACCESS_KEY"] else {
+                     print("Could not find COOK_UNSPLASH_ACCESS_KEY environment variable, please register for free at https://unsplash.com/documentation#registering-your-application and set environment variable.", to: &errStream)
 
-                    throw ExitCode.failure
-                }
+                     throw ExitCode.failure
+                 }
 
-                guard let urls = try? URL(string: randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)) else {
-                    print("Could not connect to Unsplash. Make sure your access key is valid, and that you have access to the internet.", to: &errStream)
+                 guard let urls = try? URL(string: randomImageUrlByTitle(query: recipeTitle, unsplashKey: unsplashKey)) else {
+                     print("Could not connect to Unsplash. Make sure your access key is valid, and that you have access to the internet.", to: &errStream)
 
-                    throw ExitCode.failure
-                }
+                     throw ExitCode.failure
+                 }
 
-                guard let data = try? Data(contentsOf: urls) else {
-                    print("Could not download image from Unsplash. Make sure you have access to the internet.", to: &errStream)
-                    throw ExitCode.failure
-                }
+                 guard let data = try? Data(contentsOf: urls) else {
+                     print("Could not download image from Unsplash. Make sure you have access to the internet.", to: &errStream)
+                     throw ExitCode.failure
+                 }
 
-                let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
-                do {
-                    print("Saving image to \(destinationPath)".removingPercentEncoding!)
+                 let destinationPath = fileUrl.deletingLastPathComponent().appendingPathComponent("\(recipeTitle).jpg")
+                 do {
+                     print("Saving image to \(destinationPath)".removingPercentEncoding!)
 
-                    try data.write(to: destinationPath)
-                } catch {
-                    print(error, to: &errStream)
+                     try data.write(to: destinationPath)
+                 } catch {
+                     print(error, to: &errStream)
 
-                    throw ExitCode.failure
-                }
+                     throw ExitCode.failure
+                 }
             }
         }
 
@@ -155,53 +151,36 @@ enum Unsplash: Swift.Error {
 }
 
 
-func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
-    var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")!
+ func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
+     var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")!
 
-    urlBuilder.queryItems = [
-        URLQueryItem(name: "query", value: query),
-        URLQueryItem(name: "orientation", value: "landscape"),
-    ]
+    // Can't use URLSession (and set creds as headers) because FoundationNetworking doesn't compile statically in Linux
+     urlBuilder.queryItems = [
+         URLQueryItem(name: "query", value: query),
+         URLQueryItem(name: "orientation", value: "landscape"),
+         URLQueryItem(name: "client_id", value: unsplashKey),
+     ]
+     var imageUrl: String?
 
-    var request = URLRequest(url: urlBuilder.url!)
-    request.httpMethod = "GET"
-    request.setValue("Client-ID \(unsplashKey)", forHTTPHeaderField: "Authorization")
 
-    let semaphore = DispatchSemaphore(value: 0)
-    var imageUrl: String?
+     guard let data = try? Data(contentsOf: urlBuilder.url!) else {
+         print("Could not download image location from Unsplash. Make sure you have access to the internet and valid client_id.", to: &errStream)
+         throw ExitCode.failure
+     }
 
-    URLSession.shared.dataTask(with: request) { (maybeData, response, maybeError) in
-        if let error = maybeError {
-            print(error, to: &errStream)
-            semaphore.signal()
+     if let responseJSON = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+         guard let urls = responseJSON["urls"] as? [String: Any] else {
+             print("Invalid JSON response from Unsplash. Try again to look for a new random image.", to: &errStream)
 
-            return
-        }
+             throw ExitCode.failure
+         }
 
-        guard let data = maybeData else {
-            print("Image download returned empty image. Try again to look for a new random image.", to: &errStream)
+         imageUrl = urls["regular"] as? String
+     }
 
-            return
-        }
-
-        if let responseJSON = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-            guard let urls = responseJSON["urls"] as? [String: Any] else {
-                print("Invalid JSON response from Unsplash. Try again to look for a new random image.", to: &errStream)
-
-                return
-            }
-
-            imageUrl = urls["regular"] as? String
-        }
-
-        semaphore.signal()
-    }.resume()
-
-    _ = semaphore.wait(timeout: .distantFuture)
-
-    if imageUrl != nil {
-        return imageUrl!
-    } else {        
-        throw ImageFetcherError.errorGettingImage
-    }
-}
+     if imageUrl != nil {
+         return imageUrl!
+     } else {
+         throw ImageFetcherError.errorGettingImage
+     }
+ }
