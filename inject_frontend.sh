@@ -1,7 +1,7 @@
 # run to inject static assets into code
 # bash ./inject_frontend.sh
 
-cd Frontend
+cd Sources/Server/Frontend
 
 npm run build
 
@@ -26,8 +26,5 @@ sed -i '' "s|let bootstrapCss.*|let bootstrapCss = \"$BOOTSTRAP_CSS\"|g" ./Handl
 echo "Injecting favicon..."
 FAVICON=$(brotli --stdout ./Frontend/public/favicon.png | base64)
 sed -i '' "s|let faviconPng.*|let faviconPng = \"$FAVICON\"|g" ./Handler/StaticAssetsHandler.swift
-
-
-
 
 echo "Done"
