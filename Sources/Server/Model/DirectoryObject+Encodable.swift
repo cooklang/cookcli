@@ -8,6 +8,24 @@
 import Foundation
 
 extension DirectoryObject: Encodable {
+    enum StaticKeys: String, CodingKey {
+        case type
+        case children
+    }
+
+    struct DirectoryKeys: CodingKey {
+        var intValue: Int?
+
+        init?(intValue: Int) {
+            return nil
+        }
+
+        var stringValue: String
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+        }
+    }
+    
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: StaticKeys.self)
 

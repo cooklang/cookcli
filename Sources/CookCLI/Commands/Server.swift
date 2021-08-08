@@ -34,44 +34,39 @@ extension Cook {
         @Option(name: .shortAndLong, help: "Set the IP to which the server should bind")
         var bind: String = "127.0.0.1"
 
+        @Argument(help: "A path to serve cook files from")
+        var root: String?
+
         // MARK: ParsableCommand
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Run a webserver to serve your recipes on the web")
 
         func run() throws {
+            let configLoader = ConfigLoader()
             var aisleConfig: CookConfig?
-            let aisleConfigPath = findConfigFile(type: "aisle", aisle)
-
-            if let path = aisleConfigPath {
-                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
-//                    TODO add throw
-                    let parser = ConfigParser(text)
-                    aisleConfig = parser.parse()
-                    print("Could not parse aisle config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
-                } else {
-                    print("Could not read aisle config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
-
-                    throw ExitCode.failure
-                }
-            }
-
             var inflectionConfig: CookConfig?
-            let inflectionConfigPath = findConfigFile(type: "inflection", aisle)
 
-            if let path = inflectionConfigPath {
-                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
-//                    TODO add throw
-                    let parser = ConfigParser(text)
-                    inflectionConfig = parser.parse()
-                    print("Could not parse inflection config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
-                } else {
-                    print("Could not read inflection config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
+            do {
+                aisleConfig = try configLoader.load(type: "aisle", referenced: aisle)
+            } catch ConfigLoadError.UnparsableFile(let path) {
+                print("Could not parse aisle config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
+            } catch ConfigLoadError.UnreadableFile(let path) {
+                print("Could not read aisle config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
-                    throw ExitCode.failure
-                }
+                throw ExitCode.failure
             }
 
             do {
-                try WebServer(interface: bind, port: port).start(aisle: aisleConfig, inflection: inflectionConfig)
+                inflectionConfig = try configLoader.load(type: "inflection", referenced: aisle)
+            } catch ConfigLoadError.UnparsableFile(let path) {
+                print("Could not parse inflection config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
+            } catch ConfigLoadError.UnreadableFile(let path) {
+                print("Could not read inflection config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
+
+                throw ExitCode.failure
+            }
+
+            do {
+                try WebServer(interface: bind, port: port).start(root: root ?? FileManager.default.currentDirectoryPath, aisle: aisleConfig, inflection: inflectionConfig)
             } catch {
                 print(error, to: &errStream)
                 

@@ -22,24 +22,6 @@ class DirectoryObject: FileSystemObject, Hashable, Equatable {
 
     func hash(into hasher: inout Hasher) {
         return hasher.combine(name)
-    }
-
-    enum StaticKeys: String, CodingKey {
-        case type
-        case children
-    }
-
-    struct DirectoryKeys: CodingKey {
-        var intValue: Int?
-
-        init?(intValue: Int) {
-            return nil
-        }
-
-        var stringValue: String
-        init?(stringValue: String) {
-            self.stringValue = stringValue
-        }
-    }
+    }    
 
 }

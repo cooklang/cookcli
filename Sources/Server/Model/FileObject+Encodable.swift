@@ -8,6 +8,12 @@
 import Foundation
 
 extension FileObject: Encodable {
+
+    enum FileKeys: String, CodingKey {
+        case type
+        case image
+    }
+    
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: FileKeys.self)
 

@@ -9,16 +9,18 @@ import Foundation
 
 
 struct FileSystemAssetsHandler {
+    var root: String
 
+    init(root: String) {
+        self.root = root
+    }
 
     func callAsFunction(_ environ: [String : Any], _ sendData: @escaping (Data) -> Void) -> Void {
         let captures = environ["ambassador.router_captures"] as! [String]
         var path = captures[0]
         path = path.removingPercentEncoding!
 
-        let pwd = FileManager.default.currentDirectoryPath
-//        TODO
-        let file = "\(pwd)/samples/\(path)"
+        let file = "\(root)/\(path)"
 
         do {
             try sendData(Data(contentsOf: URL(fileURLWithPath: file)))

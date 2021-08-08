@@ -23,9 +23,4 @@ class FileObject: FileSystemObject, Hashable {
         return hasher.combine(name)
     }
 
-    enum FileKeys: String, CodingKey {
-        case type
-        case image
-    }
-
 }

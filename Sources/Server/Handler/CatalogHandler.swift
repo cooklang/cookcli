@@ -9,10 +9,14 @@ import Foundation
 
 
 struct CatalogHandler {
+    var root: String
+
+    init(root: String) {
+        self.root = root
+    }
 
     func callAsFunction(_ environ: [String : Any], _ sendData: @escaping (Data) -> Void) -> Void {
-        let pwd = FileManager.default.currentDirectoryPath
-        let url = URL(fileURLWithPath: pwd + "/samples")
+        let url = URL(fileURLWithPath: root)
         let skipPathComponents = url.pathComponents.count
 
         let fileTree = DirectoryObject(name: "/")
