@@ -12,15 +12,19 @@ import Ambassador
 import CookInSwift
 import Catalog
 
-struct ShoppingListHandler {
-    enum Error: Swift.Error {
-        case problemListingFiles
-    }
+public enum ShoppingListHandlerError: Error {
+    case FailedListingFiles
+    case FailedReadingFile(path: String)
+}
 
+struct ShoppingListHandler {
+    var root: String
     var aisle: CookConfig?
     var inflection: CookConfig?
+    var fileLister = CookFileLister()
 
-    init(aisle: CookConfig?, inflection: CookConfig?) {
+    init(root: String, aisle: CookConfig?, inflection: CookConfig?) {
+        self.root = root
         self.aisle = aisle
         self.inflection = inflection
     }
@@ -28,36 +32,28 @@ struct ShoppingListHandler {
     func callAsFunction(_ environ: [String : Any], _ sendData: @escaping (Data) -> Void) -> Void {
         let input = environ["swsgi.input"] as! SWSGIInput
 
-    //        guard environ["HTTP_CONTENT_LENGTH"] != nil else {
-    //            // handle error
-    //            sendJSON([])
-    //            return
-    //        }
-
         JSONReader.read(input) { json in
             do {
                 let filesOrDirectory: [String] = (json as! [String]).map { file in
-                    return "\(FileManager.default.currentDirectoryPath)/samples/\(file).cook"
+                    return "\(root)/\(file).cook"
                 }
 
-                guard let files = try? listCookFiles(filesOrDirectory) else {
+                guard let files = try? fileLister.list(filesOrDirectory) else {
                     print("Error reading '.cook' files. Make sure the files exist, and that you have permission to read them.")
-                    throw Error.problemListingFiles
+                    throw ShoppingListHandlerError.FailedListingFiles
                 }
 
-                let ingredientTable = try combineShoppingList(files, inflection: inflection)
-
-                let sections = groupShoppingList(ingredients: ingredientTable.ingredients, aisle: aisle)
-
-                var result: [String: [[String : String]] ] = [:]
-
-                sections.sorted(by: { $0.0 < $1.0 }).forEach { section, table in
-                    for (ingredient, amounts) in table.ingredients {
-                        result[section, default: []].append(["name": ingredient, "amount": amounts.description])
+                let recipes: [CookRecipe] = try files.map { file in
+                    if let text = try? String(contentsOfFile: file, encoding: String.Encoding.utf8) {
+                        return CookRecipe(text)
+                    } else {
+                        throw ShoppingListHandlerError.FailedReadingFile(path: file)
                     }
                 }
 
-                let jsonData = try JSONEncoder().encode(result)
+                let shoppingList = CookShoppingList(recipes: recipes, inflection: inflection, aisle: aisle)
+
+                let jsonData = try JSONEncoder().encode(shoppingList)
                 let jsonString = String(data: jsonData, encoding: .utf8)!
 
                 sendData(Data(jsonString.utf8))

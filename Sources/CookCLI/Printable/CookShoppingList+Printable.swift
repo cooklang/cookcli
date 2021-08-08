@@ -10,39 +10,31 @@ import CookInSwift
 import Yams
 import Catalog
 
-extension IngredientTable {
+extension CookShoppingList {
 
     public enum Error: Swift.Error {
         case invalidJSON
     }
 
-    func print(onlyIngredients: Bool, outputFormat: OutputFormat, aisle: CookConfig?) throws {
-        let sections = groupShoppingList(ingredients: ingredients, aisle: aisle)
-
+    func print(onlyIngredients: Bool, outputFormat: OutputFormat) throws {
         switch outputFormat {
         case .text:
-            printText(sections: sections, onlyIngredients: onlyIngredients)
+            printText(onlyIngredients: onlyIngredients)
         case .json:
-            try printJson(sections: sections)
+            try printJson()
         case .yaml:
-            try printYaml(sections: sections)
+            try printYaml()
         }
     }
 
-    private func printText(sections: [String: IngredientTable], onlyIngredients: Bool) {
+    private func printText(onlyIngredients: Bool) {
         sections.sorted(by: { $0.0 < $1.0 }).forEach { section, table in
             Swift.print(printableLines(table: table, onlyIngredients: onlyIngredients, title: section).map { $0.description }.joined(separator: .newLine))
         }
     }
 
-    private func printJson(sections: [String: IngredientTable]) throws {
-        var endoded: [String: [[String : String]] ] = [:]
-
-        sections.sorted(by: { $0.0 < $1.0 }).forEach { section, table in
-            endoded[section] = encodeIngredients(table)
-        }
-
-        let jsonData = try JSONEncoder().encode(endoded)
+    private func printJson() throws {
+        let jsonData = try JSONEncoder().encode(self)
 
         guard let jsonString = String(data: jsonData, encoding: .utf8) else {
             throw Error.invalidJSON
@@ -51,14 +43,8 @@ extension IngredientTable {
         Swift.print(jsonString.utf8)
     }
 
-    private func printYaml(sections: [String: IngredientTable]) throws {
-        var endoded: [String: [[String : String]] ] = [:]
-
-        sections.sorted(by: { $0.0 < $1.0 }).forEach { section, table in
-            endoded[section] = encodeIngredients(table)
-        }
-
-        let yamlData = try YAMLEncoder().encode(endoded)
+    private func printYaml() throws {
+        let yamlData = try YAMLEncoder().encode(self)
 
         Swift.print(yamlData.utf8)
     }
@@ -85,8 +71,8 @@ extension IngredientTable {
 
 }
 
-extension IngredientTable: Printable {
-    func printableLines() -> [PrintableLine] {
-        printableLines(table: self, onlyIngredients: false, title: "Ingredients:")
-    }
-}
+//extension CookShoppingList: Printable {
+//    func printableLines() -> [PrintableLine] {
+//        printableLines(table: self, onlyIngredients: false, title: "Ingredients:")
+//    }
+//}

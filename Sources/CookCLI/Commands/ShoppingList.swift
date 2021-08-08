@@ -40,50 +40,52 @@ extension Cook {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Create a shopping list")
 
         func run() throws {
+            let configLoader = ConfigLoader()
+            let fileLister = CookFileLister()
             var aisleConfig: CookConfig?
-            let aisleConfigPath = findConfigFile(type: "aisle", aisle)
-
-            if let path = aisleConfigPath {
-                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
-//                    TODO add throw
-                    let parser = ConfigParser(text)
-                    aisleConfig = parser.parse()
-                    print("Could not parse aisle config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
-                } else {
-                    print("Could not read aisle config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
-
-                    throw ExitCode.failure
-                }
-            }
-
             var inflectionConfig: CookConfig?
-            let inflectionConfigPath = findConfigFile(type: "inflection", aisle)
-
-            if let path = inflectionConfigPath {
-                if let text = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
-//                    TODO add throw
-                    let parser = ConfigParser(text)
-                    inflectionConfig = parser.parse()
-                    print("Could not parse inflection config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
-                } else {
-                    print("Could not read inflection config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
 
-                    throw ExitCode.failure
-                }
-            }
-
-            guard let files = try? listCookFiles(filesOrDirectory) else {
-                print("Could not read .cook files at \(filesOrDirectory). Make sure the files exist, and that you have permission to read them.", to: &errStream)
+            do {
+                aisleConfig = try configLoader.load(type: "aisle", referenced: aisle)
+            } catch ConfigLoadError.UnparsableFile(let path) {
+                print("Could not parse aisle config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
+            } catch ConfigLoadError.UnreadableFile(let path) {
+                print("Could not read aisle config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
                 throw ExitCode.failure
             }
 
             do {
-                let ingredientTable = try combineShoppingList(files, inflection: inflectionConfig)
+                inflectionConfig = try configLoader.load(type: "inflection", referenced: aisle)
+            } catch ConfigLoadError.UnparsableFile(let path) {
+                print("Could not parse inflection config file at \(path). Make sure the syntax of the config file is correct.", to: &errStream)
+            } catch ConfigLoadError.UnreadableFile(let path) {
+                print("Could not read inflection config file at \(path). Make sure the file exists, and that you have permission to read it.", to: &errStream)
 
-                try ingredientTable.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat, aisle: aisleConfig)
+                throw ExitCode.failure
+            }
 
+            guard let files = try? fileLister.list(filesOrDirectory) else {
+                print("Could not read .cook files at \(filesOrDirectory). Make sure the files exist, and that you have permission to read them.", to: &errStream)
+
+                throw ExitCode.failure
+            }
+
+            let recipes: [CookRecipe] = try files.map { file in
+                if let text = try? String(contentsOfFile: file, encoding: String.Encoding.utf8) {
+                    return CookRecipe(text)
+                } else {
+                    print("Could not read .cook files at \(file). Make sure the file exist, and that you have permission to read them.", to: &errStream)
+
+                    throw ExitCode.failure
+                }
+            }
+
+            do {
+                let shoppingList = CookShoppingList(recipes: recipes, inflection: inflectionConfig, aisle: aisleConfig)
+
+                try shoppingList.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
             } catch {
                 print(error, to: &errStream)
 
