@@ -32,14 +32,6 @@ func readSTDIN () -> String? {
     return input
 }
 
-protocol Configurable {
-    func findConfig()
-}
-
-extension Configurable {
-    
-}
-
 enum OutputFormat: String, ExpressibleByArgument {
     case text, json, yaml
 }

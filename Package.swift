@@ -34,10 +34,6 @@ let package = Package(
             ]
         ),
         .target(
-            name: "ShoppingList",
-            dependencies: ["CookInSwift"]
-        ),
-        .target(
             name: "Catalog",
             dependencies: ["CookInSwift"]
         ),
@@ -46,7 +42,6 @@ let package = Package(
             dependencies: ["CookInSwift",
                            "Yams",
                            .target(name: "Server"),
-                           .target(name: "ShoppingList"),
                            .target(name: "Catalog"),
                            .product(name: "ArgumentParser", package: "swift-argument-parser")]),
         .testTarget(

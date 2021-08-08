@@ -49,7 +49,7 @@ extension Cook {
                 }
 
                 do {
-                    let parsed = parseFile(recipe: recipe)
+                    let parsed = CookRecipe(recipe)
 
                     try parsed.print(onlyIngredients: onlyIngredients, outputFormat: outputFormat)
                 } catch {
@@ -142,17 +142,11 @@ extension Cook {
     }
 }
 enum ImageFetcherError: Error {
-    case errorGettingImage
+    case ErrorGettingImage
 }
 
-
-enum Unsplash: Swift.Error {
-    case baseUrlError
-}
-
-
- func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
-     var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")!
+func randomImageUrlByTitle(query: String, unsplashKey: String) throws -> String  {
+    var urlBuilder = URLComponents(string: "https://api.unsplash.com/photos/random")!
 
     // Can't use URLSession (and set creds as headers) because FoundationNetworking doesn't compile statically in Linux
      urlBuilder.queryItems = [
@@ -181,6 +175,6 @@ enum Unsplash: Swift.Error {
      if imageUrl != nil {
          return imageUrl!
      } else {
-         throw ImageFetcherError.errorGettingImage
+         throw ImageFetcherError.ErrorGettingImage
      }
  }

@@ -10,7 +10,7 @@ import CookInSwift
 import Yams
 import Catalog
 
-extension SemanticRecipe {
+extension CookRecipe {
 
     public enum Error: Swift.Error {
         case invalidJSON
@@ -34,7 +34,7 @@ extension SemanticRecipe {
     }
 
     private func printJson() throws {
-        let jsonData = try JSONEncoder().encode(encodeRecipe(self))
+        let jsonData = try JSONEncoder().encode(self)
 
         guard let jsonString = String(data: jsonData, encoding: .utf8) else {
             throw Error.invalidJSON
@@ -44,7 +44,7 @@ extension SemanticRecipe {
     }
 
     private func printYaml() throws {
-        let yamlData = try YAMLEncoder().encode(encodeRecipe(self))
+        let yamlData = try YAMLEncoder().encode(self)
 
         Swift.print(yamlData.utf8)
     }
@@ -70,9 +70,9 @@ extension SemanticRecipe {
             lines.append(.empty)
         }
 
-        if (!equipment.isEmpty && fullOutput) {
+        if (!cookware.isEmpty && fullOutput) {
             lines.append(.text("Cookware:"))
-            equipment.forEach { e in
+            cookware.forEach { e in
                 lines.append(.cookware(e, OFFSET_UNIT))
             }
             lines.append(.empty)
@@ -91,7 +91,7 @@ extension SemanticRecipe {
     }
 }
 
-extension SemanticRecipe: Printable {
+extension CookRecipe: Printable {
     func printableLines() -> [PrintableLine] {
         printableLines(onlyIngredients: false)
     }

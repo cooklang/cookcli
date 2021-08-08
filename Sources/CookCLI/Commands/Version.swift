@@ -13,10 +13,10 @@ extension Cook {
     struct Version: ParsableCommand {
 
         // MARK: ParsableCommand
-        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Show the CookCLI version information (TODO)")
+        static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Show the CookCLI version information")
 
         func run() throws {
-            print("v0.0.1 – in food we trust")
+            print("v0.0.2 – in food we trust")
         }
     }
 }
