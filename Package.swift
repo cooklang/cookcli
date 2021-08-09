@@ -18,6 +18,7 @@ let package = Package(
         .package(url: "https://github.com/envoy/Embassy.git", from: "4.0.0"),
         .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "4.0.6"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0"))
     ],
     targets: [
         .target(
@@ -41,6 +42,7 @@ let package = Package(
             name: "CookCLI",
             dependencies: ["CookInSwift",
                            "Yams",
+                           "ZIPFoundation",
                            .target(name: "Server"),
                            .target(name: "Catalog"),
                            .product(name: "ArgumentParser", package: "swift-argument-parser")]),

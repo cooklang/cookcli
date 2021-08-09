@@ -5,13 +5,17 @@ all: release
 
 release: prepare release_linux release_macos
 
-prepare: update_version inject_frontend
+prepare: update_version inject_seed inject_frontend
 release_linux: build_linux archive_linux smoketest_linux
 release_macos: build_macos archive_macos
 
+inject_seed:
+	echo "Building frontend and injecting assets"
+	bash ./scripts/inject_frontend.sh
+
 inject_frontend:
 	echo "Building frontend and injecting assets"
-	bash inject_frontend.sh
+	bash ./scripts/inject_frontend.sh
 
 update_version:
 	echo "Setting version to $(VERSION)"
