@@ -36,13 +36,7 @@ enum OutputFormat: String, ExpressibleByArgument {
     case text, json, yaml
 }
 
-struct Cook: ParsableCommand {
-
-    @Option(name: .shortAndLong, help: "Specify a units.conf file to override units default settings (TODO)")
-    var units: String?
-
-    @Option(name: .shortAndLong, help: "Specify an inflection.conf file to override default inflection settings (TODO)")
-    var inflection: String?
+struct Cook: ParsableCommand {    
 
     // MARK: ParsableCommand
     static var configuration: CommandConfiguration = CommandConfiguration(abstract: """
