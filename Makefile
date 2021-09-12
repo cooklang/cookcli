@@ -6,7 +6,7 @@ all: release
 release: prepare release_linux release_macos
 
 prepare: update_version inject_seed inject_frontend
-release_linux: build_linux archive_linux smoketest_linux
+release_linux: build_linux archive_linux #smoketest_linux
 release_macos: build_macos archive_macos
 
 inject_seed:

@@ -12,8 +12,7 @@ public class CookRecipe {
     internal var parsed: SemanticRecipe
 
     public init(_ text: String) {
-        let parser = Parser(text)
-        let node = parser.parse()
+        let node = try! Parser.parse(text)
         let analyzer = SemanticAnalyzer()
         self.parsed = analyzer.analyze(node: node)
     }

@@ -36,7 +36,8 @@ struct CatalogHandler {
                                 while relativePathComponents.count > 1 {
                                     let dir = relativePathComponents.removeFirst()
 
-                                    let dirObject = DirectoryObject(name: dir)
+                                    let dirObject = pointer.directories.first(where: { $0.name == dir }) ?? DirectoryObject(name: dir)
+
                                     pointer.directories.insert(dirObject)
                                     pointer = dirObject
                                 }
