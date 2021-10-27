@@ -30,18 +30,18 @@ public struct WebServer {
         router["^/api/v1/recipe/(.+)"] = DataResponse(contentType: "application/json", handler: RecipeHandler(root: root).callAsFunction)
         router["^/api/v1/shopping-list"] = DataResponse(contentType: "application/json", handler: ShoppingListHandler(root: root, aisle: aisle, inflection: inflection).callAsFunction)
 
-        router["^/favicon.png"] = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.FaviconPng().callAsFunction)
+        router["^/favicon.png"] = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.FaviconPng().callAsFunction)
 
-        router["^/build/bundle.js"] = DataResponse(contentType: "application/javascript; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.BundleJs().callAsFunction)
+        router["^/build/bundle.js"] = DataResponse(contentType: "application/javascript; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BundleJs().callAsFunction)
 
-        router["^/build/bundle.css"] = DataResponse(contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.BundleCss().callAsFunction)
+        router["^/build/bundle.css"] = DataResponse(contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BundleCss().callAsFunction)
 
-        router["^/vendor/bootstrap/css/bootstrap.min.css"] = DataResponse(contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.BootstrapCss().callAsFunction)
+        router["^/vendor/bootstrap/css/bootstrap.min.css"] = DataResponse(contentType: "text/css; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.BootstrapCss().callAsFunction)
 
         router["^/(.+jpg)$"] = DataResponse(contentType: "image/jpeg", handler: FileSystemAssetsHandler(root: root).callAsFunction)
         router["^/(.+png)$"] = DataResponse(contentType: "image/png", handler: FileSystemAssetsHandler(root: root).callAsFunction)
 
-        router["^/$"] = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "br")], handler: StaticAssetsHandler.IndexHTML().callAsFunction)
+        router["^/$"] = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.IndexHTML().callAsFunction)
 
         // Start HTTP server to listen on the port
         try server.start()
