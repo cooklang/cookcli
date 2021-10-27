@@ -16,7 +16,7 @@ extension Cook {
         static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Show the CookCLI version information")
 
         func run() throws {
-            print("v0.0.7 – in food we trust")
+            print("v0.0.8 – in food we trust")
         }
     }
 }
