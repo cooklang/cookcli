@@ -51,7 +51,7 @@
         {#if file.type === "file"}
         <ListGroupItem>
             {#if file.image}
-                <img height="42px" alt={name} src={"http://localhost:9080/" + recipesPath + "/" + file.image} />
+                <img height="42px" alt={name} src={"/" + recipesPath + "/" + file.image} />
             {/if}
             <Link to={getFilePath(recipesPath, name)}>
                 {name}
