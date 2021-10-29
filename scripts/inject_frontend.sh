@@ -3,6 +3,7 @@
 
 cd Sources/Server/Frontend
 
+npm install
 npm run build
 
 cd ..
