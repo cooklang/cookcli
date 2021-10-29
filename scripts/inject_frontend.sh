@@ -1,7 +1,7 @@
 # run to inject static assets into code
 # bash ./inject_frontend.sh
 
-cd Sources/Server/Frontend
+cd "$(dirname "$0")/../Sources/Server/Frontend" || exit
 
 npm install
 npm run build
