@@ -9,6 +9,21 @@ Download latest release for your platform from the [releases page](https://githu
 On Linux (or [WSL](https://docs.microsoft.com/en-us/windows/wsl/about)), this is easy. Simply extract the binary into your binaries folder with `sudo unzip CookCLI_1.0.0_linux_amd64.zip -d /usr/local/bin/` (note: you may need to install the unzip package first). 
 
 TODO: Mac install.
+
+## Building from source
+
+1. Install Swift by following official [instructions](https://swift.org/getting-started/#installing-swift).
+2. Build CookCLI from a directory with the source code:
+
+```
+swift build --configuration release -Xswiftc -static-stdlib
+```
+
+Note. There's a `Dockerfile` for building Linux binary:
+
+    docker build -t cook-builder .
+    docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-stdlib
+
     
 ## Usage
 `cook` is a toolkit for command-line interaction with CookLang text files
