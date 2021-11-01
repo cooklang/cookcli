@@ -12,14 +12,16 @@ TODO: Mac install.
 
 ## Building from source
 
-1. Install Swift by following official [instructions](https://swift.org/getting-started/#installing-swift).
-2. Build CookCLI from a directory with the source code:
+1. Checkout code.
+2. Install Swift by following official [instructions](https://swift.org/getting-started/#installing-swift).
+3. Build CookCLI from a directory with the source code:
 
 ```
 swift build --configuration release -Xswiftc -static-stdlib
 ```
+4. Take binary from `.build/x86_64-unknown-linux-gnu/release/cook` or `.build/x86_64-apple-macosx/release/cook`
 
-Note. There's a `Dockerfile` for building Linux binary:
+Note. If you don't want to install Swift, there's a `Dockerfile` for building Linux binary:
 
     docker build -t cook-builder .
     docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-stdlib
