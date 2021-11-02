@@ -10,8 +10,8 @@ release_linux: build_linux archive_linux #smoketest_linux
 release_macos: build_macos archive_macos
 
 inject_seed:
-	echo "Building frontend and injecting assets"
-	bash ./scripts/inject_frontend.sh
+	echo "Inline sample recipes"
+	bash ./scripts/inject_seed.sh
 
 inject_frontend:
 	echo "Building frontend and injecting assets"
@@ -31,12 +31,26 @@ archive_linux:
 	mv ".build/x86_64-unknown-linux-gnu/release/CookCLI_$(VERSION)_linux_amd64.zip" ./releases/
 
 smoketest_linux:
-	docker run -v $(CURRENT_PATH):/src -it ubuntu /src/.build/x86_64-unknown-linux-gnu/release/cook recipe read /src/samples/Borsch.cook
+	docker run -v $(CURRENT_PATH):/src -it ubuntu /src/.build/x86_64-unknown-linux-gnu/release/cook recipe read /src/seed/Borsch.cook
 
 
 build_macos:
-	swift build --configuration release  --static-swift-stdlib
+	swift build --configuration release
 
-archive_macos:
-	cd .build/x86_64-apple-macosx/release/ && zip "CookCLI_$(VERSION)_darwin_amd64.zip" cook
-	mv ".build/x86_64-apple-macosx/release/CookCLI_$(VERSION)_darwin_amd64.zip" ./releases/
+check_env:
+	if test "$(SIGNING_IDENTIFIER)" = "" ; then \
+		echo "SIGNING_IDENTIFIER not set"; \
+		exit 1; \
+	fi
+
+# You need to define `SIGNING_IDENTIFIER` environment variable. the value looks like "Developer ID Application: <TEAM NAME> (<TEAM_ID>)". You can see <TEAM NAME> and <TEAM_ID> at https://developer.apple.com/account/#!/membership
+# Run `xcrun notarytool store-credentials` to store the passowrd
+archive_macos: check_env
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64"
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64.zip"
+	mkdir "./releases/CookCLI_$(VERSION)_darwin_amd64"
+	cp .build/x86_64-apple-macosx/release/cook "./releases/CookCLI_$(VERSION)_darwin_amd64"
+	codesign --force --options runtime --deep-verify --verbose --sign "$(SIGNING_IDENTIFIER)" "./releases/CookCLI_$(VERSION)_darwin_amd64/cook"
+	ditto -c -k "./releases/CookCLI_$(VERSION)_darwin_amd64" "./releases/CookCLI_$(VERSION)_darwin_amd64.zip"
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64"
+	xcrun notarytool submit "./releases/CookCLI_$(VERSION)_darwin_amd64.zip" --keychain-profile 'AC_PASSWORD' --wait

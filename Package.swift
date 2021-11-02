@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "CookCLI",
     platforms: [
-        .macOS(.v10_15)
+        .macOS(.v10_12)
     ],
     products: [
         .executable(name: "cook", targets: ["CookCLI"])
@@ -26,7 +26,7 @@ let package = Package(
             dependencies: [.product(name: "Embassy", package: "Embassy"),
                            .product(name: "Ambassador", package: "Ambassador"),
                            .target(name: "Catalog")],
-            exclude: ["Frontend", "inject_frontend.sh"],
+            exclude: ["Frontend"],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of
                 // the `.unsafeFlags` construct required by SwiftPM, this flag is recommended for Release
