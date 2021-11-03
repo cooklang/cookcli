@@ -35,7 +35,7 @@ smoketest_linux:
 
 
 build_macos:
-	swift build --configuration release
+	swift build --configuration release --arch arm64 --arch x86_64
 
 check_env:
 	if test "$(SIGNING_IDENTIFIER)" = "" ; then \
@@ -46,11 +46,11 @@ check_env:
 # You need to define `SIGNING_IDENTIFIER` environment variable. the value looks like "Developer ID Application: <TEAM NAME> (<TEAM_ID>)". You can see <TEAM NAME> and <TEAM_ID> at https://developer.apple.com/account/#!/membership
 # Run `xcrun notarytool store-credentials` to store the passowrd
 archive_macos: check_env
-	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64"
-	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64.zip"
-	mkdir "./releases/CookCLI_$(VERSION)_darwin_amd64"
-	cp .build/x86_64-apple-macosx/release/cook "./releases/CookCLI_$(VERSION)_darwin_amd64"
-	codesign --force --options runtime --deep-verify --verbose --sign "$(SIGNING_IDENTIFIER)" "./releases/CookCLI_$(VERSION)_darwin_amd64/cook"
-	ditto -c -k "./releases/CookCLI_$(VERSION)_darwin_amd64" "./releases/CookCLI_$(VERSION)_darwin_amd64.zip"
-	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64"
-	xcrun notarytool submit "./releases/CookCLI_$(VERSION)_darwin_amd64.zip" --keychain-profile 'AC_PASSWORD' --wait
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64"
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64.zip"
+	mkdir "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64"
+	cp .build/apple/Products/Release/cook "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64"
+	codesign --force --options runtime --deep-verify --verbose --sign "$(SIGNING_IDENTIFIER)" "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64/cook"
+	ditto -c -k "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64" "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64.zip"
+	rm -rf "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64"
+	xcrun notarytool submit "./releases/CookCLI_$(VERSION)_darwin_amd64_arm64.zip" --keychain-profile 'AC_PASSWORD' --wait
