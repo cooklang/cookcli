@@ -30,6 +30,10 @@
         return currentTree;
     }
 
+    function sorted(a, b) {
+        return a[0].localeCompare(b[0]);
+    }
+
     $: currentTree = calculateCurrentSubtree(recipesPath, $fileTree);
 
 </script>
@@ -39,7 +43,7 @@
     <Breadcrumbs path={recipesPath} />
 
     {#if currentTree}
-    {#each Object.entries(currentTree) as [name, file] (name)}
+    {#each Object.entries(currentTree).sort(sorted) as [name, file] (name)}
         {#if file.type === "directory"}
         <ListGroupItem>
             <DirectoryIcon /> <Link to={getDirPath(recipesPath, name)}>{name}</Link>
@@ -47,7 +51,7 @@
         {/if}
     {/each}
 
-    {#each Object.entries(currentTree) as [name, file] (name)}
+    {#each Object.entries(currentTree).sort(sorted) as [name, file] (name)}
         {#if file.type === "file"}
         <ListGroupItem>
             {#if file.image}
