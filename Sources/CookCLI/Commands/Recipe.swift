@@ -93,7 +93,7 @@ extension Cook {
             var file: String
 
             // MARK: ParsableCommand
-            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from upsplash.com to match the recipe title")
+            static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Download a random image from unsplash.com to match the recipe title")
 
             func run() throws {
                  let fileUrl = URL(fileURLWithPath: file)
