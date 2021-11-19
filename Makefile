@@ -24,7 +24,7 @@ update_version:
 
 build_linux:
 	docker build -t cook-builder .
-	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-stdlib
+	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable
 
 archive_linux:
 	cd .build/x86_64-unknown-linux-gnu/release/ && zip "CookCLI_$(VERSION)_linux_amd64.zip" cook
