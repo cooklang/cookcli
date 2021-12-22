@@ -1,4 +1,5 @@
-echo "Injecting html..."
+echo "Injecting seed..."
 cd ./seed
 SEED=$(zip -r - ./ | base64)
-sed -i '' "s|let seed.*|let seed = \"$SEED\"|g" ../Sources/CookCLI/Commands/Seed.swift
+echo "s|let seed.*|let seed = \"$SEED\"|g" > inject_seed_command
+sed -i '' -f inject_seed_command ../Sources/CookCLI/Commands/Seed.swift
