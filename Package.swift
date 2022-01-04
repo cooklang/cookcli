@@ -15,8 +15,8 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/cooklang/CookInSwift", from: "0.1.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.0.1"),
-        .package(url: "https://github.com/envoy/Embassy.git", from: "4.0.0"),
-        .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.0"),
+        .package(url: "https://github.com/envoy/Embassy.git", from: "4.1.2"),
+        .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.5"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "4.0.6"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0"))
     ],
