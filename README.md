@@ -2,6 +2,12 @@
 
 CookCLI provides a suite of tools to create shopping lists and maintain recipes. We've built it to be simple and useful for automating your cooking and shopping routine with existing UNIX command line and scripting tools. It can also function as a webserver for your recipes, making them browsable on any device with a web browser.
 
+* [Example usage](#example-usage)  
+* [Installation](#installation)  
+* [Building from source](#building-from-source)  
+* [Contribution](#contribution)  
+* [License](#license)  
+
 ## Example usage
 
 Add sample recipes:
