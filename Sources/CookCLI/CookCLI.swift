@@ -47,7 +47,6 @@ struct Cook: ParsableCommand {
             Recipe.self,
             ShoppingList.self,
             Server.self,
-            Fetch.self,
             Seed.self,
             Version.self
         ]
