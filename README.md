@@ -114,7 +114,7 @@ TINNED GOODS AND BAKING
     redcurrant jelly              1 tsp
 ```
 
-Run web-server:
+Run a web-server:
 
     $ cook server
     Started server on http://127.0.0.1:9080, serving cook files from /Users/pochho/recipes.
