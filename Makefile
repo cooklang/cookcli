@@ -24,11 +24,14 @@ update_version:
 
 build_linux:
 	docker build -t cook-builder .
-	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable
+	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "x86_64-unknown-linux-gnu"
+	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it swiftarm/swift build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "aarch64-unknown-linux-gnu"
 
 archive_linux:
 	cd .build/x86_64-unknown-linux-gnu/release/ && zip "CookCLI_$(VERSION)_linux_amd64.zip" cook
 	mv ".build/x86_64-unknown-linux-gnu/release/CookCLI_$(VERSION)_linux_amd64.zip" ./releases/
+	cd .build/aarch64-unknown-linux-gnu/release/ && zip "CookCLI_$(VERSION)_linux_arm64.zip" cook
+	mv ".build/aarch64-unknown-linux-gnu/release/CookCLI_$(VERSION)_linux_arm64.zip" ./releases/
 
 smoketest_linux:
 	docker run -v $(CURRENT_PATH):/src -it ubuntu /src/.build/x86_64-unknown-linux-gnu/release/cook recipe read /src/seed/Borsch.cook
