@@ -26,7 +26,7 @@ public class CookShoppingList {
         get {
             var sections: [String: IngredientTable] = [:]
             let ingredientTable = recipes.reduce(IngredientTable()) { table, recipe in
-                table + recipe.ingredientsTable
+                mergeIngredientTables(table, recipe.ingredientsTable)
             }
 
             ingredientTable.ingredients.forEach { name, amounts in

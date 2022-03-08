@@ -26,8 +26,8 @@ enum PrintableLine: CustomStringConvertible {
     case label(PrintableLabel, String? = nil)
     case metadata([String: String], Int = 0)
     case ingredients(IngredientTable, Int = 0)
-    case cookware(ParsedEquipment, Int = 0)
-    case step(SemanticStep, Int, Int = 0)
+    case cookware(Equipment, Int = 0)
+    case step(Step, Int, Int = 0)
     case text(String)
     case empty
     case offset(String, Int)

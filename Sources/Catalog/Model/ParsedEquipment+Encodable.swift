@@ -8,7 +8,7 @@
 import Foundation
 import CookInSwift
 
-extension ParsedEquipment: Encodable {
+extension Equipment: Encodable {
     enum CodingKeys: String, CodingKey {
         case name
     }

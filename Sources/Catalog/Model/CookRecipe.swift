@@ -9,12 +9,10 @@ import Foundation
 import CookInSwift
 
 public class CookRecipe {
-    internal var parsed: SemanticRecipe
+    internal var parsed: Recipe
 
     public init(_ text: String) {
-        let node = try! Parser.parse(text)
-        let analyzer = SemanticAnalyzer()
-        self.parsed = analyzer.analyze(node: node)
+        self.parsed = try! Recipe.from(text: text)
     }
 
     public var ingredientsTable: IngredientTable {
@@ -25,11 +23,11 @@ public class CookRecipe {
         get { return parsed.metadata }
     }
 
-    public var steps: [SemanticStep] {
+    public var steps: [Step] {
         get { return parsed.steps }
     }
 
-    public var cookware: [ParsedEquipment] {
+    public var cookware: [Equipment] {
         get { return parsed.equipment }
     }
 }

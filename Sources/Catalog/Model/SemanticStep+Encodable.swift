@@ -1,7 +1,7 @@
 import Foundation
 import CookInSwift
 
-extension SemanticStep: Encodable {
+extension Step: Encodable {
     enum CodingKeys: String, CodingKey {
         case description
     }
