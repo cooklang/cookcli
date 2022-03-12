@@ -40,7 +40,7 @@ public class ConfigLoader {
         let configFileName = "\(type).conf"
         // TODO handle path separator nicely and cross-platform
         let local = FileManager.default.currentDirectoryPath + "/config/" + configFileName
-        let home = FileManager.default.homeDirectoryForCurrentUser.path + "/.config/cook/" + configFileName
+        let home = "~/.config/cook/" + configFileName
 
         if provided != nil {
             configPath = provided

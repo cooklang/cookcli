@@ -23,9 +23,8 @@ update_version:
 
 
 build_linux:
-	docker build -t cook-builder .
-	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "x86_64-unknown-linux-gnu"
-	docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it swiftarm/swift build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "aarch64-unknown-linux-gnu"
+	docker run --platform linux/amd64 --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it swift build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "x86_64-unknown-linux-gnu"
+	docker run --platform linux/arm64 --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it swiftarm/swift build --configuration release -Xswiftc -static-executable -Xswiftc "-target" -Xswiftc "aarch64-unknown-linux-gnu"
 
 archive_linux:
 	cd .build/x86_64-unknown-linux-gnu/release/ && zip "CookCLI_$(VERSION)_linux_amd64.zip" cook
