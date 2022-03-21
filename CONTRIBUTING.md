@@ -50,7 +50,7 @@ issue. Stale issues will be closed.
 If you wish to work on `CookCLI` itself, you'll first need to:
 - install [Swift](https://www.swift.org/download/#releases) for macOS, Linux. Windows isn't supported yet (https://github.com/cooklang/CookCLI/issues/56).
 - (optional, only if you plan to change web-server) install [NodeJS](https://nodejs.org/en/download/package-manager/).
-- [fork the `CookCLI` repo](../Docs/Forking.md)
+- [fork the `CookCLI` repo](../../Docs/Forking.md)
 
 ### Building `CookCLI`
 
@@ -62,7 +62,7 @@ To build `CookCLI`, run `make dev` or `swift test`. In a few moments, you'll hav
 
 To apply changes in Single Page Application used in `cook server` run `make inject_frontend`. This will compile JavaScript code and inline it into Swift variables. After that compiled binary will have updated server code.
 
-It's possible to start server in development mode without inlining it into binary with `make dev_server`.
+To start the frontend server in development mode (without inlining it into binary every time) use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:8080 to open the web-app.
 
 ### Testing
 
