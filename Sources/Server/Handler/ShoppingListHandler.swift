@@ -10,6 +10,7 @@ import Foundation
 import Embassy
 import Ambassador
 import CookInSwift
+import ConfigParser
 import Catalog
 
 public enum ShoppingListHandlerError: Error {

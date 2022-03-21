@@ -7,6 +7,7 @@
 
 import Foundation
 import CookInSwift
+import ConfigParser
 
 public class CookShoppingList {
     let UNDEFINED_AISLE = "OTHER (add new items into aisle.conf)"
