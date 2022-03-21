@@ -13,7 +13,7 @@ let package = Package(
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
-        .package(url: "https://github.com/cooklang/CookInSwift", from: "0.1.4"),
+        .package(url: "https://github.com/cooklang/cooklang-swift", from: "0.1.4"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.0.1"),
         .package(url: "https://github.com/envoy/Embassy.git", from: "4.1.2"),
         .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.5"),
@@ -36,11 +36,11 @@ let package = Package(
         ),
         .target(
             name: "Catalog",
-            dependencies: ["CookInSwift"]
+            dependencies: [.product(name: "CookInSwift", package: "cooklang-swift")]
         ),
         .target(
             name: "CookCLI",
-            dependencies: ["CookInSwift",
+            dependencies: [.product(name: "CookInSwift", package: "cooklang-swift"),
                            "Yams",
                            "ZIPFoundation",
                            .target(name: "Server"),

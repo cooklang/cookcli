@@ -12,7 +12,7 @@
       },
       {
         "package": "CookInSwift",
-        "repositoryURL": "https://github.com/cooklang/CookInSwift",
+        "repositoryURL": "https://github.com/cooklang/cooklang-swift",
         "state": {
           "branch": null,
           "revision": "e6da4870407fba432f71b934177dcc62ef762148",
