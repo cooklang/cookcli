@@ -8,6 +8,7 @@
 import Foundation
 import ArgumentParser
 import CookInSwift
+import ConfigParser
 import Catalog
 
 extension Cook {

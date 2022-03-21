@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/cooklang/CookInSwift",
         "state": {
           "branch": null,
-          "revision": "a0101b1d8656d718dc23857795f18021f65ffa2d",
-          "version": "0.1.3"
+          "revision": "e6da4870407fba432f71b934177dcc62ef762148",
+          "version": "0.1.4"
         }
       },
       {
@@ -51,8 +51,8 @@
         "repositoryURL": "https://github.com/weichsel/ZIPFoundation.git",
         "state": {
           "branch": null,
-          "revision": "cf10bbff6ac3b873e97b36b9784c79866a051a8e",
-          "version": "0.9.12"
+          "revision": "7254c74b49cec2cb81520523ba993c671f71b066",
+          "version": "0.9.14"
         }
       }
     ]

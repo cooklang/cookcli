@@ -7,6 +7,7 @@
 
 import Foundation
 import CookInSwift
+import ConfigParser
 
 public enum ConfigLoadError: Error {
     case UnparsableFile(path: String)
