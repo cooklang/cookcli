@@ -3,6 +3,14 @@ CURRENT_PATH=$(shell pwd)
 
 all: release
 
+dev: swift build
+
+dev_server:
+	swift run cook server ./seed &
+	bash -c "trap 'pkill cook' EXIT; cd ./Sources/Server/Frontend && npm run dev"
+
+test: swift test
+
 release: prepare release_linux release_macos
 
 prepare: update_version inject_seed inject_frontend
