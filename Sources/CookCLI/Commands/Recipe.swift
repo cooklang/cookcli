@@ -21,7 +21,7 @@ extension Cook {
             // MARK: ParsableCommand
             static var configuration: CommandConfiguration = CommandConfiguration(abstract: "Parse and print a CookLang recipe file")
 
-            @Option(help: "Set the output format to json or yaml")
+            @Option(help: "Set the output format to json, yaml, or markdown")
             var outputFormat: OutputFormat = .text
 
             @Flag(help: "Print only the ingredients section of the output")

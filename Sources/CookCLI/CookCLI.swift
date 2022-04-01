@@ -33,7 +33,7 @@ func readSTDIN () -> String? {
 }
 
 enum OutputFormat: String, ExpressibleByArgument {
-    case text, json, yaml
+    case text, json, yaml, markdown
 }
 
 struct Cook: ParsableCommand {    
