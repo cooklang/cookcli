@@ -20,6 +20,8 @@ extension CookRecipe {
         switch outputFormat {
         case .text:
             printText(onlyIngredients: onlyIngredients)
+        case .markdown:
+            try printMarkdown()
         case .json:
             try printJson()
         case .yaml:
@@ -29,6 +31,42 @@ extension CookRecipe {
 
     private func printText(onlyIngredients: Bool) {
         Swift.print(printableLines(onlyIngredients: onlyIngredients).map { line in
+            return line.description
+        }.joined(separator: .newLine))
+    }
+
+    private func printMarkdown() throws {
+        var lines: [PrintableLine] = []
+
+        if (!metadata.isEmpty) {
+            let frontMatter = try YAMLEncoder().encode(metadata)
+            lines.append(.text("---"))
+            lines.append(.text(frontMatter))
+            lines.append(.text("---"))
+            lines.append(.empty)
+        }
+
+        lines.append(.text("## Ingredients"))
+        for (name, amounts) in ingredientsTable.ingredients {
+           lines.append(.text("- \(amounts) \(name)"))
+        }
+
+        lines.append(.empty)
+
+        if (!cookware.isEmpty) {
+            lines.append(.text("## Cookware"))
+            cookware.forEach { e in
+                lines.append(.text("- \(e)"))
+            }
+            lines.append(.empty)
+        }
+
+        lines.append(.text("## Steps"))
+        for (index, step) in steps.enumerated() {
+            lines.append(.step(step, index))
+        }
+
+        Swift.print(lines.map { line in
             return line.description
         }.joined(separator: .newLine))
     }

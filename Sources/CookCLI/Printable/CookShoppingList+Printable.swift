@@ -20,6 +20,8 @@ extension CookShoppingList {
         switch outputFormat {
         case .text:
             printText(onlyIngredients: onlyIngredients)
+        case .markdown:
+            Swift.print("not implemented yet")
         case .json:
             try printJson()
         case .yaml:
