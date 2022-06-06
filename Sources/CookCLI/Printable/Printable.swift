@@ -50,7 +50,7 @@ enum PrintableLine: CustomStringConvertible {
             return cookware.description.indented(offset)
         case .step(let step, let index, let offset):
 //            TODO estimate max length properly
-//            TODO get tty size and don't split by MAX_WIDTH
+//            TODO get tty size and don't split by MAX_WIDTH if it's too narrow
             let number = "\(index + 1)".indented(to: 2)
             let directions = "\(number). \(step.directions.map{ $0.description }.joined())"
             var firstLine: String = ""
