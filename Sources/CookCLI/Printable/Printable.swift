@@ -9,6 +9,7 @@ import Foundation
 import CookInSwift
 
 let OFFSET_UNIT = 4
+let MAX_WIDTH = 100
 
 protocol Printable {
     func printableLines() -> [PrintableLine]
@@ -49,10 +50,27 @@ enum PrintableLine: CustomStringConvertible {
             return cookware.description.indented(offset)
         case .step(let step, let index, let offset):
 //            TODO estimate max length properly
+//            TODO get tty size and don't split by MAX_WIDTH if it's too narrow
             let number = "\(index + 1)".indented(to: 2)
-            let firstLine = "\(number). \(step.directions.map{ $0.description }.joined())"
-            let secondLine = "[\(step.ingredientsTable.description)]"
-            return [firstLine.indented(offset), secondLine.indented(offset + 4)].joined(separator: "\n")
+            let directions = "\(number). \(step.directions.map{ $0.description }.joined())"
+            var firstLine: String = ""
+            var restLines: [String] = []
+
+            for (index, line) in directions.split(byCount: MAX_WIDTH).split(whereSeparator: \.isNewline).enumerated() {
+                if index == 0 {
+                    firstLine = String(line)
+                } else {
+                    restLines.append(String(line))
+                }
+            }
+            let ingredients = "[\(step.ingredientsTable.description.split(byCount: MAX_WIDTH))]"
+
+            if restLines.isEmpty {
+                return [firstLine.indented(offset), ingredients.indented(offset + 4)].joined(separator: "\n")
+            } else {
+                return [firstLine.indented(offset), restLines.joined(separator: "\n").indented(offset + 4), ingredients.indented(offset + 4)].joined(separator: "\n")
+            }
+
         case .text(let string):
             return string
         case .offset(let string, let offset):
@@ -131,6 +149,58 @@ extension String {
     }
 
     fileprivate func indented(_ spaces: Int, character: Character = " ") -> String {
-        return spaces > 0 ? "\((0..<spaces).map { _ in "\(character)" }.joined())\(self)" : self
+        var output: [Substring] = [];
+        for line in self.split(whereSeparator: \.isNewline) {
+            output.append(spaces > 0 ? "\((0..<spaces).map { _ in "\(character)" }.joined())\(line)" : line)
+        }
+
+        return output.joined(separator: "\n")
+    }
+
+    private func split(line: Substring, byCount n: Int, breakableCharacters: [Character]) -> String {
+        var line = String(line)
+        var lineStartIndex = line.startIndex
+
+        while line.distance(from: lineStartIndex, to: line.endIndex) > n {
+            let maxLineEndIndex = line.index(lineStartIndex, offsetBy: n)
+
+            if breakableCharacters.contains(line[maxLineEndIndex]) {
+                // If line terminates at a breakable character, replace that character with a newline
+                line.replaceSubrange(maxLineEndIndex...maxLineEndIndex, with: "\n")
+                lineStartIndex = line.index(after: maxLineEndIndex)
+            } else if let index = line[lineStartIndex..<maxLineEndIndex].lastIndex(where: { breakableCharacters.contains($0) }) {
+                // Otherwise, find a breakable character that is between lineStartIndex and maxLineEndIndex
+                line.replaceSubrange(index...index, with: "\n")
+                lineStartIndex = index
+            } else {
+                // Finally, forcible break a word
+                line.insert("\n", at: maxLineEndIndex)
+                lineStartIndex = maxLineEndIndex
+            }
+        }
+
+        return line
+    }
+
+    fileprivate func split(byCount n: Int, breakableCharacters: [Character] = [" "]) -> String {
+        precondition(n > 0)
+        var string = self
+
+        guard !string.isEmpty && string.count > n else { return string }
+
+        var startIndex = string.startIndex
+
+        repeat {
+            // Break a string into lines.
+            var endIndex = string[string.index(after: startIndex)...].firstIndex(of: "\n") ?? string.endIndex
+            if string.distance(from: startIndex, to: endIndex) > n {
+                let wrappedLine = split(line: string[startIndex..<endIndex], byCount: n, breakableCharacters: breakableCharacters)
+                string.replaceSubrange(startIndex..<endIndex, with: wrappedLine)
+                endIndex = string.index(startIndex, offsetBy: wrappedLine.count)
+            }
+
+            startIndex = endIndex
+        } while startIndex < string.endIndex
+        return string
     }
 }
