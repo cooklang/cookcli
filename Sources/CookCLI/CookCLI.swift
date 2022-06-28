@@ -7,7 +7,7 @@
 
 import Foundation
 import ArgumentParser
-#if os(Linux)
+#if canImport(Glibc)
     import Glibc
 #else
     import Darwin
