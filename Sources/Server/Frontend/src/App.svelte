@@ -2,6 +2,7 @@
     import {onMount} from "svelte";
     import {Router, Route, links} from "svelte-navigator";
     import {Navbar, NavbarBrand, Nav, NavItem, NavLink} from "sveltestrap";
+    import {setup} from 'svelte-match-media';
 
     import Recipes from "./Recipes.svelte";
     import Recipe from "./Recipe.svelte";
@@ -15,6 +16,11 @@
         let fullTree = await fetchFileTree();
 
         fileTree.set(fullTree["children"]);
+    });
+
+    setup({
+      print: 'print',
+      screen: 'screen'
     });
 </script>
 

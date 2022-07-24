@@ -1,5 +1,7 @@
 <script>
     import {Link} from "svelte-navigator";
+    import {media} from 'svelte-match-media'
+
     import {TabContent, TabPane, ListGroup, ListGroupItem, Button, Toast, Col, Container, Row} from "sveltestrap";
     import {fetchRecipe} from "./backend.js";
     import Breadcrumbs from "./Breadcrumbs.svelte";
@@ -27,7 +29,9 @@
 <Container>
   <Row>
     <Col><Breadcrumbs path={recipePath} /></Col>
+    {#if $media.screen}
     <Col class="text-end"><Button disabled={buttonDisabled} color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button></Col>
+    {/if}
   </Row>
 </Container>
 
@@ -35,6 +39,7 @@
 {#await maybeRecipe}
     <div class="mt-5 mx-auto" style="width: 250px;">Loading recipe...</div>
 {:then recipe}
+    {#if $media.screen}
     <TabContent>
 
         {#if recipe.ingredients.length > 0 }
@@ -67,6 +72,34 @@
         {/if}
 
     </TabContent>
+    {/if}
+
+    {#if $media.print}
+    <div class="ingredients-box">
+        {#if recipe.ingredients.length > 0 }
+        <Ingredients ingredients={recipe.ingredients} />
+        {/if}
+
+        {#if recipe.cookware.length > 0 }
+        <div class="card border-0">
+            <div class="card-body">
+                <p class="card-text">{recipe.cookware.map((c) => c.name).join(', ')}</p>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    {#if recipe.steps.length > 0 }
+        {#each recipe.steps as step, index}
+        <div class="card border-0">
+            <div class="card-body">
+                <h6 class="card-title">Step {index + 1}</h6>
+                <p class="card-text">{step.description}</p>
+            </div>
+        </div>
+        {/each}
+    {/if}
+    {/if}
 {:catch error}
     <p>Something went wrong: {error.message}</p>
 {/await}
@@ -80,3 +113,16 @@
       Added {recipePath} to a shopping list...
     </Toast>
 </div>
+
+<style>
+    .ingredients-box {
+        width: 20rem;
+        border: 1px solid black;
+        border-radius: 0px;
+        padding: 1.5rem 1rem;
+
+        float: left;
+        margin-right: 2rem;
+        margin-left: 1rem;
+    }
+</style>
