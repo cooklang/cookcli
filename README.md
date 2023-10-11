@@ -167,7 +167,7 @@ swift build --configuration release -static-executable
 Note. If you don't want to install Swift, there's a `Dockerfile` for building Linux binary:
 
     docker build -t cook-builder .
-    docker run  --volume $(CURRENT_PATH):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable
+    docker run  --volume $(pwd):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable
 
 
 ## Contribution

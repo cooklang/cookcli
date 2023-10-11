@@ -1,4 +1,4 @@
-FROM ubuntu:21.10
+FROM ubuntu:22.04
 LABEL maintainer="Swift Infrastructure <swift-infrastructure@forums.swift.org>"
 LABEL Description="Docker Container for the Swift programming language"
 
