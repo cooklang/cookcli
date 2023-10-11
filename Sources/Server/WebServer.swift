@@ -42,7 +42,7 @@ public struct WebServer {
         router["^/(.+jpg)$"] = DataResponse(contentType: "image/jpeg", handler: FileSystemAssetsHandler(root: root).callAsFunction)
         router["^/(.+png)$"] = DataResponse(contentType: "image/png", handler: FileSystemAssetsHandler(root: root).callAsFunction)
 
-        router["^/$"] = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.IndexHTML().callAsFunction)
+        router.notFoundResponse = DataResponse(contentType: "text/html; charset=UTF-8", headers: [("Content-Encoding", "gzip")], handler: StaticAssetsHandler.IndexHTML().callAsFunction)
 
         // Start HTTP server to listen on the port
         try server.start()
