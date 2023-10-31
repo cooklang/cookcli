@@ -1,10 +1,6 @@
-
 use clap::{Parser, Subcommand};
 
-
-use crate::{
-    version
-};
+use crate::{recipe, version};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -20,9 +16,9 @@ pub struct CliArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    // /// Manage recipe files
-    // #[command(alias = "r")]
-    // Recipe(recipe::RecipeArgs),
+    /// Manage recipe files
+    #[command(alias = "r")]
+    Recipe(recipe::RecipeArgs),
     // /// Recipes web server
     // Serve(serve::ServeArgs),
     // /// Creates a shopping list from a given list of recipes
