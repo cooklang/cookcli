@@ -1,4 +1,5 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Result, Context as AnyhowContext};
+use std::path::{Path};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
@@ -19,6 +20,9 @@ mod args;
 mod util;
 
 const COOK_DIR: &str = ".cooklang";
+const APP_NAME: &str = "cooklang-chef";
+const UTF8_PATH_PANIC: &str = "chef currently only supports UTF-8 paths. If this is problem for you, file an issue in the cooklang-chef github repository";
+pub const AUTO_AISLE: &str = "aisle.conf";
 
 pub fn main() -> Result<()> {
     let args = CliArgs::parse();
@@ -28,7 +32,7 @@ pub fn main() -> Result<()> {
     match args.command {
         Command::Recipe(args) => recipe::run(&ctx, args),
         // Command::Serve(args) => serve::run(&ctx, args),
-        // Command::ShoppingList(args) => shopping_list::run(&ctx, args),
+        Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Version(args) => version::run(&ctx, args),
     }
 }
@@ -43,6 +47,20 @@ impl Context {
     fn parser(&self) -> Result<&CooklangParser> {
         self.parser
             .get_or_try_init(|| configure_parser(&self.base_path))
+    }
+
+    fn aisle(&self) -> Option<Utf8PathBuf> {
+        let auto = self.base_path.join(COOK_DIR).join(AUTO_AISLE);
+
+        tracing::trace!("checking auto aisle file: {auto}");
+
+        auto.is_file()
+            .then_some(auto)
+            .or_else(|| {
+                let global = global_file_path(AUTO_AISLE).ok()?;
+                tracing::trace!("checking global auto aisle file: {global}");
+                global.is_file().then_some(global)
+            })
     }
 }
 
@@ -69,3 +87,21 @@ fn configure_parser(_base_path: &Utf8Path) -> Result<CooklangParser> {
 
     Ok(CooklangParser::new(extensions, converter))
 }
+
+pub fn resolve_path(base_path: &Utf8Path, path: &Path) -> Utf8PathBuf {
+    let path = Utf8Path::from_path(path).expect(UTF8_PATH_PANIC);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base_path.join(COOK_DIR).join(path)
+    }
+}
+
+pub fn global_file_path(name: &str) -> Result<Utf8PathBuf> {
+    let dirs = directories::ProjectDirs::from("", "", APP_NAME)
+        .context("Could not determine home directory path")?;
+    let config = Utf8Path::from_path(dirs.config_dir()).expect(UTF8_PATH_PANIC);
+    let path = config.join(name);
+    Ok(path)
+}
+

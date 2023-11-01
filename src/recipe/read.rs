@@ -28,6 +28,7 @@ pub struct ReadArgs {
 enum OutputFormat {
     Human,
     Json,
+    Yaml,
     #[value(alias("cook"))]
     Cooklang,
     #[value(alias("md"))]
@@ -43,6 +44,8 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             Some("json") => OutputFormat::Json,
             Some("cook") => OutputFormat::Cooklang,
             Some("md") => OutputFormat::Markdown,
+            Some("yaml") => OutputFormat::Yaml,
+            Some("yml") => OutputFormat::Yaml,
             _ => OutputFormat::Human,
         },
         None => OutputFormat::Human,
@@ -53,6 +56,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             OutputFormat::Human => {
                 cooklang_to_human::print_human(&recipe, ctx.parser()?.converter(), writer)?
             }
+            // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Json => {
                 if args.pretty {
                     serde_json::to_writer_pretty(writer, &recipe)?;
@@ -61,6 +65,8 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 }
             }
             OutputFormat::Cooklang => cooklang_to_cooklang::print_cooklang(&recipe, writer)?,
+            // TODO, really it shouldn't expose the whole internals of the objects
+            OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
             OutputFormat::Markdown => {
                 cooklang_to_md::print_md(&recipe, ctx.parser()?.converter(), writer)?
             }

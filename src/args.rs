@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::{recipe, version};
+use crate::{recipe, shopping_list, version};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -21,9 +21,9 @@ pub enum Command {
     Recipe(recipe::RecipeArgs),
     // /// Recipes web server
     // Serve(serve::ServeArgs),
-    // /// Creates a shopping list from a given list of recipes
-    // #[command(visible_alias = "sl")]
-    // ShoppingList(shopping_list::ShoppingListArgs),
+    /// Creates a shopping list from a given list of recipes
+    #[command(visible_alias = "sl")]
+    ShoppingList(shopping_list::ShoppingListArgs),
     /// Version
     Version(version::VersionArgs),
 }
