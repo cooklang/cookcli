@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::{recipe, seed, shopping_list, version};
+use crate::{recipe, seed, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -29,7 +29,4 @@ pub enum Command {
     /// Populates directory with sample recipes
     #[command()]
     Seed(seed::SeedArgs),
-
-    /// Version
-    Version(version::VersionArgs),
 }

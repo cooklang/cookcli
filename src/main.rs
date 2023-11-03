@@ -14,7 +14,6 @@ mod recipe;
 mod seed;
 mod serve;
 mod shopping_list;
-mod version;
 
 // other modules
 mod args;
@@ -35,7 +34,6 @@ pub fn main() -> Result<()> {
         // Command::Serve(args) => serve::run(&ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
-        Command::Version(args) => version::run(&ctx, args),
     }
 }
 
