@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::{util::write_to_output, util::Input, Context};
 
 #[derive(Debug, Args)]
-#[command(args_conflicts_with_subcommands = true)]
+#[command()]
 pub struct ShoppingListArgs {
     /// Recipe to add to the list
     ///
@@ -41,15 +41,8 @@ pub struct ShoppingListArgs {
     #[arg(long)]
     pretty: bool,
 
-    /// Global args
-    #[command(flatten)]
-    global_args: ShoppingListGlobalArgs,
-}
-
-#[derive(Debug, Args)]
-struct ShoppingListGlobalArgs {
     /// Load aisle conf file
-    #[arg(short, long, global = true)]
+    #[arg(short, long)]
     aisle: Option<Utf8PathBuf>,
 }
 
@@ -57,12 +50,11 @@ struct ShoppingListGlobalArgs {
 enum OutputFormat {
     Human,
     Json,
-    Yaml
+    Yaml,
 }
 
 pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     let aile_path = args
-        .global_args
         .aisle
         .or_else(|| ctx.aisle())
         .map(|path| -> Result<(_, _)> {
@@ -123,7 +115,6 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         Ok(())
     })
 }
-
 
 fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) -> Result<()> {
     let converter = ctx.parser()?.converter();
@@ -287,10 +278,7 @@ fn build_json_value<'a>(
 }
 
 // TODO DRY it
-fn build_yaml_value<'a>(
-    list: IngredientList,
-    _aisle: &'a AisleConf<'a>
-) -> serde_yaml::Value {
+fn build_yaml_value<'a>(list: IngredientList, _aisle: &'a AisleConf<'a>) -> serde_yaml::Value {
     #[derive(Serialize)]
     struct Quantity {
         value: Value,

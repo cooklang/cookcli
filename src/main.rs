@@ -1,5 +1,4 @@
-use anyhow::{bail, Result, Context as AnyhowContext};
-use std::path::{Path};
+use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
@@ -8,9 +7,11 @@ use cooklang::CooklangParser;
 use cooklang::Extensions;
 use cooklang_fs::FsIndex;
 use once_cell::sync::OnceCell;
+use std::path::Path;
 
 // commands
 mod recipe;
+mod seed;
 mod serve;
 mod shopping_list;
 mod version;
@@ -20,9 +21,9 @@ mod args;
 mod util;
 
 const COOK_DIR: &str = ".cooklang";
-const APP_NAME: &str = "cooklang-chef";
+const APP_NAME: &str = "cook";
 const UTF8_PATH_PANIC: &str = "chef currently only supports UTF-8 paths. If this is problem for you, file an issue in the cooklang-chef github repository";
-pub const AUTO_AISLE: &str = "aisle.conf";
+const AUTO_AISLE: &str = "aisle.conf";
 
 pub fn main() -> Result<()> {
     let args = CliArgs::parse();
@@ -33,6 +34,7 @@ pub fn main() -> Result<()> {
         Command::Recipe(args) => recipe::run(&ctx, args),
         // Command::Serve(args) => serve::run(&ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
+        Command::Seed(args) => seed::run(&ctx, args),
         Command::Version(args) => version::run(&ctx, args),
     }
 }
@@ -54,13 +56,11 @@ impl Context {
 
         tracing::trace!("checking auto aisle file: {auto}");
 
-        auto.is_file()
-            .then_some(auto)
-            .or_else(|| {
-                let global = global_file_path(AUTO_AISLE).ok()?;
-                tracing::trace!("checking global auto aisle file: {global}");
-                global.is_file().then_some(global)
-            })
+        auto.is_file().then_some(auto).or_else(|| {
+            let global = global_file_path(AUTO_AISLE).ok()?;
+            tracing::trace!("checking global auto aisle file: {global}");
+            global.is_file().then_some(global)
+        })
     }
 }
 
@@ -104,4 +104,3 @@ pub fn global_file_path(name: &str) -> Result<Utf8PathBuf> {
     let path = config.join(name);
     Ok(path)
 }
-
