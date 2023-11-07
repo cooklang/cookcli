@@ -7,6 +7,7 @@ use clap::{Args, Subcommand};
 use crate::{util::Input, Context};
 use cooklang_fs::{resolve_recipe, FsIndex};
 
+mod image;
 mod read;
 
 #[derive(Debug, Args)]
@@ -24,6 +25,11 @@ enum RecipeCommand {
     /// Reads a recipe
     #[command(alias = "r")]
     Read(read::ReadArgs),
+
+    /// Download a random image from unsplash.com to match the recipe title.
+    /// Environment variable COOK_UNSPLASH_ACCESS_KEY needs to be set.
+    #[command()]
+    Image(image::ImageArgs),
 }
 
 pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
@@ -31,6 +37,7 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 
     match command {
         RecipeCommand::Read(args) => read::run(ctx, args),
+        RecipeCommand::Image(args) => image::run(ctx, args),
     }
 }
 
