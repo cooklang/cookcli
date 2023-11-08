@@ -7,7 +7,7 @@ use crate::{recipe, seed, shopping_list};
     author,
     version,
     about,
-    after_help = "Docs: https://github.com/cooklang/cooklang-chef/blob/main/docs/README.md"
+    after_help = "Docs: https://cooklang.org/cli/help/"
 )]
 pub struct CliArgs {
     #[command(subcommand)]
@@ -20,13 +20,14 @@ pub enum Command {
     #[command(alias = "r")]
     Recipe(recipe::RecipeArgs),
 
-    // /// Recipes web server
-    // Serve(serve::ServeArgs),
-    /// Creates a shopping list from a given list of recipes
+    // /// Run a webserver to serve your recipes on the web
+    // Server(server::ServerArgs),
+
+    /// Create a shopping list
     #[command(visible_alias = "sl")]
     ShoppingList(shopping_list::ShoppingListArgs),
 
-    /// Populates directory with sample recipes
+    /// Populate directory with seed recipes
     #[command()]
     Seed(seed::SeedArgs),
 }

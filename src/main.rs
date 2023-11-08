@@ -21,7 +21,7 @@ mod util;
 
 const COOK_DIR: &str = ".cooklang";
 const APP_NAME: &str = "cook";
-const UTF8_PATH_PANIC: &str = "chef currently only supports UTF-8 paths. If this is problem for you, file an issue in the cooklang-chef github repository";
+const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
 const AUTO_AISLE: &str = "aisle.conf";
 
 pub fn main() -> Result<()> {

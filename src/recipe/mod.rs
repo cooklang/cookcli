@@ -22,7 +22,7 @@ pub struct RecipeArgs {
 
 #[derive(Debug, Subcommand)]
 enum RecipeCommand {
-    /// Reads a recipe
+    /// Parse and print a Cooklang recipe file
     #[command(alias = "r")]
     Read(read::ReadArgs),
 
