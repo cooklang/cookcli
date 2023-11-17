@@ -9,13 +9,13 @@
     import Logo from "./Logo.svelte";
     import ShoppingList from "./ShoppingList.svelte";
 
-    import {fetchFileTree} from "./backend.js";
-    import {fileTree} from "./store.js";
+    import {fetchRecipes} from "./backend.js";
+    import {fileTree, convertPathsIntoTree} from "./store.js";
 
     onMount(async () => {
-        let fullTree = await fetchFileTree();
+        let response = await fetchRecipes();
 
-        fileTree.set(fullTree["children"]);
+        fileTree.set(convertPathsIntoTree(response));
     });
 
     setup({

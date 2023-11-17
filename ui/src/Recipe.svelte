@@ -6,6 +6,7 @@
     import {fetchRecipe} from "./backend.js";
     import Breadcrumbs from "./Breadcrumbs.svelte";
     import Ingredients from "./Ingredients.svelte";
+    import Step from "./Step.svelte";
 
     import {shoppingListPaths} from "./store.js";
 
@@ -24,6 +25,14 @@
         isAddedToShoppingListToastOpen = true
         buttonDisabled = false;
     }
+
+    function namedGroupIngredients(grouped, flat) {
+        grouped.forEach((ingredient) => {
+            ingredient.name = flat[ingredient.index].name;
+        });
+
+        return grouped;
+    }
 </script>
 
 <Container>
@@ -40,11 +49,12 @@
     <div class="mt-5 mx-auto" style="width: 250px;">Loading recipe...</div>
 {:then recipe}
     {#if $media.screen}
+
     <TabContent>
 
         {#if recipe.ingredients.length > 0 }
         <TabPane tabId="ingredients" tab="Ingredients" active>
-            <Ingredients ingredients={recipe.ingredients} />
+            <Ingredients ingredients={namedGroupIngredients(recipe.grouped_ingredients, recipe.ingredients)} />
         </TabPane>
         {/if}
 
@@ -58,15 +68,13 @@
         </TabPane>
         {/if}
 
-        {#if recipe.steps.length > 0 }
+        {#if recipe.sections.length > 0 }
         <TabPane tabId="steps" tab="Steps">
-            {#each recipe.steps as step, index}
-            <div class="card border-0">
-                <div class="card-body">
-                    <h6 class="card-title">Step {index + 1}</h6>
-                    <p class="card-text">{step.description}</p>
-                </div>
-            </div>
+            {#each recipe.sections as section}
+
+            {#each section.steps as step}
+            <Step step={step} ingredients={recipe.ingredients} cookware={recipe.cookware} timers={recipe.timers} />
+            {/each}
             {/each}
         </TabPane>
         {/if}
@@ -94,7 +102,7 @@
         <div class="card border-0">
             <div class="card-body">
                 <h6 class="card-title">Step {index + 1}</h6>
-                <p class="card-text">{step.description}</p>
+                <p class="card-text"><Step step={step} /></p>
             </div>
         </div>
         {/each}

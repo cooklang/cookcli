@@ -12,7 +12,7 @@ use std::path::Path;
 // commands
 mod recipe;
 mod seed;
-mod serve;
+mod server;
 mod shopping_list;
 
 // other modules
@@ -31,7 +31,7 @@ pub fn main() -> Result<()> {
 
     match args.command {
         Command::Recipe(args) => recipe::run(&ctx, args),
-        // Command::Serve(args) => serve::run(&ctx, args),
+        Command::Server(args) => server::run(ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
     }
@@ -45,8 +45,7 @@ pub struct Context {
 
 impl Context {
     fn parser(&self) -> Result<&CooklangParser> {
-        self.parser
-            .get_or_try_init(|| configure_parser(&self.base_path))
+        self.parser.get_or_try_init(|| configure_parser())
     }
 
     fn aisle(&self) -> Option<Utf8PathBuf> {
@@ -79,7 +78,7 @@ fn configure_context() -> Result<Context> {
     })
 }
 
-fn configure_parser(_base_path: &Utf8Path) -> Result<CooklangParser> {
+fn configure_parser() -> Result<CooklangParser> {
     let extensions = Extensions::empty();
     let converter = Converter::empty();
 

@@ -2,6 +2,28 @@ import { writable } from 'svelte/store';
 
 export const fileTree = writable();
 
+export function convertPathsIntoTree(paths) {
+    let result = {};
+    let level = {result};
+
+    paths.forEach(path => {
+        let chunks = path.split('/');
+
+        chunks.reduce((r, name, index) => {
+          if(!r[name]) {
+            r[name] = { result: {} };
+            r.result[name] = {
+                type: index + 1 == chunks.length ? "file" : "directory",
+                children: r[name].result
+            };
+        }
+
+        return r[name];
+    }, level);
+    });
+
+    return result;
+}
 
 function createShoppingListPaths() {
     const storedShoppingList = JSON.parse(localStorage.getItem("shoppingList") || "[]");
