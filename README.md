@@ -197,3 +197,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Some files include a substantial portion of code from
+https://github.com/Zheoni/cooklang-chef.
+
+The original code is licensed under the MIT License, a copy of which
+is provided in these files in addition to our project's license.
