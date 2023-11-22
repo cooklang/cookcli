@@ -1,0 +1,181 @@
+# based on https://github.com/starship/starship workflow
+name: Release
+on:
+  push:
+    branches:
+      - main
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+  MACOSX_DEPLOYMENT_TARGET: 10.7
+
+jobs:
+  # Update release PR
+  release_please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    if: github.repository == 'cooklang/cookcli'
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: rust
+          draft: true
+
+  # Build sources for every OS
+  github_build:
+    name: Build release binaries
+    needs: release_please
+    if: ${{ needs.release_please.outputs.release_created == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: cook-x86_64-unknown-linux-gnu.tar.gz
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: cook-x86_64-unknown-linux-musl.tar.gz
+
+          - target: i686-unknown-linux-musl
+            os: ubuntu-latest
+            name: cook-i686-unknown-linux-musl.tar.gz
+
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            name: cook-aarch64-unknown-linux-musl.tar.gz
+
+          - target: arm-unknown-linux-musleabihf
+            os: ubuntu-latest
+            name: cook-arm-unknown-linux-musleabihf.tar.gz
+
+          - target: x86_64-apple-darwin
+            os: macOS-11
+            name: cook-x86_64-apple-darwin.tar.gz
+
+          - target: aarch64-apple-darwin
+            os: macOS-11
+            name: cook-aarch64-apple-darwin.tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: cook-x86_64-pc-windows-msvc.zip
+            rustflags: -C target-feature=+crt-static
+
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            name: cook-i686-pc-windows-msvc.zip
+            rustflags: -C target-feature=+crt-static
+
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: cook-aarch64-pc-windows-msvc.zip
+            rustflags: -C target-feature=+crt-static
+
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-latest
+            name: cook-x86_64-unknown-freebsd.tar.gz
+
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags || '' }}
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Setup | Install cargo-wix [Windows]
+        continue-on-error: true
+        # aarch64 is only supported in wix 4.0 development builds
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        run: cargo install --version 0.3.4 cargo-wix
+        env:
+          # cargo-wix does not require static crt
+          RUSTFLAGS: ""
+
+      - name: Setup | Install cross [Linux]
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@cross
+
+      - name: Build | Build [Cargo]
+        if: matrix.os != 'ubuntu-latest'
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build | Build [Cross]
+        if: matrix.os == 'ubuntu-latest'
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Build | Installer [Windows]
+        continue-on-error: true
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        run: >
+          cargo wix -v --no-build --nocapture -I install/windows/main.wxs
+          --target ${{ matrix.target }}
+          --output target/wix/cook-${{ matrix.target }}.msi
+
+      - name: Post Build | Prepare artifacts [Windows]
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../${{ matrix.name }} cook.exe
+          cd -
+
+      - name: Post Build | Prepare artifacts [-nix]
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czvf ../../../${{ matrix.name }} cook
+          cd -
+
+      - name: Release | Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+      - name: Release | Upload installer artifacts [Windows]
+        continue-on-error: true
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        uses: actions/upload-artifact@v3
+        with:
+          name: cook-${{ matrix.target }}.msi
+          path: target/wix/cook-${{ matrix.target }}.msi
+
+
+  # Create GitHub release with Rust build targets and release notes
+  upload_artifacts:
+    name: Add Build Artifacts to Release
+    needs: [release_please, github_build, notarize_and_pkgbuild]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Setup | Checksums
+        run: for file in cook-*/cook-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+
+      - name: Setup | Publish Release
+        run: gh release edit ${{ needs.release_please.outputs.tag_name }} --draft=false --repo=cook/cook
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build | Add Artifacts to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: cook-*/cook-*
+          tag_name: ${{ needs.release_please.outputs.tag_name }}
+
