@@ -29,7 +29,7 @@
 // SOFTWARE.
 
 use crate::Context;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderValue, Method, StatusCode, Uri},
@@ -54,6 +54,9 @@ use self::async_index::AsyncFsIndex;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
+    /// Directory with recipes
+    base_path: Option<Utf8PathBuf>,
+
     /// Allow external connections
     #[arg(long)]
     host: bool,
@@ -70,17 +73,7 @@ pub struct ServerArgs {
 
 #[tokio::main]
 pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
-    let state = build_state(ctx)?;
 
-    let app = Router::new().nest("/api", api(&state)?);
-
-    let app = app.merge(ui::ui());
-
-    let app = app.with_state(state).layer(
-        CorsLayer::new()
-            .allow_origin("*".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST]),
-    );
 
     let addr = if args.host {
         SocketAddr::from(([0, 0, 0, 0], args.port))
@@ -103,6 +96,18 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         });
     }
 
+    let state = build_state(ctx, args)?;
+
+    let app = Router::new().nest("/api", api(&state)?);
+
+    let app = app.merge(ui::ui());
+
+    let app = app.with_state(state).layer(
+        CorsLayer::new()
+            .allow_origin("*".parse::<HeaderValue>().unwrap())
+            .allow_methods([Method::GET, Method::POST]),
+    );
+
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
@@ -114,7 +119,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     Ok(())
 }
 
-fn build_state(ctx: Context) -> Result<Arc<AppState>> {
+fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     ctx.parser()?;
     let Context {
         parser,
@@ -124,11 +129,17 @@ fn build_state(ctx: Context) -> Result<Arc<AppState>> {
     } = ctx;
     let parser = parser.into_inner().unwrap();
 
+    let path = args.base_path.as_ref().unwrap_or(&base_path);
+
+    if path.is_file() {
+        bail!("{} is not a directory", path);
+    }
+
     let recipe_index = AsyncFsIndex::new(recipe_index)?;
 
     Ok(Arc::new(AppState {
         parser,
-        base_path: base_path.clone(),
+        base_path: path.clone(),
         recipe_index: recipe_index,
     }))
 }
