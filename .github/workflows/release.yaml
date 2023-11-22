@@ -159,7 +159,7 @@ jobs:
   # Create GitHub release with Rust build targets and release notes
   upload_artifacts:
     name: Add Build Artifacts to Release
-    needs: [release_please, github_build, notarize_and_pkgbuild]
+    needs: [release_please, github_build]
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Artifacts
