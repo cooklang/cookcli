@@ -48,30 +48,23 @@ issue. Stale issues will be closed.
 ### Prerequisites
 
 If you wish to work on `CookCLI` itself, you'll first need to:
-- install [Swift](https://www.swift.org/download/#releases) for macOS, Linux. Windows isn't supported yet (https://github.com/cooklang/CookCLI/issues/56).
+- install [Rust](https://www.rust-lang.org/tools/install) for macOS, Linux or Windows.
 - (optional, only if you plan to change web-server) install [NodeJS](https://nodejs.org/en/download/package-manager/).
-- [fork the `CookCLI` repo](../../Docs/Forking.md)
+- fork the `CookCLI` repo
 
 ### Building `CookCLI`
 
-To build `CookCLI`, run `make dev` or `swift test`. In a few moments, you'll have a working `cook` executable in `.build/debug`.
+To build `CookCLI`, run `make dev` or `cargo build`. In a few moments, you'll have a working `cook` executable in `target/debug`.
 
 >Note: `make dev` will build for your local machine's os/architecture.
 
 #### Building server frontend
 
-To apply changes in Single Page Application used in `cook server` run `make inject_frontend`. This will compile JavaScript code and inline it into Swift variables. After that compiled binary will have updated server code.
-
-To start the frontend server in development mode (without inlining it into binary every time) use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:8080 to open the web-app.
+To start the frontend server in development mode use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:5000 to open the web-app.
 
 ### Testing
 
-Examples (run from the repository root):
-- `swift test` will run all tests (not many at the moment 😿).
-
-All available options for skipping and filtering tests available via `swift test --help`.
-
-When a pull request is opened CI will run all tests to verify the change.
+No tests at the moment 🤞.
 
 ### Submitting a Pull Request
 

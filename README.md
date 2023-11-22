@@ -152,33 +152,34 @@ On MacOS:
 
     brew tap cooklang/tap
     brew install cooklang/tap/cook
-    
+
+
 ## Building from source
 
 1. Checkout code.
-2. Install Swift by following official [instructions](https://swift.org/getting-started/#installing-swift).
-3. Build CookCLI from a directory with the source code:
+2. Install Rust by following official [instructions](https://www.rust-lang.org/tools/install).
+3. Install Node.js by following official [instructions](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs).
+4. Build UI server
 
 ```
-swift build --configuration release -static-executable
+cd ui && npm run build
 ```
-4. Take binary from `.build/x86_64-unknown-linux-gnu/release/cook` or `.build/x86_64-apple-macosx/release/cook`
+5. Build CookCLI from a directory with the source code:
 
-Note. If you don't want to install Swift, there's a `Dockerfile` for building Linux binary:
-
-    docker build -t cook-builder .
-    docker run  --volume $(pwd):/src --workdir /src --entrypoint "swift" -it cook-builder build --configuration release -Xswiftc -static-executable
-
+```
+cargo build --release
+```
+4. Take binary from `target/release/cook`.
 
 ## Contribution
 
-Please open issues for any ideas you may have to contribute to the project.
+Please open issues for any ideas you may have to contribute to the project. See [Contribution guidelines](CONTRIBUTING.md) for details.
 
 ## License
 
 MIT License
 
-Copyright (c) 2021-2022 Alexey Dubovskoy
+Copyright (c) 2021-2023 Alexey Dubovskoy
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -197,3 +198,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Some source files include a substantial portion of code from
+https://github.com/Zheoni/cooklang-chef.
+
+The original code is licensed under the MIT License, a copy of which
+is provided in these files in addition to our project's license.
