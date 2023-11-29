@@ -162,7 +162,7 @@ On MacOS:
 4. Build UI server
 
 ```
-cd ui && npm run build
+cd ui && npm install && npm run build
 ```
 5. Build CookCLI from a directory with the source code:
 
