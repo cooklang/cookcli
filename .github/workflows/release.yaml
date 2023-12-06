@@ -126,6 +126,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: taiki-e/install-action@cross
 
+      - name: Setup | Install packages [Linux]
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install --yes libssl-dev
+
       - name: Build | Build [Cargo]
         if: matrix.os != 'ubuntu-latest'
         run: cargo build --release --locked --target ${{ matrix.target }}
