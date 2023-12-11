@@ -3,8 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - apple-notarize
-      # - main
+      - main
 env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
@@ -37,7 +36,7 @@ jobs:
   github_build:
     name: Build release binaries
     needs: release_please
-    # if: ${{ needs.release_please.outputs.release_created == 'true' }}
+    if: ${{ needs.release_please.outputs.release_created == 'true' }}
     strategy:
       fail-fast: false
       matrix:
