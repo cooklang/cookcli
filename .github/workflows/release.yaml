@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     branches:
-      - main
+      - apple-notarize
+      # - main
 env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
