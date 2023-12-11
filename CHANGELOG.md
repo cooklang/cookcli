@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/cooklang/cookcli/compare/v0.5.0...v0.6.0) (2023-12-11)
+
+
+### Features
+
+* add cache ([91ec988](https://github.com/cooklang/cookcli/commit/91ec988b5bcbdf089c061761ce25e19b53e853a8))
+* disable testing mode ([c46bf05](https://github.com/cooklang/cookcli/commit/c46bf05e1107f57f56f5490ff8ffd74c8c15f748))
+
 ## [0.5.0](https://github.com/cooklang/CookCLI/compare/v0.4.0...v0.5.0) (2023-11-22)
 
 
