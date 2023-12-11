@@ -114,6 +114,9 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
         # aarch64 is only supported in wix 4.0 development builds
