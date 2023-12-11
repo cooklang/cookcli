@@ -113,6 +113,9 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
         # aarch64 is only supported in wix 4.0 development builds
@@ -170,11 +173,100 @@ jobs:
           name: cook-${{ matrix.target }}.msi
           path: target/wix/cook-${{ matrix.target }}.msi
 
+  # Notarize cook binaries for MacOS and build notarized pkg installers
+  notarize:
+    runs-on: macos-latest
+    continue-on-error: true
+    needs: [github_build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            arch: x86_64
+            name: cook-x86_64-apple-darwin.tar.gz
+
+          - target: aarch64-apple-darwin
+            arch: aarch64
+            name: cook-aarch64-apple-darwin.tar.gz
+
+    env:
+      KEYCHAIN_FILENAME: app-signing.keychain-db
+      KEYCHAIN_ENTRY: AC_PASSWORD
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+
+      - name: Notarize | Set up secrets
+        env:
+          APP_CERTIFICATE_BASE64: ${{ secrets.APPLEDEV_APPSIGNKEY_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLEDEV_SIGNKEY_PASS }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLEDEV_SIGNKEY_PASS }}
+          APPLEID_USERNAME: ${{ secrets.APPLEDEV_ID_NAME }}
+          APPLEID_TEAMID: ${{ secrets.APPLEDEV_TEAM_ID }}
+          APPLEID_PASSWORD: ${{ secrets.APPLEDEV_PASSWORD }}
+        run: |
+          APP_CERTIFICATE_PATH="$RUNNER_TEMP/app_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
+
+          # import certificates from secrets
+          echo -n "$APP_CERTIFICATE_BASE64" | base64 --decode --output $APP_CERTIFICATE_PATH
+
+          # create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # import certificates to keychain
+          security import $APP_CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Add Apple Developer ID credentials to keychain
+          xcrun notarytool store-credentials "$KEYCHAIN_ENTRY" --team-id "$APPLEID_TEAMID" --apple-id "$APPLEID_USERNAME" --password "$APPLEID_PASSWORD" --keychain "$KEYCHAIN_PATH"
+
+      - name: Notarize | Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ matrix.name }}
+          path: artifacts
+
+      - name: Notarize | Unpack Binaries
+        run: tar xf artifacts/${{ matrix.name }}
+
+      - name: Notarize | Build, Sign, and Notarize Pkg
+        env:
+          APPLICATION_KEY_IDENT: ${{ secrets.APPLEDEV_KEY_IDENT }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
+
+          echo ">>>> Signing binary"
+          codesign --timestamp --keychain $KEYCHAIN_PATH --sign "$APPLICATION_KEY_IDENT" --verbose -f -o runtime cook
+
+          # Make ZIP file to notarize binary
+          zip cook.zip cook
+
+          echo ">>>> Submitting binary for notarization"
+          xcrun notarytool submit cook.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
+
+      - name: Notarize | Package Notarized Binary
+        run: tar czvf ${{ matrix.name }} cook
+
+      - name: Notarize | Upload Notarized Binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+      - name: Cleanup Secrets
+        if: ${{ always() }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
+          security delete-keychain $KEYCHAIN_PATH
 
   # Create GitHub release with Rust build targets and release notes
   upload_artifacts:
     name: Add Build Artifacts to Release
-    needs: [release_please, github_build]
+    needs: [release_please, github_build, notarize]
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Artifacts
