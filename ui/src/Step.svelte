@@ -28,7 +28,7 @@ function itemsToString(items, ingredients, cookware, timers) {
         switch(item.type) {
             case "ingredient":
                 if ($showUnitsNextToIngredients) {
-                    return `${formatIngredient(ingredients[item.index])} (${formatQuantity(ingredients[item.index].quantity)})`;
+                    return `${formatIngredient(ingredients[item.index])} <span class="text-muted">(${formatQuantity(ingredients[item.index].quantity)})</span>`;
                 } else {
                     return formatIngredient(ingredients[item.index]);
                 }
@@ -48,7 +48,7 @@ function itemsToString(items, ingredients, cookware, timers) {
 <div class="card border-0">
     <div class="card-body">
         <h6 class="card-title">Step {step.number}</h6>
-        <p class="card-text">{itemsToString(step.items, ingredients, cookware, timers)}</p>
+        <p class="card-text">{@html itemsToString(step.items, ingredients, cookware, timers)}</p>
     </div>
 </div>
 
