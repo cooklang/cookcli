@@ -50,4 +50,11 @@ function createShoppingListPaths() {
 
 export const shoppingListPaths = createShoppingListPaths();
 
-export const showUnitsNextToIngredients = writable(false);
+// Preference for showing units next to ingredients, default is false
+const showUnitsNextToIngredientsValue = localStorage.getItem("showUnitsNextToIngredients") || "false";
+export const showUnitsNextToIngredients = writable(JSON.parse(showUnitsNextToIngredientsValue));
+
+// Subscribe method to update local storage
+showUnitsNextToIngredients.subscribe((val) => {
+    localStorage.setItem("showUnitsNextToIngredients", JSON.stringify(val));
+})
