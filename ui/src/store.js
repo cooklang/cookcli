@@ -49,3 +49,5 @@ function createShoppingListPaths() {
 }
 
 export const shoppingListPaths = createShoppingListPaths();
+
+export const showUnitsNextToIngredients = writable(false);

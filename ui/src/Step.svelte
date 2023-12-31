@@ -1,6 +1,7 @@
 <script>
 export let step, ingredients, cookware, timers;
 import {formatQuantity} from "./quantity";
+import {showUnitsNextToIngredients} from "./store.js"
 
 function formatText(item) {
     return item.value;
@@ -26,7 +27,11 @@ function itemsToString(items, ingredients, cookware, timers) {
     return items.map((item) => {
         switch(item.type) {
             case "ingredient":
-                return formatIngredient(ingredients[item.index]);
+                if ($showUnitsNextToIngredients) {
+                    return `${formatIngredient(ingredients[item.index])} (${formatQuantity(ingredients[item.index].quantity)})`;
+                } else {
+                    return formatIngredient(ingredients[item.index]);
+                }
             case "cookware":
                 return formatCookware(cookware[item.index]);
             case "text":
