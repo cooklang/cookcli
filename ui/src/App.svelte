@@ -8,6 +8,7 @@
     import Recipe from "./Recipe.svelte";
     import Logo from "./Logo.svelte";
     import ShoppingList from "./ShoppingList.svelte";
+    import Preferences from "./Preferences.svelte";
 
     import {fetchRecipes} from "./backend.js";
     import {fileTree, convertPathsIntoTree} from "./store.js";
@@ -37,11 +38,17 @@
                 <NavItem>
                     <NavLink href="/shopping-list">Shopping list</NavLink>
                 </NavItem>
+
+                <NavItem>
+                    <NavLink href="/preferences">Preferences</NavLink>
+                </NavItem>
             </Nav>
         </Navbar>
 
         <div class="py-3">
             <Route path="shopping-list" component="{ShoppingList}" />
+
+            <Route path="preferences" component="{Preferences}" />
 
             <Route path="recipe/*recipePath" let:params>
                 <Recipe recipePath={params.recipePath} />
