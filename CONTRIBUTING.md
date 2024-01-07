@@ -72,6 +72,7 @@ Before writing any code, we recommend:
 - Create a Github issue if none already exists for the code change you'd like to make.
 - Write a comment on the Github issue indicating you're interested in contributing so
 maintainers can provide their perspective if needed.
+- Use [Semantic Commit Messages](https://gist.github.com/joshbuchea/6f47e86d2510bce28f8e7f42ae84c716), so release automation can kick-in.
 
 Keep your pull requests (PRs) small and open them early so you can get feedback on
 approach from maintainers before investing your time in larger changes.
