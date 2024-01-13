@@ -55,6 +55,8 @@ const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
 const AUTO_AISLE: &str = "aisle.conf";
 
 pub fn main() -> Result<()> {
+    configure_logging();
+
     let args = CliArgs::parse();
 
     let ctx = configure_context()?;
@@ -113,6 +115,16 @@ fn configure_parser() -> Result<CooklangParser> {
     let converter = Converter::empty();
 
     Ok(CooklangParser::new(extensions, converter))
+}
+
+fn configure_logging() -> () {
+    tracing_subscriber::fmt()
+        // Log this crate at level `trace`, but all other crates at level `info`.
+        .with_env_filter("info,cooklang=info,cook=trace")
+        .without_time()
+        .with_target(false)
+        .compact()
+        .init();
 }
 
 pub fn resolve_path(base_path: &Utf8Path, path: &Path) -> Utf8PathBuf {
