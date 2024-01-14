@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/cooklang/cookcli/compare/v0.7.0...v0.7.1) (2024-01-13)
+
+
+### Bug Fixes
+
+* log to stdout using tracing subscriber. ([2e3ddab](https://github.com/cooklang/cookcli/commit/2e3ddab44680231f9dbbca462c9b15ea1c3947b7)), closes [#94](https://github.com/cooklang/cookcli/issues/94)
+
 ## [0.7.0](https://github.com/cooklang/cookcli/compare/v0.6.0...v0.7.0) (2023-12-11)
 
 
