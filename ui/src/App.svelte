@@ -67,7 +67,8 @@
 
 <style>
     .viewport {
-        width: 800px;
+        width: 100%;
+        max-width: 800px;
         margin: 50px auto;
     }
 </style>
