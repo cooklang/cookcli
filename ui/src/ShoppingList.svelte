@@ -8,7 +8,7 @@
 
     $: maybeShoppingList = fetchShoppingList($shoppingListPaths);
 
-    function onDelte(path) {
+    function onDelete(path) {
         shoppingListPaths.remove(path)
     }
 </script>
@@ -35,7 +35,7 @@
         {#each $shoppingListPaths as path}
             <ListGroupItem class="list-group-item d-flex justify-content-between align-items-center border-0">
                 {path}
-                <Button outline dark on:click={() => onDelte(path)} size="sm">Delete</Button>
+                <Button outline dark on:click={() => onDelete(path)} size="sm">Delete</Button>
             </ListGroupItem>
         {:else}
             <div class="mt-5 mx-auto" style="width: 250px;">
