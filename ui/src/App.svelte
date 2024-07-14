@@ -7,6 +7,7 @@
     import Recipes from "./Recipes.svelte";
     import Recipe from "./Recipe.svelte";
     import Logo from "./Logo.svelte";
+    import Menu from "./Menu.svelte";
     import ShoppingList from "./ShoppingList.svelte";
     import Preferences from "./Preferences.svelte";
 
@@ -40,12 +41,19 @@
                 </NavItem>
 
                 <NavItem>
+                    <NavLink href="/menu">Schedule Menu</NavLink>
+                </NavItem>
+
+
+                <NavItem>
                     <NavLink href="/preferences">Preferences</NavLink>
                 </NavItem>
             </Nav>
         </Navbar>
 
         <div class="py-3">
+            <Route path="menu" component="{Menu}" />
+
             <Route path="shopping-list" component="{ShoppingList}" />
 
             <Route path="preferences" component="{Preferences}" />
@@ -68,7 +76,7 @@
 <style>
     .viewport {
         width: 100%;
-        max-width: 800px;
+        max-width: 80vw;
         margin: 50px auto;
     }
 </style>
