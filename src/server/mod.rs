@@ -71,6 +71,12 @@ pub struct ServerArgs {
     open: bool,
 }
 
+impl ServerArgs {
+    pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
+        self.base_path.clone()
+    }
+}
+
 #[tokio::main]
 pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 

@@ -94,7 +94,11 @@ impl Context {
 }
 
 fn configure_context() -> Result<Context> {
-    let base_path = Utf8Path::new(".").to_path_buf();
+    let args = CliArgs::parse();
+    let base_path = match args.command {
+        Command::Server(ref server_args) => server_args.get_base_path().unwrap_or_else(|| Utf8PathBuf::from(".")),
+        _ => Utf8PathBuf::from("."),
+    };
 
     if !base_path.is_dir() {
         bail!("Base path is not a directory: {base_path}");
