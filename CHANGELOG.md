@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1](https://github.com/cooklang/cookcli/compare/v0.8.0...v0.8.1) (2025-01-26)
+
+
+### Bug Fixes
+
+* shopping list ([4b54689](https://github.com/cooklang/cookcli/commit/4b54689d981ea2cb8adfa89ab8fe5515de1a2ee8))
+* upgraded parser ([d6c791f](https://github.com/cooklang/cookcli/commit/d6c791fd4c5ffd415c51fd03aa06d9a9478c36bd))
+* version ([84996f9](https://github.com/cooklang/cookcli/commit/84996f9b2fb3a54bc7d6868c32855ee4dec8b602))
+
 ## [0.8.0](https://github.com/cooklang/cookcli/compare/v0.7.1...v0.8.0) (2024-01-14)
 
 
