@@ -30,7 +30,7 @@
 
 use anyhow::Result;
 
-use cooklang_fs::{FsIndex, RecipeEntry};
+use cooklang_fs::{LazyFsIndex, RecipeEntry};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -49,9 +49,7 @@ enum Message {
 }
 
 impl AsyncFsIndex {
-    pub fn new(mut index: FsIndex) -> Result<Self> {
-        index.index_all()?;
-
+    pub fn new(index: LazyFsIndex) -> Result<Self> {
         let (tx, mut rx) = mpsc::channel::<Message>(1);
 
         tokio::spawn(async move {

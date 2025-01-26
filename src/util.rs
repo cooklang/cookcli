@@ -56,34 +56,20 @@ pub enum Input {
 
 impl Input {
     pub fn parse(&self, ctx: &Context) -> Result<cooklang::ScalableRecipe> {
-        self.parse_result(ctx)
-            .and_then(|r| unwrap_recipe(r, self.text(), ctx))
-    }
-
-    pub fn parse_result(&self, ctx: &Context) -> Result<cooklang::RecipeResult> {
         let parser = ctx.parser()?;
-        let r = match self {
-            Input::File { content, .. } => {
-                parser.parse_with_recipe_ref_checker(content.text(), "", None)
-            }
-            Input::Stdin { text } => parser.parse_with_recipe_ref_checker(text, "", None),
+        let result = match self {
+            Input::File { content } => parser.parse(content.text()),
+            Input::Stdin { text } => parser.parse(text),
         };
-        Ok(r)
+        result
+            .into_output()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse recipe"))
     }
 
     pub fn text(&self) -> &str {
         match self {
-            Input::File { content, .. } => content.text(),
-            Input::Stdin { text, .. } => text,
+            Input::File { content } => content.text(),
+            Input::Stdin { text } => text,
         }
     }
-}
-
-pub fn unwrap_recipe(
-    r: cooklang::RecipeResult,
-    _text: &str,
-    _ctx: &Context,
-) -> Result<cooklang::ScalableRecipe> {
-    let (recipe, _) = r.into_result().unwrap();
-    Ok(recipe)
 }

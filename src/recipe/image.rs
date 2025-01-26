@@ -36,7 +36,7 @@ pub fn run(_ctx: &Context, args: ImageArgs) -> Result<()> {
         .as_str()
         .unwrap();
 
-    let image_url = Url::parse(&image_url).expect("Can't parse URL");
+    let image_url = Url::parse(image_url).expect("Can't parse URL");
 
     let output_path = args
         .input

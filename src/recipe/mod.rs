@@ -35,7 +35,7 @@ use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 
 use crate::{util::Input, Context};
-use cooklang_fs::{resolve_recipe, FsIndex};
+use cooklang_fs::LazyFsIndex;
 
 mod image;
 mod read;
@@ -81,11 +81,11 @@ struct RecipeInputArgs {
 }
 
 impl RecipeInputArgs {
-    pub fn read(&self, index: &FsIndex) -> Result<Input> {
+    pub fn read(&self, index: &LazyFsIndex) -> Result<Input> {
         let input = if let Some(query) = &self.recipe {
             // RecipeInputArgs::recipe is a pathbuf even if inmediatly converted
             // to a string to enforce validation.
-            let entry = resolve_recipe(query.as_str(), index, None)?;
+            let entry = index.resolve(query.as_str(), None)?;
 
             Input::File {
                 content: entry.read()?,

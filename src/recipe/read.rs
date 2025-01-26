@@ -84,7 +84,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     write_to_output(args.output.as_deref(), |writer| {
         match format {
             OutputFormat::Human => {
-                cooklang_to_human::print_human(&recipe, ctx.parser()?.converter(), writer)?
+                cooklang_to_human::print_human(&recipe, "", ctx.parser()?.converter(), writer)?
             }
             // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Json => {
@@ -98,7 +98,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
             OutputFormat::Markdown => {
-                cooklang_to_md::print_md(&recipe, ctx.parser()?.converter(), writer)?
+                cooklang_to_md::print_md(&recipe, "", ctx.parser()?.converter(), writer)?
             }
         }
 

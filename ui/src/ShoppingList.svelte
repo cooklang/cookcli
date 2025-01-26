@@ -18,12 +18,11 @@
     {#await maybeShoppingList}
         <div class="mt-5 mx-auto" style="width: 250px;">Loading shopping list...</div>
     {:then shoppingList}
-        {#each Object.entries(shoppingList) as [shelf, ingredients]}
-            <h5 class="pt-4">{shelf}</h5>
-            <Ingredients ingredients={ingredients} />
-
+        {#each shoppingList.categories as {category, items}}
+            <h5 class="pt-4">{category}</h5>
+            <Ingredients ingredients={items} />
         {/each}
-        {#if Object.entries(shoppingList).length == 0}
+        {#if shoppingList.categories.length === 0}
             <div class="mt-5 mx-auto" style="width: 250px;">
               Nothing added to a shopping list.
             </div>
