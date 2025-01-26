@@ -126,6 +126,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     ctx.parser()?;
+    let aisle_path = ctx.aisle().clone();
     let Context {
         parser,
         recipe_index,
@@ -135,6 +136,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     let parser = parser.into_inner().unwrap();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
+
 
     if path.is_file() {
         bail!("{} is not a directory", path);
@@ -146,6 +148,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         parser,
         base_path: path.clone(),
         recipe_index,
+        aisle_path
     }))
 }
 
@@ -234,6 +237,7 @@ pub struct AppState {
     parser: CooklangParser,
     base_path: Utf8PathBuf,
     recipe_index: AsyncFsIndex,
+    aisle_path: Option<Utf8PathBuf>,
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
@@ -322,7 +326,19 @@ async fn shopping_list(
         list.add_recipe(&recipe, converter);
     }
 
-    let categories = list.categorize(&Default::default());
+    let aisle_content = if let Some(path) = &state.aisle_path {
+        match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => String::new()
+        }
+    } else {
+        tracing::warn!("No aisle file set");
+        String::new()
+    };
+
+    let aisle = cooklang::aisle::parse(&aisle_content).unwrap_or_default();
+
+    let categories = list.categorize(&aisle);
     let json_value = serde_json::json!({
         "categories": categories.into_iter().map(|(category, items)| {
             serde_json::json!({
@@ -417,7 +433,7 @@ async fn recipe(
         .map(|entry| {
             serde_json::json!({
                 "index": entry.index,
-                "quantity": entry.quantity.into_vec(),
+                "quantities": entry.quantity.into_vec(),
                 "outcome": entry.outcome
             })
         })

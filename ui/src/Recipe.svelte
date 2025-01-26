@@ -71,10 +71,16 @@
         {#if recipe.sections.length > 0 }
         <TabPane tabId="steps" tab="Steps">
             {#each recipe.sections as section}
-
-            {#each section.steps as step}
-            <Step step={step} ingredients={recipe.ingredients} cookware={recipe.cookware} timers={recipe.timers} />
-            {/each}
+                {#each section.content as item}
+                    {#if item.type === 'step'}
+                    <Step
+                        step={item.value}
+                        ingredients={recipe.ingredients}
+                        cookware={recipe.cookware}
+                        timers={recipe.timers}
+                    />
+                    {/if}
+                {/each}
             {/each}
         </TabPane>
         {/if}
@@ -97,14 +103,18 @@
         {/if}
     </div>
 
-    {#if recipe.steps.length > 0 }
-        {#each recipe.steps as step, index}
-        <div class="card border-0">
-            <div class="card-body">
-                <h6 class="card-title">Step {index + 1}</h6>
-                <p class="card-text"><Step step={step} /></p>
-            </div>
-        </div>
+    {#if recipe.sections.length > 0 }
+        {#each recipe.sections as section}
+            {#each section.content as item, index}
+                {#if item.type === 'step'}
+                <div class="card border-0">
+                    <div class="card-body">
+                        <h6 class="card-title">Step {item.value.number}</h6>
+                        <p class="card-text"><Step step={item.value} /></p>
+                    </div>
+                </div>
+                {/if}
+            {/each}
         {/each}
     {/if}
     {/if}

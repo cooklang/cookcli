@@ -54,14 +54,14 @@ function formatFraction(num, den) {
     return fractions[repr] ?? repr;
 }
 
-export function formatQuantity(quanity) {
-    if (!quanity) return "some";
+export function formatQuantity(quantity) {
+    if (!quantity) return "some";
 
     let result = "";
-    let value = quanity.value;
+    let value = quantity.value;
 
     switch(value.type) {
-      case "number":
+        case "number":
             let v = formatNumber(value.value);
             result = v[0];
             break;
@@ -73,15 +73,15 @@ export function formatQuantity(quanity) {
         case "text":
             result = value.value;
             break;
-      default:
-        // code block
+        default:
+            // code block
     }
 
-    if (quanity.unit) result = `${result} ${quanity.unit}`;
+    if (quantity.unit) result = `${result} ${quantity.unit}`;
 
     return result;
 }
 
-export function formatGroupedQuantity(quanities) {
-    return quanities.map(formatQuantity).join(", ");
+export function formatGroupedQuantity(quantities) {
+    return quantities.map(formatQuantity).join(", ");
 }
