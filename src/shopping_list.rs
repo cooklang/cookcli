@@ -37,9 +37,9 @@ use tracing::warn;
 use cooklang::{
     aisle::AisleConf,
     ingredient_list::IngredientList,
-    quantity::{GroupedQuantity, Quantity, TotalQuantity, Value},
+    quantity::{GroupedQuantity, Quantity, Value},
+    ScaledQuantity,
 };
-use cooklang_fs::resolve_recipe;
 use serde::Serialize;
 
 use crate::{util::write_to_output, util::Input, Context};
@@ -168,7 +168,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
 
     // Resolve and parse the recipe
     let input = {
-        let entry = resolve_recipe(name, &ctx.recipe_index, None)?;
+        let entry = ctx.recipe_index.resolve(name, None)?;
         Input::File {
             content: entry.read()?,
         }
@@ -188,30 +188,20 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     Ok(())
 }
 
-fn total_quantity_fmt(qty: &TotalQuantity, row: &mut tabular::Row) {
-    match qty {
-        cooklang::quantity::TotalQuantity::None => {
-            row.add_cell("");
-        }
-        cooklang::quantity::TotalQuantity::Single(quantity) => {
-            row.add_ansi_cell(quantity_fmt(quantity));
-        }
-        cooklang::quantity::TotalQuantity::Many(list) => {
-            let list = list
-                .iter()
-                .map(quantity_fmt)
-                .reduce(|s, q| format!("{s}, {q}"))
-                .unwrap();
-            row.add_ansi_cell(list);
-        }
-    };
+fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {
+    let content = qty
+        .iter()
+        .map(quantity_fmt)
+        .reduce(|s, q| format!("{s}, {q}"))
+        .unwrap_or_default();
+    row.add_ansi_cell(content);
 }
 
 fn quantity_fmt(qty: &Quantity) -> String {
     if let Some(unit) = qty.unit() {
-        format!("{} {}", qty.value, unit.text())
+        format!("{} {}", qty.value(), unit)
     } else {
-        format!("{}", qty.value)
+        format!("{}", qty.value())
     }
 }
 
@@ -220,7 +210,7 @@ fn build_human_table(list: IngredientList, aisle: &AisleConf, plain: bool) -> ta
     if plain {
         for (igr, q) in list {
             let mut row = tabular::Row::new().with_cell(igr);
-            total_quantity_fmt(&q.total(), &mut row);
+            total_quantity_fmt(&q, &mut row);
             table.add_row(row);
         }
     } else {
@@ -229,7 +219,7 @@ fn build_human_table(list: IngredientList, aisle: &AisleConf, plain: bool) -> ta
             table.add_heading(format!("[{}]", cat));
             for (igr, q) in items {
                 let mut row = tabular::Row::new().with_cell(igr);
-                total_quantity_fmt(&q.total(), &mut row);
+                total_quantity_fmt(&q, &mut row);
                 table.add_row(row);
             }
         }
@@ -249,39 +239,21 @@ fn build_json_value<'a>(
     }
     impl From<cooklang::quantity::Quantity> for Quantity {
         fn from(qty: cooklang::quantity::Quantity) -> Self {
-            let unit = qty.unit_text().map(|s| s.to_owned());
-            let value = qty.value;
+            let unit = qty.unit().map(|s| s.to_owned());
+            let value = qty.value().clone();
             Self { value, unit }
-        }
-    }
-    #[derive(Serialize)]
-    #[serde(untagged)]
-    enum TotalQuantity {
-        None,
-        Single(Quantity),
-        Many(Vec<Quantity>),
-    }
-    impl From<cooklang::quantity::TotalQuantity> for TotalQuantity {
-        fn from(value: cooklang::quantity::TotalQuantity) -> Self {
-            match value {
-                cooklang::quantity::TotalQuantity::None => TotalQuantity::None,
-                cooklang::quantity::TotalQuantity::Single(q) => TotalQuantity::Single(q.into()),
-                cooklang::quantity::TotalQuantity::Many(v) => {
-                    TotalQuantity::Many(v.into_iter().map(|q| q.into()).collect())
-                }
-            }
         }
     }
     #[derive(Serialize)]
     struct Ingredient {
         name: String,
-        quantity: TotalQuantity,
+        quantity: Vec<ScaledQuantity>,
     }
     impl From<(String, GroupedQuantity)> for Ingredient {
         fn from((name, qty): (String, GroupedQuantity)) -> Self {
             Ingredient {
                 name,
-                quantity: qty.total().into(),
+                quantity: qty.into_vec(),
             }
         }
     }
@@ -307,8 +279,7 @@ fn build_json_value<'a>(
     }
 }
 
-// TODO DRY it
-fn build_yaml_value<'a>(list: IngredientList, _aisle: &'a AisleConf<'a>) -> serde_yaml::Value {
+fn build_yaml_value<'a>(list: IngredientList, aisle: &'a AisleConf<'a>) -> serde_yaml::Value {
     #[derive(Serialize)]
     struct Quantity {
         value: Value,
@@ -316,39 +287,21 @@ fn build_yaml_value<'a>(list: IngredientList, _aisle: &'a AisleConf<'a>) -> serd
     }
     impl From<cooklang::quantity::Quantity> for Quantity {
         fn from(qty: cooklang::quantity::Quantity) -> Self {
-            let unit = qty.unit_text().map(|s| s.to_owned());
-            let value = qty.value;
+            let unit = qty.unit().map(|s| s.to_owned());
+            let value = qty.value().clone();
             Self { value, unit }
-        }
-    }
-    #[derive(Serialize)]
-    #[serde(untagged)]
-    enum TotalQuantity {
-        None,
-        Single(Quantity),
-        Many(Vec<Quantity>),
-    }
-    impl From<cooklang::quantity::TotalQuantity> for TotalQuantity {
-        fn from(value: cooklang::quantity::TotalQuantity) -> Self {
-            match value {
-                cooklang::quantity::TotalQuantity::None => TotalQuantity::None,
-                cooklang::quantity::TotalQuantity::Single(q) => TotalQuantity::Single(q.into()),
-                cooklang::quantity::TotalQuantity::Many(v) => {
-                    TotalQuantity::Many(v.into_iter().map(|q| q.into()).collect())
-                }
-            }
         }
     }
     #[derive(Serialize)]
     struct Ingredient {
         name: String,
-        quantity: TotalQuantity,
+        quantity: Vec<ScaledQuantity>,
     }
     impl From<(String, GroupedQuantity)> for Ingredient {
         fn from((name, qty): (String, GroupedQuantity)) -> Self {
             Ingredient {
                 name,
-                quantity: qty.total().into(),
+                quantity: qty.into_vec(),
             }
         }
     }
@@ -358,5 +311,15 @@ fn build_yaml_value<'a>(list: IngredientList, _aisle: &'a AisleConf<'a>) -> serd
         items: Vec<Ingredient>,
     }
 
-    serde_yaml::to_value(list.into_iter().map(Ingredient::from).collect::<Vec<_>>()).unwrap()
+    // Convert to categorized list and serialize to YAML
+    serde_yaml::to_value(
+        list.categorize(aisle)
+            .into_iter()
+            .map(|(category, items)| Category {
+                category,
+                items: items.into_iter().map(Ingredient::from).collect(),
+            })
+            .collect::<Vec<_>>(),
+    )
+    .unwrap()
 }

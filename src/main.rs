@@ -35,7 +35,7 @@ use clap::Parser;
 use cooklang::Converter;
 use cooklang::CooklangParser;
 use cooklang::Extensions;
-use cooklang_fs::FsIndex;
+use cooklang_fs::LazyFsIndex;
 use once_cell::sync::OnceCell;
 use std::path::Path;
 
@@ -49,7 +49,8 @@ mod shopping_list;
 mod args;
 mod util;
 
-const COOK_DIR: &str = ".cooklang";
+const GLOBAL_CONFIG_DIR: &str = ".cooklang";
+const LOCAL_CONFIG_DIR: &str = "config";
 const APP_NAME: &str = "cook";
 const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
 const AUTO_AISLE: &str = "aisle.conf";
@@ -72,16 +73,16 @@ pub fn main() -> Result<()> {
 pub struct Context {
     parser: OnceCell<CooklangParser>,
     base_path: Utf8PathBuf,
-    recipe_index: FsIndex,
+    recipe_index: LazyFsIndex,
 }
 
 impl Context {
     fn parser(&self) -> Result<&CooklangParser> {
-        self.parser.get_or_try_init(|| configure_parser())
+        self.parser.get_or_try_init(configure_parser)
     }
 
     fn aisle(&self) -> Option<Utf8PathBuf> {
-        let auto = self.base_path.join(COOK_DIR).join(AUTO_AISLE);
+        let auto = self.base_path.join(LOCAL_CONFIG_DIR).join(AUTO_AISLE);
 
         tracing::trace!("checking auto aisle file: {auto}");
 
@@ -96,7 +97,9 @@ impl Context {
 fn configure_context() -> Result<Context> {
     let args = CliArgs::parse();
     let base_path = match args.command {
-        Command::Server(ref server_args) => server_args.get_base_path().unwrap_or_else(|| Utf8PathBuf::from(".")),
+        Command::Server(ref server_args) => server_args
+            .get_base_path()
+            .unwrap_or_else(|| Utf8PathBuf::from(".")),
         _ => Utf8PathBuf::from("."),
     };
 
@@ -104,8 +107,9 @@ fn configure_context() -> Result<Context> {
         bail!("Base path is not a directory: {base_path}");
     }
 
-    let mut index = FsIndex::new(&base_path, 5)?;
-    index.set_config_dir(COOK_DIR.to_string());
+    let index = cooklang_fs::new_index(&base_path, 5)?
+        .config_dir(LOCAL_CONFIG_DIR.to_string())
+        .lazy();
 
     Ok(Context {
         parser: OnceCell::new(),
@@ -121,7 +125,7 @@ fn configure_parser() -> Result<CooklangParser> {
     Ok(CooklangParser::new(extensions, converter))
 }
 
-fn configure_logging() -> () {
+fn configure_logging() {
     tracing_subscriber::fmt()
         // Log this crate at level `trace`, but all other crates at level `info`.
         .with_env_filter("info,cooklang=info,cook=trace")
@@ -136,7 +140,7 @@ pub fn resolve_path(base_path: &Utf8Path, path: &Path) -> Utf8PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
     } else {
-        base_path.join(COOK_DIR).join(path)
+        base_path.join(LOCAL_CONFIG_DIR).join(path)
     }
 }
 
