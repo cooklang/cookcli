@@ -29,6 +29,7 @@
     function namedGroupIngredients(grouped, flat) {
         grouped.forEach((ingredient) => {
             ingredient.name = flat[ingredient.index].name;
+            ingredient.note = flat[ingredient.index].note
         });
 
         return grouped;

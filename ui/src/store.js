@@ -58,3 +58,15 @@ export const showQuantitiesNextToIngredients = writable(JSON.parse(showQuantitie
 showQuantitiesNextToIngredients.subscribe((val) => {
     localStorage.setItem("showQuantitiesNextToIngredients", JSON.stringify(val));
 })
+
+// Preference for showing notes next to ingredients, default is false
+const showIngredientNotesValue =
+  localStorage.getItem("showIngredientNotes") || "false";
+export const showIngredientNotes = writable(
+  JSON.parse(showIngredientNotesValue)
+);
+
+// Subscribe method to update local storage
+showIngredientNotes.subscribe((val) => {
+  localStorage.setItem("showIngredientNotes", JSON.stringify(val));
+});
