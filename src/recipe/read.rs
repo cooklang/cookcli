@@ -83,9 +83,12 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
     write_to_output(args.output.as_deref(), |writer| {
         match format {
-            OutputFormat::Human => {
-                cooklang_to_human::print_human(&recipe, "", ctx.parser()?.converter(), writer)?
-            }
+            OutputFormat::Human => cooklang_to_human::print_human(
+                &recipe,
+                recipe.metadata.title().unwrap_or(""),
+                ctx.parser()?.converter(),
+                writer,
+            )?,
             // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Json => {
                 if args.pretty {
