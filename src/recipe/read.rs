@@ -31,6 +31,7 @@
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, ValueEnum};
+use cooklang_find::get_recipe;
 
 use crate::{util::write_to_output, Context};
 
@@ -66,7 +67,7 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let input = args.input.read(&ctx.recipe_index)?;
+    let input = args.input.read(&ctx.base_path)?;
     let recipe = input.parse(ctx)?.default_scale();
 
     let format = args.format.unwrap_or_else(|| match &args.output {
@@ -89,7 +90,6 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 ctx.parser()?.converter(),
                 writer,
             )?,
-            // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Json => {
                 if args.pretty {
                     serde_json::to_writer_pretty(writer, &recipe)?;
@@ -98,7 +98,6 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 }
             }
             OutputFormat::Cooklang => cooklang_to_cooklang::print_cooklang(&recipe, writer)?,
-            // TODO, really it shouldn't expose the whole internals of the objects
             OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
             OutputFormat::Markdown => {
                 cooklang_to_md::print_md(&recipe, "", ctx.parser()?.converter(), writer)?

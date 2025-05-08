@@ -37,7 +37,6 @@ use clap::{Args, Subcommand};
 use crate::{util::Input, Context};
 use cooklang_fs::LazyFsIndex;
 
-mod image;
 mod read;
 
 #[derive(Debug, Args)]
@@ -55,11 +54,6 @@ enum RecipeCommand {
     /// Parse and print a Cooklang recipe file
     #[command(alias = "r")]
     Read(read::ReadArgs),
-
-    /// Download a random image from unsplash.com to match the recipe title.
-    /// Environment variable COOK_UNSPLASH_ACCESS_KEY needs to be set.
-    #[command()]
-    Image(image::ImageArgs),
 }
 
 pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
@@ -67,7 +61,6 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 
     match command {
         RecipeCommand::Read(args) => read::run(ctx, args),
-        RecipeCommand::Image(args) => image::run(ctx, args),
     }
 }
 
@@ -75,7 +68,7 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 struct RecipeInputArgs {
     /// Input recipe, none for stdin
     ///
-    /// This can be a full path, a partial path, or just the name.
+    /// This can be a full path or a partial path.
     #[arg(value_hint = clap::ValueHint::FilePath)]
     recipe: Option<Utf8PathBuf>,
 }

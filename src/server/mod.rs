@@ -86,7 +86,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         SocketAddr::from(([127, 0, 0, 1], args.port))
     };
 
-    info!("Listening on {addr}");
+    info!("Listening on http://{addr}");
 
     // #[cfg(feature = "ui")]
     if args.open {
