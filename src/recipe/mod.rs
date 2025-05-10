@@ -33,9 +33,10 @@ use std::io::Read;
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
+use camino::Utf8Path;
+use cooklang_find::RecipeEntry;
 
-use crate::{util::Input, Context};
-use cooklang_fs::LazyFsIndex;
+use crate::{Context};
 
 mod read;
 
@@ -74,22 +75,22 @@ struct RecipeInputArgs {
 }
 
 impl RecipeInputArgs {
-    pub fn read(&self, index: &LazyFsIndex) -> Result<Input> {
-        let input = if let Some(query) = &self.recipe {
-            // RecipeInputArgs::recipe is a pathbuf even if inmediatly converted
-            // to a string to enforce validation.
-            let entry = index.resolve(query.as_str(), None)?;
-
-            Input::File {
-                content: entry.read()?,
+    pub fn read(&self, base_path: &Utf8Path) -> Result<RecipeEntry> {
+        let entry = if let Some(query) = &self.recipe {
+            if let Some(entry) = cooklang_find::get_recipe(vec![base_path], query)? {
+                entry
+            } else {
+                return Err(anyhow::anyhow!("Recipe not found"));
             }
         } else {
             let mut buf = String::new();
             std::io::stdin()
                 .read_to_string(&mut buf)
                 .context("Failed to read stdin")?;
-            Input::Stdin { text: buf }
+
+            RecipeEntry::from_content(buf)?
         };
-        Ok(input)
+
+        Ok(entry)
     }
 }

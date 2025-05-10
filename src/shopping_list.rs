@@ -40,9 +40,10 @@ use cooklang::{
     quantity::{GroupedQuantity, Quantity, Value},
     ScaledQuantity,
 };
+use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
-use crate::{util::write_to_output, util::Input, Context};
+use crate::{util::write_to_output, Context};
 
 #[derive(Debug, Args)]
 #[command()]
@@ -154,7 +155,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
         .trim()
         .rsplit_once('*')
         .map(|(name, servings)| {
-            let target = servings.parse::<u32>().unwrap_or_else(|err| {
+            let target = servings.parse::<f64>().unwrap_or_else(|err| {
                 let mut cmd = crate::CliArgs::command();
                 cmd.error(
                     clap::error::ErrorKind::InvalidValue,
@@ -166,14 +167,11 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
         })
         .unwrap_or((entry, None));
 
-    // Resolve and parse the recipe
-    let input = {
-        let entry = ctx.recipe_index.resolve(name, None)?;
-        Input::File {
-            content: entry.read()?,
-        }
+    let recipe = if let Ok(mut e) = get_recipe(ctx, name) {
+        e.recipe()?
+    } else {
+        return Err(anyhow::anyhow!("Recipe not found"));
     };
-    let recipe = input.parse(ctx)?;
 
     // Scale
     let recipe = if let Some(servings) = servings {
@@ -186,6 +184,14 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     list.add_recipe(&recipe, converter);
 
     Ok(())
+}
+
+fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
+    if let Some(entry) = cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())? {
+        Ok(entry)
+    } else {
+        Err(anyhow::anyhow!("Recipe not found"))
+    }
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {

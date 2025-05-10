@@ -31,7 +31,6 @@
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, ValueEnum};
-use cooklang_find::get_recipe;
 
 use crate::{util::write_to_output, Context};
 
@@ -67,8 +66,10 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let input = args.input.read(&ctx.base_path)?;
-    let recipe = input.parse(ctx)?.default_scale();
+    let mut input = args.input.read(&ctx.base_path)?;
+    let recipe = input.recipe()?;
+    let name = input.name().unwrap_or("".to_string());
+    let recipe = recipe.default_scale();
 
     let format = args.format.unwrap_or_else(|| match &args.output {
         Some(p) => match p.extension() {
@@ -84,9 +85,9 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
     write_to_output(args.output.as_deref(), |writer| {
         match format {
-            OutputFormat::Human => cooklang_to_human::print_human(
+            OutputFormat::Human => crate::util::cooklang_to_human::print_human(
                 &recipe,
-                recipe.metadata.title().unwrap_or(""),
+                title,
                 ctx.parser()?.converter(),
                 writer,
             )?,
@@ -97,10 +98,10 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                     serde_json::to_writer(writer, &recipe)?;
                 }
             }
-            OutputFormat::Cooklang => cooklang_to_cooklang::print_cooklang(&recipe, writer)?,
+            OutputFormat::Cooklang => crate::util::cooklang_to_cooklang::print_cooklang(&recipe, writer)?,
             OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
             OutputFormat::Markdown => {
-                cooklang_to_md::print_md(&recipe, "", ctx.parser()?.converter(), writer)?
+                crate::util::cooklang_to_md::print_md(&recipe, title, ctx.parser()?.converter(), writer)?
             }
         }
 

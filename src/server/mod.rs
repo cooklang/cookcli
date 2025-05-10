@@ -288,7 +288,7 @@ async fn shopping_list(
             .rsplit_once('*')
             .map(|(name, servings)| {
                 let target = servings
-                    .parse::<u32>()
+                    .parse::<f64>()
                     .map_err(|_| StatusCode::BAD_REQUEST)?;
                 Ok::<_, StatusCode>((name, Some(target)))
             })
@@ -375,7 +375,7 @@ struct ColorConfig {
 
 #[derive(Deserialize)]
 struct RecipeQuery {
-    scale: Option<u32>,
+    scale: Option<f64>,
     units: Option<cooklang::convert::System>,
 }
 
@@ -393,9 +393,13 @@ async fn recipe(
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
+    tracing::info!("Entry path: {:?}", entry.path());
+
     let content = tokio::fs::read_to_string(&entry.path())
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    tracing::info!("Entry content: {}", content);
 
     let times = get_times(entry.path()).await?;
 
