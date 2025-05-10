@@ -31,9 +31,8 @@
 use std::io::Read;
 
 use anyhow::{Context as _, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand};
-use camino::Utf8Path;
 use cooklang_find::RecipeEntry;
 
 use crate::{Context};

@@ -58,6 +58,7 @@ pub struct ReadArgs {
 enum OutputFormat {
     Human,
     Json,
+    #[value(alias("yml"))]
     Yaml,
     #[value(alias("cook"))]
     Cooklang,
@@ -68,7 +69,7 @@ enum OutputFormat {
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let mut input = args.input.read(&ctx.base_path)?;
     let recipe = input.recipe()?;
-    let name = input.name().unwrap_or("".to_string());
+    let title = input.name().unwrap_or("");
     let recipe = recipe.default_scale();
 
     let format = args.format.unwrap_or_else(|| match &args.output {
