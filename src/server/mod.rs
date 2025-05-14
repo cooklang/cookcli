@@ -41,17 +41,12 @@ use axum::{
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Args;
 use cooklang::{ingredient_list::IngredientList, CooklangParser};
-use cooklang_fs::Error as CooklangError;
 
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 
 use tower_http::cors::CorsLayer;
 use tracing::info;
-
-mod async_index;
-
-use self::async_index::AsyncFsIndex;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -129,7 +124,6 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     let aisle_path = ctx.aisle().clone();
     let Context {
         parser,
-        recipe_index,
         base_path,
         ..
     } = ctx;
@@ -142,12 +136,9 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         bail!("{} is not a directory", path);
     }
 
-    let recipe_index = AsyncFsIndex::new(recipe_index)?;
-
     Ok(Arc::new(AppState {
         parser,
         base_path: path.clone(),
-        recipe_index,
         aisle_path
     }))
 }
@@ -236,7 +227,6 @@ mod ui {
 pub struct AppState {
     parser: CooklangParser,
     base_path: Utf8PathBuf,
-    recipe_index: AsyncFsIndex,
     aisle_path: Option<Utf8PathBuf>,
 }
 
@@ -294,34 +284,14 @@ async fn shopping_list(
             })
             .unwrap_or(Ok((entry.as_str(), None)))?;
 
-        let entry = state
-            .recipe_index
-            .get(name.to_string())
-            .await
+        let entry = cooklang_find::get_recipe(vec![state.base_path], name.into())
             .map_err(|_| {
                 tracing::error!("Recipe not found: {name}");
-                StatusCode::NOT_FOUND
-            })?;
+                return StatusCode::NOT_FOUND
+            });
 
-        let content = entry.read().map_err(|_| {
-            tracing::error!("Failed to read recipe: {name}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
 
-        let recipe = state
-            .parser
-            .parse(content.text())
-            .into_output()
-            .ok_or_else(|| {
-                tracing::error!("Failed to parse recipe");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-
-        let recipe = if let Some(servings) = servings {
-            recipe.scale(servings, converter)
-        } else {
-            recipe.default_scale()
-        };
+        let recipe = entry.recipe(servings.unwrap_or(1.0));
 
         list.add_recipe(&recipe, converter);
     }
@@ -478,9 +448,7 @@ async fn recipe(
 
     let value = serde_json::to_value(api_recipe).unwrap();
     let path = clean_path(entry.path(), &state.base_path);
-    let report = Report::from_pass_result(Ok(value), path.as_str(), &content, color.color);
     let value = serde_json::json!({
-        "recipe": report,
         "images": images(&entry, &state.base_path),
         "src_path": path,
         "modified": times.modified,
@@ -506,42 +474,4 @@ async fn get_times(path: &Utf8Path) -> Result<Times, StatusCode> {
     let modified = f(metadata.modified());
     let created = f(metadata.created());
     Ok(Times { modified, created })
-}
-
-#[derive(Serialize)]
-struct Report<T> {
-    value: Option<T>,
-    warnings: Vec<String>,
-    errors: Vec<String>,
-    fancy_report: Option<String>,
-}
-
-impl<T> Report<T> {
-    fn from_pass_result(
-        result: Result<T, CooklangError>,
-        _file_name: &str,
-        _source_code: &str,
-        color: bool,
-    ) -> Self {
-        match result {
-            Ok(value) => Report {
-                value: Some(value),
-                warnings: Vec::new(),
-                errors: Vec::new(),
-                fancy_report: None,
-            },
-            Err(e) => {
-                let mut report = Report {
-                    value: None,
-                    warnings: Vec::new(),
-                    errors: vec![e.to_string()],
-                    fancy_report: None,
-                };
-                if color {
-                    report.fancy_report = Some(e.to_string());
-                }
-                report
-            }
-        }
-    }
 }

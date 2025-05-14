@@ -308,9 +308,8 @@ dependencies = [
  "axum",
  "camino",
  "clap",
- "cooklang 0.16.0",
+ "cooklang",
  "cooklang-find",
- "cooklang-fs",
  "directories",
  "futures",
  "humantime",
@@ -331,32 +330,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "yansi",
-]
-
-[[package]]
-name = "cooklang"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e32d18963bbb38f01afc061a1f63370856fc385a035f27bf2643a7e39ee9a70"
-dependencies = [
- "bitflags 2.8.0",
- "codesnake",
- "enum-map",
- "finl_unicode",
- "prettyplease",
- "proc-macro2",
- "quote",
- "serde",
- "serde_yaml",
- "smallvec",
- "strum",
- "syn",
- "thiserror 2.0.11",
- "toml",
- "tracing",
- "unicase",
- "unicode-width 0.2.0",
  "yansi",
 ]
 
@@ -390,23 +363,10 @@ dependencies = [
 name = "cooklang-find"
 version = "0.1.1"
 dependencies = [
- "cooklang 0.16.0",
+ "cooklang",
  "glob",
  "serde",
  "thiserror 2.0.11",
-]
-
-[[package]]
-name = "cooklang-fs"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb1ae6f34e273e6a9dcdf3f3386e1598d6909ce6fad27f14fe014e939c0184d9"
-dependencies = [
- "camino",
- "cooklang 0.15.0",
- "serde",
- "thiserror 2.0.11",
- "tracing",
 ]
 
 [[package]]
@@ -1157,9 +1117,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.20.2"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "open"
@@ -1506,7 +1466,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

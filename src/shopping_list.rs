@@ -167,18 +167,9 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
         })
         .unwrap_or((entry, None));
 
-    let recipe = if let Ok(mut e) = get_recipe(ctx, name) {
-        e.recipe()?
-    } else {
-        return Err(anyhow::anyhow!("Recipe not found"));
-    };
+    let entry = get_recipe(ctx, name)?;
 
-    // Scale
-    let recipe = if let Some(servings) = servings {
-        recipe.scale(servings, converter)
-    } else {
-        recipe.default_scale()
-    };
+    let recipe = entry.recipe(1.0);
 
     // Add ingredients to the list
     list.add_recipe(&recipe, converter);

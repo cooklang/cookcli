@@ -67,10 +67,10 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let mut input = args.input.read(&ctx.base_path)?;
-    let recipe = input.recipe()?;
-    let title = input.name().unwrap_or("");
-    let recipe = recipe.default_scale();
+    let input = args.input.read(&ctx.base_path)?;
+    // TODO use actual scale factor
+    let recipe = input.recipe(1.0);
+    let title = input.name().as_ref().map_or("", |v| v);
 
     let format = args.format.unwrap_or_else(|| match &args.output {
         Some(p) => match p.extension() {
