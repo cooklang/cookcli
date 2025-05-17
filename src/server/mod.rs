@@ -261,9 +261,9 @@ fn clean_path(p: &Utf8Path, base_path: &Utf8Path) -> Utf8PathBuf {
     p
 }
 
-fn images(entry: &cooklang_fs::RecipeEntry, _base_path: &Utf8Path) -> Vec<cooklang_fs::Image> {
-    entry.images().to_vec()
-}
+// fn images(entry: &cooklang_find::RecipeEntry, _base_path: &Utf8Path) -> Vec<cooklang_find::Image> {
+//     entry.images().to_vec()
+// }
 
 async fn shopping_list(
     State(state): State<Arc<AppState>>,
@@ -273,25 +273,25 @@ async fn shopping_list(
     let converter = state.parser.converter();
 
     for entry in payload {
-        let (name, servings) = entry
+        let (name, scaling_factor) = entry
             .trim()
             .rsplit_once('*')
-            .map(|(name, servings)| {
-                let target = servings
+            .map(|(name, scaling_factor)| {
+                let target = scaling_factor
                     .parse::<f64>()
                     .map_err(|_| StatusCode::BAD_REQUEST)?;
                 Ok::<_, StatusCode>((name, Some(target)))
             })
             .unwrap_or(Ok((entry.as_str(), None)))?;
 
-        let entry = cooklang_find::get_recipe(vec![state.base_path], name.into())
+        let entry = cooklang_find::get_recipe(vec![&state.base_path], name)
             .map_err(|_| {
                 tracing::error!("Recipe not found: {name}");
                 return StatusCode::NOT_FOUND
-            });
+            })?;
 
 
-        let recipe = entry.recipe(servings.unwrap_or(1.0));
+        let recipe = entry.recipe(scaling_factor.unwrap_or(1.0));
 
         list.add_recipe(&recipe, converter);
     }
@@ -326,14 +326,8 @@ async fn shopping_list(
 }
 
 async fn all_recipes(State(state): State<Arc<AppState>>) -> Result<Json<Vec<String>>, StatusCode> {
-    let recipes = cooklang_fs::all_recipes(&state.base_path, 5) // TODO set as constant
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map(|e| {
-            clean_path(e.path(), &state.base_path)
-                .with_extension("")
-                .into_string()
-        })
-        .collect();
+    let recipes = cooklang_find::build_tree(&state.base_path)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(recipes))
 }
 
@@ -357,10 +351,7 @@ async fn recipe(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
-    let entry = state
-        .recipe_index
-        .get(path)
-        .await
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], path.into())
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     tracing::info!("Entry path: {:?}", entry.path());
@@ -449,7 +440,8 @@ async fn recipe(
     let value = serde_json::to_value(api_recipe).unwrap();
     let path = clean_path(entry.path(), &state.base_path);
     let value = serde_json::json!({
-        "images": images(&entry, &state.base_path),
+        // TODO: add images
+        // "images": images(&entry, &state.base_path),
         "src_path": path,
         "modified": times.modified,
         "created": times.created,

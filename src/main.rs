@@ -104,10 +104,6 @@ fn configure_context() -> Result<Context> {
         bail!("Base path is not a directory: {base_path}");
     }
 
-    let index = cooklang_fs::new_index(&base_path, 5)?
-        .config_dir(LOCAL_CONFIG_DIR.to_string())
-        .lazy();
-
     Ok(Context {
         parser: OnceCell::new(),
         base_path,

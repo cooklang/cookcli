@@ -76,11 +76,9 @@ struct RecipeInputArgs {
 impl RecipeInputArgs {
     pub fn read(&self, base_path: &Utf8Path) -> Result<RecipeEntry> {
         let entry = if let Some(query) = &self.recipe {
-            if let Some(entry) = cooklang_find::get_recipe(vec![base_path], query)? {
-                entry
-            } else {
-                return Err(anyhow::anyhow!("Recipe not found"));
-            }
+            cooklang_find::get_recipe(vec![base_path], query).map_err(|_| {
+                Err(anyhow::anyhow!("Recipe not found"))
+            })?
         } else {
             let mut buf = String::new();
             std::io::stdin()

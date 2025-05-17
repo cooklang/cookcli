@@ -151,11 +151,11 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     let converter = ctx.parser()?.converter();
 
     // split into name and servings
-    let (name, servings) = entry
+    let (name, scaling_factor) = entry
         .trim()
         .rsplit_once('*')
-        .map(|(name, servings)| {
-            let target = servings.parse::<f64>().unwrap_or_else(|err| {
+        .map(|(name, scaling_factor)| {
+            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                 let mut cmd = crate::CliArgs::command();
                 cmd.error(
                     clap::error::ErrorKind::InvalidValue,
@@ -169,7 +169,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
 
     let entry = get_recipe(ctx, name)?;
 
-    let recipe = entry.recipe(1.0);
+    let recipe = entry.recipe(scaling_factor.unwrap_or(1.0));
 
     // Add ingredients to the list
     list.add_recipe(&recipe, converter);
@@ -178,11 +178,9 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
 }
 
 fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
-    if let Some(entry) = cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())? {
-        Ok(entry)
-    } else {
+    cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into()).map_err(|_| {
         Err(anyhow::anyhow!("Recipe not found"))
-    }
+    })?
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {
