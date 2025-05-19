@@ -76,18 +76,18 @@ struct RecipeInputArgs {
 impl RecipeInputArgs {
     pub fn read(&self, base_path: &Utf8Path) -> Result<RecipeEntry> {
         let entry = if let Some(query) = &self.recipe {
-            cooklang_find::get_recipe(vec![base_path], query).map_err(|_| {
-                Err(anyhow::anyhow!("Recipe not found"))
-            })?
+            cooklang_find::get_recipe(vec![base_path], query)
+                .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))
         } else {
             let mut buf = String::new();
             std::io::stdin()
                 .read_to_string(&mut buf)
                 .context("Failed to read stdin")?;
 
-            RecipeEntry::from_content(buf)?
+            RecipeEntry::from_content(buf)
+                .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
         };
 
-        Ok(entry)
+        Ok(entry?)
     }
 }

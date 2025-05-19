@@ -178,9 +178,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
 }
 
 fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
-    cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into()).map_err(|_| {
-        Err(anyhow::anyhow!("Recipe not found"))
-    })?
+    Ok(cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())?)
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {

@@ -284,7 +284,7 @@ async fn shopping_list(
             })
             .unwrap_or(Ok((entry.as_str(), None)))?;
 
-        let entry = cooklang_find::get_recipe(vec![&state.base_path], name)
+        let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(name))
             .map_err(|_| {
                 tracing::error!("Recipe not found: {name}");
                 return StatusCode::NOT_FOUND
@@ -325,9 +325,12 @@ async fn shopping_list(
     Ok(Json(json_value))
 }
 
-async fn all_recipes(State(state): State<Arc<AppState>>) -> Result<Json<Vec<String>>, StatusCode> {
+async fn all_recipes(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, StatusCode> {
     let recipes = cooklang_find::build_tree(&state.base_path)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let recipes = serde_json::to_value(recipes).unwrap();
+
     Ok(Json(recipes))
 }
 
@@ -351,41 +354,19 @@ async fn recipe(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
-    let entry = cooklang_find::get_recipe(vec![&state.base_path], path.into())
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path))
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     tracing::info!("Entry path: {:?}", entry.path());
 
-    let content = tokio::fs::read_to_string(&entry.path())
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let times = get_times(&entry.path().as_ref().unwrap()).await?;
 
-    tracing::info!("Entry content: {}", content);
-
-    let times = get_times(entry.path()).await?;
-
-    let recipe = state.parser.parse(&content).into_output().ok_or_else(|| {
-        tracing::error!("Failed to parse recipe");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let mut recipe = if let Some(servings) = query.scale {
-        recipe.scale(servings, state.parser.converter())
-    } else {
-        recipe.default_scale()
-    };
-
-    if let Some(system) = query.units {
-        let errors = recipe.convert(system, state.parser.converter());
-        if !errors.is_empty() {
-            tracing::warn!("Errors converting units: {errors:?}");
-        }
-    }
+    let recipe = entry.recipe(query.scale.unwrap_or(1.0));
 
     #[derive(Serialize)]
     struct ApiRecipe {
         #[serde(flatten)]
-        recipe: cooklang::ScaledRecipe,
+        recipe: Arc<cooklang::ScaledRecipe>,
         grouped_ingredients: Vec<serde_json::Value>,
         timers_seconds: Vec<Option<cooklang::Value>>,
         filtered_metadata: Vec<serde_json::Value>,
@@ -431,14 +412,14 @@ async fn recipe(
             .map
             .get("image")
             .and_then(|v| v.as_str().map(|s| s.to_owned())),
-        recipe,
+        recipe: recipe,
         grouped_ingredients,
         timers_seconds,
         filtered_metadata,
     };
 
     let value = serde_json::to_value(api_recipe).unwrap();
-    let path = clean_path(entry.path(), &state.base_path);
+    let path = clean_path(entry.path().as_ref().unwrap(), &state.base_path);
     let value = serde_json::json!({
         // TODO: add images
         // "images": images(&entry, &state.base_path),
