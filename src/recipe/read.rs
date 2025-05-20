@@ -99,11 +99,16 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                     serde_json::to_writer(writer, &recipe)?;
                 }
             }
-            OutputFormat::Cooklang => crate::util::cooklang_to_cooklang::print_cooklang(&recipe, writer)?,
-            OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
-            OutputFormat::Markdown => {
-                crate::util::cooklang_to_md::print_md(&recipe, title, ctx.parser()?.converter(), writer)?
+            OutputFormat::Cooklang => {
+                crate::util::cooklang_to_cooklang::print_cooklang(&recipe, writer)?
             }
+            OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
+            OutputFormat::Markdown => crate::util::cooklang_to_md::print_md(
+                &recipe,
+                title,
+                ctx.parser()?.converter(),
+                writer,
+            )?,
         }
 
         Ok(())

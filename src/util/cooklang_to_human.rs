@@ -121,16 +121,6 @@ mod style {
 
     static STYLE: std::sync::OnceLock<OwoStyles> = std::sync::OnceLock::new();
 
-    /// Set custom styles
-    ///
-    /// Returns true if the styles were set.
-    ///
-    /// This can only be called once and before any formatting is done, otherwise
-    /// it will return false.
-    pub fn set_styles(styles: CookStyles) -> bool {
-        STYLE.set(styles.into()).is_ok()
-    }
-
     #[inline]
     pub(crate) fn styles() -> &'static OwoStyles {
         STYLE.get_or_init(|| CookStyles::default_styles().into())
@@ -435,7 +425,7 @@ fn steps(w: &mut impl io::Write, recipe: &ScaledRecipe) -> Result {
     Ok(())
 }
 
-fn step_text(recipe: &ScaledRecipe, section: &Section, step: &Step) -> (String, String) {
+fn step_text(recipe: &ScaledRecipe, _section: &Section, step: &Step) -> (String, String) {
     let mut step_text = String::new();
 
     let step_igrs_dedup = build_step_igrs_dedup(step, recipe);

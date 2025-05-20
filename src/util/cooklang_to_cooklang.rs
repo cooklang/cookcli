@@ -36,9 +36,9 @@ use anyhow::{Context, Result};
 use cooklang::{
     metadata::{CooklangValueExt, Metadata},
     model::{Item, Section, Step},
-    parser::{Modifiers},
+    parser::Modifiers,
     quantity::{Quantity, QuantityValue},
-     Recipe,
+    Recipe,
 };
 use regex::Regex;
 
@@ -89,8 +89,12 @@ fn w_section<D, V: QuantityValue>(
     }
     for content in &section.content {
         match content {
-            cooklang::Content::Step(step) => w_step(w, step, recipe).context("Failed to write step")?,
-            cooklang::Content::Text(text) => w_text_block(w, text).context("Failed to write text block")?,
+            cooklang::Content::Step(step) => {
+                w_step(w, step, recipe).context("Failed to write step")?
+            }
+            cooklang::Content::Text(text) => {
+                w_text_block(w, text).context("Failed to write text block")?
+            }
         }
         writeln!(w).context("Failed to write newline")?;
     }
@@ -145,7 +149,8 @@ fn w_step<D, V: QuantityValue>(
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
-                write!(&mut step_str, "{}", q.value()).context("Failed to write inline quantity")?;
+                write!(&mut step_str, "{}", q.value())
+                    .context("Failed to write inline quantity")?;
                 if let Some(u) = q.unit() {
                     step_str.push_str(u);
                 }
@@ -219,7 +224,7 @@ enum ComponentKind {
     Timer,
 }
 
-impl<'a, V: QuantityValue> ComponentFormatter<'a, V> {
+impl<V: QuantityValue> ComponentFormatter<'_, V> {
     fn format(self, w: &mut String) {
         w.push(match self.kind {
             ComponentKind::Ingredient => '@',

@@ -70,7 +70,7 @@ pub fn main() -> Result<()> {
 
 pub struct Context {
     parser: OnceCell<CooklangParser>,
-    base_path: Utf8PathBuf
+    base_path: Utf8PathBuf,
 }
 
 impl Context {

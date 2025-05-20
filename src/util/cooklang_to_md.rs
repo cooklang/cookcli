@@ -300,7 +300,8 @@ fn ingredients(
         return Ok(());
     }
 
-    writeln!(w, "## {}\n", opts.heading.ingredients).context("Failed to write ingredients header")?;
+    writeln!(w, "## {}\n", opts.heading.ingredients)
+        .context("Failed to write ingredients header")?;
 
     for entry in recipe.group_ingredients(converter) {
         let ingredient = entry.ingredient;
@@ -312,7 +313,8 @@ fn ingredients(
         write!(w, "- ").context("Failed to write ingredient bullet")?;
         if !entry.quantity.is_empty() {
             if opts.italic_amounts {
-                write!(w, "*{}* ", entry.quantity).context("Failed to write italicized quantity")?;
+                write!(w, "*{}* ", entry.quantity)
+                    .context("Failed to write italicized quantity")?;
             } else {
                 write!(w, "{} ", entry.quantity).context("Failed to write quantity")?;
             }
@@ -392,17 +394,24 @@ fn w_section(
     }
     for content in &section.content {
         match content {
-            cooklang::Content::Step(step) => w_step(w, step, recipe, opts)
-                .context("Failed to write step")?,
-            cooklang::Content::Text(text) => print_wrapped(w, text)
-                .context("Failed to write text content")?,
+            cooklang::Content::Step(step) => {
+                w_step(w, step, recipe, opts).context("Failed to write step")?
+            }
+            cooklang::Content::Text(text) => {
+                print_wrapped(w, text).context("Failed to write text content")?
+            }
         };
         writeln!(w).context("Failed to write newline after content")?;
     }
     Ok(())
 }
 
-fn w_step(w: &mut impl io::Write, step: &Step, recipe: &ScaledRecipe, opts: &Options) -> Result<()> {
+fn w_step(
+    w: &mut impl io::Write,
+    step: &Step,
+    recipe: &ScaledRecipe,
+    opts: &Options,
+) -> Result<()> {
     let mut step_str = step.number.to_string();
     if opts.escape_step_numbers {
         step_str.push_str("\\. ")
@@ -424,8 +433,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &ScaledRecipe, opts: &Opt
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
                 if let Some(name) = &t.name {
-                    write!(&mut step_str, "({name})")
-                        .context("Failed to write timer name")?;
+                    write!(&mut step_str, "({name})").context("Failed to write timer name")?;
                 }
                 if let Some(quantity) = &t.quantity {
                     write!(&mut step_str, "{}", quantity)
@@ -438,8 +446,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &ScaledRecipe, opts: &Opt
                     write!(&mut step_str, "*{q}*")
                         .context("Failed to write italicized inline quantity")?;
                 } else {
-                    write!(&mut step_str, "{q}")
-                        .context("Failed to write inline quantity")?;
+                    write!(&mut step_str, "{q}").context("Failed to write inline quantity")?;
                 }
             }
         }

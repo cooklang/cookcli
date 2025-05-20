@@ -28,10 +28,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod cooklang_to_human;
 pub mod cooklang_to_cooklang;
+pub mod cooklang_to_human;
 pub mod cooklang_to_md;
-
 
 use anyhow::{Context as _, Result};
 

@@ -7,7 +7,7 @@ export const fetchRecipes = (async () => {
 export const fetchRecipe = (async (path) => {
     const response = await fetch(`/api/recipes/${path}`);
     const json = await response.json();
-    return json["recipe"]["value"];
+    return json.recipe;
 })
 
 

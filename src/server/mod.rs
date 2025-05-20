@@ -123,14 +123,11 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     ctx.parser()?;
     let aisle_path = ctx.aisle().clone();
     let Context {
-        parser,
-        base_path,
-        ..
+        parser, base_path, ..
     } = ctx;
     let parser = parser.into_inner().unwrap();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
-
 
     if path.is_file() {
         bail!("{} is not a directory", path);
@@ -139,7 +136,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     Ok(Arc::new(AppState {
         parser,
         base_path: path.clone(),
-        aisle_path
+        aisle_path,
     }))
 }
 
@@ -287,9 +284,8 @@ async fn shopping_list(
         let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(name))
             .map_err(|_| {
                 tracing::error!("Recipe not found: {name}");
-                return StatusCode::NOT_FOUND
+                StatusCode::NOT_FOUND
             })?;
-
 
         let recipe = entry.recipe(scaling_factor.unwrap_or(1.0));
 
@@ -297,10 +293,7 @@ async fn shopping_list(
     }
 
     let aisle_content = if let Some(path) = &state.aisle_path {
-        match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(_) => String::new()
-        }
+        std::fs::read_to_string(path).unwrap_or_default()
     } else {
         tracing::warn!("No aisle file set");
         String::new()
@@ -325,7 +318,9 @@ async fn shopping_list(
     Ok(Json(json_value))
 }
 
-async fn all_recipes(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn all_recipes(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let recipes = cooklang_find::build_tree(&state.base_path)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -343,14 +338,12 @@ struct ColorConfig {
 #[derive(Deserialize)]
 struct RecipeQuery {
     scale: Option<f64>,
-    units: Option<cooklang::convert::System>,
 }
 
 async fn recipe(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Query(query): Query<RecipeQuery>,
-    Query(color): Query<ColorConfig>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
@@ -359,7 +352,7 @@ async fn recipe(
 
     tracing::info!("Entry path: {:?}", entry.path());
 
-    let times = get_times(&entry.path().as_ref().unwrap()).await?;
+    let times = get_times(entry.path().as_ref().unwrap()).await?;
 
     let recipe = entry.recipe(query.scale.unwrap_or(1.0));
 
@@ -412,15 +405,15 @@ async fn recipe(
             .map
             .get("image")
             .and_then(|v| v.as_str().map(|s| s.to_owned())),
-        recipe: recipe,
+        recipe,
         grouped_ingredients,
         timers_seconds,
         filtered_metadata,
     };
 
-    let value = serde_json::to_value(api_recipe).unwrap();
     let path = clean_path(entry.path().as_ref().unwrap(), &state.base_path);
     let value = serde_json::json!({
+        "recipe": api_recipe,
         // TODO: add images
         // "images": images(&entry, &state.base_path),
         "src_path": path,

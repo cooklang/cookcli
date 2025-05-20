@@ -35,7 +35,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand};
 use cooklang_find::RecipeEntry;
 
-use crate::{Context};
+use crate::Context;
 
 mod read;
 
@@ -75,7 +75,7 @@ struct RecipeInputArgs {
 
 impl RecipeInputArgs {
     pub fn read(&self, base_path: &Utf8Path) -> Result<RecipeEntry> {
-        let entry = if let Some(query) = &self.recipe {
+        if let Some(query) = &self.recipe {
             cooklang_find::get_recipe(vec![base_path], query)
                 .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))
         } else {
@@ -86,8 +86,6 @@ impl RecipeInputArgs {
 
             RecipeEntry::from_content(buf)
                 .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
-        };
-
-        Ok(entry?)
+        }
     }
 }
