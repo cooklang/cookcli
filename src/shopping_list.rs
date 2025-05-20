@@ -51,7 +51,7 @@ pub struct ShoppingListArgs {
     /// Recipe to add to the list
     ///
     /// Name or path to the file. It will use the default scaling of the recipe.
-    /// To use a custom scaling, add `*<servings>` at the end.
+    /// To use a custom scaling, add `@<scale>` at the end.
     recipes: Vec<String>,
 
     /// Output file, none for stdout.
@@ -105,7 +105,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             }
         }
     } else {
-        warn!("No aisle file found");
+        warn!("No aisle file found. Docs https://cooklang.org/docs/spec/#shopping-lists");
         Default::default()
     };
 
@@ -161,13 +161,13 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
                 )
                 .exit()
             });
-            (name, Some(target))
+            (name, target)
         })
-        .unwrap_or((entry, None));
+        .unwrap_or((entry, 1.0));
 
     let entry = get_recipe(ctx, name)?;
 
-    let recipe = entry.recipe(scaling_factor.unwrap_or(1.0));
+    let recipe = entry.recipe(scaling_factor);
 
     // Add ingredients to the list
     list.add_recipe(&recipe, converter);

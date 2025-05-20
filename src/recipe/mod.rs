@@ -66,7 +66,7 @@ struct RecipeInputArgs {
     /// Input recipe, none for stdin
     ///
     /// This can be a full path or a partial path.
-    /// You can also specify a scale inline using `path@scale` (e.g., `Easy Pancakes.cook@3`).
+    /// You can also specify a scale inline using `path@<scale>` (e.g., `Easy Pancakes.cook@3`).
     /// Note. `.cook` extension is optional.
     #[arg(value_hint = clap::ValueHint::FilePath)]
     recipe: Option<Utf8PathBuf>,
