@@ -202,10 +202,11 @@ where
 pub fn print_md(
     recipe: &ScaledRecipe,
     name: &str,
+    scale: f64,
     converter: &Converter,
     writer: impl io::Write,
 ) -> Result<()> {
-    print_md_with_options(recipe, name, &Options::default(), converter, writer)
+    print_md_with_options(recipe, name, scale, &Options::default(), converter, writer)
 }
 
 /// Writes a recipe in Markdown format
@@ -219,6 +220,7 @@ pub fn print_md(
 pub fn print_md_with_options(
     recipe: &ScaledRecipe,
     name: &str,
+    scale: f64,
     opts: &Options,
     converter: &Converter,
     mut writer: impl io::Write,
@@ -226,7 +228,7 @@ pub fn print_md_with_options(
     frontmatter(&mut writer, &recipe.metadata, name, opts)
         .context("Failed to write frontmatter")?;
 
-    writeln!(writer, "# {}\n", name).context("Failed to write title")?;
+    writeln!(writer, "# {}{}\n", name, if scale != 1.0 { format!(" @ {}", scale) } else { "".to_string() }).context("Failed to write title")?;
 
     if opts.tags {
         if let Some(tags) = recipe.metadata.tags() {

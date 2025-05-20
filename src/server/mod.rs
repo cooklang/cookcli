@@ -277,9 +277,9 @@ async fn shopping_list(
                 let target = scaling_factor
                     .parse::<f64>()
                     .map_err(|_| StatusCode::BAD_REQUEST)?;
-                Ok::<_, StatusCode>((name, Some(target)))
+                Ok::<_, StatusCode>((name, target))
             })
-            .unwrap_or(Ok((entry.as_str(), None)))?;
+            .unwrap_or(Ok((entry.as_str(), 1.0)))?;
 
         let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(name))
             .map_err(|_| {
@@ -287,7 +287,7 @@ async fn shopping_list(
                 StatusCode::NOT_FOUND
             })?;
 
-        let recipe = entry.recipe(scaling_factor.unwrap_or(1.0));
+        let recipe = entry.recipe(scaling_factor);
 
         list.add_recipe(&recipe, converter);
     }

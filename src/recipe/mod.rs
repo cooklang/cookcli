@@ -71,7 +71,7 @@ struct RecipeInputArgs {
     #[arg(value_hint = clap::ValueHint::FilePath)]
     recipe: Option<Utf8PathBuf>,
 
-    /// Scale factor
+    /// Scale factor number, defaults to 1
     #[arg(short, long, default_value_t = 1.0)]
     scale: f64,
 }

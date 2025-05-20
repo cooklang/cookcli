@@ -83,7 +83,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                     let mut cmd = crate::CliArgs::command();
                     cmd.error(
                         clap::error::ErrorKind::InvalidValue,
-                        format!("Invalid scaling target for '{name}': {err}"),
+                        format!("Invalid scaling target for '{name}': {err}. Use a number value after @ to specify a scaling factor."),
                     )
                     .exit()
                 });
@@ -103,10 +103,10 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             .read_to_string(&mut buf)
             .context("Failed to read stdin")?;
 
-        RecipeEntry::from_content(buf).map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
+        RecipeEntry::from_content(buf)
+            .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
     }?;
 
-    // TODO use actual scale factor
     let recipe = input.recipe(scale);
     let title = input.name().as_ref().map_or("", |v| v);
 
@@ -145,6 +145,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             OutputFormat::Markdown => crate::util::cooklang_to_md::print_md(
                 &recipe,
                 title,
+                scale,
                 ctx.parser()?.converter(),
                 writer,
             )?,
