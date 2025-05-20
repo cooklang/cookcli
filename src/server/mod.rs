@@ -272,7 +272,7 @@ async fn shopping_list(
     for entry in payload {
         let (name, scaling_factor) = entry
             .trim()
-            .rsplit_once('*')
+            .rsplit_once('@')
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor
                     .parse::<f64>()

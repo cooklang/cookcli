@@ -28,9 +28,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use anyhow::Result;
-use camino::Utf8PathBuf;
+use anyhow::{Context as _, Result};
+use clap::CommandFactory;
 use clap::{Args, ValueEnum};
+use std::io::Read;
+
+use camino::Utf8PathBuf;
+use cooklang_find::RecipeEntry;
 
 use crate::{util::write_to_output, Context};
 
@@ -67,9 +71,43 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let input = args.input.read(&ctx.base_path)?;
+    let mut scale = args.input.scale;
+
+    let input = if let Some(query) = args.input.recipe {
+        let (name, scaling_factor) = query
+            .as_str()
+            .trim()
+            .rsplit_once('@')
+            .map(|(name, scaling_factor)| {
+                let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
+                    let mut cmd = crate::CliArgs::command();
+                    cmd.error(
+                        clap::error::ErrorKind::InvalidValue,
+                        format!("Invalid scaling target for '{name}': {err}"),
+                    )
+                    .exit()
+                });
+                (name, Some(target))
+            })
+            .unwrap_or((query.as_str(), None));
+
+        if let Some(scaling_factor) = scaling_factor {
+            scale = scaling_factor;
+        }
+
+        cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())
+            .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))
+    } else {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .context("Failed to read stdin")?;
+
+        RecipeEntry::from_content(buf).map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
+    }?;
+
     // TODO use actual scale factor
-    let recipe = input.recipe(1.0);
+    let recipe = input.recipe(scale);
     let title = input.name().as_ref().map_or("", |v| v);
 
     let format = args.format.unwrap_or_else(|| match &args.output {
@@ -89,6 +127,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             OutputFormat::Human => crate::util::cooklang_to_human::print_human(
                 &recipe,
                 title,
+                scale,
                 ctx.parser()?.converter(),
                 writer,
             )?,

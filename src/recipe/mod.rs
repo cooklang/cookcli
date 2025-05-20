@@ -28,12 +28,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::io::Read;
-
-use anyhow::{Context as _, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use anyhow::Result;
+use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
-use cooklang_find::RecipeEntry;
 
 use crate::Context;
 
@@ -69,23 +66,12 @@ struct RecipeInputArgs {
     /// Input recipe, none for stdin
     ///
     /// This can be a full path or a partial path.
+    /// You can also specify a scale inline using `path@scale` (e.g., `Easy Pancakes.cook@3`).
+    /// Note. `.cook` extension is optional.
     #[arg(value_hint = clap::ValueHint::FilePath)]
     recipe: Option<Utf8PathBuf>,
-}
 
-impl RecipeInputArgs {
-    pub fn read(&self, base_path: &Utf8Path) -> Result<RecipeEntry> {
-        if let Some(query) = &self.recipe {
-            cooklang_find::get_recipe(vec![base_path], query)
-                .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))
-        } else {
-            let mut buf = String::new();
-            std::io::stdin()
-                .read_to_string(&mut buf)
-                .context("Failed to read stdin")?;
-
-            RecipeEntry::from_content(buf)
-                .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
-        }
-    }
+    /// Scale factor
+    #[arg(short, long, default_value_t = 1.0)]
+    scale: f64,
 }

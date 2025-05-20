@@ -153,7 +153,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     // split into name and servings
     let (name, scaling_factor) = entry
         .trim()
-        .rsplit_once('*')
+        .rsplit_once('@')
         .map(|(name, scaling_factor)| {
             let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                 let mut cmd = crate::CliArgs::command();

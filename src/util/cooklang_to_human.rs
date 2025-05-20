@@ -109,7 +109,6 @@ mod style {
     generate_styles_struct! {
         pub title: Style             = Style::new().fg_color(color!(White)).bg_color(color!(Magenta)).bold(),
         pub meta_key: Style          = Style::new().fg_color(color!(BrightGreen)).bold(),
-        pub selected_servings: Style = Style::new().fg_color(color!(Yellow)).bold(),
         pub ingredient: Style        = Style::new().fg_color(color!(Green)),
         pub cookware: Style          = Style::new().fg_color(color!(Yellow)),
         pub timer: Style             = Style::new().fg_color(color!(Cyan)),
@@ -133,12 +132,13 @@ pub type Result<T = ()> = std::result::Result<T, io::Error>;
 pub fn print_human(
     recipe: &ScaledRecipe,
     name: &str,
+    scale: f64,
     converter: &Converter,
     mut writer: impl std::io::Write,
 ) -> Result {
     let w = &mut writer;
 
-    header(w, recipe, name)?;
+    header(w, recipe, name, scale)?;
     metadata(w, recipe, converter)?;
     ingredients(w, recipe, converter)?;
     cookware(w, recipe)?;
@@ -147,18 +147,25 @@ pub fn print_human(
     Ok(())
 }
 
-fn header(w: &mut impl io::Write, recipe: &ScaledRecipe, name: &str) -> Result {
+fn header(w: &mut impl io::Write, recipe: &ScaledRecipe, name: &str, scale: f64) -> Result {
     let title_text = format!(
-        " {}{} ",
+        " {}{}{} ",
         recipe
             .metadata
             .get("emoji")
             .and_then(|v| v.as_str())
             .map(|s| format!("{s} "))
             .unwrap_or_default(),
-        name
+        name,
+        if scale != 1.0 {
+            format!(" @ {}", scale)
+        } else {
+            "".to_string()
+        }
     );
+
     writeln!(w, "{}", title_text.paint(styles().title))?;
+
     if let Some(tags) = recipe.metadata.tags() {
         let mut tags_str = String::new();
         for tag in tags {
