@@ -43,7 +43,7 @@ use cooklang::{
 use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
-use crate::{util::write_to_output, Context};
+use crate::{util::{write_to_output, split_recipe_name_and_scaling_factor}, Context};
 
 #[derive(Debug, Args)]
 #[command()]
@@ -151,9 +151,7 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     let converter = ctx.parser()?.converter();
 
     // split into name and servings
-    let (name, scaling_factor) = entry
-        .trim()
-        .rsplit_once('@')
+    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
         .map(|(name, scaling_factor)| {
             let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                 let mut cmd = crate::CliArgs::command();

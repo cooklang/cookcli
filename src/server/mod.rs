@@ -48,6 +48,8 @@ use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
+use crate::util::split_recipe_name_and_scaling_factor;
+
 #[derive(Debug, Args)]
 pub struct ServerArgs {
     /// Directory with recipes
@@ -270,9 +272,7 @@ async fn shopping_list(
     let converter = state.parser.converter();
 
     for entry in payload {
-        let (name, scaling_factor) = entry
-            .trim()
-            .rsplit_once('@')
+        let (name, scaling_factor) = split_recipe_name_and_scaling_factor(&entry)
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor
                     .parse::<f64>()

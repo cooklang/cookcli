@@ -36,7 +36,7 @@ use std::io::Read;
 use camino::Utf8PathBuf;
 use cooklang_find::RecipeEntry;
 
-use crate::{util::write_to_output, Context};
+use crate::{util::{write_to_output, split_recipe_name_and_scaling_factor}, Context};
 
 #[derive(Debug, Args)]
 pub struct ReadArgs {
@@ -74,10 +74,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let mut scale = args.input.scale;
 
     let input = if let Some(query) = args.input.recipe {
-        let (name, scaling_factor) = query
-            .as_str()
-            .trim()
-            .rsplit_once('@')
+        let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                     let mut cmd = crate::CliArgs::command();
