@@ -185,10 +185,12 @@ jobs:
           - target: x86_64-apple-darwin
             arch: x86_64
             name: cook-x86_64-apple-darwin.tar.gz
+            notarized_name: notarized-cook-x86_64-apple-darwin.tar.gz
 
           - target: aarch64-apple-darwin
             arch: aarch64
             name: cook-aarch64-apple-darwin.tar.gz
+            notarized_name: notarized-cook-aarch64-apple-darwin.tar.gz
 
     env:
       KEYCHAIN_FILENAME: app-signing.keychain-db
@@ -249,13 +251,13 @@ jobs:
           xcrun notarytool submit cook.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
 
       - name: Notarize | Package Notarized Binary
-        run: tar czvf ${{ matrix.name }} cook
+        run: tar czvf ${{ matrix.notarized_name }} cook
 
       - name: Notarize | Upload Notarized Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
+          name: ${{ matrix.notarized_name }}
+          path: ${{ matrix.notarized_name }}
 
       - name: Cleanup Secrets
         if: ${{ always() }}
