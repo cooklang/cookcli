@@ -13,15 +13,16 @@
     export let recipePath;
 
     // breadcrumbs = ["Breakfasts","Jamie","Easy Pancakes"]
-    $: maybeRecipe = fetchRecipe(recipePath);
+    $: maybeRecipe = fetchRecipe(recipePath, scaleFactor);
 
     let isAddedToShoppingListToastOpen = false;
     let buttonDisabled = false;
+    let scaleFactor = 1;
 
     async function onAddToShoppingList() {
         buttonDisabled = true;
         await new Promise(r => setTimeout(r, 500));
-        shoppingListPaths.add(recipePath);
+        shoppingListPaths.add(`${recipePath}@${scaleFactor}`);
         isAddedToShoppingListToastOpen = true
         buttonDisabled = false;
     }
@@ -40,7 +41,22 @@
   <Row>
     <Col><Breadcrumbs path={recipePath} /></Col>
     {#if $media.screen}
-    <Col class="text-end"><Button disabled={buttonDisabled} color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button></Col>
+    <Col class="text-end">
+        <div class="d-flex align-items-center justify-content-end gap-2">
+            <div class="d-flex align-items-center">
+                <label for="scale-factor" class="me-2">Scale:</label>
+                <input
+                    type="number"
+                    id="scale-factor"
+                    class="form-control form-control-sm"
+                    style="width: 80px;"
+                    min="0"
+                    bind:value={scaleFactor}
+                />
+            </div>
+            <Button disabled={buttonDisabled} color="warning" outline on:click={onAddToShoppingList}>Add to shopping list</Button>
+        </div>
+    </Col>
     {/if}
   </Row>
 </Container>
