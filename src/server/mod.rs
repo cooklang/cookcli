@@ -43,7 +43,7 @@ use clap::Args;
 use cooklang::{ingredient_list::IngredientList, CooklangParser};
 
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{net::SocketAddr, sync::Arc};
 
 use tower_http::cors::CorsLayer;
 use tracing::info;
@@ -348,8 +348,6 @@ async fn recipe(
 
     tracing::info!("Entry path: {:?}", entry.path());
 
-    let times = get_times(entry.path().as_ref().unwrap()).await?;
-
     let recipe = entry.recipe(query.scale.unwrap_or(1.0));
 
     #[derive(Serialize)]
@@ -357,9 +355,6 @@ async fn recipe(
         #[serde(flatten)]
         recipe: Arc<cooklang::ScaledRecipe>,
         grouped_ingredients: Vec<serde_json::Value>,
-        timers_seconds: Vec<Option<cooklang::Value>>,
-        filtered_metadata: Vec<serde_json::Value>,
-        external_image: Option<String>,
     }
 
     let grouped_ingredients = recipe
@@ -374,66 +369,17 @@ async fn recipe(
         })
         .collect();
 
-    let timers_seconds = recipe
-        .timers
-        .iter()
-        .map(|t| {
-            t.quantity.clone().and_then(|mut q| {
-                if q.convert("s", state.parser.converter()).is_err() {
-                    None
-                } else {
-                    Some(q.value().clone())
-                }
-            })
-        })
-        .collect();
-
-    let filtered_metadata = recipe
-        .metadata
-        .map_filtered()
-        .filter(|(k, _)| k.as_str() != Some("image"))
-        .map(|e| serde_json::to_value(e).unwrap())
-        .collect();
-
     let api_recipe = ApiRecipe {
-        external_image: recipe
-            .metadata
-            .map
-            .get("image")
-            .and_then(|v| v.as_str().map(|s| s.to_owned())),
         recipe,
         grouped_ingredients,
-        timers_seconds,
-        filtered_metadata,
     };
 
-    let path = clean_path(entry.path().as_ref().unwrap(), &state.base_path);
     let value = serde_json::json!({
         "recipe": api_recipe,
         // TODO: add images
-        // "images": images(&entry, &state.base_path),
-        "src_path": path,
-        "modified": times.modified,
-        "created": times.created,
+        // TODO: add scaling info
+        // TODO: add metadata
     });
 
     Ok(Json(value))
-}
-
-struct Times {
-    modified: Option<u64>,
-    created: Option<u64>,
-}
-async fn get_times(path: &Utf8Path) -> Result<Times, StatusCode> {
-    fn f(st: std::io::Result<SystemTime>) -> Option<u64> {
-        st.ok()
-            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-    }
-    let metadata = tokio::fs::metadata(path)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    let modified = f(metadata.modified());
-    let created = f(metadata.created());
-    Ok(Times { modified, created })
 }
