@@ -52,7 +52,5 @@ where
 }
 
 pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, &str)> {
-    query
-        .trim()
-        .rsplit_once('@')
+    query.trim().rsplit_once('@')
 }

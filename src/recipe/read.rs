@@ -36,7 +36,10 @@ use std::io::Read;
 use camino::Utf8PathBuf;
 use cooklang_find::RecipeEntry;
 
-use crate::{util::{write_to_output, split_recipe_name_and_scaling_factor}, Context};
+use crate::{
+    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    Context,
+};
 
 #[derive(Debug, Args)]
 pub struct ReadArgs {
@@ -100,8 +103,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             .read_to_string(&mut buf)
             .context("Failed to read stdin")?;
 
-        RecipeEntry::from_content(buf)
-            .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
+        RecipeEntry::from_content(buf).map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
     }?;
 
     let recipe = input.recipe(scale);

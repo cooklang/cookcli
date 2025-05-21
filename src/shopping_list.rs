@@ -43,7 +43,10 @@ use cooklang::{
 use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
-use crate::{util::{write_to_output, split_recipe_name_and_scaling_factor}, Context};
+use crate::{
+    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    Context,
+};
 
 #[derive(Debug, Args)]
 #[command()]

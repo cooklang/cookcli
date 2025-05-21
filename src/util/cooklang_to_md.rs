@@ -228,7 +228,17 @@ pub fn print_md_with_options(
     frontmatter(&mut writer, &recipe.metadata, name, opts)
         .context("Failed to write frontmatter")?;
 
-    writeln!(writer, "# {}{}\n", name, if scale != 1.0 { format!(" @ {}", scale) } else { "".to_string() }).context("Failed to write title")?;
+    writeln!(
+        writer,
+        "# {}{}\n",
+        name,
+        if scale != 1.0 {
+            format!(" @ {}", scale)
+        } else {
+            "".to_string()
+        }
+    )
+    .context("Failed to write title")?;
 
     if opts.tags {
         if let Some(tags) = recipe.metadata.tags() {
