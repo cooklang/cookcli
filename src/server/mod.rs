@@ -132,7 +132,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     let path = args.base_path.as_ref().unwrap_or(&base_path);
 
     if path.is_file() {
-        bail!("{} is not a directory", path);
+        bail!("Base path{} is not a directory", path);
     }
 
     Ok(Arc::new(AppState {
@@ -259,10 +259,6 @@ fn clean_path(p: &Utf8Path, base_path: &Utf8Path) -> Utf8PathBuf {
     let p = p.to_path_buf();
     p
 }
-
-// fn images(entry: &cooklang_find::RecipeEntry, _base_path: &Utf8Path) -> Vec<cooklang_find::Image> {
-//     entry.images().to_vec()
-// }
 
 async fn shopping_list(
     State(state): State<Arc<AppState>>,
