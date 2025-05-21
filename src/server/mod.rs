@@ -36,18 +36,15 @@ use axum::{
     response::Response,
     routing::{get, post},
     Json, Router,
+    body::Body,
 };
-
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Args;
 use cooklang::{ingredient_list::IngredientList, CooklangParser};
-
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
-
 use tower_http::cors::CorsLayer;
 use tracing::info;
-
 use crate::util::split_recipe_name_and_scaling_factor;
 
 #[derive(Debug, Args)]
@@ -110,8 +107,8 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
             .allow_methods([Method::GET, Method::POST]),
     );
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
@@ -189,7 +186,7 @@ mod ui {
         fn index_html() -> impl axum::response::IntoResponse {
             Assets::get(INDEX_HTML)
                 .map(|content| {
-                    let body = axum::body::boxed(axum::body::Full::from(content.data));
+                    let body = Body::from(content.data);
                     Response::builder()
                         .header(axum::http::header::CONTENT_TYPE, "text/html")
                         .body(body)
@@ -206,7 +203,7 @@ mod ui {
 
         match Assets::get(path) {
             Some(content) => {
-                let body = axum::body::boxed(axum::body::Full::from(content.data));
+                let body = Body::from(content.data);
                 let mime = mime_guess::from_path(path).first_or_octet_stream();
                 Ok(Response::builder()
                     .header(axum::http::header::CONTENT_TYPE, mime.as_ref())
@@ -233,7 +230,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
         .route("/shopping_list", post(shopping_list))
         .route("/recipes", get(all_recipes))
-        .route("/recipes/*path", get(recipe));
+        .route("/recipes/{*path}", get(recipe));
 
     Ok(router)
 }
