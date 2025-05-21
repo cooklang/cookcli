@@ -35,7 +35,6 @@ use clap::Parser;
 use cooklang::Converter;
 use cooklang::CooklangParser;
 use cooklang::Extensions;
-use cooklang_fs::LazyFsIndex;
 use once_cell::sync::OnceCell;
 use std::path::Path;
 
@@ -49,7 +48,6 @@ mod shopping_list;
 mod args;
 mod util;
 
-const GLOBAL_CONFIG_DIR: &str = ".cooklang";
 const LOCAL_CONFIG_DIR: &str = "config";
 const APP_NAME: &str = "cook";
 const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
@@ -73,7 +71,6 @@ pub fn main() -> Result<()> {
 pub struct Context {
     parser: OnceCell<CooklangParser>,
     base_path: Utf8PathBuf,
-    recipe_index: LazyFsIndex,
 }
 
 impl Context {
@@ -107,14 +104,9 @@ fn configure_context() -> Result<Context> {
         bail!("Base path is not a directory: {base_path}");
     }
 
-    let index = cooklang_fs::new_index(&base_path, 5)?
-        .config_dir(LOCAL_CONFIG_DIR.to_string())
-        .lazy();
-
     Ok(Context {
         parser: OnceCell::new(),
         base_path,
-        recipe_index: index,
     })
 }
 

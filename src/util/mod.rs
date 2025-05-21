@@ -28,11 +28,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod cooklang_to_cooklang;
+pub mod cooklang_to_human;
+pub mod cooklang_to_md;
+
 use anyhow::{Context as _, Result};
 
 use camino::Utf8Path;
-
-use crate::Context;
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
@@ -49,27 +51,6 @@ where
     Ok(())
 }
 
-pub enum Input {
-    File { content: cooklang_fs::RecipeContent },
-    Stdin { text: String },
-}
-
-impl Input {
-    pub fn parse(&self, ctx: &Context) -> Result<cooklang::ScalableRecipe> {
-        let parser = ctx.parser()?;
-        let result = match self {
-            Input::File { content } => parser.parse(content.text()),
-            Input::Stdin { text } => parser.parse(text),
-        };
-        result
-            .into_output()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse recipe"))
-    }
-
-    pub fn text(&self) -> &str {
-        match self {
-            Input::File { content } => content.text(),
-            Input::Stdin { text } => text,
-        }
-    }
+pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, &str)> {
+    query.trim().rsplit_once('@')
 }

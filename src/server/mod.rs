@@ -36,22 +36,16 @@ use axum::{
     response::Response,
     routing::{get, post},
     Json, Router,
+    body::Body,
 };
-
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Args;
 use cooklang::{ingredient_list::IngredientList, CooklangParser};
-use cooklang_fs::Error as CooklangError;
-
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc, time::SystemTime};
-
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
-
-mod async_index;
-
-use self::async_index::AsyncFsIndex;
+use crate::util::split_recipe_name_and_scaling_factor;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -86,7 +80,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         SocketAddr::from(([127, 0, 0, 1], args.port))
     };
 
-    info!("Listening on {addr}");
+    info!("Listening on http://{addr}");
 
     // #[cfg(feature = "ui")]
     if args.open {
@@ -113,8 +107,8 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
             .allow_methods([Method::GET, Method::POST]),
     );
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
@@ -128,27 +122,20 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     ctx.parser()?;
     let aisle_path = ctx.aisle().clone();
     let Context {
-        parser,
-        recipe_index,
-        base_path,
-        ..
+        parser, base_path, ..
     } = ctx;
     let parser = parser.into_inner().unwrap();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
 
-
     if path.is_file() {
-        bail!("{} is not a directory", path);
+        bail!("Base path{} is not a directory", path);
     }
-
-    let recipe_index = AsyncFsIndex::new(recipe_index)?;
 
     Ok(Arc::new(AppState {
         parser,
         base_path: path.clone(),
-        recipe_index,
-        aisle_path
+        aisle_path,
     }))
 }
 
@@ -199,7 +186,7 @@ mod ui {
         fn index_html() -> impl axum::response::IntoResponse {
             Assets::get(INDEX_HTML)
                 .map(|content| {
-                    let body = axum::body::boxed(axum::body::Full::from(content.data));
+                    let body = Body::from(content.data);
                     Response::builder()
                         .header(axum::http::header::CONTENT_TYPE, "text/html")
                         .body(body)
@@ -216,7 +203,7 @@ mod ui {
 
         match Assets::get(path) {
             Some(content) => {
-                let body = axum::body::boxed(axum::body::Full::from(content.data));
+                let body = Body::from(content.data);
                 let mime = mime_guess::from_path(path).first_or_octet_stream();
                 Ok(Response::builder()
                     .header(axum::http::header::CONTENT_TYPE, mime.as_ref())
@@ -236,7 +223,6 @@ mod ui {
 pub struct AppState {
     parser: CooklangParser,
     base_path: Utf8PathBuf,
-    recipe_index: AsyncFsIndex,
     aisle_path: Option<Utf8PathBuf>,
 }
 
@@ -244,7 +230,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
         .route("/shopping_list", post(shopping_list))
         .route("/recipes", get(all_recipes))
-        .route("/recipes/*path", get(recipe));
+        .route("/recipes/{*path}", get(recipe));
 
     Ok(router)
 }
@@ -260,21 +246,6 @@ fn check_path(p: &str) -> Result<(), StatusCode> {
     Ok(())
 }
 
-fn clean_path(p: &Utf8Path, base_path: &Utf8Path) -> Utf8PathBuf {
-    let p = p
-        .strip_prefix(base_path)
-        .expect("dir entry path not relative to base path");
-    #[cfg(windows)]
-    let p = Utf8PathBuf::from(p.to_string().replace('\\', "/"));
-    #[cfg(not(windows))]
-    let p = p.to_path_buf();
-    p
-}
-
-fn images(entry: &cooklang_fs::RecipeEntry, _base_path: &Utf8Path) -> Vec<cooklang_fs::Image> {
-    entry.images().to_vec()
-}
-
 async fn shopping_list(
     State(state): State<Arc<AppState>>,
     axum::extract::Json(payload): axum::extract::Json<Vec<String>>,
@@ -283,54 +254,28 @@ async fn shopping_list(
     let converter = state.parser.converter();
 
     for entry in payload {
-        let (name, servings) = entry
-            .trim()
-            .rsplit_once('*')
-            .map(|(name, servings)| {
-                let target = servings
-                    .parse::<u32>()
+        let (name, scaling_factor) = split_recipe_name_and_scaling_factor(&entry)
+            .map(|(name, scaling_factor)| {
+                let target = scaling_factor
+                    .parse::<f64>()
                     .map_err(|_| StatusCode::BAD_REQUEST)?;
-                Ok::<_, StatusCode>((name, Some(target)))
+                Ok::<_, StatusCode>((name, target))
             })
-            .unwrap_or(Ok((entry.as_str(), None)))?;
+            .unwrap_or(Ok((entry.as_str(), 1.0)))?;
 
-        let entry = state
-            .recipe_index
-            .get(name.to_string())
-            .await
+        let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(name))
             .map_err(|_| {
                 tracing::error!("Recipe not found: {name}");
                 StatusCode::NOT_FOUND
             })?;
 
-        let content = entry.read().map_err(|_| {
-            tracing::error!("Failed to read recipe: {name}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-        let recipe = state
-            .parser
-            .parse(content.text())
-            .into_output()
-            .ok_or_else(|| {
-                tracing::error!("Failed to parse recipe");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-
-        let recipe = if let Some(servings) = servings {
-            recipe.scale(servings, converter)
-        } else {
-            recipe.default_scale()
-        };
+        let recipe = entry.recipe(scaling_factor);
 
         list.add_recipe(&recipe, converter);
     }
 
     let aisle_content = if let Some(path) = &state.aisle_path {
-        match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(_) => String::new()
-        }
+        std::fs::read_to_string(path).unwrap_or_default()
     } else {
         tracing::warn!("No aisle file set");
         String::new()
@@ -355,15 +300,14 @@ async fn shopping_list(
     Ok(Json(json_value))
 }
 
-async fn all_recipes(State(state): State<Arc<AppState>>) -> Result<Json<Vec<String>>, StatusCode> {
-    let recipes = cooklang_fs::all_recipes(&state.base_path, 5) // TODO set as constant
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map(|e| {
-            clean_path(e.path(), &state.base_path)
-                .with_extension("")
-                .into_string()
-        })
-        .collect();
+async fn all_recipes(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let recipes = cooklang_find::build_tree(&state.base_path)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let recipes = serde_json::to_value(recipes).unwrap();
+
     Ok(Json(recipes))
 }
 
@@ -375,56 +319,28 @@ struct ColorConfig {
 
 #[derive(Deserialize)]
 struct RecipeQuery {
-    scale: Option<u32>,
-    units: Option<cooklang::convert::System>,
+    scale: Option<f64>,
 }
 
 async fn recipe(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Query(query): Query<RecipeQuery>,
-    Query(color): Query<ColorConfig>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
-    let entry = state
-        .recipe_index
-        .get(path)
-        .await
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path))
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let content = tokio::fs::read_to_string(&entry.path())
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    tracing::info!("Entry path: {:?}", entry.path());
 
-    let times = get_times(entry.path()).await?;
-
-    let recipe = state.parser.parse(&content).into_output().ok_or_else(|| {
-        tracing::error!("Failed to parse recipe");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let mut recipe = if let Some(servings) = query.scale {
-        recipe.scale(servings, state.parser.converter())
-    } else {
-        recipe.default_scale()
-    };
-
-    if let Some(system) = query.units {
-        let errors = recipe.convert(system, state.parser.converter());
-        if !errors.is_empty() {
-            tracing::warn!("Errors converting units: {errors:?}");
-        }
-    }
+    let recipe = entry.recipe(query.scale.unwrap_or(1.0));
 
     #[derive(Serialize)]
     struct ApiRecipe {
         #[serde(flatten)]
-        recipe: cooklang::ScaledRecipe,
+        recipe: Arc<cooklang::ScaledRecipe>,
         grouped_ingredients: Vec<serde_json::Value>,
-        timers_seconds: Vec<Option<cooklang::Value>>,
-        filtered_metadata: Vec<serde_json::Value>,
-        external_image: Option<String>,
     }
 
     let grouped_ingredients = recipe
@@ -439,105 +355,17 @@ async fn recipe(
         })
         .collect();
 
-    let timers_seconds = recipe
-        .timers
-        .iter()
-        .map(|t| {
-            t.quantity.clone().and_then(|mut q| {
-                if q.convert("s", state.parser.converter()).is_err() {
-                    None
-                } else {
-                    Some(q.value().clone())
-                }
-            })
-        })
-        .collect();
-
-    let filtered_metadata = recipe
-        .metadata
-        .map_filtered()
-        .filter(|(k, _)| k.as_str() != Some("image"))
-        .map(|e| serde_json::to_value(e).unwrap())
-        .collect();
-
     let api_recipe = ApiRecipe {
-        external_image: recipe
-            .metadata
-            .map
-            .get("image")
-            .and_then(|v| v.as_str().map(|s| s.to_owned())),
         recipe,
         grouped_ingredients,
-        timers_seconds,
-        filtered_metadata,
     };
 
-    let value = serde_json::to_value(api_recipe).unwrap();
-    let path = clean_path(entry.path(), &state.base_path);
-    let report = Report::from_pass_result(Ok(value), path.as_str(), &content, color.color);
     let value = serde_json::json!({
-        "recipe": report,
-        "images": images(&entry, &state.base_path),
-        "src_path": path,
-        "modified": times.modified,
-        "created": times.created,
+        "recipe": api_recipe,
+        // TODO: add images
+        // TODO: add scaling info
+        // TODO: add metadata
     });
 
     Ok(Json(value))
-}
-
-struct Times {
-    modified: Option<u64>,
-    created: Option<u64>,
-}
-async fn get_times(path: &Utf8Path) -> Result<Times, StatusCode> {
-    fn f(st: std::io::Result<SystemTime>) -> Option<u64> {
-        st.ok()
-            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-    }
-    let metadata = tokio::fs::metadata(path)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    let modified = f(metadata.modified());
-    let created = f(metadata.created());
-    Ok(Times { modified, created })
-}
-
-#[derive(Serialize)]
-struct Report<T> {
-    value: Option<T>,
-    warnings: Vec<String>,
-    errors: Vec<String>,
-    fancy_report: Option<String>,
-}
-
-impl<T> Report<T> {
-    fn from_pass_result(
-        result: Result<T, CooklangError>,
-        _file_name: &str,
-        _source_code: &str,
-        color: bool,
-    ) -> Self {
-        match result {
-            Ok(value) => Report {
-                value: Some(value),
-                warnings: Vec::new(),
-                errors: Vec::new(),
-                fancy_report: None,
-            },
-            Err(e) => {
-                let mut report = Report {
-                    value: None,
-                    warnings: Vec::new(),
-                    errors: vec![e.to_string()],
-                    fancy_report: None,
-                };
-                if color {
-                    report.fancy_report = Some(e.to_string());
-                }
-                report
-            }
-        }
-    }
 }

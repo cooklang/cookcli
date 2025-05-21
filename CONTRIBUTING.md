@@ -60,7 +60,7 @@ To build `CookCLI`, run `make dev` or `cargo build`. In a few moments, you'll ha
 
 #### Building server frontend
 
-To start the frontend server in development mode use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:5000 to open the web-app.
+To start the frontend server in development mode use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:8080 to open the web-app.
 
 ### Testing
 

@@ -40,9 +40,13 @@ use cooklang::{
     quantity::{GroupedQuantity, Quantity, Value},
     ScaledQuantity,
 };
+use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
-use crate::{util::write_to_output, util::Input, Context};
+use crate::{
+    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    Context,
+};
 
 #[derive(Debug, Args)]
 #[command()]
@@ -50,7 +54,7 @@ pub struct ShoppingListArgs {
     /// Recipe to add to the list
     ///
     /// Name or path to the file. It will use the default scaling of the recipe.
-    /// To use a custom scaling, add `*<servings>` at the end.
+    /// To use a custom scaling, add `@<scale>` at the end.
     recipes: Vec<String>,
 
     /// Output file, none for stdout.
@@ -104,7 +108,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             }
         }
     } else {
-        warn!("No aisle file found");
+        warn!("No aisle file found. Docs https://cooklang.org/docs/spec/#shopping-lists");
         Default::default()
     };
 
@@ -150,11 +154,9 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
     let converter = ctx.parser()?.converter();
 
     // split into name and servings
-    let (name, servings) = entry
-        .trim()
-        .rsplit_once('*')
-        .map(|(name, servings)| {
-            let target = servings.parse::<u32>().unwrap_or_else(|err| {
+    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
+        .map(|(name, scaling_factor)| {
+            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                 let mut cmd = crate::CliArgs::command();
                 cmd.error(
                     clap::error::ErrorKind::InvalidValue,
@@ -162,30 +164,25 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
                 )
                 .exit()
             });
-            (name, Some(target))
+            (name, target)
         })
-        .unwrap_or((entry, None));
+        .unwrap_or((entry, 1.0));
 
-    // Resolve and parse the recipe
-    let input = {
-        let entry = ctx.recipe_index.resolve(name, None)?;
-        Input::File {
-            content: entry.read()?,
-        }
-    };
-    let recipe = input.parse(ctx)?;
+    let entry = get_recipe(ctx, name)?;
 
-    // Scale
-    let recipe = if let Some(servings) = servings {
-        recipe.scale(servings, converter)
-    } else {
-        recipe.default_scale()
-    };
+    let recipe = entry.recipe(scaling_factor);
 
     // Add ingredients to the list
     list.add_recipe(&recipe, converter);
 
     Ok(())
+}
+
+fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
+    Ok(cooklang_find::get_recipe(
+        vec![ctx.base_path.clone()],
+        name.into(),
+    )?)
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {

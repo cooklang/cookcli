@@ -28,16 +28,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::io::Read;
-
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 
-use crate::{util::Input, Context};
-use cooklang_fs::LazyFsIndex;
+use crate::Context;
 
-mod image;
 mod read;
 
 #[derive(Debug, Args)]
@@ -55,11 +51,6 @@ enum RecipeCommand {
     /// Parse and print a Cooklang recipe file
     #[command(alias = "r")]
     Read(read::ReadArgs),
-
-    /// Download a random image from unsplash.com to match the recipe title.
-    /// Environment variable COOK_UNSPLASH_ACCESS_KEY needs to be set.
-    #[command()]
-    Image(image::ImageArgs),
 }
 
 pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
@@ -67,7 +58,6 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 
     match command {
         RecipeCommand::Read(args) => read::run(ctx, args),
-        RecipeCommand::Image(args) => image::run(ctx, args),
     }
 }
 
@@ -75,28 +65,13 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 struct RecipeInputArgs {
     /// Input recipe, none for stdin
     ///
-    /// This can be a full path, a partial path, or just the name.
+    /// This can be a full path or a partial path.
+    /// You can also specify a scale inline using `path@<scale>` (e.g., `Easy Pancakes.cook@3`).
+    /// Note. `.cook` extension is optional.
     #[arg(value_hint = clap::ValueHint::FilePath)]
     recipe: Option<Utf8PathBuf>,
-}
 
-impl RecipeInputArgs {
-    pub fn read(&self, index: &LazyFsIndex) -> Result<Input> {
-        let input = if let Some(query) = &self.recipe {
-            // RecipeInputArgs::recipe is a pathbuf even if inmediatly converted
-            // to a string to enforce validation.
-            let entry = index.resolve(query.as_str(), None)?;
-
-            Input::File {
-                content: entry.read()?,
-            }
-        } else {
-            let mut buf = String::new();
-            std::io::stdin()
-                .read_to_string(&mut buf)
-                .context("Failed to read stdin")?;
-            Input::Stdin { text: buf }
-        };
-        Ok(input)
-    }
+    /// Scale factor number, defaults to 1
+    #[arg(short, long, default_value_t = 1.0)]
+    scale: f64,
 }

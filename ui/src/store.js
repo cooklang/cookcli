@@ -2,27 +2,38 @@ import { writable } from 'svelte/store';
 
 export const fileTree = writable();
 
-export function convertPathsIntoTree(paths) {
-    let result = {};
-    let level = {result};
+export function convertPathsIntoTree(data) {
+    // If we're given the root node directly, return it
+    if (data.children) {
+        return data;
+    }
 
-    paths.forEach(path => {
-        let chunks = path.split('/');
+    // If we're given an array of paths (old format), convert it
+    if (Array.isArray(data)) {
+        let result = {};
+        let level = {result};
 
-        chunks.reduce((r, name, index) => {
-          if(!r[name]) {
-            r[name] = { result: {} };
-            r.result[name] = {
-                type: index + 1 == chunks.length ? "file" : "directory",
-                children: r[name].result
-            };
-        }
+        data.forEach(path => {
+            let chunks = path.split('/');
 
-        return r[name];
-    }, level);
-    });
+            chunks.reduce((r, name, index) => {
+                if(!r[name]) {
+                    r[name] = { result: {} };
+                    r.result[name] = {
+                        type: index + 1 == chunks.length ? "file" : "directory",
+                        children: r[name].result
+                    };
+                }
 
-    return result;
+                return r[name];
+            }, level);
+        });
+
+        return result;
+    }
+
+    // If we're given something else, return null
+    return null;
 }
 
 function createShoppingListPaths() {
