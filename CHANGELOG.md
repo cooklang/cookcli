@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.11.0](https://github.com/cooklang/cookcli/compare/v0.10.0...v0.11.0) (2025-05-21)
+
+
+### Features
+
+* add servings ([9f539d9](https://github.com/cooklang/cookcli/commit/9f539d9c2e901f53785ecf3edbd962b47003b276))
+* render scale ([83a90bb](https://github.com/cooklang/cookcli/commit/83a90bb429adc5c966aad82cbf5915ed7c499184))
+* support scaling ([66595f7](https://github.com/cooklang/cookcli/commit/66595f7559fa714378daaed31b7ee7e898bf5a4a))
+* update package name ([fe5cf9c](https://github.com/cooklang/cookcli/commit/fe5cf9c21e0e582ae1d79b454a25bf7e650383b3))
+
+
+### Bug Fixes
+
+* cleanup unused code ([5672dca](https://github.com/cooklang/cookcli/commit/5672dcaf576ee2af6cf10f923baf6f1a193792a2))
+* clippy ([edd9f98](https://github.com/cooklang/cookcli/commit/edd9f98ecab984cf159e6b07a76b8cded2999d10))
+* UI datastructure ([9265dcf](https://github.com/cooklang/cookcli/commit/9265dcf1159f12339d4a7cb905bec954008216df))
+
 ## [0.10.0](https://github.com/cooklang/cookcli/compare/v0.9.0...v0.10.0) (2025-01-26)
 
 
