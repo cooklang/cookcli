@@ -28,7 +28,7 @@ futures = "0.3"
 mime_guess = "2.0"
 open = "5.0"
 openssl = { version = "0.10", features = ["vendored"] }
-cooklang-find = { path = "../cooklang-find" }
+cooklang-find = { version = "0.2" }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tabular = { version = "0.2", features = ["ansi-cell"] }
 yansi = "1"
