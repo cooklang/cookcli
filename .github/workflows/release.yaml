@@ -14,7 +14,7 @@ env:
 permissions:
   contents: write
   pull-requests: write
-  
+
 jobs:
   # Update release PR
   release_please:
@@ -160,7 +160,7 @@ jobs:
           cd -
 
       - name: Release | Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
@@ -168,7 +168,7 @@ jobs:
       - name: Release | Upload installer artifacts [Windows]
         continue-on-error: true
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cook-${{ matrix.target }}.msi
           path: target/wix/cook-${{ matrix.target }}.msi
@@ -225,7 +225,7 @@ jobs:
           xcrun notarytool store-credentials "$KEYCHAIN_ENTRY" --team-id "$APPLEID_TEAMID" --apple-id "$APPLEID_USERNAME" --password "$APPLEID_PASSWORD" --keychain "$KEYCHAIN_PATH"
 
       - name: Notarize | Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: artifacts
@@ -252,7 +252,7 @@ jobs:
         run: tar czvf ${{ matrix.name }} cook
 
       - name: Notarize | Upload Notarized Binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
@@ -270,7 +270,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Setup | Checksums
         run: for file in cook-*/cook-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
