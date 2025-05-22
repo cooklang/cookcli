@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/cooklang/cookcli/compare/v0.12.0...v0.12.1) (2025-05-22)
+
+
+### Bug Fixes
+
+* issue with . base path in server ([85b91b0](https://github.com/cooklang/cookcli/commit/85b91b04537903b80e05e4f2cbc3a666029a3c5f))
+
 ## [0.12.0](https://github.com/cooklang/cookcli/compare/v0.11.0...v0.12.0) (2025-05-21)
 
 
