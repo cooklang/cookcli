@@ -1,9 +1,10 @@
 [package]
 name = "cookcli"
-version = "0.12.1"
+version = "0.12.2"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
+include = ["/src", "/Cargo.toml", "/README.md", "/ui/public"]
 
 [[bin]]
 name = "cook"
