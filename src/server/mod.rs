@@ -46,6 +46,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 use crate::util::split_recipe_name_and_scaling_factor;
+use crate::util::resolve_to_absolute_path;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -127,14 +128,17 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     let parser = parser.into_inner().unwrap();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
+    let absolute_path = resolve_to_absolute_path(path)?;
 
-    if path.is_file() {
-        bail!("Base path{} is not a directory", path);
+    if absolute_path.is_file() {
+        bail!("Base path {} is not a directory", absolute_path);
     }
+
+    tracing::info!("Using absolute base path: {:?}", absolute_path);
 
     Ok(Arc::new(AppState {
         parser,
-        base_path: path.clone(),
+        base_path: absolute_path,
         aisle_path,
     }))
 }
@@ -175,7 +179,7 @@ mod ui {
     }
 
     #[derive(RustEmbed)]
-    #[folder = "./ui/public/"]
+    #[folder = "ui/public/"]
     struct Assets;
 
     async fn static_ui(uri: Uri) -> impl axum::response::IntoResponse {
@@ -241,6 +245,7 @@ fn check_path(p: &str) -> Result<(), StatusCode> {
         .components()
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
+        tracing::error!("Invalid path: {p}");
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(())
@@ -258,7 +263,10 @@ async fn shopping_list(
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor
                     .parse::<f64>()
-                    .map_err(|_| StatusCode::BAD_REQUEST)?;
+                    .map_err(|_| {
+                        tracing::error!("Invalid scaling factor: {scaling_factor}");
+                        StatusCode::BAD_REQUEST
+                    })?;
                 Ok::<_, StatusCode>((name, target))
             })
             .unwrap_or(Ok((entry.as_str(), 1.0)))?;
@@ -304,9 +312,16 @@ async fn all_recipes(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let recipes = cooklang_find::build_tree(&state.base_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to build recipe tree: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    let recipes = serde_json::to_value(recipes).unwrap();
+    let recipes = serde_json::to_value(recipes)
+        .map_err(|e| {
+            tracing::error!("Failed to serialize recipes: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(recipes))
 }
@@ -329,10 +344,11 @@ async fn recipe(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
-    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path))
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-
-    tracing::info!("Entry path: {:?}", entry.path());
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
+        .map_err(|_| {
+            tracing::error!("Recipe not found: {path}");
+            StatusCode::NOT_FOUND
+        })?;
 
     let recipe = entry.recipe(query.scale.unwrap_or(1.0));
 

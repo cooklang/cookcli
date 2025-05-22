@@ -36,7 +36,7 @@ use cooklang::Converter;
 use cooklang::CooklangParser;
 use cooklang::Extensions;
 use once_cell::sync::OnceCell;
-use std::path::Path;
+use crate::util::resolve_to_absolute_path;
 
 // commands
 mod recipe;
@@ -100,13 +100,15 @@ fn configure_context() -> Result<Context> {
         _ => Utf8PathBuf::from("."),
     };
 
-    if !base_path.is_dir() {
-        bail!("Base path is not a directory: {base_path}");
+    let absolute_base_path = resolve_to_absolute_path(&base_path)?;
+
+    if !absolute_base_path.is_dir() {
+        bail!("Base path is not a directory: {}", absolute_base_path);
     }
 
     Ok(Context {
         parser: OnceCell::new(),
-        base_path,
+        base_path: absolute_base_path,
     })
 }
 
@@ -125,15 +127,6 @@ fn configure_logging() {
         .with_target(false)
         .compact()
         .init();
-}
-
-pub fn resolve_path(base_path: &Utf8Path, path: &Path) -> Utf8PathBuf {
-    let path = Utf8Path::from_path(path).expect(UTF8_PATH_PANIC);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        base_path.join(LOCAL_CONFIG_DIR).join(path)
-    }
 }
 
 pub fn global_file_path(name: &str) -> Result<Utf8PathBuf> {

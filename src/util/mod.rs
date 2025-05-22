@@ -35,6 +35,7 @@ pub mod cooklang_to_md;
 use anyhow::{Context as _, Result};
 
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
@@ -53,4 +54,37 @@ where
 
 pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, &str)> {
     query.trim().rsplit_once('@')
+}
+
+/// Resolves a path to an absolute path. If the input path is already absolute,
+/// it is returned as is. Otherwise, it is resolved relative to the current working directory.
+/// The path is normalized to remove any `.` or `..` components.
+pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| {
+                tracing::error!("Failed to get current directory: {:?}", e);
+                anyhow::anyhow!("Failed to get current directory")
+            })?
+            .join(path)
+            .try_into()
+            .map_err(|e| {
+                tracing::error!("Failed to convert path to UTF-8: {:?}", e);
+                anyhow::anyhow!("Failed to convert path to UTF-8")
+            })?
+    };
+
+    // Normalize the path by resolving all components
+    std::fs::canonicalize(&absolute)
+        .map_err(|e| {
+            tracing::error!("Failed to canonicalize path: {:?}", e);
+            anyhow::anyhow!("Failed to canonicalize path")
+        })?
+        .try_into()
+        .map_err(|e| {
+            tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
+            anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
+        })
 }

@@ -2,11 +2,11 @@
 
 CookCLI provides a suite of tools to create shopping lists and maintain recipes. We've built it to be simple and useful for automating your cooking and shopping routine with existing UNIX command line and scripting tools. It can also function as a webserver for your recipes, making them browsable on any device with a web browser.
 
-* [Example usage](#example-usage)  
-* [Installation](#installation)  
-* [Building from source](#building-from-source)  
-* [Contribution](#contribution)  
-* [License](#license)  
+* [Example usage](#example-usage)
+* [Installation](#installation)
+* [Building from source](#building-from-source)
+* [Contribution](#contribution)
+* [License](#license)
 
 ## Example usage
 
@@ -125,34 +125,38 @@ Run a web-server:
 You can find full documentation at https://cooklang.org/cli/help/ or by running `help` command.
 
 ```
-Usage: cook [OPTIONS] COMMAND
+A command-line interface for managing and working with Cooklang recipes
 
-Options:
-    -a, --aisle <aisle>             Specify an aisle.conf file to override shopping list default settings 
-    -u, --units <units>             Specify a units.conf file to override units default settings
-    -i, --inflection <inflection>   Specify an inflection.conf file to override default inflection settings
-    -h, --help                      Show help information.
+Usage: cook <COMMAND>
 
 Commands:
-    recipe                  Manage recipes and recipe files
-    shopping-list           Create a shopping list
-    server                  Run a webserver to serve your recipes on the web
-    fetch                   Pull recipes from the community recipe repository
-    version                 Show the CookCLI version information
-    help                    Show the help text for a sub-command
+  recipe         Manage recipe files
+  server         Run a webserver to serve your recipes on the web
+  shopping-list  Create a shopping list [aliases: sl]
+  seed           Populate directory with seed recipes
+  help           Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+Docs: https://cooklang.org/cli/help/
 ```
 
 ## Installation
 
 Download latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add the file to your operating system's PATH.
 
-On Linux (or [WSL](https://docs.microsoft.com/en-us/windows/wsl/about)), this is easy. Simply extract the binary into your binaries folder with `sudo unzip CookCLI_1.0.0_linux_amd64.zip -d /usr/local/bin/` (note: you may need to install the unzip package first). 
+On Linux (or [WSL](https://docs.microsoft.com/en-us/windows/wsl/about)), this is easy. Simply extract the binary into your binaries folder (for example `/usr/local/bin/`).
 
 On MacOS:
 
     brew tap cooklang/tap
     brew install cooklang/tap/cook
 
+With Cargo:
+
+    cargo install cookcli
 
 ## Building from source
 
