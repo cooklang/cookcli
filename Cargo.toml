@@ -32,6 +32,7 @@ tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 mime_guess = "2.0"
 open = "5.3"
+openssl = { version = "0.10", features = ["vendored"] }
 cooklang-find = { version = "0.2" }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tabular = { version = "0.2", features = ["ansi-cell"] }
