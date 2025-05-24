@@ -152,7 +152,7 @@ On Linux (or [WSL](https://docs.microsoft.com/en-us/windows/wsl/about)), this is
 On MacOS:
 
     brew tap cooklang/tap
-    brew install cooklang/tap/cook
+    brew install cooklang/tap/cookcli
 
 With Cargo:
 
