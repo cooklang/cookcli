@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.2](https://github.com/cooklang/cookcli/compare/v0.12.1...v0.12.2) (2025-05-24)
+
+
+### Bug Fixes
+
+* brew install cmd ([adf9bce](https://github.com/cooklang/cookcli/commit/adf9bced58e1f102a18371a698cd0a03cebff0f7))
+* cargo publish to include ui ([0807f55](https://github.com/cooklang/cookcli/commit/0807f55c633ac9932a81f5b32e32b6a6052061e8))
+
 ## [0.12.1](https://github.com/cooklang/cookcli/compare/v0.12.0...v0.12.1) (2025-05-22)
 
 
