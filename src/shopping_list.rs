@@ -173,8 +173,14 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
 
     let recipe = entry.recipe(scaling_factor);
 
-    // Add ingredients to the list
-    list.add_recipe(&recipe, converter);
+    let ref_indices = list.add_recipe(&recipe, converter, false);
+
+    for ref_index in ref_indices {
+        let ingredient = &recipe.ingredients[ref_index];
+        let reference = ingredient.reference.as_ref().unwrap();
+
+        extract_ingredients(reference.path("/").as_str(), list, ctx)?;
+    }
 
     Ok(())
 }

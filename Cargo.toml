@@ -4,7 +4,7 @@ version = "0.12.2"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
-include = ["/src", "/Cargo.toml", "/README.md", "/ui/public"]
+include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/ui/public"]
 
 [[bin]]
 name = "cook"
@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-cooklang = "0.16"
+cooklang = { path = "../cooklang-rs" }
 anyhow = "1"
 camino = { version = "1", features = ["serde1"] }
 once_cell = "1"
@@ -33,7 +33,7 @@ tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 mime_guess = "2.0"
 open = "5.3"
 openssl = { version = "0.10", features = ["vendored"] }
-cooklang-find = { version = "0.2" }
+cooklang-find = { path = "../cooklang-find" }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tabular = { version = "0.2", features = ["ansi-cell"] }
 yansi = "1"

@@ -277,7 +277,7 @@ async fn shopping_list(
 
         let recipe = entry.recipe(scaling_factor);
 
-        list.add_recipe(&recipe, converter);
+        list.add_recipe(&recipe, converter, true);
     }
 
     let aisle_content = if let Some(path) = &state.aisle_path {
