@@ -34,7 +34,7 @@ use std::{fmt::Write, io};
 
 use anyhow::{Context, Result};
 use cooklang::{
-    metadata::{CooklangValueExt, Metadata},
+    metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
     quantity::{Quantity, QuantityValue},
@@ -58,14 +58,16 @@ pub fn print_cooklang<D, V: QuantityValue>(
 fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> Result<()> {
     // TODO if the recipe has been scaled and multiple servings are defined
     // it can lead to the recipe not parsing.
-
-    for (key, value) in &metadata.map {
-        if let Some(key) = key.as_str() {
-            if let Some(val) = value.as_str_like() {
-                writeln!(w, ">> {key}: {val}").context("Failed to write metadata line")?;
-            }
-        }
+    if metadata.map.is_empty() {
+        return Ok(());
     }
+
+    let map = metadata.map.clone();
+
+    const FRONTMATTER_FENCE: &str = "---";
+    writeln!(w, "{}", FRONTMATTER_FENCE).context("Failed to write frontmatter start")?;
+    serde_yaml::to_writer(&mut *w, &map).context("Failed to serialize frontmatter")?;
+    writeln!(w, "{}\n", FRONTMATTER_FENCE).context("Failed to write frontmatter end")?;
     Ok(())
 }
 
@@ -113,10 +115,16 @@ fn w_step<D, V: QuantityValue>(
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
 
+                let name = if let Some(reference) = &igr.reference {
+                    format!("./{}/{}", reference.components.join("/"), &igr.name)
+                } else {
+                    igr.name.clone()
+                };
+
                 ComponentFormatter {
                     kind: ComponentKind::Ingredient,
                     modifiers: igr.modifiers(),
-                    name: Some(&igr.name),
+                    name: Some(&name),
                     alias: igr.alias.as_deref(),
                     quantity: igr.quantity.as_ref(),
                     note: igr.note.as_deref(),

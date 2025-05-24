@@ -28,15 +28,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::util::resolve_to_absolute_path;
 use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use cooklang::Converter;
 use cooklang::CooklangParser;
-use cooklang::Extensions;
 use once_cell::sync::OnceCell;
-use crate::util::resolve_to_absolute_path;
 
 // commands
 mod recipe;
@@ -113,10 +111,7 @@ fn configure_context() -> Result<Context> {
 }
 
 fn configure_parser() -> Result<CooklangParser> {
-    let extensions = Extensions::empty();
-    let converter = Converter::empty();
-
-    Ok(CooklangParser::new(extensions, converter))
+    Ok(CooklangParser::canonical())
 }
 
 fn configure_logging() {

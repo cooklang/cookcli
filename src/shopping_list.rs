@@ -122,6 +122,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // retrieve, scale and merge ingredients
     let mut list = IngredientList::new();
+
     for entry in args.recipes {
         extract_ingredients(&entry, &mut list, ctx)?;
     }
