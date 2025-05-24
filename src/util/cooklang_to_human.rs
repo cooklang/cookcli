@@ -114,6 +114,7 @@ mod style {
         pub timer: Style             = Style::new().fg_color(color!(Cyan)),
         pub inline_quantity: Style   = Style::new().fg_color(color!(BrightRed)),
         pub opt_marker: Style        = Style::new().fg_color(color!(BrightCyan)).italic(),
+        pub reference_marker: Style   = Style::new().fg_color(color!(Blue)).italic(),
         pub section_name: Style      = Style::new().bold().underline(),
         pub step_igr_quantity: Style = Style::new().dimmed(),
     }
@@ -275,7 +276,7 @@ fn ingredients(w: &mut impl io::Write, recipe: &ScaledRecipe, converter: &Conver
         return Ok(());
     }
     writeln!(w, "Ingredients:")?;
-    let mut table = Table::new("  {:<} {:<}    {:<} {:<}");
+    let mut table = Table::new("  {:<} {:<}    {:<} {:<} {:<}");
     let mut there_is_fixed = false;
     let mut there_is_err = false;
     let trinagle = " \u{26a0}";
@@ -287,9 +288,7 @@ fn ingredients(w: &mut impl io::Write, recipe: &ScaledRecipe, converter: &Conver
             outcome,
             ..
         } = entry;
-        if !igr.modifiers().should_be_listed() {
-            continue;
-        }
+
         let mut is_fixed = false;
         let mut is_err = false;
         let (outcome_style, outcome_char) = outcome
@@ -307,17 +306,28 @@ fn ingredients(w: &mut impl io::Write, recipe: &ScaledRecipe, converter: &Conver
                 ScaleOutcome::Scaled | ScaleOutcome::NoQuantity => (yansi::Style::new(), ""),
             })
             .unwrap_or_default();
+
         let mut row = Row::new().with_cell(igr.display_name());
+
+        if igr.reference.is_some() {
+            let path = igr.reference.as_ref().unwrap().components.join("/");
+            row.add_ansi_cell(format!("(recipe: {}/{})", path, igr.name).paint(styles().reference_marker));
+        } else {
+            row.add_cell("");
+        }
+
         if igr.modifiers().is_optional() {
             row.add_ansi_cell("(optional)".paint(styles().opt_marker));
         } else {
             row.add_cell("");
         }
+
         let content = quantity
             .iter()
             .map(|q| quantity_fmt(q).paint(outcome_style).to_string())
             .reduce(|s, q| format!("{s}, {q}"))
             .unwrap_or_default();
+
         row.add_ansi_cell(format!("{content}{}", outcome_char.paint(outcome_style)));
 
         if let Some(note) = &igr.note {
@@ -325,6 +335,7 @@ fn ingredients(w: &mut impl io::Write, recipe: &ScaledRecipe, converter: &Conver
         } else {
             row.add_cell("");
         }
+
         table.add_row(row);
     }
     write!(w, "{table}")?;

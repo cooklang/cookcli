@@ -332,7 +332,12 @@ fn ingredients(
             }
         }
 
-        write!(w, "{}", ingredient.display_name()).context("Failed to write ingredient name")?;
+        if ingredient.reference.is_some() {
+            let path = ingredient.reference.as_ref().unwrap().components.join("/");
+            write!(w, "[{}]({}/{})", ingredient.display_name(), path, ingredient.name).context("Failed to write reference")?;
+        } else {
+            write!(w, "{}", ingredient.display_name()).context("Failed to write ingredient name")?;
+        }
 
         if ingredient.modifiers().is_optional() {
             write!(w, " {}", opts.optional_marker).context("Failed to write optional marker")?;
