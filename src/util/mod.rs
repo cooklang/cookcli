@@ -33,9 +33,7 @@ pub mod cooklang_to_human;
 pub mod cooklang_to_md;
 
 use anyhow::{Context as _, Result};
-
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where

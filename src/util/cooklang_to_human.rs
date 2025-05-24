@@ -311,7 +311,9 @@ fn ingredients(w: &mut impl io::Write, recipe: &ScaledRecipe, converter: &Conver
 
         if igr.reference.is_some() {
             let path = igr.reference.as_ref().unwrap().components.join("/");
-            row.add_ansi_cell(format!("(recipe: {}/{})", path, igr.name).paint(styles().reference_marker));
+            row.add_ansi_cell(
+                format!("(recipe: {}/{})", path, igr.name).paint(styles().reference_marker),
+            );
         } else {
             row.add_cell("");
         }

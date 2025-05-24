@@ -34,7 +34,7 @@ use std::{fmt::Write, io};
 
 use anyhow::{Context, Result};
 use cooklang::{
-    metadata::{Metadata},
+    metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
     quantity::{Quantity, QuantityValue},
