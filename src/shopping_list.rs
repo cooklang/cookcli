@@ -32,6 +32,7 @@ use anstream::ColorChoice;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, CommandFactory, ValueEnum};
+use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
 
 use cooklang::{
@@ -122,9 +123,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // retrieve, scale and merge ingredients
     let mut list = IngredientList::new();
+    let mut seen = BTreeMap::new();
 
     for entry in args.recipes {
-        extract_ingredients(&entry, &mut list, ctx)?;
+        extract_ingredients(&entry, &mut list, &mut seen, ctx)?;
     }
 
     write_to_output(args.output.as_deref(), |mut w| {
@@ -151,7 +153,17 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     })
 }
 
-fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) -> Result<()> {
+fn extract_ingredients(entry: &str, list: &mut IngredientList, seen: &mut BTreeMap<String, usize>, ctx: &Context) -> Result<()> {
+    if seen.contains_key(entry) {
+        return Err(anyhow::anyhow!(
+            "Circular dependency found: {} -> {}",
+            seen.keys().map(|s| s.clone()).collect::<Vec<_>>().join(" -> "),
+            entry
+        ));
+    }
+
+    seen.insert(entry.to_string(), seen.len());
+
     let converter = ctx.parser()?.converter();
 
     // split into name and servings
@@ -169,18 +181,21 @@ fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) ->
         })
         .unwrap_or((entry, 1.0));
 
-    let entry = get_recipe(ctx, name)?;
+    let recipe_entry = get_recipe(ctx, name)?;
 
-    let recipe = entry.recipe(scaling_factor);
+    let recipe = recipe_entry.recipe(scaling_factor);
 
     let ref_indices = list.add_recipe(&recipe, converter, false);
 
     for ref_index in ref_indices {
         let ingredient = &recipe.ingredients[ref_index];
         let reference = ingredient.reference.as_ref().unwrap();
+        let path = reference.path("/");
 
-        extract_ingredients(reference.path("/").as_str(), list, ctx)?;
+        extract_ingredients(path.as_str(), list, seen, ctx)?;
     }
+
+    seen.remove(entry);
 
     Ok(())
 }
