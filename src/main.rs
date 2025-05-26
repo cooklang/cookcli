@@ -95,6 +95,9 @@ fn configure_context() -> Result<Context> {
         Command::Server(ref server_args) => server_args
             .get_base_path()
             .unwrap_or_else(|| Utf8PathBuf::from(".")),
+        Command::ShoppingList(ref shopping_list_args) => shopping_list_args
+            .get_base_path()
+            .unwrap_or_else(|| Utf8PathBuf::from(".")),
         _ => Utf8PathBuf::from("."),
     };
 

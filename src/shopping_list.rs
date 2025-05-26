@@ -57,6 +57,10 @@ pub struct ShoppingListArgs {
     /// To use a custom scaling, add `@<scale>` at the end.
     recipes: Vec<String>,
 
+    /// Base path to search for recipes
+    #[arg(short, long)]
+    base_path: Option<Utf8PathBuf>,
+
     /// Output file, none for stdout.
     #[arg(short, long)]
     output: Option<Utf8PathBuf>,
@@ -82,6 +86,12 @@ pub struct ShoppingListArgs {
     /// Don't expand referenced recipes
     #[arg(short, long)]
     ignore_references: bool,
+}
+
+impl ShoppingListArgs {
+    pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
+        self.base_path.clone()
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
