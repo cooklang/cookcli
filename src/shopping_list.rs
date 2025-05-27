@@ -214,9 +214,34 @@ fn extract_ingredients(
         for ref_index in ref_indices {
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
-            let path = reference.path("/");
 
-            extract_ingredients(path.as_str(), list, seen, ctx, ignore_references)?;
+            let suffix = match ingredient.quantity.as_ref() {
+                Some(quantity) => {
+                    if quantity.unit().is_some() {
+                        return Err(anyhow::anyhow!(
+                            "Unit not supported for referenced ingredients: {}({}). See https://github.com/cooklang/cookcli/issues/137",
+                            ingredient.name,
+                            quantity
+                        ));
+                    } else {
+                        match quantity.value() {
+                            Value::Number(value) => {
+                                value.to_string()
+                            },
+                            _ => {
+                                String::from("")
+                            }
+                        }
+                    }
+                },
+                None => {
+                    scaling_factor.to_string()
+                }
+            };
+
+            let path = reference.path("/") + ":" + &suffix;
+
+            extract_ingredients(path.as_str() , list, seen, ctx, ignore_references)?;
         }
     }
 
