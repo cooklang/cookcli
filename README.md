@@ -8,6 +8,12 @@ CookCLI provides a suite of tools to create shopping lists and maintain recipes.
 * [Contribution](#contribution)
 * [License](#license)
 
+
+> [!WARNING]
+> Note: The CLI is currently undergoing significant development.
+> The interface and functionality may change between versions.
+
+
 ## Example usage
 
 Add sample recipes:
