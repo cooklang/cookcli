@@ -34,6 +34,10 @@ pub mod cooklang_to_md;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use clap::CommandFactory;
+use cooklang::{ingredient_list::IngredientList, quantity::Value, Converter};
+use cooklang_find::RecipeEntry;
+use std::collections::BTreeMap;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
@@ -87,4 +91,89 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
             tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
             anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
         })
+}
+
+pub fn extract_ingredients(
+    entry: &str,
+    list: &mut IngredientList,
+    seen: &mut BTreeMap<String, usize>,
+    base_path: &Utf8PathBuf,
+    converter: &Converter,
+    ignore_references: bool,
+) -> Result<()> {
+    if seen.contains_key(entry) {
+        return Err(anyhow::anyhow!(
+            "Circular dependency found: {} -> {}",
+            seen.keys().cloned().collect::<Vec<_>>().join(" -> "),
+            entry
+        ));
+    }
+
+    seen.insert(entry.to_string(), seen.len());
+
+    // split into name and servings
+    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
+        .map(|(name, scaling_factor)| {
+            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
+                let mut cmd = crate::CliArgs::command();
+                cmd.error(
+                    clap::error::ErrorKind::InvalidValue,
+                    format!("Invalid scaling target for '{name}': {err}"),
+                )
+                .exit()
+            });
+            (name, target)
+        })
+        .unwrap_or((entry, 1.0));
+
+    let recipe_entry = get_recipe(base_path, name)?;
+    let recipe = recipe_entry.recipe(scaling_factor);
+    let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
+
+    if !ignore_references {
+        for ref_index in ref_indices {
+            let ingredient = &recipe.ingredients[ref_index];
+            let reference = ingredient.reference.as_ref().unwrap();
+
+            let suffix = match ingredient.quantity.as_ref() {
+                Some(quantity) => {
+                    if quantity.unit().is_some() {
+                        return Err(anyhow::anyhow!(
+                            "Unit not supported for referenced ingredients: {}({}). See https://github.com/cooklang/cookcli/issues/137",
+                            ingredient.name,
+                            quantity
+                        ));
+                    } else {
+                        match quantity.value() {
+                            Value::Number(value) => value.to_string(),
+                            _ => String::from(""),
+                        }
+                    }
+                }
+                None => scaling_factor.to_string(),
+            };
+
+            let path = reference.path("/") + ":" + &suffix;
+
+            extract_ingredients(
+                path.as_str(),
+                list,
+                seen,
+                base_path,
+                converter,
+                ignore_references,
+            )?;
+        }
+    }
+
+    seen.remove(entry);
+
+    Ok(())
+}
+
+pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
+    Ok(cooklang_find::get_recipe(
+        vec![base_path.clone()],
+        name.into(),
+    )?)
 }

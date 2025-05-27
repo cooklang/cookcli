@@ -22,7 +22,7 @@
     async function onAddToShoppingList() {
         buttonDisabled = true;
         await new Promise(r => setTimeout(r, 500));
-        shoppingListPaths.add(`${recipePath}@${scaleFactor}`);
+        shoppingListPaths.add(`${recipePath}:${scaleFactor}`);
         isAddedToShoppingListToastOpen = true
         buttonDisabled = false;
     }

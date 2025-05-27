@@ -31,7 +31,7 @@
 use anstream::ColorChoice;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
-use clap::{Args, CommandFactory, ValueEnum};
+use clap::{Args, ValueEnum};
 use std::collections::BTreeMap;
 use tracing::warn;
 use yansi::Paint;
@@ -39,13 +39,13 @@ use yansi::Paint;
 use cooklang::{
     aisle::AisleConf,
     ingredient_list::IngredientList,
-    quantity::{GroupedQuantity, Quantity, Value}, ScaledQuantity,
+    quantity::{GroupedQuantity, Quantity, Value},
+    ScaledQuantity,
 };
-use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    util::{extract_ingredients, write_to_output},
     Context,
 };
 
@@ -142,7 +142,14 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     let ignore_references = args.ignore_references;
 
     for entry in args.recipes {
-        extract_ingredients(&entry, &mut list, &mut seen, ctx, ignore_references)?;
+        extract_ingredients(
+            &entry,
+            &mut list,
+            &mut seen,
+            ctx.base_path(),
+            ctx.parser()?.converter(),
+            ignore_references,
+        )?;
     }
 
     write_to_output(args.output.as_deref(), |mut w| {
@@ -167,94 +174,6 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         }
         Ok(())
     })
-}
-
-fn extract_ingredients(
-    entry: &str,
-    list: &mut IngredientList,
-    seen: &mut BTreeMap<String, usize>,
-    ctx: &Context,
-    ignore_references: bool,
-) -> Result<()> {
-    if seen.contains_key(entry) {
-        return Err(anyhow::anyhow!(
-            "Circular dependency found: {} -> {}",
-            seen.keys()
-                .map(|s| s.clone())
-                .collect::<Vec<_>>()
-                .join(" -> "),
-            entry
-        ));
-    }
-
-    seen.insert(entry.to_string(), seen.len());
-
-    let converter = ctx.parser()?.converter();
-
-    // split into name and servings
-    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
-        .map(|(name, scaling_factor)| {
-            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::CliArgs::command();
-                cmd.error(
-                    clap::error::ErrorKind::InvalidValue,
-                    format!("Invalid scaling target for '{name}': {err}"),
-                )
-                .exit()
-            });
-            (name, target)
-        })
-        .unwrap_or((entry, 1.0));
-
-    let recipe_entry = get_recipe(ctx, name)?;
-    let recipe = recipe_entry.recipe(scaling_factor);
-    let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
-
-    if !ignore_references {
-        for ref_index in ref_indices {
-            let ingredient = &recipe.ingredients[ref_index];
-            let reference = ingredient.reference.as_ref().unwrap();
-
-            let suffix = match ingredient.quantity.as_ref() {
-                Some(quantity) => {
-                    if quantity.unit().is_some() {
-                        return Err(anyhow::anyhow!(
-                            "Unit not supported for referenced ingredients: {}({}). See https://github.com/cooklang/cookcli/issues/137",
-                            ingredient.name,
-                            quantity
-                        ));
-                    } else {
-                        match quantity.value() {
-                            Value::Number(value) => {
-                                value.to_string()
-                            },
-                            _ => {
-                                String::from("")
-                            }
-                        }
-                    }
-                },
-                None => {
-                    scaling_factor.to_string()
-                }
-            };
-
-            let path = reference.path("/") + ":" + &suffix;
-
-            extract_ingredients(path.as_str() , list, seen, ctx, ignore_references)?;
-        }
-    }
-
-    seen.remove(entry);
-
-    Ok(())
-}
-
-fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
-    Ok(cooklang_find::get_recipe(
-        vec![ctx.base_path.clone()],
-        name.into(),
-    )?)
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {

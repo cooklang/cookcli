@@ -87,6 +87,10 @@ impl Context {
             global.is_file().then_some(global)
         })
     }
+
+    fn base_path(&self) -> &Utf8PathBuf {
+        &self.base_path
+    }
 }
 
 fn configure_context() -> Result<Context> {
