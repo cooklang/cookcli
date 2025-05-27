@@ -35,6 +35,8 @@ pub mod cooklang_to_md;
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 
+pub const RECIPE_SCALING_DELIMITER: char = ':';
+
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
     F: FnOnce(Box<dyn std::io::Write>) -> Result<()>,
@@ -51,7 +53,7 @@ where
 }
 
 pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, &str)> {
-    query.trim().rsplit_once('@')
+    query.trim().rsplit_once(RECIPE_SCALING_DELIMITER)
 }
 
 /// Resolves a path to an absolute path. If the input path is already absolute,
