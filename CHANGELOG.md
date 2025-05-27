@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.13.0](https://github.com/cooklang/cookcli/compare/v0.12.1...v0.13.0) (2025-05-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* use : as scaling factor delimiter
+
+### Features
+
+* add base path for shopping lists so we can lookup references ([a5c1a42](https://github.com/cooklang/cookcli/commit/a5c1a42fd3dfb1c3ca63cfb6454ca47110789853))
+* detect cycle references ([3d9144f](https://github.com/cooklang/cookcli/commit/3d9144f66af5420440921a9e52883c9a8fc09b3c))
+* highlight sections in shopping list ([342db6c](https://github.com/cooklang/cookcli/commit/342db6c6b2ceb6fcc478476a00f49ec3b36adfad))
+* implement basic reference scaling ([f193203](https://github.com/cooklang/cookcli/commit/f193203ed65b26b4f58c2cde4d244135b8996d7e))
+* recursively get ingredients for referenced recipes ([bdc71cd](https://github.com/cooklang/cookcli/commit/bdc71cdc5df0b09651d953a724a165cb14844c4a))
+* support references in read command ([fc50c00](https://github.com/cooklang/cookcli/commit/fc50c0026cba26cd6866ce4587fd9762a9e65c03))
+* support references in shopping list command ([9a959d4](https://github.com/cooklang/cookcli/commit/9a959d40a1c19f3b4f8b40ecce2ce7d1f5bfe049))
+* support references in UI recipe screen ([50867de](https://github.com/cooklang/cookcli/commit/50867de9a99d26d2c98aa3b58cb01181ee5853af))
+* support references in UI shopping list ([5090b83](https://github.com/cooklang/cookcli/commit/5090b83e0e2637092f056a52006acc29dc0becd0))
+
+
+### Bug Fixes
+
+* brew install cmd ([adf9bce](https://github.com/cooklang/cookcli/commit/adf9bced58e1f102a18371a698cd0a03cebff0f7))
+* cargo publish to include ui ([0807f55](https://github.com/cooklang/cookcli/commit/0807f55c633ac9932a81f5b32e32b6a6052061e8))
+
+
+### Miscellaneous Chores
+
+* release 0.13.0 ([60b3ee5](https://github.com/cooklang/cookcli/commit/60b3ee5e9f1c4fabf95e5c7d15b1cc836632772d))
+
+
+### Code Refactoring
+
+* use : as scaling factor delimiter ([6b2251c](https://github.com/cooklang/cookcli/commit/6b2251cc3ef16bb321d703658e2e67c99e0e9a33))
+
 ## [0.12.1](https://github.com/cooklang/cookcli/compare/v0.12.0...v0.12.1) (2025-05-22)
 
 
