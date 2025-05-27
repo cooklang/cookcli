@@ -31,6 +31,7 @@
         grouped.forEach((ingredient) => {
             ingredient.name = flat[ingredient.index].name;
             ingredient.note = flat[ingredient.index].note;
+            ingredient.reference = flat[ingredient.index].reference;
         });
 
         return grouped;
