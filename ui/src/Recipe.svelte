@@ -22,7 +22,7 @@
     async function onAddToShoppingList() {
         buttonDisabled = true;
         await new Promise(r => setTimeout(r, 500));
-        shoppingListPaths.add(`${recipePath}@${scaleFactor}`);
+        shoppingListPaths.add(`${recipePath}:${scaleFactor}`);
         isAddedToShoppingListToastOpen = true
         buttonDisabled = false;
     }
@@ -31,6 +31,7 @@
         grouped.forEach((ingredient) => {
             ingredient.name = flat[ingredient.index].name;
             ingredient.note = flat[ingredient.index].note;
+            ingredient.reference = flat[ingredient.index].reference;
         });
 
         return grouped;

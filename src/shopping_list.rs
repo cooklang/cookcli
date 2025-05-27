@@ -31,8 +31,10 @@
 use anstream::ColorChoice;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
-use clap::{Args, CommandFactory, ValueEnum};
+use clap::{Args, ValueEnum};
+use std::collections::BTreeMap;
 use tracing::warn;
+use yansi::Paint;
 
 use cooklang::{
     aisle::AisleConf,
@@ -40,11 +42,10 @@ use cooklang::{
     quantity::{GroupedQuantity, Quantity, Value},
     ScaledQuantity,
 };
-use cooklang_find::RecipeEntry;
 use serde::Serialize;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    util::{extract_ingredients, write_to_output},
     Context,
 };
 
@@ -56,6 +57,10 @@ pub struct ShoppingListArgs {
     /// Name or path to the file. It will use the default scaling of the recipe.
     /// To use a custom scaling, add `@<scale>` at the end.
     recipes: Vec<String>,
+
+    /// Base path to search for recipes
+    #[arg(short, long)]
+    base_path: Option<Utf8PathBuf>,
 
     /// Output file, none for stdout.
     #[arg(short, long)]
@@ -78,6 +83,16 @@ pub struct ShoppingListArgs {
     /// Load aisle conf file
     #[arg(short, long)]
     aisle: Option<Utf8PathBuf>,
+
+    /// Don't expand referenced recipes
+    #[arg(short, long)]
+    ignore_references: bool,
+}
+
+impl ShoppingListArgs {
+    pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
+        self.base_path.clone()
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -122,8 +137,19 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // retrieve, scale and merge ingredients
     let mut list = IngredientList::new();
+    let mut seen = BTreeMap::new();
+
+    let ignore_references = args.ignore_references;
+
     for entry in args.recipes {
-        extract_ingredients(&entry, &mut list, ctx)?;
+        extract_ingredients(
+            &entry,
+            &mut list,
+            &mut seen,
+            ctx.base_path(),
+            ctx.parser()?.converter(),
+            ignore_references,
+        )?;
     }
 
     write_to_output(args.output.as_deref(), |mut w| {
@@ -148,41 +174,6 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         }
         Ok(())
     })
-}
-
-fn extract_ingredients(entry: &str, list: &mut IngredientList, ctx: &Context) -> Result<()> {
-    let converter = ctx.parser()?.converter();
-
-    // split into name and servings
-    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
-        .map(|(name, scaling_factor)| {
-            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::CliArgs::command();
-                cmd.error(
-                    clap::error::ErrorKind::InvalidValue,
-                    format!("Invalid scaling target for '{name}': {err}"),
-                )
-                .exit()
-            });
-            (name, target)
-        })
-        .unwrap_or((entry, 1.0));
-
-    let entry = get_recipe(ctx, name)?;
-
-    let recipe = entry.recipe(scaling_factor);
-
-    // Add ingredients to the list
-    list.add_recipe(&recipe, converter);
-
-    Ok(())
-}
-
-fn get_recipe(ctx: &Context, name: &str) -> Result<RecipeEntry> {
-    Ok(cooklang_find::get_recipe(
-        vec![ctx.base_path.clone()],
-        name.into(),
-    )?)
 }
 
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {
@@ -213,7 +204,7 @@ fn build_human_table(list: IngredientList, aisle: &AisleConf, plain: bool) -> ta
     } else {
         let categories = list.categorize(aisle);
         for (cat, items) in categories {
-            table.add_heading(format!("[{}]", cat));
+            table.add_heading(format!("[{}]", cat.green()));
             for (igr, q) in items {
                 let mut row = tabular::Row::new().with_cell(igr);
                 total_quantity_fmt(&q, &mut row);

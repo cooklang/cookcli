@@ -28,15 +28,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::util::resolve_to_absolute_path;
 use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use cooklang::Converter;
 use cooklang::CooklangParser;
-use cooklang::Extensions;
 use once_cell::sync::OnceCell;
-use crate::util::resolve_to_absolute_path;
 
 // commands
 mod recipe;
@@ -89,12 +87,19 @@ impl Context {
             global.is_file().then_some(global)
         })
     }
+
+    fn base_path(&self) -> &Utf8PathBuf {
+        &self.base_path
+    }
 }
 
 fn configure_context() -> Result<Context> {
     let args = CliArgs::parse();
     let base_path = match args.command {
         Command::Server(ref server_args) => server_args
+            .get_base_path()
+            .unwrap_or_else(|| Utf8PathBuf::from(".")),
+        Command::ShoppingList(ref shopping_list_args) => shopping_list_args
             .get_base_path()
             .unwrap_or_else(|| Utf8PathBuf::from(".")),
         _ => Utf8PathBuf::from("."),
@@ -113,10 +118,7 @@ fn configure_context() -> Result<Context> {
 }
 
 fn configure_parser() -> Result<CooklangParser> {
-    let extensions = Extensions::empty();
-    let converter = Converter::empty();
-
-    Ok(CooklangParser::new(extensions, converter))
+    Ok(CooklangParser::canonical())
 }
 
 fn configure_logging() {

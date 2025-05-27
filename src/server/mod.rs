@@ -28,25 +28,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::util::extract_ingredients;
+use crate::util::resolve_to_absolute_path;
 use crate::Context;
 use anyhow::{bail, Result};
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
     http::{HeaderValue, Method, StatusCode, Uri},
     response::Response,
     routing::{get, post},
     Json, Router,
-    body::Body,
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Args;
 use cooklang::{ingredient_list::IngredientList, CooklangParser};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
-use crate::util::split_recipe_name_and_scaling_factor;
-use crate::util::resolve_to_absolute_path;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -256,30 +257,21 @@ async fn shopping_list(
     axum::extract::Json(payload): axum::extract::Json<Vec<String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let mut list = IngredientList::new();
-    let converter = state.parser.converter();
+    let mut seen = BTreeMap::new();
 
     for entry in payload {
-        let (name, scaling_factor) = split_recipe_name_and_scaling_factor(&entry)
-            .map(|(name, scaling_factor)| {
-                let target = scaling_factor
-                    .parse::<f64>()
-                    .map_err(|_| {
-                        tracing::error!("Invalid scaling factor: {scaling_factor}");
-                        StatusCode::BAD_REQUEST
-                    })?;
-                Ok::<_, StatusCode>((name, target))
-            })
-            .unwrap_or(Ok((entry.as_str(), 1.0)))?;
-
-        let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(name))
-            .map_err(|_| {
-                tracing::error!("Recipe not found: {name}");
-                StatusCode::NOT_FOUND
-            })?;
-
-        let recipe = entry.recipe(scaling_factor);
-
-        list.add_recipe(&recipe, converter);
+        extract_ingredients(
+            &entry,
+            &mut list,
+            &mut seen,
+            &state.base_path,
+            state.parser.converter(),
+            false,
+        )
+        .map_err(|e| {
+            tracing::error!("Error processing recipe: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
     }
 
     let aisle_content = if let Some(path) = &state.aisle_path {
@@ -311,17 +303,15 @@ async fn shopping_list(
 async fn all_recipes(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let recipes = cooklang_find::build_tree(&state.base_path)
-        .map_err(|e| {
-            tracing::error!("Failed to build recipe tree: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let recipes = cooklang_find::build_tree(&state.base_path).map_err(|e| {
+        tracing::error!("Failed to build recipe tree: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-    let recipes = serde_json::to_value(recipes)
-        .map_err(|e| {
-            tracing::error!("Failed to serialize recipes: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let recipes = serde_json::to_value(recipes).map_err(|e| {
+        tracing::error!("Failed to serialize recipes: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(recipes))
 }
