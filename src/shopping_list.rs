@@ -34,6 +34,7 @@ use camino::Utf8PathBuf;
 use clap::{Args, CommandFactory, ValueEnum};
 use std::collections::BTreeMap;
 use tracing::warn;
+use yansi::Paint;
 
 use cooklang::{
     aisle::AisleConf,
@@ -259,7 +260,7 @@ fn build_human_table(list: IngredientList, aisle: &AisleConf, plain: bool) -> ta
     } else {
         let categories = list.categorize(aisle);
         for (cat, items) in categories {
-            table.add_heading(format!("[{}]", cat));
+            table.add_heading(format!("[{}]", cat.green()));
             for (igr, q) in items {
                 let mut row = tabular::Row::new().with_cell(igr);
                 total_quantity_fmt(&q, &mut row);
