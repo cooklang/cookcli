@@ -9,13 +9,13 @@
     import Logo from "./Logo.svelte";
     import ShoppingList from "./ShoppingList.svelte";
     import Preferences from "./Preferences.svelte";
+    import Search from "./Search.svelte";
 
     import {fetchRecipes} from "./backend.js";
     import {fileTree, convertPathsIntoTree} from "./store.js";
 
     onMount(async () => {
         let response = await fetchRecipes();
-
         fileTree.set(convertPathsIntoTree(response));
     });
 
@@ -29,6 +29,7 @@
     <Router>
         <Navbar color="light" light expand="md">
             <NavbarBrand href="/"><Logo /> Cook</NavbarBrand>
+            <Search />
             <Nav navbar>
                 <!-- TODO select active links -->
                 <NavItem>
@@ -70,5 +71,14 @@
         width: 100%;
         max-width: 800px;
         margin: 50px auto;
+    }
+
+    .search-results a:hover {
+        background-color: #f8f9fa;
+    }
+
+    .search-results {
+        max-height: 300px;
+        overflow-y: auto;
     }
 </style>

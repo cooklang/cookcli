@@ -28,26 +28,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::util::extract_ingredients;
 use crate::util::resolve_to_absolute_path;
 use crate::Context;
 use anyhow::{bail, Result};
 use axum::{
-    body::Body,
-    extract::{Path, Query, State},
-    http::{HeaderValue, Method, StatusCode, Uri},
-    response::Response,
+    http::{HeaderValue, Method},
     routing::{get, post},
-    Json, Router,
+    Router,
 };
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use clap::Args;
-use cooklang::{ingredient_list::IngredientList, CooklangParser};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use cooklang::CooklangParser;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+mod handlers;
+mod ui;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -170,61 +167,6 @@ async fn shutdown_signal() {
     info!("Stopping server");
 }
 
-// #[cfg(feature = "ui")]f
-mod ui {
-    use super::*;
-    use rust_embed::RustEmbed;
-
-    pub fn ui() -> Router<Arc<AppState>> {
-        Router::new().fallback(static_ui)
-    }
-
-    #[derive(RustEmbed)]
-    #[folder = "ui/public/"]
-    struct Assets;
-
-    async fn static_ui(uri: Uri) -> impl axum::response::IntoResponse {
-        use axum::response::IntoResponse;
-
-        const INDEX_HTML: &str = "index.html";
-
-        fn index_html() -> impl axum::response::IntoResponse {
-            Assets::get(INDEX_HTML)
-                .map(|content| {
-                    let body = Body::from(content.data);
-                    Response::builder()
-                        .header(axum::http::header::CONTENT_TYPE, "text/html")
-                        .body(body)
-                        .unwrap()
-                })
-                .ok_or(StatusCode::NOT_FOUND)
-        }
-
-        let path = uri.path().trim_start_matches('/');
-
-        if path.is_empty() || path == INDEX_HTML {
-            return Ok(index_html().into_response());
-        }
-
-        match Assets::get(path) {
-            Some(content) => {
-                let body = Body::from(content.data);
-                let mime = mime_guess::from_path(path).first_or_octet_stream();
-                Ok(Response::builder()
-                    .header(axum::http::header::CONTENT_TYPE, mime.as_ref())
-                    .body(body)
-                    .unwrap())
-            }
-            None => {
-                if path.contains('.') {
-                    return Err(StatusCode::NOT_FOUND);
-                }
-                Ok(index_html().into_response())
-            }
-        }
-    }
-}
-
 pub struct AppState {
     parser: CooklangParser,
     base_path: Utf8PathBuf,
@@ -233,145 +175,10 @@ pub struct AppState {
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
-        .route("/shopping_list", post(shopping_list))
-        .route("/recipes", get(all_recipes))
-        .route("/recipes/{*path}", get(recipe));
+        .route("/shopping_list", post(handlers::shopping_list))
+        .route("/recipes", get(handlers::all_recipes))
+        .route("/recipes/{*path}", get(handlers::recipe))
+        .route("/search", get(handlers::search));
 
     Ok(router)
-}
-
-fn check_path(p: &str) -> Result<(), StatusCode> {
-    let path = Utf8Path::new(p);
-    if !path
-        .components()
-        .all(|c| matches!(c, Utf8Component::Normal(_)))
-    {
-        tracing::error!("Invalid path: {p}");
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(())
-}
-
-async fn shopping_list(
-    State(state): State<Arc<AppState>>,
-    axum::extract::Json(payload): axum::extract::Json<Vec<String>>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    let mut list = IngredientList::new();
-    let mut seen = BTreeMap::new();
-
-    for entry in payload {
-        extract_ingredients(
-            &entry,
-            &mut list,
-            &mut seen,
-            &state.base_path,
-            state.parser.converter(),
-            false,
-        )
-        .map_err(|e| {
-            tracing::error!("Error processing recipe: {}", e);
-            StatusCode::BAD_REQUEST
-        })?;
-    }
-
-    let aisle_content = if let Some(path) = &state.aisle_path {
-        std::fs::read_to_string(path).unwrap_or_default()
-    } else {
-        tracing::warn!("No aisle file set");
-        String::new()
-    };
-
-    let aisle = cooklang::aisle::parse(&aisle_content).unwrap_or_default();
-
-    let categories = list.categorize(&aisle);
-    let json_value = serde_json::json!({
-        "categories": categories.into_iter().map(|(category, items)| {
-            serde_json::json!({
-                "category": category,
-                "items": items.into_iter().map(|(name, qty)| {
-                    serde_json::json!({
-                        "name": name,
-                        "quantities": qty.into_vec()
-                    })
-                }).collect::<Vec<_>>()
-            })
-        }).collect::<Vec<_>>()
-    });
-    Ok(Json(json_value))
-}
-
-async fn all_recipes(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    let recipes = cooklang_find::build_tree(&state.base_path).map_err(|e| {
-        tracing::error!("Failed to build recipe tree: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let recipes = serde_json::to_value(recipes).map_err(|e| {
-        tracing::error!("Failed to serialize recipes: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(recipes))
-}
-
-#[derive(Debug, Deserialize, Clone, Copy, Default)]
-#[serde(default)]
-struct ColorConfig {
-    color: bool,
-}
-
-#[derive(Deserialize)]
-struct RecipeQuery {
-    scale: Option<f64>,
-}
-
-async fn recipe(
-    Path(path): Path<String>,
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<RecipeQuery>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    check_path(&path)?;
-
-    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
-        .map_err(|_| {
-            tracing::error!("Recipe not found: {path}");
-            StatusCode::NOT_FOUND
-        })?;
-
-    let recipe = entry.recipe(query.scale.unwrap_or(1.0));
-
-    #[derive(Serialize)]
-    struct ApiRecipe {
-        #[serde(flatten)]
-        recipe: Arc<cooklang::ScaledRecipe>,
-        grouped_ingredients: Vec<serde_json::Value>,
-    }
-
-    let grouped_ingredients = recipe
-        .group_ingredients(state.parser.converter())
-        .into_iter()
-        .map(|entry| {
-            serde_json::json!({
-                "index": entry.index,
-                "quantities": entry.quantity.into_vec(),
-                "outcome": entry.outcome
-            })
-        })
-        .collect();
-
-    let api_recipe = ApiRecipe {
-        recipe,
-        grouped_ingredients,
-    };
-
-    let value = serde_json::json!({
-        "recipe": api_recipe,
-        // TODO: add images
-        // TODO: add scaling info
-        // TODO: add metadata
-    });
-
-    Ok(Json(value))
 }

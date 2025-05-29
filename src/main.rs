@@ -38,6 +38,7 @@ use once_cell::sync::OnceCell;
 
 // commands
 mod recipe;
+mod search;
 mod seed;
 mod server;
 mod shopping_list;
@@ -63,6 +64,7 @@ pub fn main() -> Result<()> {
         Command::Server(args) => server::run(ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
+        Command::Search(args) => search::run(&ctx, args),
     }
 }
 
