@@ -30,7 +30,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{recipe, seed, server, shopping_list};
+use crate::{recipe, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -61,4 +61,10 @@ pub enum Command {
     /// Populate directory with seed recipes
     #[command()]
     Seed(seed::SeedArgs),
+
+    /// Search for recipes containing the given text.
+    /// Multiple search terms are supported, separated by spaces.
+    /// Results are sorted by relevance.
+    #[command(alias = "f")]
+    Search(search::SearchArgs),
 }
