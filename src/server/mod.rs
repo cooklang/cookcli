@@ -177,7 +177,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
         .route("/shopping_list", post(handlers::shopping_list))
         .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/{*path}", get(handlers::recipe));
+        .route("/recipes/{*path}", get(handlers::recipe))
+        .route("/search", get(handlers::search));
 
     Ok(router)
 }

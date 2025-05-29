@@ -21,6 +21,11 @@ pub struct RecipeQuery {
     scale: Option<f64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
 fn check_path(p: &str) -> Result<(), StatusCode> {
     let path = Utf8Path::new(p);
     if !path
@@ -96,4 +101,28 @@ pub async fn recipe(
     });
 
     Ok(Json(value))
+}
+
+pub async fn search(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
+    let recipes = cooklang_find::search(&state.base_path, &query.q).map_err(|e| {
+        tracing::error!("Failed to search recipes: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let results = recipes
+        .into_iter()
+        .map(|recipe| {
+            let path = recipe.path().as_ref().unwrap();
+            let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
+            serde_json::json!({
+                "name": recipe.name(),
+                "path": relative_path.to_string()
+            })
+        })
+        .collect();
+
+    Ok(Json(results))
 }
