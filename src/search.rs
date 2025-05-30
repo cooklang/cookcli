@@ -23,7 +23,8 @@ pub fn run(ctx: &Context, args: SearchArgs) -> Result<()> {
 
     for recipe in recipes {
         if let Some(path) = recipe.path() {
-            println!("{}", path);
+            let relative_path = path.strip_prefix(&base_dir).unwrap_or(path);
+            println!("{}", relative_path);
         }
     }
 
