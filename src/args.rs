@@ -30,7 +30,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{recipe, search, seed, server, shopping_list};
+use crate::{recipe, search, seed, server, shopping_list, import};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -67,4 +67,8 @@ pub enum Command {
     /// Results are sorted by relevance.
     #[command(alias = "f")]
     Search(search::SearchArgs),
+
+    /// Import a recipe from a URL
+    #[command(alias = "i")]
+    Import(import::ImportArgs),
 }
