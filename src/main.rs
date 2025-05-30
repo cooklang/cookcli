@@ -42,6 +42,7 @@ mod search;
 mod seed;
 mod server;
 mod shopping_list;
+mod import;
 
 // other modules
 mod args;
@@ -65,6 +66,7 @@ pub fn main() -> Result<()> {
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
         Command::Search(args) => search::run(&ctx, args),
+        Command::Import(args) => import::run(&ctx, args),
     }
 }
 
