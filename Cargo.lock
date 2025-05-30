@@ -335,6 +335,7 @@ dependencies = [
  "cooklang",
  "cooklang-find",
  "cooklang-import",
+ "cooklang-reports",
  "directories",
  "humantime",
  "mime_guess",
@@ -410,6 +411,20 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "cooklang-reports"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85c58154232fcd23c20fc5f857477248e74957fc93b1f80115a63f7c4fd4d08a"
+dependencies = [
+ "cooklang",
+ "minijinja",
+ "serde",
+ "serde_yaml",
+ "thiserror",
+ "yaml-datastore",
 ]
 
 [[package]]
@@ -1271,6 +1286,16 @@ checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
 dependencies = [
  "mime",
  "unicase",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd72e8b4e42274540edabec853f607c015c73436159b06c39c7af85a20433155"
+dependencies = [
+ "indexmap",
+ "serde",
 ]
 
 [[package]]
@@ -3049,6 +3074,17 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
+
+[[package]]
+name = "yaml-datastore"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8af6117f4d2157a2cd2221234e3f92c526601dfbac22e466a493f36bd4d2901f"
+dependencies = [
+ "serde",
+ "serde_yaml",
+ "thiserror",
+]
 
 [[package]]
 name = "yansi"
