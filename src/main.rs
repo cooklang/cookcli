@@ -37,12 +37,13 @@ use cooklang::CooklangParser;
 use once_cell::sync::OnceCell;
 
 // commands
+mod import;
 mod recipe;
+mod report;
 mod search;
 mod seed;
 mod server;
 mod shopping_list;
-mod import;
 
 // other modules
 mod args;
@@ -67,6 +68,7 @@ pub fn main() -> Result<()> {
         Command::Seed(args) => seed::run(&ctx, args),
         Command::Search(args) => search::run(&ctx, args),
         Command::Import(args) => import::run(&ctx, args),
+        Command::Report(args) => report::run(&ctx, args),
     }
 }
 

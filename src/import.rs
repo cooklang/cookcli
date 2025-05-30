@@ -17,15 +17,17 @@ pub struct ImportArgs {
 pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
     let recipe = tokio::runtime::Runtime::new()?.block_on(async {
         if args.skip_conversion {
-            let recipe = fetch_recipe(&args.url).await.map_err(|e| anyhow::anyhow!("{}", e))?;
+            let recipe = fetch_recipe(&args.url)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             Ok(format!(
                 "{}\n\n[Ingredients]\n{}\n\n[Instructions]\n{}",
-                recipe.name,
-                recipe.ingredients,
-                recipe.instructions
+                recipe.name, recipe.ingredients, recipe.instructions
             ))
         } else {
-            import_recipe(&args.url).await.map_err(|e| anyhow::anyhow!("{}", e))
+            import_recipe(&args.url)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))
         }
     })?;
 
