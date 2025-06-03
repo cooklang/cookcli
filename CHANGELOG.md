@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.14.0](https://github.com/cooklang/cookcli/compare/v0.13.0...v0.14.0) (2025-06-03)
+
+
+### Features
+
+* add basic search ([94741e0](https://github.com/cooklang/cookcli/commit/94741e0e712ebea7bc79db41021df768dc750075))
+* add support for templates ([881495f](https://github.com/cooklang/cookcli/commit/881495f8003b21fe1084b209a9428ef231632179))
+* diplay relative path for search results ([ac7f847](https://github.com/cooklang/cookcli/commit/ac7f847ef7dba190af678d47da736da0bebd707b))
+* import recipe ([27dccf4](https://github.com/cooklang/cookcli/commit/27dccf4c34c94e4743d2772652138b8ad8494bf9))
+* search via UI ([1ca4c2a](https://github.com/cooklang/cookcli/commit/1ca4c2ac543ebea29efd9dc0b40b3f8f4a40930f))
+
+
+### Bug Fixes
+
+* make cost report work ([3538d20](https://github.com/cooklang/cookcli/commit/3538d2043489df9bd0994ee22f648edd1a3e3da1))
+
 ## [0.13.0](https://github.com/cooklang/cookcli/compare/v0.13.0...v0.13.0) (2025-05-27)
 
 
