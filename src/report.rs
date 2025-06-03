@@ -21,6 +21,9 @@ pub struct ReportArgs {
 }
 
 pub fn run(_ctx: &crate::Context, args: ReportArgs) -> Result<()> {
+    // Print warning about prototype feature
+    eprintln!("⚠️  Warning: The report command is a prototype feature and will change in future versions.");
+
     // Split recipe name and scaling factor
     let (recipe_name, scaling_factor) = split_recipe_name_and_scaling_factor(&args.recipe)
         .map(|(name, factor)| {
