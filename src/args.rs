@@ -30,7 +30,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{recipe, search, seed, server, shopping_list, import};
+use crate::{import, recipe, report, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -71,4 +71,8 @@ pub enum Command {
     /// Import a recipe from a URL
     #[command(alias = "i")]
     Import(import::ImportArgs),
+
+    /// Generate a report from a recipe using a Jinja2 template
+    #[command(alias = "rp")]
+    Report(report::ReportArgs),
 }

@@ -13,32 +13,33 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anstream = "0.6"
+anstyle = "1"
+anstyle-yansi = "2"
+anyhow = "1"
+axum = { version = "0.8" }
+camino = { version = "1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive"] }
 cooklang = { version = "0.16.1" }
-anyhow = "1"
-camino = { version = "1", features = ["serde1"] }
-once_cell = "1"
-serde_json = "1.0"
-anstream = "0.6"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-serde = "1.0"
+cooklang-find = { version = "0.2.1" }
+cooklang-import = "0.4.1"
+cooklang-reports = { version = "0.1" }
 directories = "6"
-serde_yaml = "0.9"
-rust-embed = "8"
-tokio = { version = "1", features = ["full"] }
-axum = { version = "0.8" }
-tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+humantime = "2"
 mime_guess = "2.0"
+once_cell = "1"
 open = "5.3"
 openssl = { version = "0.10", features = ["vendored"] }
-cooklang-find = { version = "0.2.1" }
-textwrap = { version = "0.16", features = ["terminal_size"] }
-tabular = { version = "0.2", features = ["ansi-cell"] }
-yansi = "1"
-anstyle-yansi = "2"
-humantime = "2"
-anstyle = "1"
 regex = "1"
-cooklang-import = "0.4.1"
+rust-embed = "8"
+serde = "1.0"
+serde_json = "1.0"
+serde_yaml = "0.9"
+tabular = { version = "0.2", features = ["ansi-cell"] }
+textwrap = { version = "0.16", features = ["terminal_size"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+yansi = "1"
