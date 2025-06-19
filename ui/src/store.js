@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 
 export const fileTree = writable();
+export const localMenu = writable({});
 
 export function convertPathsIntoTree(data) {
     // If we're given the root node directly, return it
