@@ -40,7 +40,6 @@ use cooklang::{
     aisle::AisleConf,
     ingredient_list::IngredientList,
     quantity::{GroupedQuantity, Quantity, Value},
-    ScaledQuantity,
 };
 use serde::Serialize;
 
@@ -235,13 +234,13 @@ fn build_json_value<'a>(
     #[derive(Serialize)]
     struct Ingredient {
         name: String,
-        quantity: Vec<ScaledQuantity>,
+        quantity: Vec<Quantity>,
     }
     impl From<(String, GroupedQuantity)> for Ingredient {
         fn from((name, qty): (String, GroupedQuantity)) -> Self {
             Ingredient {
                 name,
-                quantity: qty.into_vec(),
+                quantity: qty.into_vec().into_iter().map(Quantity::from).collect(),
             }
         }
     }
@@ -283,13 +282,13 @@ fn build_yaml_value<'a>(list: IngredientList, aisle: &'a AisleConf<'a>) -> serde
     #[derive(Serialize)]
     struct Ingredient {
         name: String,
-        quantity: Vec<ScaledQuantity>,
+        quantity: Vec<Quantity>,
     }
     impl From<(String, GroupedQuantity)> for Ingredient {
         fn from((name, qty): (String, GroupedQuantity)) -> Self {
             Ingredient {
                 name,
-                quantity: qty.into_vec(),
+                quantity: qty.into_vec().into_iter().map(Quantity::from).collect(),
             }
         }
     }

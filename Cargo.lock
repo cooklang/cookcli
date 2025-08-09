@@ -359,9 +359,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.16.1"
+version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82648f1a35e96041d44f9ab0842fcafc7faf79d8a03f5fbca335fce1adc045cd"
+checksum = "69b53feb0ec0b5d5ca047c91495234fd6dd90bcdc998ac685c8e0b2932dffcaa"
 dependencies = [
  "bitflags",
  "codesnake",
@@ -385,9 +385,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-find"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48abd0021a0b530aa5efe89bc529d2f8f3bec14f975cb4f76eb644b2ed2ebfac"
+checksum = "6991bf679d9299953b557a299fc5690b4b1eb5ffdd1b9b8c767b0ea0e163d150"
 dependencies = [
  "camino",
  "cooklang",
@@ -415,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-reports"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85c58154232fcd23c20fc5f857477248e74957fc93b1f80115a63f7c4fd4d08a"
+checksum = "3ee90cee120fbf3deaad72f3b70afc6d0a132b1db1311314d2356487fdc222a2"
 dependencies = [
  "cooklang",
  "minijinja",

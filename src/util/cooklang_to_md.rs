@@ -37,7 +37,7 @@ use cooklang::{
     convert::Converter,
     metadata::Metadata,
     model::{Item, Section, Step},
-    ScaledRecipe,
+    Recipe,
 };
 use serde::{Deserialize, Serialize};
 
@@ -200,7 +200,7 @@ where
 /// This is an alias for [`print_md_with_options`] where the options are the
 /// default value.
 pub fn print_md(
-    recipe: &ScaledRecipe,
+    recipe: &Recipe,
     name: &str,
     scale: f64,
     converter: &Converter,
@@ -218,7 +218,7 @@ pub fn print_md(
 /// The [`Options`] are used to further customize the output. See it's
 /// documentation to know about them.
 pub fn print_md_with_options(
-    recipe: &ScaledRecipe,
+    recipe: &Recipe,
     name: &str,
     scale: f64,
     opts: &Options,
@@ -272,7 +272,7 @@ pub fn print_md_with_options(
     }
 
     ingredients(&mut writer, recipe, converter, opts).context("Failed to write ingredients")?;
-    cookware(&mut writer, recipe, opts).context("Failed to write cookware")?;
+    cookware(&mut writer, recipe, opts, converter).context("Failed to write cookware")?;
     sections(&mut writer, recipe, opts).context("Failed to write sections")?;
 
     Ok(())
@@ -304,7 +304,7 @@ fn frontmatter(
 
 fn ingredients(
     w: &mut impl io::Write,
-    recipe: &ScaledRecipe,
+    recipe: &Recipe,
     converter: &Converter,
     opts: &Options,
 ) -> Result<()> {
@@ -361,20 +361,20 @@ fn ingredients(
     Ok(())
 }
 
-fn cookware(w: &mut impl io::Write, recipe: &ScaledRecipe, opts: &Options) -> Result<()> {
+fn cookware(w: &mut impl io::Write, recipe: &Recipe, opts: &Options, converter: &Converter) -> Result<()> {
     if recipe.cookware.is_empty() {
         return Ok(());
     }
 
     writeln!(w, "## {}\n", opts.heading.cookware).context("Failed to write cookware header")?;
-    for item in recipe.group_cookware() {
+    for item in recipe.group_cookware(converter) {
         let cw = item.cookware;
         write!(w, "- ").context("Failed to write cookware bullet")?;
-        if !item.amount.is_empty() {
+        if !item.quantity.is_empty() {
             if opts.italic_amounts {
-                write!(w, "*{} * ", item.amount).context("Failed to write italicized amount")?;
+                write!(w, "*{} * ", item.quantity).context("Failed to write italicized amount")?;
             } else {
-                write!(w, "{} ", item.amount).context("Failed to write amount")?;
+                write!(w, "{} ", item.quantity).context("Failed to write amount")?;
             }
         }
         write!(w, "{}", cw.display_name()).context("Failed to write cookware name")?;
@@ -393,7 +393,7 @@ fn cookware(w: &mut impl io::Write, recipe: &ScaledRecipe, opts: &Options) -> Re
     Ok(())
 }
 
-fn sections(w: &mut impl io::Write, recipe: &ScaledRecipe, opts: &Options) -> Result<()> {
+fn sections(w: &mut impl io::Write, recipe: &Recipe, opts: &Options) -> Result<()> {
     writeln!(w, "## {}\n", opts.heading.steps).context("Failed to write steps header")?;
     for (idx, section) in recipe.sections.iter().enumerate() {
         w_section(w, section, recipe, idx + 1, opts)
@@ -405,7 +405,7 @@ fn sections(w: &mut impl io::Write, recipe: &ScaledRecipe, opts: &Options) -> Re
 fn w_section(
     w: &mut impl io::Write,
     section: &Section,
-    recipe: &ScaledRecipe,
+    recipe: &Recipe,
     num: usize,
     opts: &Options,
 ) -> Result<()> {
@@ -434,7 +434,7 @@ fn w_section(
 fn w_step(
     w: &mut impl io::Write,
     step: &Step,
-    recipe: &ScaledRecipe,
+    recipe: &Recipe,
     opts: &Options,
 ) -> Result<()> {
     let mut step_str = step.number.to_string();

@@ -72,7 +72,7 @@ pub async fn recipe(
     #[derive(Serialize)]
     struct ApiRecipe {
         #[serde(flatten)]
-        recipe: Arc<cooklang::ScaledRecipe>,
+        recipe: Arc<cooklang::Recipe>,
         grouped_ingredients: Vec<serde_json::Value>,
     }
 
@@ -82,8 +82,7 @@ pub async fn recipe(
         .map(|entry| {
             serde_json::json!({
                 "index": entry.index,
-                "quantities": entry.quantity.into_vec(),
-                "outcome": entry.outcome
+                "quantities": entry.quantity.into_vec()
             })
         })
         .collect();

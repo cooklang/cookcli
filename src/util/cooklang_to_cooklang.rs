@@ -37,13 +37,13 @@ use cooklang::{
     metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
-    quantity::{Quantity, QuantityValue},
+    quantity::Quantity,
     Recipe,
 };
 use regex::Regex;
 
-pub fn print_cooklang<D, V: QuantityValue>(
-    recipe: &Recipe<D, V>,
+pub fn print_cooklang(
+    recipe: &Recipe,
     mut writer: impl io::Write,
 ) -> Result<()> {
     let w = &mut writer;
@@ -71,17 +71,17 @@ fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> Result<()> {
     Ok(())
 }
 
-fn sections<D, V: QuantityValue>(w: &mut impl io::Write, recipe: &Recipe<D, V>) -> Result<()> {
+fn sections(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
     for (index, section) in recipe.sections.iter().enumerate() {
         w_section(w, section, recipe, index).context("Failed to write section")?;
     }
     Ok(())
 }
 
-fn w_section<D, V: QuantityValue>(
+fn w_section(
     w: &mut impl io::Write,
     section: &Section,
-    recipe: &Recipe<D, V>,
+    recipe: &Recipe,
     index: usize,
 ) -> Result<()> {
     if let Some(name) = &section.name {
@@ -103,10 +103,10 @@ fn w_section<D, V: QuantityValue>(
     Ok(())
 }
 
-fn w_step<D, V: QuantityValue>(
+fn w_step(
     w: &mut impl io::Write,
     step: &Step,
-    recipe: &Recipe<D, V>,
+    recipe: &Recipe,
 ) -> Result<()> {
     let mut step_str = String::new();
     for item in &step.items {
@@ -138,7 +138,7 @@ fn w_step<D, V: QuantityValue>(
                     modifiers: cw.modifiers(),
                     name: Some(&cw.name),
                     alias: cw.alias.as_deref(),
-                    quantity: cw.quantity.clone().map(|v| Quantity::new(v, None)).as_ref(),
+                    quantity: cw.quantity.as_ref(),
                     note: None,
                 }
                 .format(&mut step_str)
@@ -217,12 +217,12 @@ fn component_word_separator<'a>(
     Box::new(words.into_iter())
 }
 
-struct ComponentFormatter<'a, V: QuantityValue> {
+struct ComponentFormatter<'a> {
     kind: ComponentKind,
     modifiers: Modifiers,
     name: Option<&'a str>,
     alias: Option<&'a str>,
-    quantity: Option<&'a Quantity<V>>,
+    quantity: Option<&'a Quantity>,
     note: Option<&'a str>,
 }
 
@@ -232,7 +232,7 @@ enum ComponentKind {
     Timer,
 }
 
-impl<V: QuantityValue> ComponentFormatter<'_, V> {
+impl ComponentFormatter<'_> {
     fn format(self, w: &mut String) {
         w.push(match self.kind {
             ComponentKind::Ingredient => '@',
