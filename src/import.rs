@@ -6,10 +6,25 @@ use crate::Context;
 
 #[derive(Debug, Args)]
 pub struct ImportArgs {
-    /// URL of the recipe to import
+    /// URL of the recipe webpage to import
+    ///
+    /// The importer supports many popular recipe websites and will
+    /// automatically extract ingredients, instructions, and metadata.
+    /// The recipe will be converted to Cooklang format unless
+    /// --skip-conversion is used.
+    ///
+    /// Example URLs:
+    ///   https://www.allrecipes.com/recipe/...
+    ///   https://www.bbcgoodfood.com/recipes/...
+    ///   https://cooking.nytimes.com/recipes/...
+    #[arg(value_name = "URL")]
     url: String,
 
-    /// Skip conversion to Cooklang format and just fetch the original recipe
+    /// Output the original recipe data without converting to Cooklang
+    ///
+    /// By default, imported recipes are converted to Cooklang format.
+    /// Use this flag to get the raw recipe data as extracted from
+    /// the website (useful for debugging or custom processing).
     #[arg(short, long)]
     skip_conversion: bool,
 }
@@ -31,6 +46,6 @@ pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
         }
     })?;
 
-    println!("{}", recipe);
+    println!("{recipe}");
     Ok(())
 }

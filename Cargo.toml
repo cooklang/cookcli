@@ -20,10 +20,10 @@ anyhow = "1"
 axum = { version = "0.8" }
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive"] }
-cooklang = "0.16.5"
-cooklang-find = "0.2.2"
+cooklang = { path = "../cooklang-rs", default-features = false, features = ["aisle", "pantry"] }
+cooklang-find = { path = "../cooklang-find" }
 cooklang-import = "0.4.1"
-cooklang-reports = "0.1.1"
+cooklang-reports = { path = "../cooklang-reports" }
 directories = "6"
 humantime = "2"
 mime_guess = "2.0"

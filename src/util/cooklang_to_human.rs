@@ -158,7 +158,7 @@ fn header(w: &mut impl io::Write, recipe: &Recipe, name: &str, scale: f64) -> Re
             .unwrap_or_default(),
         name,
         if scale != 1.0 {
-            format!(" @ {}", scale)
+            format!(" @ {scale}")
         } else {
             "".to_string()
         }
@@ -441,7 +441,7 @@ fn step_text(recipe: &Recipe, _section: &Section, step: &Step) -> (String, Strin
                             quantity_fmt(quantity).paint(styles().timer),
                             name.paint(styles().timer),
                         );
-                        write!(&mut step_text, "{}", s).unwrap();
+                        write!(&mut step_text, "{s}").unwrap();
                     }
                     (Some(quantity), None) => {
                         write!(
@@ -500,10 +500,7 @@ fn step_text(recipe: &Recipe, _section: &Section, step: &Step) -> (String, Strin
     (step_text, igrs_text)
 }
 
-fn build_step_igrs_dedup<'a>(
-    step: &'a Step,
-    recipe: &'a Recipe,
-) -> HashMap<&'a str, Vec<usize>> {
+fn build_step_igrs_dedup<'a>(step: &'a Step, recipe: &'a Recipe) -> HashMap<&'a str, Vec<usize>> {
     // contain all ingredients used in the step (the names), the vec
     // contains the exact indices used
     let mut step_igrs_dedup: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -590,7 +587,7 @@ where
     let options = f(textwrap::Options::new(*TERM_WIDTH));
     let lines = textwrap::wrap(text, options);
     for line in lines {
-        writeln!(w, "{}", line)?;
+        writeln!(w, "{line}")?;
     }
     Ok(())
 }

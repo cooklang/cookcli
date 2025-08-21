@@ -34,10 +34,9 @@ use clap::{Args, ValueEnum};
 use std::io::Read;
 
 use camino::Utf8PathBuf;
-use cooklang_find::RecipeEntry;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output},
+    util::{split_recipe_name_and_scaling_factor, write_to_output, PARSER},
     Context,
 };
 
@@ -46,17 +45,30 @@ pub struct ReadArgs {
     #[command(flatten)]
     input: super::RecipeInputArgs,
 
-    /// Output file, none for stdout.
-    #[arg(short, long)]
+    /// File to write output (stdout if not specified)
+    ///
+    /// The output format can be automatically inferred from the file
+    /// extension (.json, .yaml, .md, .cook, .txt)
+    #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     output: Option<Utf8PathBuf>,
 
-    /// Output format
+    /// Output format for the recipe
     ///
-    /// Tries to infer it from output file extension. Defaults to "human".
+    /// Available formats:
+    ///   human    - Human-readable text with formatting (default)
+    ///   json     - JSON representation of the recipe data
+    ///   yaml     - YAML representation of the recipe data
+    ///   cooklang - Regenerated Cooklang format
+    ///   markdown - Markdown formatted recipe
+    ///
+    /// If not specified, format is inferred from output file extension.
     #[arg(short, long, value_enum)]
     format: Option<OutputFormat>,
 
-    /// Pretty output format, if available
+    /// Enable pretty formatting for structured output
+    ///
+    /// Adds indentation and formatting to JSON and YAML output.
+    /// Has no effect on human, cooklang, or markdown formats.
     #[arg(long)]
     pretty: bool,
 }
@@ -76,14 +88,14 @@ enum OutputFormat {
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let mut scale = args.input.scale;
 
-    let input = if let Some(query) = args.input.recipe {
+    let (recipe, title) = if let Some(query) = args.input.recipe {
         let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
                     let mut cmd = crate::CliArgs::command();
                     cmd.error(
                         clap::error::ErrorKind::InvalidValue,
-                        format!("Invalid scaling target for '{name}': {err}. Use a number value after @ to specify a scaling factor."),
+                        format!("Invalid scaling target for '{name}': {err}. Use a number value after : to specify a scaling factor."),
                     )
                     .exit()
                 });
@@ -95,19 +107,28 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             scale = scaling_factor;
         }
 
-        cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())
-            .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))
+        let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())
+            .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
+        let title = recipe_entry
+            .name()
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        (recipe, title)
     } else {
+        // Read from stdin and parse directly
         let mut buf = String::new();
         std::io::stdin()
             .read_to_string(&mut buf)
             .context("Failed to read stdin")?;
-
-        RecipeEntry::from_content(buf).map_err(|e| anyhow::anyhow!("Failed to parse recipe: {}", e))
-    }?;
-
-    let recipe = input.recipe(scale);
-    let title = input.name().as_ref().map_or("", |v| v);
+        let (mut recipe, _warnings) = PARSER
+            .parse(&buf)
+            .into_result()
+            .context("Failed to parse recipe from stdin")?;
+        recipe.scale(scale, PARSER.converter());
+        (std::sync::Arc::new(recipe), String::new())
+    };
 
     let format = args.format.unwrap_or_else(|| match &args.output {
         Some(p) => match p.extension() {
@@ -125,9 +146,9 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
         match format {
             OutputFormat::Human => crate::util::cooklang_to_human::print_human(
                 &recipe,
-                title,
+                &title,
                 scale,
-                ctx.parser()?.converter(),
+                PARSER.converter(),
                 writer,
             )?,
             OutputFormat::Json => {
@@ -143,9 +164,9 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
             OutputFormat::Markdown => crate::util::cooklang_to_md::print_md(
                 &recipe,
-                title,
+                &title,
                 scale,
-                ctx.parser()?.converter(),
+                PARSER.converter(),
                 writer,
             )?,
         }

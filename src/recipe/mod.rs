@@ -63,15 +63,26 @@ pub fn run(ctx: &Context, args: RecipeArgs) -> Result<()> {
 
 #[derive(Debug, Args)]
 struct RecipeInputArgs {
-    /// Input recipe, none for stdin
+    /// Recipe file to read (stdin if not specified)
     ///
-    /// This can be a full path or a partial path.
-    /// You can also specify a scale inline using `path@<scale>` (e.g., `Easy Pancakes.cook@3`).
-    /// Note. `.cook` extension is optional.
-    #[arg(value_hint = clap::ValueHint::FilePath)]
+    /// Can be specified as:
+    ///   - Full path: /path/to/recipe.cook
+    ///   - Relative path: recipes/pasta.cook
+    ///   - Recipe name: "Pasta Carbonara" (searches in recipe directory)
+    ///   - With scaling: recipe.cook:2 or "Pasta:3" (scales by factor)
+    ///   - Stdin: omit to read from standard input
+    ///
+    /// The .cook extension is optional and will be added automatically.
+    /// When using recipe names (not paths), the tool searches in the
+    /// current directory and configured recipe directories.
+    #[arg(value_hint = clap::ValueHint::FilePath, value_name = "RECIPE")]
     recipe: Option<Utf8PathBuf>,
 
-    /// Scale factor number, defaults to 1
+    /// Scaling factor for ingredient quantities
+    ///
+    /// Multiplies all ingredient quantities by this factor.
+    /// Can also be specified inline with : syntax (e.g., recipe:2).
+    /// The inline syntax takes precedence over this flag.
     #[arg(short, long, default_value_t = 1.0)]
     scale: f64,
 }

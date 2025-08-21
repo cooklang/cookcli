@@ -38,7 +38,6 @@ use axum::{
 };
 use camino::Utf8PathBuf;
 use clap::Args;
-use cooklang::CooklangParser;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
@@ -48,18 +47,33 @@ mod ui;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
-    /// Directory with recipes
+    /// Root directory containing your recipe files
+    ///
+    /// The server will recursively scan this directory for .cook files
+    /// and make them available through the web interface. Defaults to
+    /// the current directory if not specified.
+    #[arg(value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
 
-    /// Allow external connections
+    /// Allow connections from external hosts (not just localhost)
+    ///
+    /// By default, the server only accepts connections from localhost
+    /// for security. Use this flag to allow access from other devices
+    /// on your network. Be cautious when using this on public networks.
     #[arg(long)]
     host: bool,
 
-    /// Set http server port
-    #[arg(long, default_value_t = 9080)]
+    /// Port number for the HTTP server
+    ///
+    /// The server will listen on this port. Make sure the port is not
+    /// already in use by another application.
+    #[arg(short = 'p', long, default_value_t = 9080)]
     port: u16,
 
-    /// Open browser on start
+    /// Automatically open the web interface in your default browser
+    ///
+    /// When enabled, the server will launch your default web browser
+    /// and navigate to the server URL after startup.
     // #[cfg(feature = "ui")]
     #[arg(long, default_value_t = false)]
     open: bool,
@@ -118,12 +132,8 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 }
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
-    ctx.parser()?;
     let aisle_path = ctx.aisle().clone();
-    let Context {
-        parser, base_path, ..
-    } = ctx;
-    let parser = parser.into_inner().unwrap();
+    let Context { base_path } = ctx;
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
     let absolute_path = resolve_to_absolute_path(path)?;
@@ -135,7 +145,6 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     tracing::info!("Using absolute base path: {:?}", absolute_path);
 
     Ok(Arc::new(AppState {
-        parser,
         base_path: absolute_path,
         aisle_path,
     }))
@@ -168,7 +177,6 @@ async fn shutdown_signal() {
 }
 
 pub struct AppState {
-    parser: CooklangParser,
     base_path: Utf8PathBuf,
     aisle_path: Option<Utf8PathBuf>,
 }

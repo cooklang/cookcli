@@ -35,11 +35,30 @@ pub mod cooklang_to_md;
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::CommandFactory;
-use cooklang::{ingredient_list::IngredientList, quantity::Value, Converter};
+use cooklang::{
+    ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Recipe,
+};
 use cooklang_find::RecipeEntry;
+use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
+
+pub static PARSER: Lazy<CooklangParser> = Lazy::new(CooklangParser::canonical);
+
+/// Parse a Recipe from a RecipeEntry with the given scaling factor
+pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
+    let content = entry.content().context("Failed to read recipe content")?;
+    let (mut recipe, _warnings) = PARSER
+        .parse(&content)
+        .into_result()
+        .context("Failed to parse recipe")?;
+
+    // Scale the recipe
+    recipe.scale(scaling_factor, PARSER.converter());
+    Ok(Arc::new(recipe))
+}
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
@@ -127,7 +146,7 @@ pub fn extract_ingredients(
         .unwrap_or((entry, 1.0));
 
     let recipe_entry = get_recipe(base_path, name)?;
-    let recipe = recipe_entry.recipe(scaling_factor);
+    let recipe = parse_recipe_from_entry(&recipe_entry, scaling_factor)?;
     let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
 
     if !ignore_references {
@@ -135,34 +154,59 @@ pub fn extract_ingredients(
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
 
-            let suffix = match ingredient.quantity.as_ref() {
+            // Get the referenced recipe
+            let ref_path = reference.path("/");
+            let ref_entry = get_recipe(base_path, &ref_path)?;
+
+            // Parse and scale the recipe based on the quantity specification
+            let ref_recipe = match ingredient.quantity.as_ref() {
                 Some(quantity) => {
-                    if quantity.unit().is_some() {
-                        return Err(anyhow::anyhow!(
-                            "Unit not supported for referenced ingredients: {}({}). See https://github.com/cooklang/cookcli/issues/137",
-                            ingredient.name,
-                            quantity
-                        ));
-                    } else {
-                        match quantity.value() {
-                            Value::Number(value) => value.to_string(),
-                            _ => String::from(""),
+                    let target_value = match quantity.value() {
+                        Value::Number(num) => num
+                            .to_string()
+                            .parse::<f64>()
+                            .map_err(|_| anyhow::anyhow!("Invalid numeric value: {}", num))?,
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Invalid quantity value for referenced recipe: {}",
+                                ingredient.name
+                            ));
                         }
+                    };
+
+                    let content = ref_entry
+                        .content()
+                        .context("Failed to read recipe content")?;
+                    let (mut recipe, _warnings) = PARSER
+                        .parse(&content)
+                        .into_result()
+                        .context("Failed to parse recipe")?;
+
+                    // Use the new scale_to_target function
+                    recipe
+                        .scale_to_target(target_value, quantity.unit(), PARSER.converter())
+                        .context(format!(
+                            "Failed to scale recipe '{}' with target {} {}",
+                            ref_path,
+                            target_value,
+                            quantity.unit().unwrap_or("(no unit)")
+                        ))?;
+
+                    // Apply any additional CLI scaling
+                    if scaling_factor != 1.0 {
+                        recipe.scale(scaling_factor, PARSER.converter());
                     }
+
+                    Arc::new(recipe)
                 }
-                None => scaling_factor.to_string(),
+                None => {
+                    // No quantity specified, use CLI scaling only
+                    parse_recipe_from_entry(&ref_entry, scaling_factor)?
+                }
             };
 
-            let path = reference.path("/") + ":" + &suffix;
-
-            extract_ingredients(
-                path.as_str(),
-                list,
-                seen,
-                base_path,
-                converter,
-                ignore_references,
-            )?;
+            // Add the scaled recipe's ingredients to the list
+            list.add_recipe(&ref_recipe, converter, true);
         }
     }
 

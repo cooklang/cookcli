@@ -29,10 +29,11 @@
 // SOFTWARE.
 
 use anstream::ColorChoice;
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, ValueEnum};
 use std::collections::BTreeMap;
+use std::io::Write;
 use tracing::warn;
 use yansi::Paint;
 
@@ -44,34 +45,51 @@ use cooklang::{
 use serde::Serialize;
 
 use crate::{
-    util::{extract_ingredients, write_to_output},
+    util::{extract_ingredients, write_to_output, PARSER},
     Context,
 };
 
 #[derive(Debug, Args)]
 #[command()]
 pub struct ShoppingListArgs {
-    /// Recipe to add to the list
+    /// Recipe files to include in the shopping list
     ///
-    /// Name or path to the file. It will use the default scaling of the recipe.
-    /// To use a custom scaling, add `@<scale>` at the end.
+    /// Specify one or more recipe files by name or path. Each recipe can include
+    /// an optional scaling factor using the :N syntax (e.g., "recipe.cook:2" to double).
+    /// Glob patterns are supported (e.g., "*.cook" for all recipes in a directory).
+    ///
+    /// Examples:
+    ///   pasta.cook              # Single recipe at default scale
+    ///   "Pasta.cook:3"          # Triple the pasta recipe
+    ///   recipe1.cook recipe2.cook  # Multiple recipes
+    ///   desserts/*.cook         # All recipes in desserts folder
     recipes: Vec<String>,
 
-    /// Base path to search for recipes
-    #[arg(short, long)]
+    /// Base directory to search for recipe files
+    ///
+    /// When recipe names (not full paths) are provided, the tool will search
+    /// for them in this directory. Defaults to the current directory.
+    #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
 
-    /// Output file, none for stdout.
-    #[arg(short, long)]
+    /// Output file path (stdout if not specified)
+    ///
+    /// The output format can be inferred from the file extension
+    /// (.json, .yaml, .txt, .md)
+    #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     output: Option<Utf8PathBuf>,
 
-    /// Do not display categories
+    /// Display ingredients without aisle categories
+    ///
+    /// By default, ingredients are grouped by their aisle category
+    /// (produce, dairy, etc.). This flag displays them as a simple list.
     #[arg(short, long)]
     plain: bool,
 
-    /// Output format
+    /// Output format for the shopping list
     ///
-    /// Tries to infer it from output file extension. Defaults to "human".
+    /// Available formats: human (default), json, yaml, markdown
+    /// If not specified, format is inferred from output file extension.
     #[arg(short, long, value_enum)]
     format: Option<OutputFormat>,
 
@@ -86,6 +104,10 @@ pub struct ShoppingListArgs {
     /// Don't expand referenced recipes
     #[arg(short, long)]
     ignore_references: bool,
+
+    /// Display only ingredient names, one per line, without amounts
+    #[arg(long)]
+    ingredients_only: bool,
 }
 
 impl ShoppingListArgs {
@@ -112,18 +134,80 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         .transpose()?;
 
     let aisle = if let Some((path, content)) = &aile_path {
-        match cooklang::aisle::parse(content) {
-            Ok(conf) => conf,
-            Err(e) => {
-                let stderr = std::io::stderr();
-                let color = anstream::AutoStream::choice(&stderr) != ColorChoice::Never;
-                cooklang::error::write_rich_error(&e, path.as_str(), content, color, stderr)?;
-                bail!("Error parsing aisle file")
+        // Use parse_lenient to be more forgiving with aisle configuration
+        let result = cooklang::aisle::parse_lenient(content);
+
+        // Check if there are any warnings to display
+        if result.report().has_warnings() {
+            let stderr = std::io::stderr();
+            let color = anstream::AutoStream::choice(&stderr) != ColorChoice::Never;
+            // Write each warning individually
+            for warning in result.report().warnings() {
+                let stderr_handle = std::io::stderr();
+                cooklang::error::write_rich_error(
+                    warning,
+                    path.as_str(),
+                    content,
+                    color,
+                    stderr_handle,
+                )?;
             }
         }
+
+        // Get the output - parse_lenient should always return something
+        result.output().cloned().unwrap_or_else(|| {
+            warn!("Aisle file parsing failed, using default configuration");
+            Default::default()
+        })
     } else {
         warn!("No aisle file found. Docs https://cooklang.org/docs/spec/#shopping-lists");
         Default::default()
+    };
+
+    // Load pantry configuration if available
+    let pantry_path = ctx.pantry();
+    let pantry = if let Some(path) = &pantry_path {
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                tracing::debug!("Loading pantry from: {}", path);
+                let result = cooklang::pantry::parse_lenient(&content);
+
+                // Check if there are any warnings to display
+                if result.report().has_warnings() {
+                    let stderr = std::io::stderr();
+                    let color = anstream::AutoStream::choice(&stderr) != ColorChoice::Never;
+                    for warning in result.report().warnings() {
+                        let stderr_handle = std::io::stderr();
+                        cooklang::error::write_rich_error(
+                            warning,
+                            path.as_str(),
+                            &content,
+                            color,
+                            stderr_handle,
+                        )?;
+                    }
+                }
+
+                let mut pantry_conf = result.output().cloned();
+                if let Some(ref mut pantry) = pantry_conf {
+                    pantry.rebuild_index();
+                    tracing::debug!(
+                        "Pantry loaded successfully with {} sections",
+                        pantry.sections.len()
+                    );
+                } else {
+                    tracing::warn!("Failed to parse pantry file");
+                }
+                pantry_conf
+            }
+            Err(e) => {
+                warn!("Failed to read pantry file: {}", e);
+                None
+            }
+        }
+    } else {
+        tracing::debug!("No pantry file found");
+        None
     };
 
     let format = args.format.unwrap_or_else(|| match &args.output {
@@ -146,29 +230,73 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             &mut list,
             &mut seen,
             ctx.base_path(),
-            ctx.parser()?.converter(),
+            PARSER.converter(),
             ignore_references,
         )?;
     }
 
-    write_to_output(args.output.as_deref(), |mut w| {
-        match format {
-            OutputFormat::Human => {
-                let table = build_human_table(list, &aisle, args.plain);
-                write!(w, "{table}")?;
+    // Filter out items that are in the pantry
+    if let Some(pantry_conf) = &pantry {
+        let mut filtered_list = IngredientList::new();
+        for (ingredient_name, quantity) in list {
+            if !pantry_conf.has_ingredient(&ingredient_name) {
+                // Re-add the ingredient to the filtered list
+                filtered_list.add_ingredient(ingredient_name, &quantity, PARSER.converter());
+            } else {
+                tracing::debug!(
+                    "Removing '{}' from shopping list (found in pantry)",
+                    ingredient_name
+                );
             }
-            OutputFormat::Json => {
-                let value = build_json_value(list, &aisle, args.plain);
-                if args.pretty {
-                    serde_json::to_writer_pretty(w, &value)?;
-                } else {
-                    serde_json::to_writer(w, &value)?;
+        }
+        list = filtered_list;
+    }
+
+    write_to_output(args.output.as_deref(), |mut w| {
+        if args.ingredients_only {
+            match format {
+                OutputFormat::Human => {
+                    // Simple output: one ingredient per line, no amounts
+                    for (ingredient, _quantity) in list {
+                        writeln!(w, "{ingredient}")?;
+                    }
+                }
+                OutputFormat::Json => {
+                    // Output as a JSON array of strings
+                    let ingredients: Vec<String> =
+                        list.into_iter().map(|(ingredient, _)| ingredient).collect();
+                    if args.pretty {
+                        serde_json::to_writer_pretty(w, &ingredients)?;
+                    } else {
+                        serde_json::to_writer(w, &ingredients)?;
+                    }
+                }
+                OutputFormat::Yaml => {
+                    // Output as a YAML array of strings
+                    let ingredients: Vec<String> =
+                        list.into_iter().map(|(ingredient, _)| ingredient).collect();
+                    serde_yaml::to_writer(w, &ingredients)?;
                 }
             }
-            OutputFormat::Yaml => {
-                let value = build_yaml_value(list, &aisle);
+        } else {
+            match format {
+                OutputFormat::Human => {
+                    let table = build_human_table(list, &aisle, args.plain);
+                    write!(w, "{table}")?;
+                }
+                OutputFormat::Json => {
+                    let value = build_json_value(list, &aisle, args.plain);
+                    if args.pretty {
+                        serde_json::to_writer_pretty(w, &value)?;
+                    } else {
+                        serde_json::to_writer(w, &value)?;
+                    }
+                }
+                OutputFormat::Yaml => {
+                    let value = build_yaml_value(list, &aisle);
 
-                serde_yaml::to_writer(w, &value)?;
+                    serde_yaml::to_writer(w, &value)?;
+                }
             }
         }
         Ok(())

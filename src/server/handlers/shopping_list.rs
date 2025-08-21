@@ -1,5 +1,5 @@
 use crate::server::AppState;
-use crate::util::extract_ingredients;
+use crate::util::{extract_ingredients, PARSER};
 use axum::{extract::State, http::StatusCode, Json};
 use cooklang::ingredient_list::IngredientList;
 use serde_json;
@@ -19,7 +19,7 @@ pub async fn shopping_list(
             &mut list,
             &mut seen,
             &state.base_path,
-            state.parser.converter(),
+            PARSER.converter(),
             false,
         )
         .map_err(|e| {

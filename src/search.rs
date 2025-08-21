@@ -7,12 +7,25 @@ use crate::Context;
 
 #[derive(Debug, Args)]
 pub struct SearchArgs {
-    /// Search query
-    #[arg(required = true)]
+    /// Search terms to find in recipes
+    ///
+    /// Can be a single word, multiple words, or a phrase in quotes.
+    /// The search looks through recipe titles, ingredients, instructions,
+    /// and metadata. Multiple terms are treated as AND (all must match).
+    ///
+    /// Examples:
+    ///   chicken                 # Find recipes with "chicken"
+    ///   "olive oil"             # Search for exact phrase
+    ///   tomato pasta quick      # Find recipes with all three terms
+    #[arg(required = true, value_name = "QUERY")]
     query: String,
 
-    /// Base directory to search in
-    #[arg(short, long)]
+    /// Directory to search for recipes
+    ///
+    /// Specifies the root directory to search. The search will recursively
+    /// scan for .cook files in this directory and all subdirectories.
+    /// Defaults to the current directory.
+    #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     base_dir: Option<Utf8PathBuf>,
 }
 
@@ -24,7 +37,7 @@ pub fn run(ctx: &Context, args: SearchArgs) -> Result<()> {
     for recipe in recipes {
         if let Some(path) = recipe.path() {
             let relative_path = path.strip_prefix(&base_dir).unwrap_or(path);
-            println!("{}", relative_path);
+            println!("{relative_path}");
         }
     }
 

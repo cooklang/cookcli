@@ -1,4 +1,4 @@
-use crate::server::AppState;
+use crate::{server::AppState, util::PARSER};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -67,7 +67,11 @@ pub async fn recipe(
             StatusCode::NOT_FOUND
         })?;
 
-    let recipe = entry.recipe(query.scale.unwrap_or(1.0));
+    let recipe =
+        crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0)).map_err(|e| {
+            tracing::error!("Failed to parse recipe: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     #[derive(Serialize)]
     struct ApiRecipe {
@@ -77,7 +81,7 @@ pub async fn recipe(
     }
 
     let grouped_ingredients = recipe
-        .group_ingredients(state.parser.converter())
+        .group_ingredients(PARSER.converter())
         .into_iter()
         .map(|entry| {
             serde_json::json!({
@@ -113,12 +117,13 @@ pub async fn search(
 
     let results = recipes
         .into_iter()
-        .map(|recipe| {
-            let path = recipe.path().as_ref().unwrap();
-            let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
-            serde_json::json!({
-                "name": recipe.name(),
-                "path": relative_path.to_string()
+        .filter_map(|recipe| {
+            recipe.path().map(|path| {
+                let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
+                serde_json::json!({
+                    "name": recipe.name(),
+                    "path": relative_path.to_string()
+                })
             })
         })
         .collect();
