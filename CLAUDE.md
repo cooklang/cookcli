@@ -4,18 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-CookCLI is a command-line interface for managing Cooklang recipes. It's written in Rust and includes a web server with a Svelte frontend. The project follows UNIX philosophy where each command does one thing well.
+CookCLI is a command-line interface for managing Cooklang recipes. It's written in Rust and includes a web server with server-side rendered HTML using Askama templates and Tailwind CSS. The project follows UNIX philosophy where each command does one thing well.
 
 ## Build and Development Commands
 
 ### Building
 ```bash
-# Full release build (includes UI)
+# Full release build (includes CSS compilation)
 make release
 
-# Development build (Rust only)
+# Development build
 cargo build
-make dev
+make build  # Includes CSS compilation
+
+# Build CSS only
+make css
+npm run build-css
 
 # Build specific workspace member
 cargo build -p cookcli
@@ -42,11 +46,21 @@ RUST_LOG=trace cargo run -- [command]  # More verbose
 
 ### Web UI Development
 ```bash
-# Start development server (API + Svelte)
+# Start development server with CSS built
 make dev_server
 
-# Build UI for production (required before release build)
-cd ui && npm install && npm run build
+# Start development with CSS watch mode
+make css-watch  # In one terminal
+cargo run -- server ./seed  # In another terminal
+
+# Install dependencies (first time setup)
+npm install
+
+# Build CSS for production
+npm run build-css
+
+# Watch CSS changes during development
+npm run watch-css
 ```
 
 ### Linting and Formatting
@@ -78,7 +92,7 @@ The `Context` struct (in `src/main.rs`) provides:
 - `pantry()`: Returns path to pantry.conf (same search pattern)
 
 Configuration search order:
-1. `./config/[aisle|pantry].conf` - Local to recipe directory
+1. `./config/[aisle.conf|pantry.conf]` - Local to recipe directory
 2. `~/Library/Application Support/cook/` (macOS) or `~/.config/cook/` (Linux)
 
 ### Command Modules
@@ -86,7 +100,7 @@ Configuration search order:
 #### Core Commands
 - `recipe`: Parse and display recipes (supports multiple output formats)
 - `shopping_list`: Generate shopping lists with ingredient aggregation
-- `server`: Web server using Axum + embedded Svelte UI
+- `server`: Web server using Axum + Askama templates with Tailwind CSS
 - `search`: Full-text recipe search
 - `import`: Import from websites via cooklang-import
 - `doctor`: Validate recipes and check configurations
@@ -101,9 +115,12 @@ Configuration search order:
 
 ### Web Server
 - Backend: Axum web framework in `src/server/`
-- Frontend: Svelte app in `ui/` (built files embedded via rust-embed)
+- Frontend: Server-side rendered HTML using Askama templates
+- Templates: Located in `templates/` directory
+- Styling: Tailwind CSS with custom components
 - API handlers in `src/server/handlers/`
-- Static files served from embedded `ui/public/`
+- Static files served from `static/` directory
+- Shopping list stored as tab-delimited files in `/tmp/`
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)
@@ -127,7 +144,7 @@ Configuration search order:
 - Ingredients with same name are automatically combined
 - Unit conversion handled by cooklang crate
 - Aisle categorization via aisle.conf
-- Pantry filtering via pantry.conf
+- Pantry filtering via pantry.conf (TOML format with quantities and dates)
 
 ### Doctor Command
 - `validate`: Checks syntax, deprecated features, and recipe references
@@ -143,6 +160,46 @@ Configuration search order:
 - `.cook` files use Cooklang markup
 - Supports YAML frontmatter or `>>` metadata (deprecated)
 - Output formats: human, json, yaml, markdown, cooklang
+
+## Frontend Architecture
+
+### Template System
+The web UI uses server-side rendering with Askama templates:
+- Templates located in `templates/` directory
+- Base template (`base.html`) provides common layout
+- Page-specific templates extend the base template
+- Template data structures defined in `src/server/templates.rs`
+
+### Styling
+- Tailwind CSS for utility-first styling
+- Custom components defined in `static/css/input.css`
+- Compiled CSS output in `static/css/output.css`
+- Configuration in `tailwind.config.js`
+
+### Key Templates
+- `base.html` - Common layout with navigation and search
+- `recipes.html` - Recipe listing with directory navigation
+- `recipe.html` - Individual recipe display with scaling
+- `shopping_list.html` - Shopping list management
+- `preferences.html` - User preferences and settings
+
+### Frontend Features
+- **Recipe Browsing**: Directory-based navigation with breadcrumbs
+- **Recipe Display**: Ingredients, steps, metadata with colorful badges
+- **Shopping List**: Persistent storage in `/tmp/shopping_list.txt`
+- **Recipe Scaling**: Dynamic scaling with URL parameters
+- **Search**: Real-time recipe search with dropdown results
+- **Responsive Design**: Mobile-friendly layout with Tailwind
+
+### CSS Component Classes
+Custom Tailwind components for consistent styling:
+- `.recipe-card` - Recipe cards with gradient top border
+- `.ingredient-badge` - Orange gradient badges for ingredients
+- `.cookware-badge` - Green gradient badges for cookware
+- `.timer-badge` - Red gradient badges for timers
+- `.metadata-pill` - Clean outline badges for metadata
+- `.nav-pill` - Navigation items with hover effects
+- `.step-number` - Circular step numbers with gradient
 
 ## Testing Approach
 
@@ -171,8 +228,28 @@ Uses semantic commit messages for automated releases:
 ### Modifying Output Formats
 Output formatting is centralized in `src/util/` modules. Each format has its own module with consistent interface.
 
+### Working with Templates
+1. Create new template in `templates/` directory
+2. Define data structure in `src/server/templates.rs`
+3. Implement handler in `src/server/ui.rs`
+4. Add route in the UI router
+
+### Modifying Styles
+1. Edit component classes in `static/css/input.css`
+2. Run `make css` or `npm run build-css` to compile
+3. For development, use `npm run watch-css` for auto-rebuild
+4. Custom colors and utilities can be added to `tailwind.config.js`
+
+### Frontend Development Workflow
+1. Install dependencies: `npm install`
+2. Start CSS watch: `npm run watch-css`
+3. Run server: `cargo run -- server ./seed`
+4. Make changes to templates or styles
+5. Refresh browser to see changes (templates are recompiled on each request in dev mode)
+
 ### Debugging Recipe Parsing
 Use `RUST_LOG=trace` to see detailed parsing information including:
 - File discovery paths
 - Configuration loading
 - Recipe reference resolution
+- Static file serving paths

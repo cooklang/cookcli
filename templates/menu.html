@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}{{ name }} - Cook{% endblock %}
+
+{% block content %}
+<div>
+    <nav class="mb-4">
+        <ol class="flex space-x-2 text-sm text-gray-600">
+            <li><a href="/" class="hover:text-gray-900">Recipes</a></li>
+            {% for crumb in breadcrumbs %}
+            <li class="flex items-center">
+                <span class="mx-2 text-gray-400">/</span>
+                {% if loop.last %}
+                    <span class="text-gray-900">{{ crumb }}</span>
+                {% else %}
+                    <a href="/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}" class="hover:text-gray-900">{{ crumb }}</a>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+    </nav>
+    
+    <div class="mb-8">
+        <!-- Menu image if available -->
+        {% match image_path %}
+        {% when Some with (img) %}
+        <div class="mb-6 max-w-4xl mx-auto">
+            <div class="rounded-xl overflow-hidden shadow-lg bg-gray-50">
+                <img src="{{ img }}" alt="{{ name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
+            </div>
+        </div>
+        {% when None %}
+        {% endmatch %}
+
+        <!-- Title bar with scale and shopping list button -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div class="flex items-center gap-3">
+                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">{{ name }}</h1>
+                <span class="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-full text-sm font-semibold">Menu</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center">
+                    <label for="scale" class="text-sm font-medium text-gray-700 mr-2">Scale:</label>
+                    <input type="number" 
+                           id="scale" 
+                           value="{{ scale }}" 
+                           min="0.5" 
+                           max="200"
+                           step="0.5" 
+                           class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
+                           onchange="window.location.href = `/recipe/{{ recipe_path }}?scale=${this.value}`">
+                </div>
+                <button onclick="addToShoppingList(event, '{{ recipe_path }}')" 
+                        class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    Add All to Shopping List
+                </button>
+            </div>
+        </div>
+        
+        <!-- Menu info section -->
+        <div class="space-y-4">
+            {% match metadata %}
+            {% when Some with (metadata) %}
+            
+            <!-- Description if present -->
+            {% match metadata.description %}
+            {% when Some with (description) %}
+            <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-200">
+                <p class="text-gray-700 italic">{{ description }}</p>
+            </div>
+            {% when None %}
+            {% endmatch %}
+            
+            <!-- Metadata row -->
+            <div id="metadata-container" class="flex flex-wrap gap-3">
+                {% match metadata.servings %}
+                {% when Some with (servings) %}
+                <span class="metadata-pill metadata-servings">👥 {{ servings }} servings</span>
+                {% when None %}
+                {% endmatch %}
+                
+                {% match metadata.time %}
+                {% when Some with (time) %}
+                <span class="metadata-pill metadata-time">⏱️ {{ time }}</span>
+                {% when None %}
+                {% endmatch %}
+                
+                {% match metadata.author %}
+                {% when Some with (author) %}
+                <span class="metadata-pill metadata-author">👤 {{ author }}</span>
+                {% when None %}
+                {% endmatch %}
+                
+                <!-- Custom metadata -->
+                {% for (key, value) in metadata.custom %}
+                <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
+                {% endfor %}
+            </div>
+            
+            {% when None %}
+            {% endmatch %}
+        </div>
+    </div>
+    
+    <!-- Menu sections -->
+    <div class="space-y-8">
+            {% for section in sections %}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {% match section.name %}
+                {% when Some with (name) %}
+                <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3">
+                    <h2 class="text-xl font-semibold">{{ name }}</h2>
+                </div>
+                {% when None %}
+                {% endmatch %}
+                
+                <div class="p-6 space-y-4">
+                    {% for line in section.lines %}
+                    {% if line.len() == 1 %}
+                        {% match line[0] %}
+                        {% when crate::server::templates::MenuSectionItem::Text with (text) %}
+                            {% if text.trim().ends_with(":") %}
+                            <!-- Meal type header -->
+                            <h3 class="text-lg font-semibold text-gray-800 mt-2 mb-1">{{ text }}</h3>
+                            {% else %}
+                            <!-- Regular text line -->
+                            <div class="pl-6">
+                                <span class="text-gray-700">{{ text }}</span>
+                            </div>
+                            {% endif %}
+                        {% when _ %}
+                            <!-- Single non-text item -->
+                            <div class="pl-6 flex items-baseline gap-x-2">
+                                <span class="text-gray-400">•</span>
+                                {% match line[0] %}
+                                {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
+                                    <span class="inline-flex items-center gap-1">
+                                        <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook" 
+                                           class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
+                                            {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
+                                        </a>
+                                        {% match scale %}
+                                        {% when Some with (s) %}
+                                            <span class="text-sm text-gray-500">(×{{ s }})</span>
+                                        {% when None %}
+                                        {% endmatch %}
+                                    </span>
+                                {% when crate::server::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
+                                    <span class="inline-flex items-center gap-1">
+                                        <span class="ingredient-badge">
+                                            {{ name }}
+                                            {% match quantity %}
+                                            {% when Some with (q) %}
+                                                <span class="font-semibold">{{ q }}</span>
+                                            {% when None %}
+                                            {% endmatch %}
+                                            {% match unit %}
+                                            {% when Some with (u) %}
+                                                <span class="text-orange-700">{{ u }}</span>
+                                            {% when None %}
+                                            {% endmatch %}
+                                        </span>
+                                    </span>
+                                {% when _ %}
+                                {% endmatch %}
+                            </div>
+                        {% endmatch %}
+                    {% else %}
+                    <!-- Multi-item line (meal item with ingredients) -->
+                    <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
+                        <span class="text-gray-400">•</span>
+                        {% for item in line %}
+                            {% match item %}
+                            {% when crate::server::templates::MenuSectionItem::Text with (text) %}
+                                <span class="text-gray-700">{{ text }}</span>
+                            
+                            {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
+                                <span class="inline-flex items-center gap-1">
+                                    <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook" 
+                                       class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
+                                        {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
+                                    </a>
+                                    {% match scale %}
+                                    {% when Some with (s) %}
+                                        <span class="text-sm text-gray-500">(×{{ s }})</span>
+                                    {% when None %}
+                                    {% endmatch %}
+                                </span>
+                            
+                            {% when crate::server::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
+                                <span class="inline-flex items-center gap-1">
+                                    <span class="ingredient-badge">
+                                        {{ name }}
+                                        {% match quantity %}
+                                        {% when Some with (q) %}
+                                            <span class="font-semibold">{{ q }}</span>
+                                        {% when None %}
+                                        {% endmatch %}
+                                        {% match unit %}
+                                        {% when Some with (u) %}
+                                            <span class="text-orange-700">{{ u }}</span>
+                                        {% when None %}
+                                        {% endmatch %}
+                                    </span>
+                                </span>
+                            {% endmatch %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+    </div>
+</div>
+
+<script>
+async function addToShoppingList(event, recipePath) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const originalText = button.innerHTML;
+    
+    try {
+        const scale = document.getElementById('scale')?.value || 1;
+        const response = await fetch('/api/shopping_list/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                path: recipePath,
+                name: recipePath.split('/').pop().replace('.menu', ''),
+                scale: parseFloat(scale)
+            })
+        });
+        
+        if (response.ok) {
+            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Added!';
+            button.classList.add('bg-green-500', 'hover:bg-green-600');
+            button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.classList.remove('bg-green-500', 'hover:bg-green-600');
+                button.classList.add('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+            }, 2000);
+        } else {
+            throw new Error('Failed to add to shopping list');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> Error';
+        button.classList.add('bg-red-500', 'hover:bg-red-600');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-red-500', 'hover:bg-red-600');
+        }, 2000);
+    }
+}
+</script>
+{% endblock %}

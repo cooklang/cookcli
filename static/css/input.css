@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes */
+@layer components {
+    /* Recipe cards with colorful borders */
+    .recipe-card {
+        @apply relative overflow-hidden;
+    }
+
+    .recipe-card::before {
+        content: '';
+        @apply absolute top-0 left-0 right-0 h-1;
+        background: linear-gradient(90deg, #ff6b35, #fbbf24, #4ade80);
+    }
+
+    /* Ingredient badges */
+    .ingredient-badge {
+        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
+        background: linear-gradient(135deg, #fef3c7, #fed7aa);
+        @apply text-orange-700 border border-orange-400;
+    }
+
+    .cookware-badge {
+        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
+        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+        @apply text-green-900 border border-green-400;
+    }
+
+    .timer-badge {
+        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
+        background: linear-gradient(135deg, #fee2e2, #fecaca);
+        @apply text-red-900 border border-red-400;
+    }
+
+    /* Enhanced buttons */
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f97316);
+        @apply shadow-lg hover:-translate-y-0.5 transition-all;
+    }
+
+    .btn-primary:hover {
+        box-shadow: 0 6px 20px 0 rgba(255, 107, 53, 0.4);
+    }
+
+    /* Step numbers with colorful circles */
+    .step-number {
+        @apply w-8 h-8 flex items-center justify-center rounded-full text-white font-bold flex-shrink-0;
+        background: linear-gradient(135deg, #ff6b35, #f97316);
+    }
+
+    /* Tags styling */
+    .tag {
+        @apply inline-block px-3 py-1 rounded-full text-xs font-medium mr-2;
+        background: linear-gradient(135deg, #fbbf24, #fb923c);
+        @apply text-white shadow-sm;
+    }
+
+    /* Navigation pills */
+    .nav-pill {
+        @apply px-5 py-2 rounded-full transition-all font-medium text-gray-500 relative;
+    }
+
+    .nav-pill:hover {
+        background: linear-gradient(135deg, #fef3c7, #fed7aa);
+        @apply text-orange-700 -translate-y-0.5 shadow-md;
+    }
+
+    .nav-pill.active {
+        background: linear-gradient(135deg, #ff6b35, #f97316);
+        @apply text-white font-bold shadow-lg;
+    }
+
+    /* Recipe metadata pills - simple outline style */
+    .metadata-pill {
+        @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap border bg-white;
+    }
+
+    .metadata-servings {
+        @apply text-gray-600 border-gray-300;
+    }
+
+    .metadata-time {
+        @apply text-blue-600 border-blue-300;
+    }
+
+    .metadata-difficulty {
+        @apply text-yellow-600 border-yellow-300;
+    }
+
+    .metadata-course {
+        @apply text-orange-600 border-orange-300;
+    }
+
+    .metadata-prep {
+        @apply text-indigo-600 border-indigo-300;
+    }
+
+    .metadata-cook {
+        @apply text-red-600 border-red-300;
+    }
+
+    .metadata-cuisine {
+        @apply text-green-600 border-green-300;
+    }
+
+    .metadata-diet {
+        @apply text-lime-600 border-lime-300;
+    }
+
+    .metadata-author {
+        @apply text-pink-600 border-pink-300;
+    }
+
+    .metadata-custom {
+        @apply text-purple-600 border-purple-300;
+    }
+
+    /* Search input with colorful focus */
+    .search-input:focus {
+        @apply border-primary-orange;
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+
+    /* Recipe image placeholder with gradient */
+    .recipe-image-placeholder {
+        background: linear-gradient(135deg, #ff6b35, #fbbf24);
+        @apply w-30 h-30 rounded-full flex items-center justify-center text-white text-5xl;
+    }
+}

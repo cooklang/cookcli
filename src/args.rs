@@ -35,11 +35,15 @@ use crate::{doctor, import, recipe, report, search, seed, server, shopping_list}
 #[derive(Parser, Debug)]
 #[command(
     author,
-    version,
+    version = concat!(env!("CARGO_PKG_VERSION"), " - in food we trust"),
     about,
     after_help = "Docs: https://cooklang.org/cli/help/"
 )]
 pub struct CliArgs {
+    /// Increase verbosity (-v for info, -vv for debug, -vvv for trace)
+    #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true)]
+    pub verbosity: u8,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -56,7 +60,10 @@ pub enum Command {
     ///   cook recipe myrecipe.cook                 # Display recipe in human format
     ///   cook recipe myrecipe.cook -f json         # Output as JSON
     ///   cook recipe myrecipe.cook@2 -f yaml       # Scale recipe 2x and output as YAML
-    #[command(alias = "r", long_about = "Parse and display Cooklang recipe files with support for multiple output formats and scaling")]
+    #[command(
+        alias = "r",
+        long_about = "Parse and display Cooklang recipe files with support for multiple output formats and scaling"
+    )]
     Recipe(recipe::RecipeArgs),
 
     /// Start a local web server to browse and view your recipe collection
@@ -70,7 +77,10 @@ pub enum Command {
     ///   cook server                    # Start server on localhost:9080
     ///   cook server --host --port 8080 # Allow external connections on port 8080
     ///   cook server ~/recipes          # Serve recipes from specific directory
-    #[command(alias = "s", long_about = "Run a web server to browse and interact with your recipe collection")]
+    #[command(
+        alias = "s",
+        long_about = "Run a web server to browse and interact with your recipe collection"
+    )]
     Server(server::ServerArgs),
 
     /// Generate a combined shopping list from multiple recipes
@@ -84,7 +94,10 @@ pub enum Command {
     ///   cook sl "Pasta.cook:2" "Salad.cook"           # Scale pasta recipe by 2
     ///   cook sl *.cook -f json -o list.json           # All recipes to JSON file
     ///   cook sl recipe.cook --plain                   # Without categories
-    #[command(visible_alias = "sl", long_about = "Create shopping lists from one or more recipes with ingredient aggregation and categorization")]
+    #[command(
+        visible_alias = "sl",
+        long_about = "Create shopping lists from one or more recipes with ingredient aggregation and categorization"
+    )]
     ShoppingList(shopping_list::ShoppingListArgs),
 
     /// Initialize a directory with example Cooklang recipes
@@ -109,7 +122,10 @@ pub enum Command {
     ///   cook search "olive oil"         # Search for exact phrase
     ///   cook search tomato basil        # Find recipes with both terms
     ///   cook search -b ~/recipes pasta  # Search in specific directory
-    #[command(alias = "f", long_about = "Search for recipes by ingredient, title, or any text content with relevance ranking")]
+    #[command(
+        alias = "f",
+        long_about = "Search for recipes by ingredient, title, or any text content with relevance ranking"
+    )]
     Search(search::SearchArgs),
 
     /// Import recipes from supported websites and convert to Cooklang
@@ -121,7 +137,10 @@ pub enum Command {
     /// Examples:
     ///   cook import https://example.com/recipe       # Import and convert
     ///   cook import URL --skip-conversion            # Import without converting
-    #[command(alias = "i", long_about = "Import recipes from websites and automatically convert them to Cooklang format")]
+    #[command(
+        alias = "i",
+        long_about = "Import recipes from websites and automatically convert them to Cooklang format"
+    )]
     Import(import::ImportArgs),
 
     /// Generate custom reports from recipes using templates
@@ -137,7 +156,10 @@ pub enum Command {
     ///   cook report -t card.j2 recipe.cook           # Generate recipe card
     ///   cook report -t nutrition.j2 recipe.cook@2    # Nutrition for 2x recipe
     ///   cook report -t plan.j2 recipe.cook -o out.md # Output to file
-    #[command(alias = "rp", long_about = "Generate custom reports and outputs from recipes using Jinja2 templates")]
+    #[command(
+        alias = "rp",
+        long_about = "Generate custom reports and outputs from recipes using Jinja2 templates"
+    )]
     Report(report::ReportArgs),
 
     /// Analyze your recipe collection for issues and improvements
@@ -149,6 +171,8 @@ pub enum Command {
     /// Examples:
     ///   cook doctor                     # Run all checks
     ///   cook doctor aisle              # Check for uncategorized ingredients
-    #[command(long_about = "Check recipe collection for potential issues and suggest improvements")]
+    #[command(
+        long_about = "Check recipe collection for potential issues and suggest improvements"
+    )]
     Doctor(doctor::DoctorArgs),
 }

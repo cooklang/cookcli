@@ -61,6 +61,23 @@ cook shopping-list "Pasta.cook:3" "Bread.cook:0.5" "Soup.cook:2"
 cook shopping-list "Main Course.cook:2" "Side Dish.cook:2" "Dessert.cook:2"
 ```
 
+## Menu Files
+
+Create shopping lists from `.menu` files that organize multiple recipes:
+
+```bash
+# Generate shopping list from weekly menu
+cook shopping-list "weekly_plan.menu"
+
+# Scale entire menu for more people
+cook shopping-list "weekly_plan.menu:2"
+
+# Combine menu with individual recipes
+cook shopping-list "weekly_plan.menu" "Extra Snacks.cook"
+```
+
+Menu files can contain recipe references with their own scaling, and the menu-level scaling multiplies with individual recipe scales.
+
 ## Smart Ingredient Combining
 
 CookCLI automatically combines ingredients with the same name:
@@ -178,6 +195,70 @@ Find ingredients not in your aisle configuration:
 
 ```bash
 cook doctor aisle
+```
+
+## Pantry Configuration
+
+Track your ingredient inventory and automatically exclude items you already have from shopping lists using `pantry.conf`:
+
+```toml
+# Default location: ./config/pantry.conf
+[freezer]
+ice_cream = "1%L"
+frozen_peas = "500%g"
+spinach = { bought = "05.05.2024", expire = "05.06.2024", quantity = "1%kg" }
+
+[fridge]
+milk = { expire = "10.05.2024", quantity = "2%L" }
+cheese = { expire = "15.05.2024" }
+butter = "250%g"
+
+[pantry]
+rice = "5%kg"
+pasta = "1%kg"
+flour = "5%kg"
+salt = "1%kg"
+olive_oil = "1%L"
+```
+
+### How It Works
+
+Items listed in your pantry are automatically excluded from shopping lists:
+
+```bash
+# Recipe calls for: flour, eggs, milk, sugar
+# Pantry has: flour (5kg), milk (2L)
+# Shopping list shows only: eggs, sugar
+cook shopping-list "Cake.cook"
+```
+
+### Pantry Item Formats
+
+Two ways to specify items:
+
+1. **Simple format**: `item = "quantity"`
+   ```toml
+   rice = "5%kg"
+   ```
+
+2. **Detailed format**: Track expiration and purchase dates
+   ```toml
+   milk = { quantity = "2%L", expire = "10.05.2024", bought = "05.05.2024" }
+   ```
+
+### Using Custom Pantry Configuration
+
+```bash
+cook shopping-list "Recipe.cook" --pantry ~/my-pantry.conf
+```
+
+### Inventory Management
+
+Check what's in your pantry and when items expire:
+
+```bash
+# View pantry contents (if using report command)
+cook report -t pantry-inventory.j2 --pantry ./config/pantry.conf
 ```
 
 ## Recipe References
@@ -355,7 +436,7 @@ cook shopping-list "Menu/*.cook" --plain | \
 
 ### Unit Conversion
 
-CookCLI automatically converts compatible units:
+Someday CookCLI will automatically converts the units:
 * 1000 ml → 1 liter
 * 1000 g → 1 kg
 

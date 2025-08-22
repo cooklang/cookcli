@@ -55,9 +55,8 @@ const AUTO_AISLE: &str = "aisle.conf";
 const AUTO_PANTRY: &str = "pantry.conf";
 
 pub fn main() -> Result<()> {
-    configure_logging();
-
     let args = CliArgs::parse();
+    configure_logging(args.verbosity);
 
     let ctx = configure_context()?;
 
@@ -78,6 +77,10 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn new(base_path: Utf8PathBuf) -> Self {
+        Self { base_path }
+    }
+
     pub fn aisle(&self) -> Option<Utf8PathBuf> {
         let auto = self.base_path.join(LOCAL_CONFIG_DIR).join(AUTO_AISLE);
 
@@ -130,10 +133,16 @@ fn configure_context() -> Result<Context> {
     })
 }
 
-fn configure_logging() {
+fn configure_logging(verbosity: u8) {
+    let env_filter = match verbosity {
+        0 => "warn,cook=warn",   // Default: warnings and errors only
+        1 => "info,cook=info",   // -v: info level
+        2 => "debug,cook=debug", // -vv: debug level
+        _ => "trace,cook=trace", // -vvv or more: trace level
+    };
+
     tracing_subscriber::fmt()
-        // Log this crate at level `trace`, but all other crates at level `info`.
-        .with_env_filter("info,cooklang=info,cook=trace")
+        .with_env_filter(env_filter)
         .without_time()
         .with_target(false)
         .compact()

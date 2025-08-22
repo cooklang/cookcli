@@ -73,6 +73,33 @@ pub async fn recipe(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // Get the image path if available
+    let image_path = entry.title_image().clone().and_then(|img_path| {
+        // If it's a URL, use it directly
+        if img_path.starts_with("http://") || img_path.starts_with("https://") {
+            Some(img_path)
+        } else {
+            // For file paths, make them relative and accessible via /api/static
+            let img_path = camino::Utf8Path::new(&img_path);
+
+            // Try to strip the base_path prefix to get a relative path
+            if let Ok(relative) = img_path.strip_prefix(&state.base_path) {
+                Some(format!("/api/static/{relative}"))
+            } else {
+                // If the path doesn't start with base_path, it might already be relative
+                // or it might be an absolute path to a file within base_path
+                if !img_path.is_absolute() {
+                    Some(format!("/api/static/{img_path}"))
+                } else {
+                    // Last resort: try to get just the filename
+                    img_path
+                        .file_name()
+                        .map(|name| format!("/api/static/{name}"))
+                }
+            }
+        }
+    });
+
     #[derive(Serialize)]
     struct ApiRecipe {
         #[serde(flatten)]
@@ -98,9 +125,9 @@ pub async fn recipe(
 
     let value = serde_json::json!({
         "recipe": api_recipe,
-        // TODO: add images
-        // TODO: add scaling info
-        // TODO: add metadata
+        "image": image_path,
+        "scale": query.scale.unwrap_or(1.0),
+        // TODO: add more metadata if needed
     });
 
     Ok(Json(value))

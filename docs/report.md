@@ -80,7 +80,7 @@ This provides the template with:
 * Scaled recipe (2x)
 * Nutritional and cost data from datastore
 * Aisle categorization for shopping
-* Pantry status for filtering
+* Pantry inventory for filtering (excludes items you already have)
 
 ## Example Templates
 
@@ -242,10 +242,25 @@ Template can access:
 
 ### Pantry Configuration
 
-Filter out pantry items:
+Filter out pantry items using your inventory:
 
 ```bash
 cook report -t list.j2 recipe.cook -p ./config/pantry.conf
+```
+
+The pantry.conf file tracks your inventory with quantities and dates:
+
+```toml
+[freezer]
+frozen_peas = "500%g"
+spinach = { quantity = "1%kg", expire = "05.06.2024" }
+
+[fridge]
+milk = { quantity = "2%L", expire = "10.05.2024" }
+
+[pantry]
+flour = "5%kg"
+salt = "1%kg"
 ```
 
 Template can check pantry items:
@@ -261,9 +276,9 @@ Need to buy:
   - {{ ing.name }}
 {% endfor %}
 
-From pantry:
+From pantry (already have):
 {% for ing in recipe.ingredients if ing.in_pantry %}
-  - {{ ing.name }}
+  - {{ ing.name }} ({{ ing.pantry_quantity }} available)
 {% endfor %}
 ```
 

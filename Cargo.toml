@@ -4,7 +4,7 @@ version = "0.14.0"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
-include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/ui/public"]
+include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static"]
 
 [[bin]]
 name = "cook"
@@ -17,7 +17,9 @@ anstream = "0.6"
 anstyle = "1"
 anstyle-yansi = "2"
 anyhow = "1"
-axum = { version = "0.8" }
+askama = "0.12"
+askama_axum = "0.4"
+axum = { version = "0.7" }
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive"] }
 cooklang = { path = "../cooklang-rs", default-features = false, features = ["aisle", "pantry"] }
@@ -39,7 +41,7 @@ tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 yansi = "1"

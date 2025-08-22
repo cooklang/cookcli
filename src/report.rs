@@ -4,6 +4,7 @@ use camino::Utf8PathBuf;
 use clap::{CommandFactory, Parser};
 use cooklang_reports::{config::Config, render_template_with_config};
 use std::{fs, path::PathBuf};
+use tracing::warn;
 
 #[derive(Parser, Debug)]
 pub struct ReportArgs {
@@ -55,7 +56,7 @@ pub struct ReportArgs {
 
 pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     // Print warning about prototype feature
-    eprintln!("⚠️  Warning: The report command is a prototype feature and will change in future versions.");
+    warn!("⚠️  The report command is a prototype feature and will change in future versions.");
 
     // Split recipe name and scaling factor
     let (recipe_name, scaling_factor) = split_recipe_name_and_scaling_factor(&args.recipe)

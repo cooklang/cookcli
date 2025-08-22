@@ -31,29 +31,41 @@
 pub mod cooklang_to_cooklang;
 pub mod cooklang_to_human;
 pub mod cooklang_to_md;
+pub mod format;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::CommandFactory;
 use cooklang::{
-    ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Recipe,
+    ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
 };
 use cooklang_find::RecipeEntry;
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
-pub static PARSER: Lazy<CooklangParser> = Lazy::new(CooklangParser::canonical);
+pub static PARSER: Lazy<CooklangParser> = Lazy::new(|| {
+    // Use no extensions but with default converter for basic unit support
+    CooklangParser::new(Extensions::empty(), Converter::default())
+});
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
     let content = entry.content().context("Failed to read recipe content")?;
-    let (mut recipe, _warnings) = PARSER
-        .parse(&content)
-        .into_result()
-        .context("Failed to parse recipe")?;
+    let parsed = PARSER.parse(&content);
+
+    // Log any warnings
+    if parsed.report().has_warnings() {
+        let recipe_name = entry.name().as_deref().unwrap_or("unknown");
+        for warning in parsed.report().warnings() {
+            warn!("Recipe '{}': {}", recipe_name, warning);
+        }
+    }
+
+    let (mut recipe, _warnings) = parsed.into_result().context("Failed to parse recipe")?;
 
     // Scale the recipe
     recipe.scale(scaling_factor, PARSER.converter());

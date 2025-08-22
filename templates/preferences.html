@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Preferences - Cook{% endblock %}
+
+{% block content %}
+<div>
+    <h1 class="text-2xl font-bold mb-6">Preferences</h1>
+    
+    <div class="space-y-6">
+        <div class="bg-gray-50 p-4 rounded">
+            <h2 class="text-lg font-semibold mb-3">Configuration Files</h2>
+            <div class="space-y-2 text-sm">
+                <div>
+                    <span class="font-medium">Aisle Configuration:</span>
+                    <span class="text-gray-600 ml-2">{{ aisle_path }}</span>
+                </div>
+                <div>
+                    <span class="font-medium">Pantry Configuration:</span>
+                    <span class="text-gray-600 ml-2">{{ pantry_path }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-4 rounded">
+            <h2 class="text-lg font-semibold mb-3">Recipe Directory</h2>
+            <div class="text-sm">
+                <span class="font-medium">Base Path:</span>
+                <span class="text-gray-600 ml-2">{{ base_path }}</span>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-4 rounded">
+            <h2 class="text-lg font-semibold mb-3">About</h2>
+            <div class="space-y-2 text-sm">
+                <div>
+                    <span class="font-medium">Version:</span>
+                    <span class="text-gray-600 ml-2">{{ version }}</span>
+                </div>
+                <div>
+                    <span class="font-medium">Cooklang CLI:</span>
+                    <span class="text-gray-600 ml-2">A command-line tool for managing Cooklang recipes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

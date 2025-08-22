@@ -10,6 +10,20 @@ cook recipe "Neapolitan Pizza.cook"
 
 This displays the recipe in a human-readable format with ingredients, steps, and metadata clearly organized.
 
+## Menu Files
+
+CookCLI also supports `.menu` files for meal planning. Menu files can reference multiple recipes and organize them by meals or days:
+
+```bash
+# View a menu file
+cook recipe "weekly_plan.menu"
+
+# Scale entire menu (scales all referenced recipes)
+cook recipe "weekly_plan.menu:2"
+```
+
+Menu files use the same scaling notation as regular recipes, and the scaling applies to all recipe references within the menu.
+
 ## Reading Recipes
 
 The simplest way to view a recipe:

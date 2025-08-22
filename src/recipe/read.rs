@@ -39,6 +39,7 @@ use crate::{
     util::{split_recipe_name_and_scaling_factor, write_to_output, PARSER},
     Context,
 };
+use cooklang_find::RecipeEntry;
 
 #[derive(Debug, Args)]
 pub struct ReadArgs {
@@ -109,25 +110,22 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
         let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())
             .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
-        let title = recipe_entry
-            .name()
-            .as_ref()
-            .map(|v| v.to_string())
-            .unwrap_or_default();
         let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
-        (recipe, title)
+        (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     } else {
-        // Read from stdin and parse directly
+        // Read from stdin and create a RecipeEntry
         let mut buf = String::new();
         std::io::stdin()
             .read_to_string(&mut buf)
             .context("Failed to read stdin")?;
-        let (mut recipe, _warnings) = PARSER
-            .parse(&buf)
-            .into_result()
-            .context("Failed to parse recipe from stdin")?;
-        recipe.scale(scale, PARSER.converter());
-        (std::sync::Arc::new(recipe), String::new())
+
+        // Create a RecipeEntry from the stdin content
+        let recipe_entry = RecipeEntry::from_content(buf, Some("stdin".to_string()))
+            .context("Failed to create recipe entry from stdin")?;
+
+        // Use the same parsing function as for file-based recipes
+        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     };
 
     let format = args.format.unwrap_or_else(|| match &args.output {

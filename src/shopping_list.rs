@@ -28,12 +28,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use anstream::ColorChoice;
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, ValueEnum};
 use std::collections::BTreeMap;
-use std::io::Write;
+use std::io::Write; // Still needed for write! macro with output files
 use tracing::warn;
 use yansi::Paint;
 
@@ -124,6 +123,48 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
+    // Expand directories to .cook files
+    let mut expanded_recipes = Vec::new();
+    for entry in &args.recipes {
+        let path = if entry.contains(':') {
+            // Handle recipe:scaling syntax
+            let (recipe_path, _) = entry.split_once(':').unwrap();
+            Utf8PathBuf::from(recipe_path)
+        } else {
+            Utf8PathBuf::from(entry)
+        };
+
+        // Check if it's a directory
+        if path.is_dir() {
+            // Find all .cook files in the directory
+            for dir_entry in std::fs::read_dir(&path)? {
+                let dir_entry = dir_entry?;
+                let file_path = dir_entry.path();
+                if let Some(ext) = file_path.extension() {
+                    if ext == "cook" {
+                        if let Ok(utf8_path) = Utf8PathBuf::from_path_buf(file_path) {
+                            // Preserve the scaling factor if it was specified
+                            if entry.contains(':') {
+                                let scaling = entry.split_once(':').unwrap().1;
+                                expanded_recipes.push(format!("{utf8_path}:{scaling}"));
+                            } else {
+                                expanded_recipes.push(utf8_path.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Not a directory, use as-is
+            expanded_recipes.push(entry.clone());
+        }
+    }
+
+    // If no recipes were expanded (empty directory or no directories), use original list
+    if expanded_recipes.is_empty() && !args.recipes.is_empty() {
+        expanded_recipes = args.recipes.clone();
+    }
+
     let aile_path = args
         .aisle
         .or_else(|| ctx.aisle())
@@ -133,24 +174,14 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         })
         .transpose()?;
 
-    let aisle = if let Some((path, content)) = &aile_path {
+    let aisle = if let Some((_path, content)) = &aile_path {
         // Use parse_lenient to be more forgiving with aisle configuration
         let result = cooklang::aisle::parse_lenient(content);
 
         // Check if there are any warnings to display
         if result.report().has_warnings() {
-            let stderr = std::io::stderr();
-            let color = anstream::AutoStream::choice(&stderr) != ColorChoice::Never;
-            // Write each warning individually
             for warning in result.report().warnings() {
-                let stderr_handle = std::io::stderr();
-                cooklang::error::write_rich_error(
-                    warning,
-                    path.as_str(),
-                    content,
-                    color,
-                    stderr_handle,
-                )?;
+                warn!("Aisle configuration warning: {}", warning);
             }
         }
 
@@ -174,17 +205,8 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
                 // Check if there are any warnings to display
                 if result.report().has_warnings() {
-                    let stderr = std::io::stderr();
-                    let color = anstream::AutoStream::choice(&stderr) != ColorChoice::Never;
                     for warning in result.report().warnings() {
-                        let stderr_handle = std::io::stderr();
-                        cooklang::error::write_rich_error(
-                            warning,
-                            path.as_str(),
-                            &content,
-                            color,
-                            stderr_handle,
-                        )?;
+                        warn!("Pantry configuration warning: {}", warning);
                     }
                 }
 
@@ -224,7 +246,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     let ignore_references = args.ignore_references;
 
-    for entry in args.recipes {
+    for entry in expanded_recipes {
         extract_ingredients(
             &entry,
             &mut list,

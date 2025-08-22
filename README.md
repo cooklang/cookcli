@@ -99,13 +99,34 @@ You'll need Rust and Node.js installed. Then:
 git clone https://github.com/cooklang/CookCLI.git
 cd CookCLI
 
-# Build web UI
-cd ui && npm install && npm run build && cd ..
+# Install frontend dependencies
+npm install
 
-# Build the CLI
+# Build CSS (required for web UI)
+npm run build-css
+
+# Build the CLI with web UI
 cargo build --release
 
 # Binary will be at target/release/cook
+```
+
+### Development Setup
+
+For development with hot-reload of CSS changes:
+
+```bash
+# Install dependencies
+npm install
+
+# In one terminal, watch CSS changes
+npm run watch-css
+
+# In another terminal, run the development server
+cargo run -- server ./seed
+
+# Or use the Makefile
+make dev_server  # Builds CSS and starts server
 ```
 
 ## Commands
@@ -243,27 +264,100 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 
 CookCLI looks for configuration files in:
 
-* `./config/` - in your recipe directory
-* `~/.config/cooklang/` - in your home directory
+* `./config/` - in your recipe directory (highest priority)
+* `~/.config/cooklang/` - in your home directory (fallback)
+* `~/Library/Application Support/cook/` - on macOS (fallback)
 
-The main configuration file is `aisle.conf` which organizes ingredients by store section for shopping lists:
+Configuration files:
+* `aisle.conf` - Organizes ingredients by store section
+* `pantry.conf` - Tracks your ingredient inventory with quantities
+
+### Aisle Configuration (`aisle.conf`)
+
+Organizes ingredients by store section for shopping lists. Items not in any category will appear under "Other".
 
 ```
 [produce]
 tomatoes
 basil
 garlic
+onions
 
 [dairy]
 milk
 cheese
 yogurt
+butter
 
 [pantry]
 flour
 sugar
 pasta
+rice
+olive oil
+
+[meat]
+chicken
+beef
+pork
+
+[bakery]
+bread
+rolls
 ```
+
+### Pantry Configuration (`pantry.conf`)
+
+Tracks your ingredient inventory with quantities and expiration dates. Items in your pantry are excluded from shopping lists automatically.
+
+```toml
+[freezer]
+ice_cream = "1%L"
+frozen_peas = "500%g"
+spinach = { bought = "05.05.2024", expire = "05.06.2024", quantity = "1%kg" }
+
+[fridge]
+milk = { expire = "10.05.2024", quantity = "2%L" }
+cheese = { expire = "15.05.2024" }
+butter = "250%g"
+
+[pantry]
+rice = "5%kg"
+pasta = "1%kg"
+flour = "5%kg"
+olive_oil = "1%L"
+salt = "1%kg"
+```
+
+Pantry items can be specified in two formats:
+- Simple: `item = "quantity"`
+- Detailed: `item = { quantity = "amount", expire = "date", bought = "date" }`
+
+Items listed in your pantry will be automatically excluded from shopping lists, helping you track what you already have at home.
+
+### Using Configuration Files
+
+```bash
+# Shopping list will organize by aisle and exclude pantry items
+cook shopping-list "Pasta.cook"
+
+# Check which ingredients aren't categorized
+cook doctor aisle
+
+# Use specific config directory
+cook shopping-list "Recipe.cook" --aisle ./my-config/aisle.conf
+
+# Example: Recipe calls for salt, pepper, chicken, tomatoes
+# With pantry.conf containing salt and rice in your inventory:
+# Shopping list will only show: pepper, chicken, tomatoes
+```
+
+### Configuration Priority
+
+1. Command-line flags (highest priority)
+2. Local `./config/` directory
+3. User config directory `~/.config/cooklang/`
+4. System defaults (lowest priority)
 
 ## Tips
 
@@ -306,6 +400,7 @@ Areas where we'd love help:
 * New features
 * Recipe collections
 * Translations
+* UI/UX improvements
 
 ## License
 
