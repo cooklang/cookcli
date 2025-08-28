@@ -96,16 +96,16 @@ jobs:
       - name: Setup | Checkout
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
 
-      - uses: pnpm/action-setup@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          version: 8
-          run_install: true
+          node-version: '18'
 
-      - name: Build UI
-        shell: "bash"
-        run: |
-          cd ui
-          pnpm run build
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CSS
+        run: npm run build-css
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@master
