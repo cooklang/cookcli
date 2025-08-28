@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/cooklang/cookcli/compare/v0.14.0...v0.15.0) (2025-08-28)
+
+
+### Features
+
+* cook doctor ([d46b166](https://github.com/cooklang/cookcli/commit/d46b16607ba687501e2808703b0a9910db83a3b6))
+* new UI ([e200582](https://github.com/cooklang/cookcli/commit/e2005823bd51ef9eba87859e68b4af30b8501d4a))
+
 ## [Unreleased]
 
 ### Features
