@@ -42,10 +42,7 @@ use cooklang::{
 };
 use regex::Regex;
 
-pub fn print_cooklang(
-    recipe: &Recipe,
-    mut writer: impl io::Write,
-) -> Result<()> {
+pub fn print_cooklang(recipe: &Recipe, mut writer: impl io::Write) -> Result<()> {
     let w = &mut writer;
 
     metadata(w, &recipe.metadata).context("Failed to write metadata")?;
@@ -65,9 +62,9 @@ fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> Result<()> {
     let map = metadata.map.clone();
 
     const FRONTMATTER_FENCE: &str = "---";
-    writeln!(w, "{}", FRONTMATTER_FENCE).context("Failed to write frontmatter start")?;
+    writeln!(w, "{FRONTMATTER_FENCE}").context("Failed to write frontmatter start")?;
     serde_yaml::to_writer(&mut *w, &map).context("Failed to serialize frontmatter")?;
-    writeln!(w, "{}\n", FRONTMATTER_FENCE).context("Failed to write frontmatter end")?;
+    writeln!(w, "{FRONTMATTER_FENCE}\n").context("Failed to write frontmatter end")?;
     Ok(())
 }
 
@@ -103,11 +100,7 @@ fn w_section(
     Ok(())
 }
 
-fn w_step(
-    w: &mut impl io::Write,
-    step: &Step,
-    recipe: &Recipe,
-) -> Result<()> {
+fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
     let mut step_str = String::new();
     for item in &step.items {
         match item {
@@ -246,7 +239,7 @@ impl ComponentFormatter<'_> {
                 Modifiers::OPT => '?',
                 Modifiers::REF => '&',
                 Modifiers::NEW => '+',
-                _ => panic!("Unknown modifier: {:?}", m),
+                _ => panic!("Unknown modifier: {m:?}"),
             });
         }
         let mut multi_word = false;
@@ -265,7 +258,7 @@ impl ComponentFormatter<'_> {
             w.push('{');
             w.push_str(&q.value().to_string());
             if let Some(unit) = q.unit() {
-                write!(w, "%{}", unit).unwrap();
+                write!(w, "%{unit}").unwrap();
             }
             w.push('}');
         } else if multi_word {

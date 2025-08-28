@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping List - Cook{% endblock %}
+
+{% block content %}
+<div class="flex flex-col lg:flex-row gap-6">
+    <!-- Sidebar with selected recipes and pantry -->
+    <div class="lg:w-2/5 xl:w-1/3">
+        <div class="bg-white rounded-2xl shadow-lg p-6 sticky top-6">
+            <h3 class="font-bold text-lg mb-3 text-orange-600">Selected Recipes</h3>
+            <div id="selected-recipes" class="space-y-2 mb-4">
+            </div>
+            <div class="space-y-2 mb-6">
+                <button onclick="clearList()" class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
+                    Clear All
+                </button>
+            </div>
+
+            <!-- Pantry items section -->
+            <div id="pantry-section" class="hidden">
+                <h3 class="font-bold text-lg mb-3 text-green-600">In Your Pantry</h3>
+                <div id="pantry-items" class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200 max-h-64 overflow-y-auto">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main content area with shopping list -->
+    <div class="flex-1">
+        <div id="shopping-list-results">
+            <div id="list-content"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let shoppingList = [];
+
+async function loadShoppingList() {
+    try {
+        const response = await fetch('/api/shopping_list/items');
+        shoppingList = await response.json();
+        renderSelectedRecipes();
+        
+        // Automatically generate the shopping list if there are items
+        if (shoppingList.length > 0) {
+            await generateList();
+        }
+    } catch (error) {
+        console.error('Failed to load shopping list:', error);
+    }
+}
+
+function renderSelectedRecipes() {
+    const container = document.getElementById('selected-recipes');
+    
+    if (shoppingList.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No recipes selected. Add recipes from the recipe page.</p>';
+        document.getElementById('list-content').innerHTML = '<p class="text-gray-500">No items in shopping list. Add recipes to get started.</p>';
+        return;
+    }
+    
+    container.innerHTML = shoppingList.map((item, index) => `
+        <div class="flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
+            <div>
+                <span class="font-medium text-gray-800">${item.name}</span>
+                <span class="text-purple-600 ml-2 text-sm">(×${item.scale})</span>
+            </div>
+            <button onclick="removeRecipe('${item.path}')" class="text-red-500 hover:text-red-700 font-medium text-sm">
+                Remove
+            </button>
+        </div>
+    `).join('');
+}
+
+async function removeRecipe(path) {
+    try {
+        const response = await fetch('/api/shopping_list/remove', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ path })
+        });
+        
+        if (response.ok) {
+            await loadShoppingList();
+            // Note: loadShoppingList will automatically regenerate if there are items
+        }
+    } catch (error) {
+        console.error('Failed to remove recipe:', error);
+    }
+}
+
+async function clearList() {
+    try {
+        const response = await fetch('/api/shopping_list/clear', {
+            method: 'POST',
+        });
+        
+        if (response.ok) {
+            await loadShoppingList();
+            document.getElementById('shopping-list-results').classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Failed to clear list:', error);
+    }
+}
+
+async function generateList() {
+    if (shoppingList.length === 0) {
+        alert('Please add some recipes first');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/shopping_list', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(shoppingList.map(item => ({
+                recipe: item.path,
+                scale: item.scale
+            })))
+        });
+        
+        const data = await response.json();
+        displayShoppingList(data);
+    } catch (error) {
+        console.error('Failed to generate shopping list:', error);
+        alert('Failed to generate shopping list');
+    }
+}
+
+// Helper function to extract numeric value from nested structures
+function extractNumericValue(obj) {
+    if (typeof obj === 'number') {
+        return obj;
+    }
+    if (obj && typeof obj === 'object' && 'value' in obj) {
+        return extractNumericValue(obj.value);
+    }
+    return NaN;
+}
+
+// Format numbers with fractions
+function formatNumber(value) {
+    // Round to reasonable precision
+    const rounded = Math.round(value * 1000000) / 1000000;
+    
+    // Check if it's effectively a whole number
+    if (Math.abs(rounded % 1) < 0.0000001) {
+        return Math.floor(rounded).toString();
+    }
+    
+    // Try to convert to common fraction
+    const fraction = decimalToFraction(rounded);
+    if (fraction) {
+        return fraction;
+    }
+    
+    // Format as decimal with appropriate precision
+    const rounded3 = Math.round(rounded * 1000) / 1000;
+    let result = rounded3.toString();
+    
+    // Remove trailing zeros after decimal point
+    if (result.includes('.')) {
+        result = result.replace(/\.?0+$/, '');
+    }
+    
+    return result;
+}
+
+function decimalToFraction(value) {
+    const epsilon = 0.0001;
+    const whole = Math.floor(value);
+    const fract = value - whole;
+    
+    const commonFractions = [
+        [0.125, "1/8"],
+        [0.25, "1/4"],
+        [0.333333, "1/3"],
+        [0.375, "3/8"],
+        [0.5, "1/2"],
+        [0.625, "5/8"],
+        [0.666667, "2/3"],
+        [0.75, "3/4"],
+        [0.875, "7/8"]
+    ];
+    
+    for (const [decimal, fractionStr] of commonFractions) {
+        if (Math.abs(fract - decimal) < epsilon) {
+            if (whole > 0) {
+                // For values > 1, return null to use decimal format
+                return null;
+            } else {
+                return fractionStr;
+            }
+        }
+    }
+    
+    return null;
+}
+
+function displayShoppingList(data) {
+    const resultsDiv = document.getElementById('shopping-list-results');
+    const contentDiv = document.getElementById('list-content');
+    const pantrySection = document.getElementById('pantry-section');
+    const pantryItems = document.getElementById('pantry-items');
+
+    let html = '';
+    
+    // Display items to buy (organized by aisle)
+    if (data.categories && data.categories.length > 0) {
+        html += '<h2 class="text-2xl font-bold mb-4 text-orange-600">Shopping List</h2>';
+        html += data.categories.map(category => `
+            <div class="mb-6 bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-lg mb-3 text-orange-600">${category.category}</h3>
+                <ul class="space-y-2">
+                    ${category.items.map((item, idx) => {
+                        // Use ingredient name as the unique ID for localStorage
+                        const itemId = `item-${item.name.replace(/\s+/g, '-')}`;
+                        return `
+                        <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition-colors">
+                            <div class="flex items-center flex-1">
+                                <input type="checkbox" 
+                                    id="${itemId}" 
+                                    class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 mr-3"
+                                    onchange="toggleItem('${itemId}', this.checked, '${item.name}')">
+                                <label for="${itemId}" class="cursor-pointer flex-1">
+                                    <span class="item-name">${item.name}</span>
+                                </label>
+                            </div>
+                            <span class="text-gray-600 ml-4">
+                                ${formatQuantities(item.quantities)}
+                            </span>
+                        </li>
+                    `}).join('')}
+                </ul>
+            </div>
+        `).join('');
+    }
+
+    // Display pantry items in sidebar
+    if (data.pantry_items && data.pantry_items.length > 0) {
+        pantrySection.classList.remove('hidden');
+        pantryItems.innerHTML = `
+            <ul class="space-y-2 text-sm">
+                ${data.pantry_items.map((item, idx) => {
+                    return `
+                    <li class="flex items-center justify-between py-1">
+                        <div class="flex items-center flex-1">
+                            <svg class="w-4 h-4 text-green-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="text-green-800">${item.name}</span>
+                        </div>
+                        <span class="text-green-700 text-xs ml-2">
+                            ${formatQuantities(item.quantities)}
+                        </span>
+                    </li>
+                `}).join('')}
+            </ul>
+        `;
+    } else {
+        pantrySection.classList.add('hidden');
+    }
+    
+    if (html === '') {
+        contentDiv.innerHTML = '<p class="text-gray-500">No items in shopping list</p>';
+    } else {
+        contentDiv.innerHTML = html;
+        // Load saved checked states
+        loadCheckedStates();
+    }
+}
+
+// Helper function to format quantities
+function formatQuantities(quantities) {
+    return quantities.map(q => {
+        let val = '';
+
+        // Extract the numeric value from various nested structures
+        if (q.value) {
+            // Handle different nesting levels
+            let numValue = q.value;
+
+            // Keep drilling down if we have nested value properties
+            while (numValue && typeof numValue === 'object' && 'value' in numValue) {
+                numValue = numValue.value;
+            }
+
+            // Handle Range type (has start and end)
+            if (numValue && typeof numValue === 'object' && 'start' in numValue && 'end' in numValue) {
+                // Format range
+                const start = extractNumericValue(numValue.start);
+                const end = extractNumericValue(numValue.end);
+                if (!isNaN(start) && !isNaN(end)) {
+                    val = `${formatNumber(start)} - ${formatNumber(end)}`;
+                }
+            }
+            // Handle Text type
+            else if (typeof numValue === 'string') {
+                val = numValue;
+            }
+            // Handle numeric value
+            else if (typeof numValue === 'number' && !isNaN(numValue)) {
+                val = formatNumber(numValue);
+            }
+        }
+
+        // Get unit
+        let unit = q.unit || '';
+        if (unit && typeof unit === 'object' && 'value' in unit) {
+            unit = unit.value || '';
+        }
+
+        return `${val} ${unit}`.trim();
+    }).join(', ');
+}
+
+// Store for checked items - using ingredient names as keys
+let checkedItems = new Set();
+
+function toggleItem(itemId, checked, ingredientName) {
+    // Use ingredient name for storage instead of itemId
+    const storageKey = ingredientName || itemId;
+
+    if (checked) {
+        checkedItems.add(storageKey);
+        // Add strikethrough effect
+        const element = document.querySelector(`#${CSS.escape(itemId)}`);
+        if (element) {
+            element.parentElement.querySelector('.item-name').style.textDecoration = 'line-through';
+            element.parentElement.querySelector('.item-name').style.opacity = '0.6';
+        }
+    } else {
+        checkedItems.delete(storageKey);
+        // Remove strikethrough effect
+        const element = document.querySelector(`#${CSS.escape(itemId)}`);
+        if (element) {
+            element.parentElement.querySelector('.item-name').style.textDecoration = 'none';
+            element.parentElement.querySelector('.item-name').style.opacity = '1';
+        }
+    }
+    
+    // Save to localStorage using ingredient names
+    localStorage.setItem('checkedShoppingItems', JSON.stringify(Array.from(checkedItems)));
+}
+
+function loadCheckedStates() {
+    // Load from localStorage
+    const saved = localStorage.getItem('checkedShoppingItems');
+    if (saved) {
+        checkedItems = new Set(JSON.parse(saved));
+        
+        // Apply checked states to checkboxes by matching ingredient names
+        document.querySelectorAll('.item-name').forEach(nameElement => {
+            const ingredientName = nameElement.textContent.trim();
+            if (checkedItems.has(ingredientName)) {
+                const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    // Apply strikethrough effect
+                    nameElement.style.textDecoration = 'line-through';
+                    nameElement.style.opacity = '0.6';
+                }
+            }
+        });
+    }
+}
+
+// Clear checked items when clearing the list
+const originalClearList = clearList;
+clearList = async function() {
+    await originalClearList();
+    checkedItems.clear();
+    localStorage.removeItem('checkedShoppingItems');
+    // Clear the shopping list display
+    document.getElementById('list-content').innerHTML = '<p class="text-gray-500">No items in shopping list. Add recipes to get started.</p>';
+}
+
+loadShoppingList();
+</script>
+{% endblock %}

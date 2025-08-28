@@ -16,7 +16,15 @@ struct SeedFiles;
 #[derive(Debug, Args)]
 #[command()]
 pub struct SeedArgs {
-    /// Output directory, none for current directory.
+    /// Directory where example recipes will be created
+    ///
+    /// The seed command will create a collection of example Cooklang
+    /// recipes in this directory. These examples demonstrate various
+    /// Cooklang features including ingredients, cookware, timers, and
+    /// metadata. If not specified, uses the current directory.
+    ///
+    /// The directory will be created if it doesn't exist.
+    #[arg(value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     output: Option<Utf8PathBuf>,
 }
 

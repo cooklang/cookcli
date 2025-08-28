@@ -1,4 +1,4 @@
-use crate::server::AppState;
+use crate::{server::AppState, util::PARSER};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -67,7 +67,38 @@ pub async fn recipe(
             StatusCode::NOT_FOUND
         })?;
 
-    let recipe = entry.recipe(query.scale.unwrap_or(1.0));
+    let recipe =
+        crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0)).map_err(|e| {
+            tracing::error!("Failed to parse recipe: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Get the image path if available
+    let image_path = entry.title_image().clone().and_then(|img_path| {
+        // If it's a URL, use it directly
+        if img_path.starts_with("http://") || img_path.starts_with("https://") {
+            Some(img_path)
+        } else {
+            // For file paths, make them relative and accessible via /api/static
+            let img_path = camino::Utf8Path::new(&img_path);
+
+            // Try to strip the base_path prefix to get a relative path
+            if let Ok(relative) = img_path.strip_prefix(&state.base_path) {
+                Some(format!("/api/static/{relative}"))
+            } else {
+                // If the path doesn't start with base_path, it might already be relative
+                // or it might be an absolute path to a file within base_path
+                if !img_path.is_absolute() {
+                    Some(format!("/api/static/{img_path}"))
+                } else {
+                    // Last resort: try to get just the filename
+                    img_path
+                        .file_name()
+                        .map(|name| format!("/api/static/{name}"))
+                }
+            }
+        }
+    });
 
     #[derive(Serialize)]
     struct ApiRecipe {
@@ -77,7 +108,7 @@ pub async fn recipe(
     }
 
     let grouped_ingredients = recipe
-        .group_ingredients(state.parser.converter())
+        .group_ingredients(PARSER.converter())
         .into_iter()
         .map(|entry| {
             serde_json::json!({
@@ -94,12 +125,22 @@ pub async fn recipe(
 
     let value = serde_json::json!({
         "recipe": api_recipe,
-        // TODO: add images
-        // TODO: add scaling info
-        // TODO: add metadata
+        "image": image_path,
+        "scale": query.scale.unwrap_or(1.0),
+        // TODO: add more metadata if needed
     });
 
     Ok(Json(value))
+}
+
+pub async fn reload() -> Result<Json<serde_json::Value>, StatusCode> {
+    // Since the server reads from disk on each request, there's no cache to clear.
+    // This endpoint just returns success to indicate the reload was processed.
+    tracing::info!("Reload requested - recipes will be refreshed from disk on next request");
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "message": "Recipes will be refreshed from disk on next request"
+    })))
 }
 
 pub async fn search(
@@ -113,12 +154,13 @@ pub async fn search(
 
     let results = recipes
         .into_iter()
-        .map(|recipe| {
-            let path = recipe.path().as_ref().unwrap();
-            let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
-            serde_json::json!({
-                "name": recipe.name(),
-                "path": relative_path.to_string()
+        .filter_map(|recipe| {
+            recipe.path().map(|path| {
+                let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
+                serde_json::json!({
+                    "name": recipe.name(),
+                    "path": relative_path.to_string()
+                })
             })
         })
         .collect();

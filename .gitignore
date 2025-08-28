@@ -1,3 +1,6 @@
 target/
 .DS_Store
 releases
+node_modules/
+static/css/output.css
+package-lock.json

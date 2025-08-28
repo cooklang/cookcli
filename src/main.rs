@@ -33,10 +33,9 @@ use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use cooklang::CooklangParser;
-use once_cell::sync::OnceCell;
 
 // commands
+mod doctor;
 mod import;
 mod recipe;
 mod report;
@@ -53,11 +52,11 @@ const LOCAL_CONFIG_DIR: &str = "config";
 const APP_NAME: &str = "cook";
 const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
 const AUTO_AISLE: &str = "aisle.conf";
+const AUTO_PANTRY: &str = "pantry.conf";
 
 pub fn main() -> Result<()> {
-    configure_logging();
-
     let args = CliArgs::parse();
+    configure_logging(args.verbosity);
 
     let ctx = configure_context()?;
 
@@ -69,20 +68,20 @@ pub fn main() -> Result<()> {
         Command::Search(args) => search::run(&ctx, args),
         Command::Import(args) => import::run(&ctx, args),
         Command::Report(args) => report::run(&ctx, args),
+        Command::Doctor(args) => doctor::run(&ctx, args),
     }
 }
 
 pub struct Context {
-    parser: OnceCell<CooklangParser>,
     base_path: Utf8PathBuf,
 }
 
 impl Context {
-    fn parser(&self) -> Result<&CooklangParser> {
-        self.parser.get_or_try_init(configure_parser)
+    pub fn new(base_path: Utf8PathBuf) -> Self {
+        Self { base_path }
     }
 
-    fn aisle(&self) -> Option<Utf8PathBuf> {
+    pub fn aisle(&self) -> Option<Utf8PathBuf> {
         let auto = self.base_path.join(LOCAL_CONFIG_DIR).join(AUTO_AISLE);
 
         tracing::trace!("checking auto aisle file: {auto}");
@@ -94,7 +93,19 @@ impl Context {
         })
     }
 
-    fn base_path(&self) -> &Utf8PathBuf {
+    pub fn pantry(&self) -> Option<Utf8PathBuf> {
+        let auto = self.base_path.join(LOCAL_CONFIG_DIR).join(AUTO_PANTRY);
+
+        tracing::trace!("checking auto pantry file: {auto}");
+
+        auto.is_file().then_some(auto).or_else(|| {
+            let global = global_file_path(AUTO_PANTRY).ok()?;
+            tracing::trace!("checking global auto pantry file: {global}");
+            global.is_file().then_some(global)
+        })
+    }
+
+    pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
 }
@@ -118,22 +129,24 @@ fn configure_context() -> Result<Context> {
     }
 
     Ok(Context {
-        parser: OnceCell::new(),
         base_path: absolute_base_path,
     })
 }
 
-fn configure_parser() -> Result<CooklangParser> {
-    Ok(CooklangParser::canonical())
-}
+fn configure_logging(verbosity: u8) {
+    let env_filter = match verbosity {
+        0 => "warn,cook=warn",   // Default: warnings and errors only
+        1 => "info,cook=info",   // -v: info level
+        2 => "debug,cook=debug", // -vv: debug level
+        _ => "trace,cook=trace", // -vvv or more: trace level
+    };
 
-fn configure_logging() {
     tracing_subscriber::fmt()
-        // Log this crate at level `trace`, but all other crates at level `info`.
-        .with_env_filter("info,cooklang=info,cook=trace")
+        .with_env_filter(env_filter)
         .without_time()
         .with_target(false)
         .compact()
+        .with_writer(std::io::stderr)
         .init();
 }
 

@@ -30,36 +30,60 @@
 
 use crate::util::resolve_to_absolute_path;
 use crate::Context;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context as _, Result};
 use axum::{
-    http::{HeaderValue, Method},
+    body::Body,
+    extract::Path,
+    http::{header, HeaderValue, Method, Response, StatusCode},
     routing::{get, post},
     Router,
 };
 use camino::Utf8PathBuf;
 use clap::Args;
-use cooklang::CooklangParser;
+use rust_embed::RustEmbed;
 use std::{net::SocketAddr, sync::Arc};
-use tower_http::cors::CorsLayer;
-use tracing::info;
+use tower_http::{cors::CorsLayer, services::ServeDir};
+use tracing::{error, info};
 
 mod handlers;
+mod shopping_list_store;
+mod templates;
 mod ui;
+
+// Embed static files at compile time
+#[derive(RustEmbed)]
+#[folder = "static/"]
+struct StaticFiles;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
-    /// Directory with recipes
+    /// Root directory containing your recipe files
+    ///
+    /// The server will recursively scan this directory for .cook files
+    /// and make them available through the web interface. Defaults to
+    /// the current directory if not specified.
+    #[arg(value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
 
-    /// Allow external connections
+    /// Allow connections from external hosts (not just localhost)
+    ///
+    /// By default, the server only accepts connections from localhost
+    /// for security. Use this flag to allow access from other devices
+    /// on your network. Be cautious when using this on public networks.
     #[arg(long)]
     host: bool,
 
-    /// Set http server port
-    #[arg(long, default_value_t = 9080)]
+    /// Port number for the HTTP server
+    ///
+    /// The server will listen on this port. Make sure the port is not
+    /// already in use by another application.
+    #[arg(short = 'p', long, default_value_t = 9080)]
     port: u16,
 
-    /// Open browser on start
+    /// Automatically open the web interface in your default browser
+    ///
+    /// When enabled, the server will launch your default web browser
+    /// and navigate to the server URL after startup.
     // #[cfg(feature = "ui")]
     #[arg(long, default_value_t = false)]
     open: bool,
@@ -79,13 +103,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         SocketAddr::from(([127, 0, 0, 1], args.port))
     };
 
-    info!("Listening on http://{addr}");
+    println!("Listening on http://{addr}");
 
     // #[cfg(feature = "ui")]
     if args.open {
         let port = args.port;
         let url = format!("http://localhost:{port}");
-        info!("Serving web UI on {url}");
+        println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             if let Err(e) = open::that(url) {
@@ -96,9 +120,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let state = build_state(ctx, args)?;
 
-    let app = Router::new().nest("/api", api(&state)?);
+    println!("Serving recipe files from: {:?}", &state.base_path);
 
-    let app = app.merge(ui::ui());
+    let app = Router::new()
+        .nest("/api", api(&state)?)
+        .merge(ui::ui())
+        .route("/static/*file", get(serve_static))
+        .nest_service("/api/static", ServeDir::new(&state.base_path));
 
     let app = app.with_state(state).layer(
         CorsLayer::new()
@@ -106,11 +134,23 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
             .allow_methods([Method::GET, Method::POST]),
     );
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::AddrInUse {
+                error!("Port {} is already in use. Please stop the existing server or use a different port with --port", addr.port());
+                return Err(anyhow::anyhow!("Port {} is already in use", addr.port()));
+            } else {
+                error!("Failed to bind to {}: {}", addr, e);
+                return Err(anyhow::anyhow!("Failed to bind to {}: {}", addr, e));
+            }
+        }
+    };
+
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
+        .context("Server error")?;
 
     info!("Server stopped");
 
@@ -118,12 +158,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 }
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
-    ctx.parser()?;
-    let aisle_path = ctx.aisle().clone();
-    let Context {
-        parser, base_path, ..
-    } = ctx;
-    let parser = parser.into_inner().unwrap();
+    let Context { base_path } = ctx;
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
     let absolute_path = resolve_to_absolute_path(path)?;
@@ -134,10 +169,18 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
 
     tracing::info!("Using absolute base path: {:?}", absolute_path);
 
+    // Create a new Context with the actual base path to properly search for config files
+    let server_ctx = Context::new(absolute_path.clone());
+    let aisle_path = server_ctx.aisle();
+    let pantry_path = server_ctx.pantry();
+
+    tracing::info!("Aisle configuration: {:?}", aisle_path);
+    tracing::info!("Pantry configuration: {:?}", pantry_path);
+
     Ok(Arc::new(AppState {
-        parser,
         base_path: absolute_path,
         aisle_path,
+        pantry_path,
     }))
 }
 
@@ -168,17 +211,48 @@ async fn shutdown_signal() {
 }
 
 pub struct AppState {
-    parser: CooklangParser,
-    base_path: Utf8PathBuf,
-    aisle_path: Option<Utf8PathBuf>,
+    pub base_path: Utf8PathBuf,
+    pub aisle_path: Option<Utf8PathBuf>,
+    pub pantry_path: Option<Utf8PathBuf>,
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
         .route("/shopping_list", post(handlers::shopping_list))
+        .route(
+            "/shopping_list/items",
+            get(handlers::get_shopping_list_items),
+        )
+        .route("/shopping_list/add", post(handlers::add_to_shopping_list))
+        .route(
+            "/shopping_list/remove",
+            post(handlers::remove_from_shopping_list),
+        )
+        .route("/shopping_list/clear", post(handlers::clear_shopping_list))
         .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/{*path}", get(handlers::recipe))
-        .route("/search", get(handlers::search));
+        .route("/recipes/*path", get(handlers::recipe))
+        .route("/search", get(handlers::search))
+        .route("/reload", get(handlers::reload).post(handlers::reload));
 
     Ok(router)
+}
+
+async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResponse {
+    let path = path.trim_start_matches('/');
+
+    StaticFiles::get(path)
+        .map(|content| {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, mime.as_ref())
+                .body(Body::from(content.data))
+                .unwrap()
+        })
+        .unwrap_or_else(|| {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("404 Not Found"))
+                .unwrap()
+        })
 }

@@ -49,18 +49,115 @@ issue. Stale issues will be closed.
 
 If you wish to work on `CookCLI` itself, you'll first need to:
 - install [Rust](https://www.rust-lang.org/tools/install) for macOS, Linux or Windows.
-- (optional, only if you plan to change web-server) install [NodeJS](https://nodejs.org/en/download/package-manager/).
+- install [NodeJS](https://nodejs.org/en/download/package-manager/) for building the web UI styles.
 - fork the `CookCLI` repo
 
 ### Building `CookCLI`
 
-To build `CookCLI`, run `make dev` or `cargo build`. In a few moments, you'll have a working `cook` executable in `target/debug`.
+To build `CookCLI`:
 
->Note: `make dev` will build for your local machine's os/architecture.
+```bash
+# Install frontend dependencies (first time only)
+npm install
 
-#### Building server frontend
+# Build everything including CSS
+make build
 
-To start the frontend server in development mode use `make dev_server`. This will start API and Svelte development server in the background. Navigate to http://127.0.0.1:8080 to open the web-app.
+# Or build just the Rust binary
+cargo build
+```
+
+In a few moments, you'll have a working `cook` executable in `target/debug`.
+
+>Note: `make build` will compile CSS and build for your local machine's os/architecture.
+
+## Web UI Development
+
+The web interface uses server-side rendering with Askama templates and Tailwind CSS.
+
+### Quick Start for Frontend Development
+
+```bash
+# Setup
+npm install              # Install Tailwind and dependencies
+make css                 # Build CSS once
+
+# Development workflow
+npm run watch-css        # Terminal 1: Watch CSS changes
+cargo run -- server      # Terminal 2: Run dev server
+
+# Build for production
+make release             # Builds everything including CSS
+```
+
+### Frontend Stack
+
+* **Templates**: Askama templates in `templates/` directory
+* **Styling**: Tailwind CSS with custom components
+* **JavaScript**: Vanilla JS for interactivity (no framework dependency)
+* **Static Files**: Served from `static/` directory
+
+### Working with Templates
+
+Templates are in `templates/` and use the Askama templating engine:
+
+```html
+<!-- templates/recipe.html -->
+{% extends "base.html" %}
+{% block content %}
+  <h1>{{ recipe.name }}</h1>
+  <!-- Recipe content -->
+{% endblock %}
+```
+
+Template data structures are defined in `src/server/templates.rs`.
+
+### Modifying Styles
+
+The UI uses Tailwind CSS with custom components:
+
+1. Edit styles in `static/css/input.css`
+2. Run `npm run build-css` to compile
+3. For development, use `npm run watch-css` for auto-rebuild
+
+Custom component classes:
+* `.recipe-card` - Recipe cards with gradient borders
+* `.ingredient-badge` - Ingredient tags in recipes
+* `.metadata-pill` - Clean metadata badges
+* `.nav-pill` - Navigation items
+
+### Adding New Pages
+
+1. Create template in `templates/`
+2. Define data structure in `src/server/templates.rs`
+3. Add handler in `src/server/ui.rs`
+4. Add route to the router
+
+### File Structure
+
+```
+├── templates/           # Askama HTML templates
+│   ├── base.html       # Base layout
+│   ├── recipes.html    # Recipe listing
+│   └── recipe.html     # Single recipe view
+├── static/             # Static assets
+│   └── css/
+│       ├── input.css   # Tailwind input with custom classes
+│       └── output.css  # Compiled CSS (generated)
+├── src/server/
+│   ├── mod.rs         # Server setup and routing
+│   ├── ui.rs          # UI request handlers
+│   └── templates.rs   # Template data structures
+├── tailwind.config.js  # Tailwind configuration
+└── package.json        # NPM dependencies
+```
+
+### Development Tips
+
+- Templates are recompiled on each build, so you need to rebuild after template changes
+- CSS changes with `npm run watch-css` are reflected immediately (just refresh browser)
+- Use browser dev tools to inspect Tailwind classes
+- Check `static/css/output.css` is being generated and served correctly
 
 ### Testing
 

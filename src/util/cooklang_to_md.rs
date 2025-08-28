@@ -233,7 +233,7 @@ pub fn print_md_with_options(
         "# {}{}\n",
         name,
         if scale != 1.0 {
-            format!(" @ {}", scale)
+            format!(" @ {scale}")
         } else {
             "".to_string()
         }
@@ -296,9 +296,9 @@ fn frontmatter(
     }
 
     const FRONTMATTER_FENCE: &str = "---";
-    writeln!(w, "{}", FRONTMATTER_FENCE).context("Failed to write frontmatter start")?;
+    writeln!(w, "{FRONTMATTER_FENCE}").context("Failed to write frontmatter start")?;
     serde_yaml::to_writer(&mut w, &map).context("Failed to serialize frontmatter")?;
-    writeln!(w, "{}\n", FRONTMATTER_FENCE).context("Failed to write frontmatter end")?;
+    writeln!(w, "{FRONTMATTER_FENCE}\n").context("Failed to write frontmatter end")?;
     Ok(())
 }
 
@@ -361,7 +361,12 @@ fn ingredients(
     Ok(())
 }
 
-fn cookware(w: &mut impl io::Write, recipe: &Recipe, opts: &Options, converter: &Converter) -> Result<()> {
+fn cookware(
+    w: &mut impl io::Write,
+    recipe: &Recipe,
+    opts: &Options,
+    converter: &Converter,
+) -> Result<()> {
     if recipe.cookware.is_empty() {
         return Ok(());
     }
@@ -423,7 +428,13 @@ fn w_section(
                 w_step(w, step, recipe, opts).context("Failed to write step")?
             }
             cooklang::Content::Text(text) => {
-                print_wrapped(w, text).context("Failed to write text content")?
+                // Check if this is a list bullet item
+                if text.trim() == "-" {
+                    // Add extra newline for list separation
+                    writeln!(w).context("Failed to write newline for list bullet")?
+                } else {
+                    print_wrapped(w, text).context("Failed to write text content")?
+                }
             }
         };
         writeln!(w).context("Failed to write newline after content")?;
@@ -431,12 +442,7 @@ fn w_section(
     Ok(())
 }
 
-fn w_step(
-    w: &mut impl io::Write,
-    step: &Step,
-    recipe: &Recipe,
-    opts: &Options,
-) -> Result<()> {
+fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) -> Result<()> {
     let mut step_str = step.number.to_string();
     if opts.escape_step_numbers {
         step_str.push_str("\\. ")
@@ -446,7 +452,14 @@ fn w_step(
 
     for item in &step.items {
         match item {
-            Item::Text { value } => step_str.push_str(value),
+            Item::Text { value } => {
+                // Check if this is a list bullet and format it properly for markdown
+                if value.trim() == "-" {
+                    step_str.push_str("\n- ");
+                } else {
+                    step_str.push_str(value);
+                }
+            }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
                 step_str.push_str(igr.display_name().as_ref());
@@ -461,7 +474,7 @@ fn w_step(
                     write!(&mut step_str, "({name})").context("Failed to write timer name")?;
                 }
                 if let Some(quantity) = &t.quantity {
-                    write!(&mut step_str, "{}", quantity)
+                    write!(&mut step_str, "{quantity}")
                         .context("Failed to write timer quantity")?;
                 }
             }
@@ -494,7 +507,7 @@ where
     let options = f(textwrap::Options::new(*TERM_WIDTH));
     let lines = textwrap::wrap(text, options);
     for line in lines {
-        writeln!(w, "{}", line).context("Failed to write wrapped line")?;
+        writeln!(w, "{line}").context("Failed to write wrapped line")?;
     }
     Ok(())
 }
