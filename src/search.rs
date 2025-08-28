@@ -9,16 +9,16 @@ use crate::Context;
 pub struct SearchArgs {
     /// Search terms to find in recipes
     ///
-    /// Can be a single word, multiple words, or a phrase in quotes.
+    /// Can be one or more words to search for in recipes.
     /// The search looks through recipe titles, ingredients, instructions,
     /// and metadata. Multiple terms are treated as AND (all must match).
     ///
     /// Examples:
-    ///   chicken                 # Find recipes with "chicken"
-    ///   "olive oil"             # Search for exact phrase
-    ///   tomato pasta quick      # Find recipes with all three terms
-    #[arg(required = true, value_name = "QUERY")]
-    query: String,
+    ///   cook search chicken              # Find recipes with "chicken"
+    ///   cook search chicken rice         # Find recipes with both "chicken" and "rice"
+    ///   cook search "olive oil"          # Search for exact phrase
+    #[arg(required = true, num_args = 1.., value_name = "TERMS")]
+    query: Vec<String>,
 
     /// Directory to search for recipes
     ///
@@ -32,12 +32,14 @@ pub struct SearchArgs {
 pub fn run(ctx: &Context, args: SearchArgs) -> Result<()> {
     let base_dir = args.base_dir.unwrap_or_else(|| ctx.base_path.clone());
 
-    let recipes = search(&base_dir, &args.query)?;
+    // Join multiple search terms with spaces
+    let query = args.query.join(" ");
+    let recipes = search(&base_dir, &query)?;
 
     for recipe in recipes {
         if let Some(path) = recipe.path() {
             let relative_path = path.strip_prefix(&base_dir).unwrap_or(path);
-            println!("{relative_path}");
+            println!("\"{relative_path}\"");
         }
     }
 

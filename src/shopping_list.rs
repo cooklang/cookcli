@@ -247,11 +247,26 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     let ignore_references = args.ignore_references;
 
     for entry in expanded_recipes {
+        // Determine the base path for this entry
+        // If the entry is an absolute path or relative path to a file,
+        // use its parent directory as the base for resolving references
+        let entry_path = Utf8PathBuf::from(entry.split(':').next().unwrap_or(&entry));
+        let base_path = if entry_path.exists() && entry_path.is_file() {
+            // Use the parent directory of the file
+            entry_path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| ctx.base_path().clone())
+        } else {
+            // Use the context base path for recipe names or non-existent paths
+            ctx.base_path().clone()
+        };
+
         extract_ingredients(
             &entry,
             &mut list,
             &mut seen,
-            ctx.base_path(),
+            &base_path,
             PARSER.converter(),
             ignore_references,
         )?;
@@ -265,7 +280,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 // Re-add the ingredient to the filtered list
                 filtered_list.add_ingredient(ingredient_name, &quantity, PARSER.converter());
             } else {
-                tracing::debug!(
+                tracing::info!(
                     "Removing '{}' from shopping list (found in pantry)",
                     ingredient_name
                 );

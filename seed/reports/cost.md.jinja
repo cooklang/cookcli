@@ -3,7 +3,7 @@
 {%- set ns.total = 0 %}
 {%- for ingredient in ingredients %}
 {%- set price = db(ingredient.name ~ '.shopping.price_per_unit') * (ingredient.quantity.value | float) %}
-* {{ ingredient.name }}: ${{ price | format_price(2) }}
+* {{ ingredient.name }}: {{ price | number_to_currency }}
 {%- set ns.total = ns.total + price %}
 {%- endfor %}
 

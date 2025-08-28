@@ -173,35 +173,6 @@ done | sort | uniq -c | sort -rn | head
 # This shows recipes ranked by how many of your ingredients they use
 ```
 
-### Recipe Statistics
-
-```bash
-# Count recipes by cuisine
-for cuisine in italian mexican chinese thai; do
-  echo "$cuisine: $(cook search $cuisine | wc -l) recipes"
-done
-
-# Find most common ingredients
-for recipe in *.cook; do
-  cook recipe "$recipe" -f json | jq -r '.ingredients[].name'
-done | sort | uniq -c | sort -rn | head -10
-```
-
-### Smart Meal Planning
-
-```bash
-# Find quick weeknight dinners
-cook search "30 minutes" | grep -v dessert
-
-# Find recipes for meal prep
-cook search "meal prep"
-cook search "freezer friendly"
-
-# Find recipes by season
-cook search summer
-cook search "winter comfort"
-```
-
 ## Search Patterns
 
 ### Exclusion Patterns
@@ -294,37 +265,6 @@ cook search "" | dmenu | xargs cook recipe
 cook search "" | rofi -dmenu | xargs cook recipe
 ```
 
-### Quick Aliases
-
-Add to your shell configuration:
-
-```bash
-# Quick search functions
-alias find-recipe='cook search'
-alias quick-dinner='cook search "30 minutes" | grep -v dessert'
-alias vegetarian='cook search vegetarian'
-
-# Interactive recipe picker
-pick-recipe() {
-  cook search "$1" | fzf | xargs cook recipe
-}
-```
-
-### Search History
-
-Keep track of searches:
-
-```bash
-# Log searches
-search-recipe() {
-  echo "$(date): $*" >> ~/.recipe-searches.log
-  cook search "$@"
-}
-
-# View popular searches
-cat ~/.recipe-searches.log | cut -d: -f2- | \
-  sort | uniq -c | sort -rn | head
-```
 
 ## Optimizing Search
 
@@ -333,23 +273,13 @@ cat ~/.recipe-searches.log | cut -d: -f2- | \
 Structure your recipes for better searchability:
 
 ```cooklang
->> title: Quick Chicken Stir-Fry
->> tags: quick, weeknight, asian, chicken
->> time: 20 minutes
->> cuisine: Chinese
+---
+title: Quick Chicken Stir-Fry
+tags: quick, weeknight, asian, chicken
+time: 20 minutes
+cuisine: Chinese
+---
 ```
-
-### Naming Conventions
-
-Use consistent naming:
-* Include main ingredients in filename
-* Use descriptive titles
-* Add relevant metadata
-* Tag dietary restrictions
-
-### Search Index
-
-For large collections, the first search might be slow as it builds an index. Subsequent searches are faster.
 
 ## Troubleshooting
 

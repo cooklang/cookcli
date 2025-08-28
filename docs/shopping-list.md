@@ -1,6 +1,6 @@
 # Shopping List Command
 
-The `shopping-list` command creates organized shopping lists from one or more recipes. It automatically combines ingredients, converts units, and groups items by store section.
+The `shopping-list` command creates organized shopping lists from one or more recipes. It automatically combines ingredients, converts units (some day!), and groups items by store section.
 
 ## Basic Usage
 
@@ -15,21 +15,27 @@ This creates a combined shopping list with all ingredients from both recipes.
 ### Single Recipe
 
 ```bash
-cook shopping-list "Neapolitan Pizza.cook"
+cook shopping-list "Breakfast/Easy Pancakes" "Neapolitan Pizza"
 ```
 
 Output:
 ```
-PRODUCE
-    garlic                        3 cloves
-    fresh basil                   18 leaves
+[dried herbs and spices]
+salt                     24.6 g
+sea salt                 1 pinch
 
-DAIRY
-    mozzarella                    3 packs
-    
-PANTRY
-    tipo zero flour               820 g
-    salt                          25 g
+[milk and dairy]
+eggs                     3
+
+[oils and dressings]
+oil
+olive oil                1 drizzle
+
+[other]
+San Marzano tomato sauce 5 tbsp
+basil leaves
+mozzarella cheese        100 grams
+semolina
 ```
 
 ### Multiple Recipes
@@ -67,30 +73,16 @@ Create shopping lists from `.menu` files that organize multiple recipes:
 
 ```bash
 # Generate shopping list from weekly menu
-cook shopping-list "weekly_plan.menu"
+cook shopping-list "2 Day Plan.menu"
 
 # Scale entire menu for more people
-cook shopping-list "weekly_plan.menu:2"
+cook shopping-list "2 Day Plan.menu:2"
 
 # Combine menu with individual recipes
-cook shopping-list "weekly_plan.menu" "Extra Snacks.cook"
+cook shopping-list "2 Day Plan.menu" "Extra Snacks.cook"
 ```
 
 Menu files can contain recipe references with their own scaling, and the menu-level scaling multiplies with individual recipe scales.
-
-## Smart Ingredient Combining
-
-CookCLI automatically combines ingredients with the same name:
-
-```
-Recipe 1: flour 500 g
-Recipe 2: flour 300 g
-→ Shopping list: flour 800 g
-
-Recipe 1: milk 200 ml
-Recipe 2: milk 0.5 liters
-→ Shopping list: milk 700 ml
-```
 
 ## Output Formats
 
@@ -232,6 +224,12 @@ Items listed in your pantry are automatically excluded from shopping lists:
 cook shopping-list "Cake.cook"
 ```
 
+Enable logging to see what's excluded with pantry:
+
+```bash
+cook -v shopping-list "Cake.cook"
+```
+
 ### Pantry Item Formats
 
 Two ways to specify items:
@@ -252,22 +250,13 @@ Two ways to specify items:
 cook shopping-list "Recipe.cook" --pantry ~/my-pantry.conf
 ```
 
-### Inventory Management
-
-Check what's in your pantry and when items expire:
-
-```bash
-# View pantry contents (if using report command)
-cook report -t pantry-inventory.j2 --pantry ./config/pantry.conf
-```
-
 ## Recipe References
 
 Shopping lists handle recipe references (includes) automatically:
 
 ```cooklang
 # Main.cook
-Include @Pizza Dough.cook
+Include @./Pizza Dough{}
 
 Add @tomato sauce{200%ml} and @mozzarella{150%g}.
 ```
@@ -289,13 +278,13 @@ cook shopping-list "Main.cook" --ignore-references
 
 ```bash
 # Save as text
-cook shopping-list "Menu/*.cook" -o list.txt
+cook shopping-list Menu/*.cook -o list.txt
 
 # Save as JSON
-cook shopping-list "Menu/*.cook" -f json -o list.json
+cook shopping-list Menu/*.cook -f json -o list.json
 
 # Format inferred from extension
-cook shopping-list "Menu/*.cook" -o shopping.yaml
+cook shopping-list Menu/*.cook -o shopping.yaml
 ```
 
 ### Ingredients Only
@@ -339,59 +328,14 @@ Scale recipes for large gatherings:
 # Party for 20 people (recipes serve 4)
 scale=5
 cook shopping-list \
-  "Appetizer.cook@$scale" \
-  "Main Course.cook@$scale" \
-  "Side Dish.cook@$scale" \
-  "Dessert.cook@$scale"
+  "Appetizer.cook:$scale" \
+  "Main Course.cook:$scale" \
+  "Side Dish.cook:$scale" \
+  "Dessert.cook:$scale"
 ```
 
-### Integration with Task Apps
-
-Export to task management apps:
-
-```bash
-# Create checklist in Markdown
-cook shopping-list "Menu/*.cook" --plain | \
-  awk '{print "- [ ] " $0}' > checklist.md
-
-# Send to todo app
-cook shopping-list "Menu/*.cook" --ingredients-only | \
-  xargs -I {} todo add "Buy {}"
-```
-
-### Price Estimation
-
-Combine with pricing data:
-
-```bash
-# prices.json: {"flour": 2.50, "eggs": 3.00, ...}
-
-cook shopping-list "Menu/*.cook" -f json | \
-  jq --slurpfile prices prices.json '
-    .ingredients | map({
-      name: .name,
-      quantity: .quantity,
-      price: $prices[0][.name] // 0
-    }) | 
-    {items: ., total: map(.price) | add}
-  '
-```
 
 ## Smart Shopping
-
-### By Store
-
-Separate lists for different stores:
-
-```bash
-# Farmer's market items
-cook shopping-list "Menu/*.cook" -f json | \
-  jq '.categories.produce'
-
-# Regular grocery items
-cook shopping-list "Menu/*.cook" -f json | \
-  jq 'del(.categories.produce)'
-```
 
 ### Batch Cooking
 
@@ -403,45 +347,7 @@ cook shopping-list "Freezer Meals/*.cook:10" \
   -o bulk-cooking-list.txt
 ```
 
-## Tips and Tricks
-
-### Quick Lists
-
-```bash
-# Alias for common combinations
-alias weekly='cook shopping-list Weekend/*.cook'
-alias party='cook shopping-list Party/*.cook:5'
-```
-
-### List Comparison
-
-Compare shopping lists:
-
-```bash
-# What's different this week?
-diff \
-  <(cook shopping-list "Last Week/*.cook" --plain | sort) \
-  <(cook shopping-list "This Week/*.cook" --plain | sort)
-```
-
-### Inventory Check
-
-```bash
-# Generate list, then manually mark what you have
-cook shopping-list "Menu/*.cook" --plain | \
-  awk '{print "[ ] " $0}' > checklist.txt
-```
-
 ## Common Issues
-
-### Unit Conversion
-
-Someday CookCLI will automatically converts the units:
-* 1000 ml → 1 liter
-* 1000 g → 1 kg
-
-Incompatible units are listed separately:
-* "tomatoes: 3 cans, 500 g" (can't combine count with weight)
 
 ### Missing Aisle Categories
 

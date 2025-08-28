@@ -4,17 +4,23 @@ Command line tools for working with Cooklang recipes.
 
 ## What is CookCLI?
 
-CookCLI provides a suite of tools to create shopping lists and maintain recipes. We've built it to be simple and useful for automating your cooking and shopping routine with existing UNIX command line and scripting tools. It can also function as a webserver for your recipes, making them browsable on any device with a web browser.
+CookCLI provides a suite of commands to create shopping lists,
+reports and maintain recipes. We've built it to be simple and useful
+for automating your cooking and shopping routine with existing
+UNIX command line and scripting tools. It can also function
+as a webserver for your recipes, making them browsable on
+any device with a web browser.
 
 With CookCLI, you can:
 
-* simplify your personal recipe management
-* streamline your shopping routine  
-* make cooking more fun
+* integrate your Cooklang recipes with other tools
+* script meal planning and shopping
+* evaluate your recipes or menus with reports
+* of course cook with your terminal open
 
 ## Getting Started
 
-First, install CookCLI using one of the methods below. Then create some sample recipes to explore:
+First, install CookCLI using one of the methods below. CookCLI comes with a few sample recipes to play with:
 
 ```bash
 $ cook seed
@@ -24,45 +30,46 @@ $ cook recipe "Neapolitan Pizza.cook"
 This displays the recipe in a human-readable format:
 
 ```
-Metadata:
-    servings: 6
+Neapolitan Pizza
+
+source: https://www.stadlermade.com/how-to-pizza-dough/neapolitan/
+servings: 6
 
 Ingredients:
-    chopped tomato                3 cans
-    dried oregano                 3 tbsp
-    fresh basil                   18 leaves
-    fresh yeast                   1.6 g
-    garlic                        3 cloves
-    mozzarella                    3 packs
-    parma ham                     3 packs
-    salt                          25 g
-    tipo zero flour               820 g
-    water                         530 ml
+  semolina
+  Pizza Dough              (recipe: Shared/Pizza Dough)     6 balls
+  flour
+  semolina
+  San Marzano tomato sauce                                  5 tbsp
+  basil leaves
+  mozzarella cheese                                         100 grams
+
+Cookware:
+  outdoor oven
+  spatula
 
 Steps:
-     1. Make 6 pizza balls using tipo zero flour, water, salt and fresh yeast. Put in a fridge for 2 days.
-        [fresh yeast: 1.6 g; salt: 25 g; tipo zero flour: 820 g; water: 530 ml]
-     2. Set oven to max temperature and heat pizza stone for about 40 minutes.
-        [–]
-     3. Make some tomato sauce with chopped tomato and garlic and dried oregano. Put on a pan and leave for 15 minutes occasionally stirring.
-        [chopped tomato: 3 cans; dried oregano: 3 tbsp; garlic: 3 cloves]
-     4. Make pizzas putting some tomato sauce with spoon on top of flattened dough. Add fresh basil, parma ham and mozzarella.
-        [fresh basil: 18 leaves; mozzarella: 3 packs; parma ham: 3 packs]
-     5. Put in an oven for 4 minutes.
-        [–]
+ 1. Preheat your outdoor oven so it’s around 450/500°C (842/932°F).
+     [-]
+ 2. Prepare your pizza toppings because from now on you wanna work fast.
+    Sprinkle some semolina on your work surface.
+     [semolina]
+ ...
 ```
 
 Create a shopping list from multiple recipes:
 
 ```bash
-$ cook shopping-list "Neapolitan Pizza.cook" "Caesar Salad.cook"
+$ cook -v shopping-list "Neapolitan Pizza.cook" "./Breakfast/Easy Pancakes.cook""
 ```
 
 Or start the web server to browse your recipes:
 
 ```bash
-$ cook server
-Started server on http://127.0.0.1:9080, serving cook files from current directory
+$ cook server --open
+Listening on http://127.0.0.1:9080
+Serving Web UI on http://localhost:9080
+Serving recipe files from: "/Users/chefalexey/recipes"
 ```
 
 ![server interface](https://user-images.githubusercontent.com/4168619/148116974-7010e265-5aa8-4990-a4b9-f85abe3eafb0.png)
@@ -179,6 +186,9 @@ cook server --host
 
 # Use a different port
 cook server --port 8080
+
+# Open browser immideately
+cook server --open
 ```
 
 ### `cook search`
@@ -198,7 +208,8 @@ cook search -b ~/recipes pasta
 
 ### `cook import`
 
-Import recipes from websites and convert them to Cooklang format.
+Import recipes from websites and convert them to Cooklang format. Requires
+`OPENAI_API_KEY` environment variable set.
 
 ```bash
 # Import a recipe
@@ -213,11 +224,14 @@ cook import https://www.example.com/recipe --skip-conversion
 Check your recipe collection for issues and maintain consistency.
 
 ```bash
-# Validate all recipes
+# Validate all recipes and display parsing errors
 cook doctor validate
 
 # Check aisle configuration for shopping lists
 cook doctor aisle
+
+# Check pantry configuration
+cook doctor pantry
 
 # Run all checks
 cook doctor
@@ -241,10 +255,10 @@ Generate custom outputs using templates (experimental feature).
 
 ```bash
 # Generate a recipe card
-cook report -t recipe-card.j2 recipe.cook
+cook report -t recipe-card.md.jinja recipe.cook
 
 # Create nutrition label
-cook report -t nutrition.j2 recipe.cook
+cook report -t nutrition.html.jinja recipe.cook
 ```
 
 ## Documentation
@@ -278,8 +292,8 @@ Organizes ingredients by store section for shopping lists. Items not in any cate
 
 ```
 [produce]
-tomatoes
-basil
+tomatoes|tomato
+basil|basil leaves
 garlic
 onions
 
@@ -352,14 +366,11 @@ cook shopping-list "Recipe.cook" --aisle ./my-config/aisle.conf
 # Shopping list will only show: pepper, chicken, tomatoes
 ```
 
-### Configuration Priority
-
-1. Command-line flags (highest priority)
-2. Local `./config/` directory
-3. User config directory `~/.config/cooklang/`
-4. System defaults (lowest priority)
-
 ## Tips
+
+### Logging
+
+CookCLI has different level of logging. You can pass `-v` to show info messages, `-vv` for debug and `-vvv` for trace. Use it if you want to submit bug report because it will help us to better understand what's going on.
 
 ### Scaling Recipes
 
@@ -376,18 +387,17 @@ CookCLI works great with pipes and standard tools:
 
 ```bash
 # Find all recipes with chicken and create a shopping list
-cook search chicken | xargs cook shopping-list
+cook search eggs | xargs cook shopping-list
 
 # Convert all recipes to Markdown
 for r in *.cook; do
   cook recipe "$r" -f markdown > "docs/${r%.cook}.md"
 done
-
-# Check which recipes are quick
-cook search "" | while read r; do
-  cook recipe "$r" -f json | jq -r 'select(.metadata.time <= 30) | .title'
-done
 ```
+
+## Give us a star
+
+Why not? It will help more people discover this tool and Cooklang.
 
 ## Contributing
 
@@ -412,11 +422,12 @@ Some source files include code from [cooklang-chef](https://github.com/Zheoni/co
 
 * [Cooklang Specification](https://cooklang.org/docs/spec) - the recipe markup language
 * [Cooklang Apps](https://cooklang.org/app/) - iOS and Android apps
-* [Community Recipes](https://github.com/cooklang/recipes) - recipe collections
-* [Discussion Forum](https://github.com/cooklang/CookCLI/discussions) - questions and ideas
 
 ## Support
 
 * [Issue Tracker](https://github.com/cooklang/CookCLI/issues) - report bugs
-* [Discussions](https://github.com/cooklang/CookCLI/discussions) - ask questions
 * [Twitter](https://twitter.com/cooklang_org) - updates and news
+* [Playground](https://cooklang.github.io/cooklang-rs/)
+* [Discord server](https://discord.gg/fUVVvUzEEK), ask for help or say hello fellow cooks
+* [Spec discussions](https://github.com/cooklang/spec/discussions), suggest a new idea or give your opinion on future development
+* [Awesome Cooklang Recipes](https://github.com/cooklang/awesome-cooklang-recipes), find inspiration or share your recipes with the community.

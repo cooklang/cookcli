@@ -8,6 +8,12 @@ The `recipe` command parses and displays Cooklang recipe files. It's your primar
 cook recipe "Neapolitan Pizza.cook"
 ```
 
+File extension is optional, that works too:
+
+```bash
+cook recipe "Neapolitan Pizza"
+```
+
 This displays the recipe in a human-readable format with ingredients, steps, and metadata clearly organized.
 
 ## Menu Files
@@ -16,10 +22,10 @@ CookCLI also supports `.menu` files for meal planning. Menu files can reference 
 
 ```bash
 # View a menu file
-cook recipe "weekly_plan.menu"
+cook recipe "2 Day Plan.menu"
 
 # Scale entire menu (scales all referenced recipes)
-cook recipe "weekly_plan.menu:2"
+cook recipe "2 Day Plan.menu:2"
 ```
 
 Menu files use the same scaling notation as regular recipes, and the scaling applies to all recipe references within the menu.
@@ -69,25 +75,36 @@ Export recipes in different formats for various uses:
 ### Human-Readable (Default)
 
 ```bash
-cook recipe "Pizza.cook"
+cook recipe "Neapolitan Pizza"
 ```
 
 Output:
 ```
-Metadata:
-    servings: 4
-    time: 2 hours
+ Neapolitan Pizza
+
+source: https://www.stadlermade.com/how-to-pizza-dough/neapolitan/
+servings: 6
 
 Ingredients:
-    flour                         500 g
-    water                         300 ml
-    salt                          10 g
-    yeast                         5 g
+  semolina
+  Pizza Dough              (recipe: Shared/Pizza Dough)     6 balls
+  flour
+  semolina
+  San Marzano tomato sauce                                  5 tbsp
+  basil leaves
+  mozzarella cheese                                         100 grams
+
+Cookware:
+  outdoor oven
+  spatula
 
 Steps:
-    1. Mix flour, water, salt, and yeast...
-    2. Knead for 10 minutes...
-    3. Let rise for 1 hour...
+ 1. Preheat your outdoor oven so it’s around 450/500°C (842/932°F).
+     [-]
+ 2. Prepare your pizza toppings because from now on you wanna work fast.
+    Sprinkle some semolina on your work surface.
+     [semolina]
+...
 ```
 
 ### JSON Format
@@ -95,27 +112,35 @@ Steps:
 Perfect for processing with other tools:
 
 ```bash
-cook recipe "Pizza.cook" -f json | jq '.ingredients'
+cook recipe "Neapolitan Pizza" -f json | jq '.ingredients'
 ```
 
 Output:
 ```json
 [
   {
-    "name": "flour",
-    "quantity": { "value": 500, "unit": "g" }
+    "name": "semolina",
+    "alias": null,
+    "quantity": null,
+    "note": null,
+    "reference": null,
+    "relation": {
+      "relation": {
+        "type": "definition",
+        "referenced_from": [],
+        "defined_in_step": true
+      },
+      "reference_target": null
+    },
+    "modifiers": ""
   },
-  {
-    "name": "water",
-    "quantity": { "value": 300, "unit": "ml" }
-  }
-]
+  ...
 ```
 
 ### YAML Format
 
 ```bash
-cook recipe "Pizza.cook" -f yaml
+cook recipe "Neapolitan Pizza" -f yaml
 ```
 
 ### Markdown Format
@@ -123,7 +148,7 @@ cook recipe "Pizza.cook" -f yaml
 Great for documentation or sharing:
 
 ```bash
-cook recipe "Pizza.cook" -f markdown > recipe.md
+cook recipe "Neapolitan Pizza" -f markdown > recipe.md
 ```
 
 ### Cooklang Format
@@ -131,7 +156,7 @@ cook recipe "Pizza.cook" -f markdown > recipe.md
 Regenerate clean Cooklang markup:
 
 ```bash
-cook recipe "Pizza.cook" -f cooklang
+cook recipe "Neapolitan Pizza" -f cooklang
 ```
 
 ## Saving Output
@@ -140,13 +165,13 @@ Write the output to a file:
 
 ```bash
 # Save as JSON
-cook recipe "Pizza.cook" -f json -o pizza.json
+cook recipe "Neapolitan Pizza" -f json -o pizza.json
 
 # Save as Markdown
-cook recipe "Pizza.cook" -f markdown -o pizza.md
+cook recipe "Neapolitan Pizza" -f markdown -o pizza.md
 
 # Format is inferred from extension
-cook recipe "Pizza.cook" -o pizza.yaml
+cook recipe "Neapolitan Pizza" -o pizza.yaml
 ```
 
 ## Pretty Printing
@@ -154,7 +179,7 @@ cook recipe "Pizza.cook" -o pizza.yaml
 For JSON and YAML outputs, use `--pretty` for formatted output:
 
 ```bash
-cook recipe "Pizza.cook" -f json --pretty
+cook recipe "Neapolitan Pizza" -f json --pretty
 ```
 
 ## Recipe Discovery
@@ -183,9 +208,6 @@ Combine with UNIX tools for analysis:
 for recipe in *.cook; do
   cook recipe "$recipe" -f json
 done | jq -s '[.[].ingredients[].name] | group_by(.) | map({name: .[0], count: length})'
-
-# Find recipes by cooking time
-cook recipe "*.cook" -f json | jq 'select(.metadata.time <= 30)'
 ```
 
 ### Batch Processing
@@ -202,7 +224,7 @@ done
 # Validate all recipes
 for recipe in *.cook; do
   echo "Checking $recipe..."
-  cook recipe "$recipe" > /dev/null || echo "Error in $recipe"
+  cook -vvv recipe "$recipe" > /dev/null || echo "Error in $recipe"
 done
 ```
 
@@ -212,46 +234,7 @@ Compare scaled versions:
 
 ```bash
 # Compare original and doubled recipe
-diff <(cook recipe "Pizza.cook") <(cook recipe "Pizza.cook:2")
-
-# See how scaling affects specific ingredients
-cook recipe "Cake.cook" -f json | jq '.ingredients'
-cook recipe "Cake.cook:3" -f json | jq '.ingredients'
-```
-
-## Tips
-
-### Quick Validation
-
-Use the recipe command to validate syntax:
-
-```bash
-# Validates and displays any errors
-cook recipe "new-recipe.cook"
-
-# Silent validation (returns exit code)
-cook recipe "recipe.cook" > /dev/null 2>&1 && echo "Valid" || echo "Invalid"
-```
-
-### Template Generation
-
-Use existing recipes as templates:
-
-```bash
-# Get the structure of a recipe
-cook recipe "Pizza.cook" -f cooklang > template.cook
-
-# Extract just ingredients
-cook recipe "Pizza.cook" -f json | jq -r '.ingredients[].name'
-```
-
-### Integration with Editors
-
-Set up your editor to validate on save:
-
-```vim
-" Vim - Add to .vimrc
-autocmd BufWritePost *.cook !cook recipe %
+diff <(cook recipe "Neapolitan Pizza") <(cook recipe "Neapolitan Pizza:2")
 ```
 
 ## Common Issues
@@ -260,21 +243,8 @@ autocmd BufWritePost *.cook !cook recipe %
 
 If a recipe isn't found by name, try:
 
-1. Using the full path
-2. Adding the `.cook` extension
-3. Checking you're in the right directory
-
-### Scaling Limitations
-
-* Some ingredients shouldn't be scaled linearly (like salt or spices)
-* Consider adding metadata hints for non-linear scaling
-* Always review scaled recipes before cooking
-
-### Format Detection
-
-* Output format is inferred from file extension
-* Use `-f` flag to override detection
-* Default is human-readable format
+1. Escaping whitespaces
+2. Checking you're in the right directory
 
 ## See Also
 

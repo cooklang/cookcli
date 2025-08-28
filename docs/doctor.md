@@ -37,34 +37,6 @@ cook doctor aisle
 
 This helps maintain complete shopping list categorization by finding ingredients that aren't assigned to any store section.
 
-## Validation Check
-
-### Basic Validation
-
-```bash
-cook doctor validate
-```
-
-Example output:
-```
-📄 Pasta Carbonara.cook
-  ❌ Error: Unknown timer unit: mins
-  ⚠️  Warning: Deprecated metadata syntax: use YAML frontmatter
-
-📄 Pizza Dough.cook
-  ❌ Error: Invalid quantity: "handful"
-  ⚠️  Warning: Missing required metadata: servings
-
-=== Recipe References ===
-📄 Lasagna.cook
-  ❌ Missing reference: Bechamel Sauce.cook
-
-=== Validation Summary ===
-Total recipes scanned: 25
-❌ 3 error(s) found in 2 recipe(s)
-⚠️  4 warning(s) found in 3 recipe(s)
-```
-
 ### Strict Mode
 
 Use strict mode in CI/CD pipelines:
@@ -83,37 +55,6 @@ Great for:
 
 ```bash
 cook doctor validate -b ~/recipes/italian
-```
-
-## Aisle Check
-
-### Basic Check
-
-```bash
-cook doctor aisle
-```
-
-Example output:
-```
-Scanned 50 recipes, found 125 unique ingredients
-
-✓ All ingredients are present in aisle configuration
-```
-
-Or if missing ingredients:
-
-```
-Scanned 50 recipes, found 125 unique ingredients
-
-16 ingredients not found in aisle configuration:
-  - quinoa
-  - tahini
-  - miso paste
-  - fish sauce
-  - sumac
-  ...
-
-Consider adding these ingredients to your aisle.conf file.
 ```
 
 ### Custom Base Path
@@ -223,61 +164,6 @@ jobs:
         run: cook doctor validate --strict
 ```
 
-### Pre-commit Hook
-
-Create `.git/hooks/pre-commit`:
-
-```bash
-#!/bin/bash
-echo "Validating recipes..."
-cook doctor validate --strict
-if [ $? -ne 0 ]; then
-  echo "Recipe validation failed. Please fix errors before committing."
-  exit 1
-fi
-```
-
-### Makefile Integration
-
-```makefile
-.PHONY: validate
-validate:
-	@echo "Checking recipes..."
-	@cook doctor validate --strict
-
-.PHONY: check-aisle
-check-aisle:
-	@echo "Checking aisle configuration..."
-	@cook doctor aisle
-
-.PHONY: health-check
-health-check: validate check-aisle
-	@echo "All checks passed!"
-```
-
-## Maintaining Recipe Quality
-
-### Regular Health Checks
-
-Run doctor regularly:
-
-```bash
-# Add to crontab or scheduled tasks
-0 9 * * 1 cd ~/recipes && cook doctor > ~/recipe-health.log
-```
-
-### Progressive Enhancement
-
-Start with fixing errors, then warnings:
-
-```bash
-# First, fix all errors
-cook doctor validate | grep "❌"
-
-# Then address warnings
-cook doctor validate | grep "⚠️"
-```
-
 ### Batch Fixes
 
 Fix common issues across all recipes:
@@ -343,122 +229,6 @@ Use appropriate configuration:
 ```bash
 cook shopping-list *.cook --aisle walmart-aisle.conf
 ```
-
-## Advanced Validation
-
-### Custom Validation Rules
-
-Create a validation script:
-
-```bash
-#!/bin/bash
-# validate-custom.sh
-
-# Check for required metadata
-for recipe in *.cook; do
-  if ! grep -q "^servings:" "$recipe"; then
-    echo "Missing servings: $recipe"
-  fi
-  if ! grep -q "^time:" "$recipe"; then
-    echo "Missing time: $recipe"
-  fi
-done
-
-# Check image files exist
-for recipe in *.cook; do
-  base=$(basename "$recipe" .cook)
-  if [ ! -f "${base}.jpg" ] && [ ! -f "${base}.png" ]; then
-    echo "Missing image: $recipe"
-  fi
-done
-```
-
-### Validation Report
-
-Generate detailed reports:
-
-```bash
-# Create validation report
-{
-  echo "# Recipe Collection Health Report"
-  echo "Date: $(date)"
-  echo ""
-  echo "## Validation Results"
-  cook doctor validate
-  echo ""
-  echo "## Aisle Coverage"
-  cook doctor aisle
-  echo ""
-  echo "## Statistics"
-  echo "Total recipes: $(ls *.cook | wc -l)"
-  echo "With errors: $(cook doctor validate | grep -c '❌')"
-  echo "With warnings: $(cook doctor validate | grep -c '⚠️')"
-} > health-report.md
-```
-
-## Best Practices
-
-### Keep Recipes Valid
-
-1. Run `cook doctor` before committing changes
-2. Fix errors immediately
-3. Address warnings when possible
-4. Keep aisle.conf updated
-
-### Organize for Health
-
-```
-recipes/
-├── config/
-│   └── aisle.conf      # Maintained and complete
-├── validated/          # Recipes that pass all checks
-├── drafts/            # Work in progress
-└── archive/           # Old recipes
-```
-
-### Document Issues
-
-When you can't fix an issue immediately:
-
-```cooklang
->> known_issues: Missing quantity for salt - season to taste
->> todo: Add precise measurements after testing
-```
-
-## Troubleshooting
-
-### Performance Issues
-
-For large collections:
-
-```bash
-# Check specific directories
-cook doctor validate -b recipes/tested
-
-# Run checks in parallel
-find . -type d -maxdepth 1 | xargs -P 4 -I {} cook doctor validate -b {}
-```
-
-### False Positives
-
-Some warnings might be intentional:
-
-```cooklang
-# Intentionally vague quantity
-@salt{} -- to taste
-
-# Non-standard but valid unit
-@love{1%handful} -- just kidding!
-```
-
-### Integration Issues
-
-If doctor commands fail in CI:
-
-1. Check CookCLI version
-2. Verify file permissions
-3. Ensure recipes are checked out
-4. Check for encoding issues
 
 ## See Also
 

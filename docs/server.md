@@ -324,15 +324,6 @@ cook server --port 8081
 * Consider organizing recipes into folders
 * Reduce image sizes in recipe directories
 
-### Browser Compatibility
-
-The web interface works best with:
-* Chrome/Edge 90+
-* Firefox 88+
-* Safari 14+
-* Mobile Safari (iOS 14+)
-* Chrome Mobile
-
 ## Security Considerations
 
 ### Local Network Only

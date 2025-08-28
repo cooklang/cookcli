@@ -133,6 +133,16 @@ pub async fn recipe(
     Ok(Json(value))
 }
 
+pub async fn reload() -> Result<Json<serde_json::Value>, StatusCode> {
+    // Since the server reads from disk on each request, there's no cache to clear.
+    // This endpoint just returns success to indicate the reload was processed.
+    tracing::info!("Reload requested - recipes will be refreshed from disk on next request");
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "message": "Recipes will be refreshed from disk on next request"
+    })))
+}
+
 pub async fn search(
     State(state): State<Arc<AppState>>,
     Query(query): Query<SearchQuery>,

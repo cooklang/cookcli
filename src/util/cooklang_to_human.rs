@@ -392,9 +392,15 @@ fn steps(w: &mut impl io::Write, recipe: &Recipe) -> Result {
                     })?;
                 }
                 cooklang::Content::Text(t) => {
-                    writeln!(w)?;
-                    print_wrapped_with_options(w, t.trim(), |o| o.initial_indent("  "))?;
-                    writeln!(w)?;
+                    // Check if this is a list bullet item
+                    if t.trim() == "-" {
+                        // Don't print anything for isolated dash, it will be handled as a newline before the next item
+                        writeln!(w)?;
+                    } else {
+                        writeln!(w)?;
+                        print_wrapped_with_options(w, t.trim(), |o| o.initial_indent("  "))?;
+                        writeln!(w)?;
+                    }
                 }
             }
         }
@@ -413,7 +419,14 @@ fn step_text(recipe: &Recipe, _section: &Section, step: &Step) -> (String, Strin
 
     for item in &step.items {
         match item {
-            Item::Text { value } => step_text += value,
+            Item::Text { value } => {
+                // Check if this is a list bullet and add a newline before it for better formatting
+                if value.trim() == "-" {
+                    step_text += "\n    • ";
+                } else {
+                    step_text += value;
+                }
+            }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
                 write!(

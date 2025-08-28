@@ -1,13 +1,13 @@
 # Report Command
 
-The `report` command generates custom reports from recipes using Jinja2 templates. It's a powerful tool for creating recipe cards, nutrition labels, meal plans, or any custom format you need.
+The `report` command generates custom reports from recipes using minijinja templates. It's a powerful tool for creating recipe cards, nutrition labels, meal plans, or any custom format you need.
 
 ⚠️ **Note**: The report command is currently a prototype feature and will evolve in future versions.
 
 ## Basic Usage
 
 ```bash
-cook report -t template.j2 recipe.cook
+cook report -t template.jinja recipe.cook
 ```
 
 This processes the recipe through the template and outputs the result.
@@ -69,11 +69,25 @@ Templates receive comprehensive recipe data:
 
 ```bash
 cook report \
-  -t comprehensive.j2 \
-  recipe.cook:2 \
-  -d ./datastore \
+  -t reports/cost.md.jinja \
+  "Breakfast/Easy Pancakes.cook:2" \
+  -d ./db \
   -a ./config/aisle.conf \
   -p ./config/pantry.conf
+```
+
+Outputs:
+
+```markdown
+# Cost Report
+
+* eggs: $1.50
+* flour: $0.38
+* milk: $0.50
+* sea salt: $0.00
+* olive oil: $0.01
+
+Total: $2.39
 ```
 
 This provides the template with:
@@ -86,116 +100,32 @@ This provides the template with:
 
 ### Simple Recipe Card
 
-Create `recipe-card.j2`:
+Create `recipe-card.jinja`:
 
 ```jinja2
-# {{ recipe.title }}
-
-**Servings:** {{ recipe.servings }}
-**Time:** {{ recipe.time }}
+**Servings:** {{ metadata.servings }}
 
 ## Ingredients
-{% for ingredient in recipe.ingredients %}
+{%- for ingredient in ingredients %}
 - {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
-{% endfor %}
+{%- endfor %}
 
 ## Instructions
-{% for step in recipe.steps %}
-{{ step.number }}. {{ step.instruction }}
-{% endfor %}
+{% for section in sections %}
+{% for content in section %}
+{{ content }}
+{%- endfor %}
+{%- endfor %}
+
 ```
 
 Use it:
 
 ```bash
-cook report -t recipe-card.j2 "Pasta.cook"
+cook report -t reports/recipe-card.md.jinja "Neapolitan Pizza.cook"
 ```
 
-### Shopping List Card
-
-Create `shopping-card.j2`:
-
-```jinja2
-SHOPPING LIST FOR: {{ recipe.title | upper }}
-=====================================
-
-{# Group by aisle if available #}
-{% if recipe.ingredients[0].aisle is defined %}
-  {% for aisle, items in recipe.ingredients | groupby('aisle') %}
-{{ aisle | upper }}
-    {% for ingredient in items if not ingredient.in_pantry %}
-[ ] {{ ingredient.name }} - {{ ingredient.quantity }} {{ ingredient.unit }}
-    {% endfor %}
-  {% endfor %}
-{% else %}
-  {# Simple list if no aisle data #}
-  {% for ingredient in recipe.ingredients if not ingredient.in_pantry %}
-[ ] {{ ingredient.name }} - {{ ingredient.quantity }} {{ ingredient.unit }}
-  {% endfor %}
-{% endif %}
-
-Total items to buy: {{ recipe.ingredients | rejectattr('in_pantry') | list | length }}
-Pantry items used: {{ recipe.ingredients | selectattr('in_pantry') | list | length }}
-```
-
-### Nutrition Label
-
-Create `nutrition.j2`:
-
-```jinja2
-Nutrition Facts
----------------
-Serving Size: 1 serving
-Servings: {{ recipe.servings }}
-
-{% if recipe.nutrition %}
-Calories: {{ recipe.nutrition.calories }}
-Total Fat: {{ recipe.nutrition.fat }}g
-Protein: {{ recipe.nutrition.protein }}g
-Carbs: {{ recipe.nutrition.carbs }}g
-{% else %}
-Nutrition data not available
-{% endif %}
-```
-
-### HTML Recipe Page
-
-Create `recipe-page.j2`:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ recipe.title }}</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; }
-        .ingredient { margin: 5px 0; }
-        .step { margin: 15px 0; }
-    </style>
-</head>
-<body>
-    <h1>{{ recipe.title }}</h1>
-    <p>Serves {{ recipe.servings }} | {{ recipe.time }}</p>
-    
-    <h2>Ingredients</h2>
-    <ul>
-    {% for ing in recipe.ingredients %}
-        <li class="ingredient">
-            {{ ing.quantity }} {{ ing.unit }} {{ ing.name }}
-            {% if ing.notes %}({{ ing.notes }}){% endif %}
-        </li>
-    {% endfor %}
-    </ul>
-    
-    <h2>Instructions</h2>
-    <ol>
-    {% for step in recipe.steps %}
-        <li class="step">{{ step.instruction }}</li>
-    {% endfor %}
-    </ol>
-</body>
-</html>
-```
+Checkout more reports [here](https://github.com/cooklang/cooklang-reports/tree/main/test/data/reports).
 
 ## Scaling Recipes
 
@@ -203,10 +133,10 @@ Scale recipes before processing:
 
 ```bash
 # Double the recipe
-cook report -t template.j2 "Cake.cook:2"
+cook report -t template.jinja "Cake.cook:2"
 
 # Scale to 10 servings
-cook report -t template.j2 "Dinner.cook:10"
+cook report -t template.jinja "Dinner.cook:10"
 ```
 
 ## Configuration Options
@@ -216,7 +146,7 @@ cook report -t template.j2 "Dinner.cook:10"
 Include additional data from a datastore:
 
 ```bash
-cook report -t nutrition.j2 recipe.cook -d ./datastore
+cook report -t nutrition.jinja recipe.cook -d ./db
 ```
 
 The datastore can contain:
@@ -230,14 +160,20 @@ The datastore can contain:
 Categorize ingredients by store section:
 
 ```bash
-cook report -t shopping.j2 recipe.cook -a ./config/aisle.conf
+cook report -t shopping.jinja recipe.cook -a ./config/aisle.conf
 ```
 
 Template can access:
 ```jinja2
-{% for ingredient in recipe.ingredients %}
-  {{ ingredient.name }} - Aisle: {{ ingredient.aisle }}
-{% endfor %}
+## Organized by Store Aisle
+
+{%- for aisle, items in aisled(ingredients) | items %}
+
+### {{ aisle | titleize }}
+{%- for ingredient in items %}
+- [ ] {{ ingredient.name | titleize }}: {{ ingredient.quantity }}
+{%- endfor %}
+{%- endfor %}
 ```
 
 ### Pantry Configuration
@@ -245,7 +181,7 @@ Template can access:
 Filter out pantry items using your inventory:
 
 ```bash
-cook report -t list.j2 recipe.cook -p ./config/pantry.conf
+cook report -t list.jinja recipe.cook -p ./config/pantry.conf
 ```
 
 The pantry.conf file tracks your inventory with quantities and dates:
@@ -265,21 +201,23 @@ salt = "1%kg"
 
 Template can check pantry items:
 ```jinja2
-{# Show only non-pantry items #}
-{% for ingredient in recipe.ingredients if not ingredient.in_pantry %}
-  {{ ingredient.name }}: {{ ingredient.quantity }}
-{% endfor %}
+## Items to Buy (Not in Pantry)
 
-{# Or separate them #}
-Need to buy:
-{% for ing in recipe.ingredients if not ing.in_pantry %}
-  - {{ ing.name }}
-{% endfor %}
+{%- for (aisle, items) in aisled(excluding_pantry(ingredients)) | items %}
 
-From pantry (already have):
-{% for ing in recipe.ingredients if ing.in_pantry %}
-  - {{ ing.name }} ({{ ing.pantry_quantity }} available)
-{% endfor %}
+### {{ aisle | titleize }}
+{%- for ingredient in items %}
+- [ ] {{ ingredient.name | titleize }}: {{ ingredient.quantity }}
+{%- endfor %}
+{%- endfor %}
+
+---
+
+## Already Have in Pantry
+
+{%- for ingredient in from_pantry(ingredients) %}
+- ✓ {{ ingredient.name | titleize }}: {{ ingredient.quantity }}
+{%- endfor %}
 ```
 
 ## Output Options
@@ -287,17 +225,7 @@ From pantry (already have):
 ### Save to File
 
 ```bash
-cook report -t card.j2 recipe.cook > recipe-card.md
-```
-
-### Multiple Recipes
-
-Process multiple recipes:
-
-```bash
-for recipe in *.cook; do
-  cook report -t card.j2 "$recipe" > "cards/$(basename $recipe .cook).md"
-done
+cook report -t card.jinja recipe.cook > recipe-card.md
 ```
 
 ## Advanced Templates
@@ -322,7 +250,7 @@ done
 
 ```jinja2
 {# Format quantities nicely #}
-{% for ing in recipe.ingredients %}
+{% for ing in ingredients %}
   {{ "%-20s" | format(ing.name) }} {{ "%8.2f %s" | format(ing.quantity, ing.unit) }}
 {% endfor %}
 
@@ -354,7 +282,7 @@ Estimated cost: ${{ recipe.ingredients | length * 2.50 }}
 
 ### Meal Planning
 
-Create `weekly-plan.j2`:
+Create `weekly-plan.jinja`:
 
 ```jinja2
 ## {{ recipe.metadata.day }} - {{ recipe.title }}
@@ -376,13 +304,13 @@ Generate weekly plan:
 
 ```bash
 for day in monday tuesday wednesday; do
-  cook report -t weekly-plan.j2 "$day.cook" >> weekly-plan.md
+  cook report -t weekly-plan.jinja "$day.cook" >> weekly-plan.md
 done
 ```
 
 ### Recipe Book
 
-Create `book-page.j2`:
+Create `book-page.jinja`:
 
 ```latex
 \section{{{ recipe.title }}}
@@ -410,7 +338,7 @@ Create `book-page.j2`:
 
 ### Index Generation
 
-Create `index.j2`:
+Create `index.jinja`:
 
 ```markdown
 # Recipe Index
@@ -429,50 +357,13 @@ Generate index:
 
 ```bash
 for recipe in *.cook; do
-  cook report -t index.j2 "$recipe" >> index.md
+  cook report -t index.jinja "$recipe" >> index.md
 done
-```
-
-## Template Development
-
-### Testing Templates
-
-```bash
-# Test with simple output
-cook report -t test.j2 recipe.cook
-
-# Debug available variables
-cat > debug.j2 << 'EOF'
-Available variables:
-{{ recipe | tojson(indent=2) }}
-EOF
-
-cook report -t debug.j2 recipe.cook
-```
-
-### Template Library
-
-Organize templates:
-
-```
-templates/
-├── cards/
-│   ├── simple.j2
-│   ├── detailed.j2
-│   └── photo.j2
-├── formats/
-│   ├── markdown.j2
-│   ├── html.j2
-│   └── latex.j2
-└── special/
-    ├── nutrition.j2
-    ├── cost.j2
-    └── planning.j2
 ```
 
 ### Reusable Components
 
-Create `base.j2`:
+Create `base.jinja`:
 
 ```jinja2
 {# Macro for ingredient list #}
@@ -495,7 +386,7 @@ Create `base.j2`:
 Use in other templates:
 
 ```jinja2
-{% import 'base.j2' as base %}
+{% import 'base.jinja' as base %}
 
 {{ base.time_display(recipe.time) }}
 {{ base.ingredient_list(recipe.ingredients) }}
@@ -507,20 +398,20 @@ Use in other templates:
 
 ```bash
 # Generate Markdown
-cook report -t recipe.j2 recipe.cook > recipe.md
+cook report -t recipe.md.jinja recipe.cook > recipe.md
 
 # Convert to PDF with pandoc
 pandoc recipe.md -o recipe.pdf
 
 # Or direct to PDF with HTML template
-cook report -t recipe-html.j2 recipe.cook | wkhtmltopdf - recipe.pdf
+cook report -t recipe.html.jinja recipe.cook | wkhtmltopdf - recipe.pdf
 ```
 
 ### Email Newsletter
 
 ```bash
 # Generate HTML email
-cook report -t email-recipe.j2 "Recipe of the Week.cook" > email.html
+cook report -t email-recipe.html.jinja "Recipe of the Week.cook" > email.html
 
 # Send with mail command
 cat email.html | mail -a "Content-Type: text/html" -s "Recipe of the Week" list@example.com
@@ -528,7 +419,7 @@ cat email.html | mail -a "Content-Type: text/html" -s "Recipe of the Week" list@
 
 ### Social Media
 
-Create `social.j2`:
+Create `social.jinja`:
 
 ```jinja2
 🍽️ {{ recipe.title }}
@@ -584,10 +475,10 @@ Get the full recipe at: example.com/recipes/{{ recipe.slug }}
 
 ```bash
 # Use absolute path
-cook report -t /full/path/to/template.j2 recipe.cook
+cook report -t /full/path/to/template.jinja recipe.cook
 
 # Or ensure template is in current directory
-ls *.j2
+ls *.jinja
 ```
 
 ### Variable Errors
@@ -600,15 +491,6 @@ If a variable doesn't exist:
 
 {# Or use default #}
 {{ recipe.metadata.note | default("") }}
-```
-
-### Encoding Issues
-
-For special characters:
-
-```jinja2
-{{ recipe.title | escape }}  {# HTML escape #}
-{{ recipe.title | urlencode }}  {# URL encoding #}
 ```
 
 ## See Also

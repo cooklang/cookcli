@@ -428,7 +428,13 @@ fn w_section(
                 w_step(w, step, recipe, opts).context("Failed to write step")?
             }
             cooklang::Content::Text(text) => {
-                print_wrapped(w, text).context("Failed to write text content")?
+                // Check if this is a list bullet item
+                if text.trim() == "-" {
+                    // Add extra newline for list separation
+                    writeln!(w).context("Failed to write newline for list bullet")?
+                } else {
+                    print_wrapped(w, text).context("Failed to write text content")?
+                }
             }
         };
         writeln!(w).context("Failed to write newline after content")?;
@@ -446,7 +452,14 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
 
     for item in &step.items {
         match item {
-            Item::Text { value } => step_str.push_str(value),
+            Item::Text { value } => {
+                // Check if this is a list bullet and format it properly for markdown
+                if value.trim() == "-" {
+                    step_str.push_str("\n- ");
+                } else {
+                    step_str.push_str(value);
+                }
+            }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
                 step_str.push_str(igr.display_name().as_ref());

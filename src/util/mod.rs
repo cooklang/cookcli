@@ -162,13 +162,37 @@ pub fn extract_ingredients(
     let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
 
     if !ignore_references {
+        // Determine the base path for resolving references
+        // If the recipe has a path, use its parent directory as the base
+        let ref_base_path = recipe_entry
+            .path()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| base_path.clone());
+
         for ref_index in ref_indices {
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
 
-            // Get the referenced recipe
-            let ref_path = reference.path("/");
-            let ref_entry = get_recipe(base_path, &ref_path)?;
+            // Get the referenced recipe path
+            // Handle the case where components might be ["."] or empty
+            let ref_path = if reference.components.is_empty() {
+                reference.name.clone()
+            } else if reference.components.len() == 1 && reference.components[0] == "." {
+                format!("./{}", reference.name)
+            } else {
+                reference.path("/")
+            };
+
+            // If the reference starts with ./ or ../, resolve it relative to the recipe's location
+            // Otherwise, use the original base_path
+            let search_base = if ref_path.starts_with("./") || ref_path.starts_with("../") {
+                &ref_base_path
+            } else {
+                base_path
+            };
+
+            let ref_entry = get_recipe(search_base, &ref_path)?;
 
             // Parse and scale the recipe based on the quantity specification
             let ref_recipe = match ingredient.quantity.as_ref() {

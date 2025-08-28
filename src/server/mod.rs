@@ -103,13 +103,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         SocketAddr::from(([127, 0, 0, 1], args.port))
     };
 
-    info!("Listening on http://{addr}");
+    println!("Listening on http://{addr}");
 
     // #[cfg(feature = "ui")]
     if args.open {
         let port = args.port;
         let url = format!("http://localhost:{port}");
-        println!("Serving web UI on {url}");
+        println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             if let Err(e) = open::that(url) {
@@ -120,7 +120,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let state = build_state(ctx, args)?;
 
-    info!("Serving recipe files from: {:?}", &state.base_path);
+    println!("Serving recipe files from: {:?}", &state.base_path);
 
     let app = Router::new()
         .nest("/api", api(&state)?)
@@ -231,7 +231,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
         .route("/recipes", get(handlers::all_recipes))
         .route("/recipes/*path", get(handlers::recipe))
-        .route("/search", get(handlers::search));
+        .route("/search", get(handlers::search))
+        .route("/reload", get(handlers::reload).post(handlers::reload));
 
     Ok(router)
 }

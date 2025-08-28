@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **UI**: Complete rewrite of web UI from Svelte to server-side rendered Askama templates with Tailwind CSS
+* **doctor**: Add comprehensive recipe validation command with syntax checking, reference validation, and CI-friendly exit codes  
+* **shopping-list**: Enhanced shopping list with persistent storage, menu support, and improved aggregation
+* **recipes**: Add support for .menu files for weekly meal planning
+* **server**: Improved server with better static file handling and shopping list persistence
+* **import**: Add metadata output support with multiple formats (JSON, YAML, frontmatter) and metadata-only extraction option
+
+### Bug Fixes
+
+* Fix recipe reference resolution and scaling in shopping lists
+* Improve error handling and user feedback across all commands
+
+### Documentation
+
+* Add comprehensive documentation for all commands in docs/ directory
+* Add CLAUDE.md for AI-assisted development guidance
+* Update README with detailed command examples and usage patterns
+
+### Dependencies
+
+* Update cooklang parser to latest version for improved parsing reliability
+
+### Infrastructure
+
+* Add Dockerfile for containerized deployments
+* Improve Makefile with CSS build targets for Tailwind compilation
+* Add npm package.json for frontend build tooling
+
 ## [0.14.0](https://github.com/cooklang/cookcli/compare/v0.13.0...v0.14.0) (2025-06-03)
 
 
