@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/cooklang/cookcli/compare/v0.15.1...v0.15.2) (2025-08-28)
+
+
+### Bug Fixes
+
+* ci build ([0b023a3](https://github.com/cooklang/cookcli/commit/0b023a3f001f7a6656ee2a7e054892cce7d49cdd))
+
 ## [0.15.1](https://github.com/cooklang/cookcli/compare/v0.15.1...v0.15.1) (2025-08-28)
 
 
