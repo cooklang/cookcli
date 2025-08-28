@@ -72,7 +72,11 @@ Serving Web UI on http://localhost:9080
 Serving recipe files from: "/Users/chefalexey/recipes"
 ```
 
-![server interface](https://user-images.githubusercontent.com/4168619/148116974-7010e265-5aa8-4990-a4b9-f85abe3eafb0.png)
+
+<img width="1166" height="995" alt="Screenshot 2025-08-28 at 16 47 49" src="https://github.com/user-attachments/assets/73ec0a6d-f2dc-4fcc-b54b-5622e0532df3" />
+<img width="1175" height="935" alt="Screenshot 2025-08-28 at 16 47 56" src="https://github.com/user-attachments/assets/fdbfc722-cdec-401a-a9ac-6ff2bba4b7c5" />
+<img width="1276" height="866" alt="Screenshot 2025-08-28 at 16 49 20" src="https://github.com/user-attachments/assets/8e6c0ffa-0957-4769-9268-beae8efdea7a" />
+
 
 ## Installation
 
