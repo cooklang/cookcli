@@ -80,6 +80,10 @@ Serving recipe files from: "/Users/chefalexey/recipes"
 
 ## Installation
 
+### Download Binary
+
+Download the latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add it to your PATH.
+
 ### macOS
 
 Using Homebrew:
@@ -91,15 +95,13 @@ brew install cooklang/tap/cookcli
 
 ### Install with Cargo
 
+> not working at the moment, re: https://github.com/cooklang/cookcli/issues/155#issuecomment-3239646168
+
 If you have Rust installed:
 
 ```bash
 cargo install cookcli
 ```
-
-### Download Binary
-
-Download the latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add it to your PATH.
 
 ### Build from Source
 
