@@ -30,7 +30,7 @@ pub struct SearchArgs {
 }
 
 pub fn run(ctx: &Context, args: SearchArgs) -> Result<()> {
-    let base_dir = args.base_dir.unwrap_or_else(|| ctx.base_path.clone());
+    let base_dir = args.base_dir.unwrap_or_else(|| ctx.base_path().clone());
 
     // Join multiple search terms with spaces
     let query = args.query.join(" ");

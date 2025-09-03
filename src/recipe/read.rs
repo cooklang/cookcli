@@ -29,8 +29,7 @@
 // SOFTWARE.
 
 use anyhow::{Context as _, Result};
-use clap::CommandFactory;
-use clap::{Args, ValueEnum};
+use clap::{Args, CommandFactory, ValueEnum};
 use std::io::Read;
 
 use camino::Utf8PathBuf;
@@ -93,7 +92,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
         let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
             .map(|(name, scaling_factor)| {
                 let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                    let mut cmd = crate::CliArgs::command();
+                    let mut cmd = crate::args::CliArgs::command();
                     cmd.error(
                         clap::error::ErrorKind::InvalidValue,
                         format!("Invalid scaling target for '{name}': {err}. Use a number value after : to specify a scaling factor."),
@@ -108,7 +107,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             scale = scaling_factor;
         }
 
-        let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path.clone()], name.into())
+        let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path().clone()], name.into())
             .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
         let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
         (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
