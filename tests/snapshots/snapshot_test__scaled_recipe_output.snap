@@ -1,0 +1,203 @@
+---
+source: tests/snapshot_test.rs
+expression: formatted
+---
+{
+  "cookware": [
+    {
+      "alias": null,
+      "name": "pot",
+      "note": null,
+      "quantity": null,
+      "relation": {
+        "defined_in_step": true,
+        "referenced_from": [],
+        "type": "definition"
+      }
+    }
+  ],
+  "ingredients": [
+    {
+      "alias": null,
+      "modifiers": "",
+      "name": "water",
+      "note": null,
+      "quantity": {
+        "scalable": true,
+        "unit": "cups",
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 6.0
+          }
+        }
+      },
+      "reference": null,
+      "relation": {
+        "reference_target": null,
+        "relation": {
+          "defined_in_step": true,
+          "referenced_from": [],
+          "type": "definition"
+        }
+      }
+    },
+    {
+      "alias": null,
+      "modifiers": "",
+      "name": "salt",
+      "note": null,
+      "quantity": {
+        "scalable": true,
+        "unit": "tsp",
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 3.0
+          }
+        }
+      },
+      "reference": null,
+      "relation": {
+        "reference_target": null,
+        "relation": {
+          "defined_in_step": true,
+          "referenced_from": [],
+          "type": "definition"
+        }
+      }
+    },
+    {
+      "alias": null,
+      "modifiers": "",
+      "name": "pasta",
+      "note": null,
+      "quantity": {
+        "scalable": true,
+        "unit": "g",
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 600.0
+          }
+        }
+      },
+      "reference": null,
+      "relation": {
+        "reference_target": null,
+        "relation": {
+          "defined_in_step": true,
+          "referenced_from": [],
+          "type": "definition"
+        }
+      }
+    }
+  ],
+  "inline_quantities": [],
+  "metadata": {
+    "map": {
+      "servings": 6,
+      "title": "Simple Recipe"
+    }
+  },
+  "sections": [
+    {
+      "content": [
+        {
+          "type": "step",
+          "value": {
+            "items": [
+              {
+                "type": "text",
+                "value": "Boil "
+              },
+              {
+                "index": 0,
+                "type": "ingredient"
+              },
+              {
+                "type": "text",
+                "value": " for "
+              },
+              {
+                "index": 0,
+                "type": "timer"
+              },
+              {
+                "type": "text",
+                "value": ". Add "
+              },
+              {
+                "index": 1,
+                "type": "ingredient"
+              },
+              {
+                "type": "text",
+                "value": " and "
+              },
+              {
+                "index": 2,
+                "type": "ingredient"
+              },
+              {
+                "type": "text",
+                "value": ". Cook in a "
+              },
+              {
+                "index": 0,
+                "type": "cookware"
+              },
+              {
+                "type": "text",
+                "value": " for another "
+              },
+              {
+                "index": 1,
+                "type": "timer"
+              },
+              {
+                "type": "text",
+                "value": "."
+              }
+            ],
+            "number": 1
+          }
+        }
+      ],
+      "name": null
+    }
+  ],
+  "timers": [
+    {
+      "name": null,
+      "quantity": {
+        "scalable": false,
+        "unit": "minutes",
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 5.0
+          }
+        }
+      }
+    },
+    {
+      "name": null,
+      "quantity": {
+        "scalable": false,
+        "unit": "minutes",
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 10.0
+          }
+        }
+      }
+    }
+  ]
+}

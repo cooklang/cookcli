@@ -1,0 +1,15 @@
+---
+source: tests/snapshot_test.rs
+expression: sorted_output
+---
+📄 with_errors.cook
+  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+=== Recipe References ===
+
+📄 with_errors.cook
+  ❌ Missing reference: nonexistent
+
+=== Validation Summary ===
+Total recipes scanned: 5
+❌ 1 error(s) found in 0 recipe(s)
+⚠️  1 warning(s) found in 1 recipe(s)

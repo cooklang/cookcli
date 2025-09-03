@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+"Breakfast/pancakes.cook"

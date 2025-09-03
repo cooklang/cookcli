@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+garlic 2 cloves
+pasta  200 g
+water  2 cups
