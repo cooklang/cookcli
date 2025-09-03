@@ -4,7 +4,7 @@
 
 {% block content %}
 <div>
-    <nav class="mb-4">
+    <nav class="mb-4 breadcrumb print:hidden">
         <ol class="flex space-x-2 text-sm text-gray-600">
             <li><a href="/" class="hover:text-gray-900">Recipes</a></li>
             {% for crumb in breadcrumbs %}
@@ -19,44 +19,54 @@
             {% endfor %}
         </ol>
     </nav>
-    
+
     <div class="mb-8">
         <!-- Recipe image if available -->
         {% match image_path %}
         {% when Some with (img) %}
-        <div class="mb-6 max-w-4xl mx-auto">
-            <div class="rounded-xl overflow-hidden shadow-lg bg-gray-50">
-                <img src="{{ img }}" alt="{{ recipe.name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
-            </div>
+        <div class="mb-6 max-w-4xl mx-auto flex justify-center">
+            <img src="{{ img }}" alt="{{ recipe.name }}" class="rounded-xl shadow-lg max-w-full h-auto max-h-[500px]">
         </div>
         {% when None %}
         {% endmatch %}
 
         <!-- Title bar with scale and shopping list button -->
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">{{ recipe.name }}</h1>
-            <div class="flex flex-wrap items-center gap-3">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 print:flex-row print:items-center">
+            <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent print:text-2xl">
+                {{ recipe.name }}
+            </h1>
+            {% if scale != 1.0 %}
+            <div class="hidden print:block text-lg font-normal text-gray-700">Scale: {{ scale }}x</div>
+            {% endif %}
+            <div class="flex flex-wrap items-center gap-3 print:hidden">
                 <div class="flex items-center">
                     <label for="scale" class="text-sm font-medium text-gray-700 mr-2">Scale:</label>
-                    <input type="number" 
-                           id="scale" 
-                           value="{{ scale }}" 
-                           min="0.5" 
+                    <input type="number"
+                           id="scale"
+                           value="{{ scale }}"
+                           min="0.5"
                            max="200"
-                           step="0.5" 
+                           step="0.5"
                            class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
                            onchange="window.location.href = `/recipe/{{ recipe_path }}?scale=${this.value}`">
                 </div>
-                <button onclick="addToShoppingList(event, '{{ recipe_path }}')" 
+                <button onclick="addToShoppingList(event, '{{ recipe_path }}')"
                         class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
                     Add to Shopping List
                 </button>
+                <button onclick="window.print()"
+                        class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md flex items-center gap-2 print:hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Print Recipe
+                </button>
             </div>
         </div>
-        
+
         <!-- Recipe info section -->
         <div class="space-y-4">
             <!-- Tags row -->
@@ -67,10 +77,10 @@
                 {% endfor %}
             </div>
             {% endif %}
-            
+
             {% match recipe.metadata %}
             {% when Some with (metadata) %}
-            
+
             <!-- Description if present -->
             {% match metadata.description %}
             {% when Some with (description) %}
@@ -79,94 +89,144 @@
             </div>
             {% when None %}
             {% endmatch %}
-            
+
             <!-- Metadata row -->
             <div id="metadata-container" class="flex flex-wrap gap-3">
                 <!-- Display all metadata items -->
-                
+
                 {% match metadata.servings %}
                 {% when Some with (servings) %}
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} servings</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.time %}
                 {% when Some with (time) %}
                 <span class="metadata-pill metadata-time">⏱️ {{ time }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.difficulty %}
                 {% when Some with (difficulty) %}
                 <span class="metadata-pill metadata-difficulty">📊 {{ difficulty }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.course %}
                 {% when Some with (course) %}
                 <span class="metadata-pill metadata-course">🍽️ {{ course }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.prep_time %}
                 {% when Some with (prep_time) %}
                 <span class="metadata-pill metadata-prep">⏱️ Prep: {{ prep_time }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.cook_time %}
                 {% when Some with (cook_time) %}
                 <span class="metadata-pill metadata-cook">🔥 Cook: {{ cook_time }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.cuisine %}
                 {% when Some with (cuisine) %}
                 <span class="metadata-pill metadata-cuisine">🌍 {{ cuisine }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.diet %}
                 {% when Some with (diet) %}
                 <span class="metadata-pill metadata-diet">🥗 {{ diet }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.author %}
                 {% when Some with (author) %}
                 <span class="metadata-pill metadata-author">👤 {{ author }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
                 {% endfor %}
             </div>
-            
+
             {% when None %}
             {% endmatch %}
         </div>
     </div>
-    
+
     <div class="grid md:grid-cols-3 gap-8 mb-8">
         <div class="md:col-span-1">
             <div class="bg-white rounded-2xl shadow-lg p-6">
                 <h2 class="text-xl font-bold mb-4 text-orange-600">🥘 Ingredients</h2>
-                <ul class="space-y-3">
-                {% for ingredient in ingredients %}
-                <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
-                    <span class="font-medium">{{ ingredient.name }}</span>
-                    <span class="text-orange-700 font-semibold">
-                        {% match ingredient.quantity %}
-                        {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
-                        {% match ingredient.unit %}
-                        {% when Some with (unit) %} {{ unit }}{% when None %}{% endmatch %}
-                    </span>
-                </li>
-                {% endfor %}
-            </ul>
-            
+
+                {% if sections.len() > 1 %}
+                    <!-- Display ingredients grouped by section -->
+                    {% for section in sections %}
+                        {% if section.ingredients.len() > 0 %}
+                            {% match section.name %}
+                            {% when Some with (name) %}
+                                <h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">{{ name }}</h3>
+                            {% when None %}
+                                {% if !loop.first %}<h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">Main</h3>{% endif %}
+                            {% endmatch %}
+
+                            <ul class="space-y-3 {% if !loop.last %}mb-4{% endif %}">
+                            {% for ingredient in section.ingredients %}
+                            <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
+                                {% match ingredient.reference_path %}
+                                {% when Some with (path) %}
+                                    <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        </svg>
+                                        {{ ingredient.name }}
+                                    </a>
+                                {% when None %}
+                                    <span class="font-medium">{{ ingredient.name }}</span>
+                                {% endmatch %}
+                                <span class="text-orange-700 font-semibold">
+                                    {% match ingredient.quantity %}
+                                    {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
+                                    {% match ingredient.unit %}
+                                    {% when Some with (unit) %} {{ unit }}{% when None %}{% endmatch %}
+                                </span>
+                            </li>
+                            {% endfor %}
+                            </ul>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <!-- Fallback to original flat list for recipes without sections -->
+                    <ul class="space-y-3">
+                    {% for ingredient in ingredients %}
+                    <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
+                        {% match ingredient.reference_path %}
+                        {% when Some with (path) %}
+                            <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                                {{ ingredient.name }}
+                            </a>
+                        {% when None %}
+                            <span class="font-medium">{{ ingredient.name }}</span>
+                        {% endmatch %}
+                        <span class="text-orange-700 font-semibold">
+                            {% match ingredient.quantity %}
+                            {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
+                            {% match ingredient.unit %}
+                            {% when Some with (unit) %} {{ unit }}{% when None %}{% endmatch %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                    </ul>
+                {% endif %}
+
             {% if cookware.len() > 0 %}
             <h2 class="text-xl font-bold mt-6 mb-4 text-green-600">🍳 Cookware</h2>
             <ul class="space-y-2">
@@ -179,35 +239,55 @@
             {% endif %}
             </div>
         </div>
-        
+
         <div class="md:col-span-2">
             <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h2 class="text-2xl font-bold mb-6 text-orange-600">📝 Instructions</h2>
-                <ol class="space-y-4">
-                    {% for step in steps %}
-                    <li class="bg-gradient-to-r from-gray-50 to-orange-50 rounded-xl p-4">
-                        <div class="flex gap-4">
-                            <div class="step-number">{{ loop.index }}</div>
-                            <div class="flex-1">
-                                <div class="text-gray-700 mb-2 leading-8">
-                                {% for item in step.items %}
-                                    {% match item %}
-                                        {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with (name) %}<span class="ingredient-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% endmatch %}{% endfor %}
-                                </div>
-                                {% if step.ingredients.len() > 0 %}
-                                <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
-                                    {% for ing in step.ingredients %}
-                                        <span class="inline-block mr-3">
-                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
-                                        </span>
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
+                {% for section in sections %}
+                    {% match section.name %}
+                    {% when Some with (name) %}
+                        <h3 class="text-xl font-semibold mt-6 mb-4 text-orange-700 border-b-2 border-orange-200 pb-2">{{ name }}</h3>
+                    {% when None %}
+                    {% endmatch %}
+
+                    {% if section.notes.len() > 0 %}
+                    <div class="mb-4">
+                        {% for note in section.notes %}
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-3 border-l-4 border-blue-400">
+                            <div class="flex items-start gap-2">
+                                <span class="text-blue-600">📝</span>
+                                <p class="text-gray-700 italic">{{ note }}</p>
                             </div>
                         </div>
-                    </li>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <ol class="space-y-4 {% if !loop.first %}mt-4{% endif %}">
+                        {% for step in section.steps %}
+                        <li class="bg-gradient-to-r from-gray-50 to-orange-50 rounded-xl p-4">
+                            <div class="flex gap-4">
+                                <div class="step-number">{{ section.step_offset + loop.index }}</div>
+                                <div class="flex-1">
+                                    <div class="text-gray-700 mb-2 leading-8">
+                                    {% for item in step.items %}
+                                        {% match item %}
+                                            {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% endmatch %}{% endfor %}
+                                    </div>
+                                    {% if step.ingredients.len() > 0 %}
+                                    <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
+                                        {% for ing in step.ingredients %}
+                                            <span class="inline-block mr-3">
+                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ol>
                 {% endfor %}
-                </ol>
             </div>
         </div>
     </div>
@@ -216,7 +296,7 @@
 <script>
 async function addToShoppingList(event, recipePath) {
     const scale = document.getElementById('scale').value;
-    
+
     try {
         const response = await fetch('/api/shopping_list/add', {
             method: 'POST',
@@ -229,7 +309,7 @@ async function addToShoppingList(event, recipePath) {
                 scale: parseFloat(scale)
             })
         });
-        
+
         if (response.ok) {
             // Change button temporarily to show success
             const button = event.target.closest('button');
@@ -242,7 +322,7 @@ async function addToShoppingList(event, recipePath) {
             `;
             button.classList.add('bg-gradient-to-r', 'from-green-500', 'to-green-600');
             button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
-            
+
             // Reset after 2 seconds
             setTimeout(() => {
                 button.innerHTML = originalContent;
