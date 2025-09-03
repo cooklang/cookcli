@@ -36,19 +36,19 @@ jobs:
         components: rustfmt, clippy
 
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache cargo build
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
@@ -119,7 +119,7 @@ jobs:
       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
 
     - name: Upload coverage to codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./cobertura.xml
         fail_ci_if_error: false
@@ -155,7 +155,7 @@ jobs:
 
     - name: Upload snapshot diffs
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: snapshot-diffs
         path: tests/snapshots/*.snap.new
