@@ -229,9 +229,17 @@ async fn recipe_page(
 
     let mut ingredients = Vec::new();
     let mut cookware = Vec::new();
-    let mut steps = Vec::new();
+    let mut sections = Vec::new();
 
     for ingredient in &recipe.ingredients {
+        let reference_path = ingredient.reference.as_ref().map(|r| {
+            if r.components.is_empty() {
+                r.name.clone()
+            } else {
+                format!("{}/{}", r.components.join("/"), r.name)
+            }
+        });
+
         ingredients.push(IngredientData {
             name: ingredient.name.to_string(),
             quantity: ingredient
@@ -242,6 +250,7 @@ async fn recipe_page(
                 .quantity
                 .as_ref()
                 .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+            reference_path,
         });
     }
 
@@ -251,91 +260,157 @@ async fn recipe_page(
         });
     }
 
+    let mut total_steps = 0;
     for section in &recipe.sections {
+        let mut section_steps = Vec::new();
+        let mut section_notes = Vec::new();
+        let mut section_ingredient_indices = std::collections::HashSet::new();
+
         for content in &section.content {
             use cooklang::Content;
-            if let Content::Step(step) = content {
-                let mut step_items = Vec::new();
-                let mut step_ingredients = Vec::new();
+            match content {
+                Content::Step(step) => {
+                    let mut step_items = Vec::new();
+                    let mut step_ingredients = Vec::new();
 
-                for item in &step.items {
-                    use crate::server::templates::{StepIngredient, StepItem};
-                    use cooklang::Item;
+                    for item in &step.items {
+                        use crate::server::templates::{StepIngredient, StepItem};
+                        use cooklang::Item;
 
-                    match item {
-                        Item::Text { value } => {
-                            step_items.push(StepItem::Text(value.to_string()));
-                        }
-                        Item::Ingredient { index } => {
-                            if let Some(ing) = recipe.ingredients.get(*index) {
-                                step_items.push(StepItem::Ingredient(ing.name.to_string()));
-
-                                // Also add to step ingredients list
-                                step_ingredients.push(StepIngredient {
-                                    name: ing.name.to_string(),
-                                    quantity: ing.quantity.as_ref().and_then(|q| {
-                                        crate::util::format::format_quantity(q.value())
-                                    }),
-                                    unit: ing
-                                        .quantity
-                                        .as_ref()
-                                        .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
-                                });
+                        match item {
+                            Item::Text { value } => {
+                                step_items.push(StepItem::Text(value.to_string()));
                             }
-                        }
-                        Item::Cookware { index } => {
-                            if let Some(cw) = recipe.cookware.get(*index) {
-                                step_items.push(StepItem::Cookware(cw.name.to_string()));
-                            }
-                        }
-                        Item::Timer { index } => {
-                            if let Some(timer) = recipe.timers.get(*index) {
-                                let mut timer_text = String::new();
-
-                                // Add timer quantity and unit
-                                if let Some(quantity) = &timer.quantity {
-                                    if let Some(formatted) =
-                                        crate::util::format::format_quantity(quantity.value())
-                                    {
-                                        timer_text.push_str(&formatted);
-                                    }
-                                    if let Some(unit) = quantity.unit() {
-                                        if !timer_text.is_empty() {
-                                            timer_text.push(' ');
+                            Item::Ingredient { index } => {
+                                section_ingredient_indices.insert(*index);
+                                if let Some(ing) = recipe.ingredients.get(*index) {
+                                    let reference_path = ing.reference.as_ref().map(|r| {
+                                        if r.components.is_empty() {
+                                            r.name.clone()
+                                        } else {
+                                            format!("{}/{}", r.components.join("/"), r.name)
                                         }
-                                        timer_text.push_str(unit);
-                                    }
-                                }
+                                    });
 
-                                // If no duration info, just show "timer"
-                                if timer_text.is_empty() {
-                                    timer_text = "timer".to_string();
-                                }
+                                    step_items.push(StepItem::Ingredient {
+                                        name: ing.name.to_string(),
+                                        reference_path,
+                                    });
 
-                                step_items.push(StepItem::Timer(timer_text));
+                                    // Also add to step ingredients list
+                                    step_ingredients.push(StepIngredient {
+                                        name: ing.name.to_string(),
+                                        quantity: ing.quantity.as_ref().and_then(|q| {
+                                            crate::util::format::format_quantity(q.value())
+                                        }),
+                                        unit: ing
+                                            .quantity
+                                            .as_ref()
+                                            .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+                                    });
+                                }
                             }
-                        }
-                        Item::InlineQuantity { index } => {
-                            if let Some(q) = recipe.inline_quantities.get(*index) {
-                                let mut qty = crate::util::format::format_quantity(q.value())
-                                    .unwrap_or_default();
-                                if let Some(unit) = q.unit() {
-                                    if !qty.is_empty() {
-                                        qty.push_str(&format!(" {unit}"));
-                                    } else {
-                                        qty = unit.to_string();
-                                    }
+                            Item::Cookware { index } => {
+                                if let Some(cw) = recipe.cookware.get(*index) {
+                                    step_items.push(StepItem::Cookware(cw.name.to_string()));
                                 }
-                                step_items.push(StepItem::Quantity(qty));
+                            }
+                            Item::Timer { index } => {
+                                if let Some(timer) = recipe.timers.get(*index) {
+                                    let mut timer_text = String::new();
+
+                                    // Add timer quantity and unit
+                                    if let Some(quantity) = &timer.quantity {
+                                        if let Some(formatted) =
+                                            crate::util::format::format_quantity(quantity.value())
+                                        {
+                                            timer_text.push_str(&formatted);
+                                        }
+                                        if let Some(unit) = quantity.unit() {
+                                            if !timer_text.is_empty() {
+                                                timer_text.push(' ');
+                                            }
+                                            timer_text.push_str(unit);
+                                        }
+                                    }
+
+                                    // If no duration info, just show "timer"
+                                    if timer_text.is_empty() {
+                                        timer_text = "timer".to_string();
+                                    }
+
+                                    step_items.push(StepItem::Timer(timer_text));
+                                }
+                            }
+                            Item::InlineQuantity { index } => {
+                                if let Some(q) = recipe.inline_quantities.get(*index) {
+                                    let mut qty = crate::util::format::format_quantity(q.value())
+                                        .unwrap_or_default();
+                                    if let Some(unit) = q.unit() {
+                                        if !qty.is_empty() {
+                                            qty.push_str(&format!(" {unit}"));
+                                        } else {
+                                            qty = unit.to_string();
+                                        }
+                                    }
+                                    step_items.push(StepItem::Quantity(qty));
+                                }
                             }
                         }
                     }
+                    section_steps.push(StepData {
+                        items: step_items,
+                        ingredients: step_ingredients,
+                    });
                 }
-                steps.push(StepData {
-                    items: step_items,
-                    ingredients: step_ingredients,
-                });
+                Content::Text(text) => {
+                    // Skip list bullet items
+                    if text.trim() != "-" {
+                        section_notes.push(text.trim().to_string());
+                    }
+                }
             }
+        }
+
+        // Only add sections that have steps or notes
+        if !section_steps.is_empty() || !section_notes.is_empty() {
+            use crate::server::templates::RecipeSection;
+
+            // Collect ingredients used in this section
+            let mut section_ingredients = Vec::new();
+            for idx in section_ingredient_indices {
+                if let Some(ingredient) = recipe.ingredients.get(idx) {
+                    let reference_path = ingredient.reference.as_ref().map(|r| {
+                        if r.components.is_empty() {
+                            r.name.clone()
+                        } else {
+                            format!("{}/{}", r.components.join("/"), r.name)
+                        }
+                    });
+
+                    section_ingredients.push(IngredientData {
+                        name: ingredient.name.to_string(),
+                        quantity: ingredient
+                            .quantity
+                            .as_ref()
+                            .and_then(|q| crate::util::format::format_quantity(q.value())),
+                        unit: ingredient
+                            .quantity
+                            .as_ref()
+                            .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+                        reference_path,
+                    });
+                }
+            }
+
+            sections.push(RecipeSection {
+                name: section.name.clone(),
+                steps: section_steps.clone(),
+                notes: section_notes.clone(),
+                step_offset: total_steps,
+                ingredients: section_ingredients,
+            });
+            total_steps += section_steps.len();
         }
     }
 
@@ -408,7 +483,7 @@ async fn recipe_page(
         tags,
         ingredients,
         cookware,
-        steps,
+        sections,
         image_path,
     };
 
