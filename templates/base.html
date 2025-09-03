@@ -1,17 +1,457 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Cook{% endblock %}</title>
     <link href="/static/css/output.css" rel="stylesheet">
     <link href="/static/css/custom-styles.css" rel="stylesheet">
+    <script>
+        // Check for saved theme preference or default to light
+        const theme = localStorage.getItem('theme') || 'light';
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+    </script>
     <style>
         .viewport {
             width: 100%;
             max-width: 72rem;
             margin: 2rem auto;
             padding: 0 1rem;
+        }
+
+        /* Dark mode styles */
+        .dark {
+            color-scheme: dark;
+        }
+
+        .dark body {
+            background-color: #111827;
+        }
+
+        .dark .bg-gray-50 {
+            background-color: #111827;
+        }
+
+        .dark .bg-white {
+            background-color: #1f2937;
+        }
+
+        .dark .text-gray-900 {
+            color: #f9fafb;
+        }
+
+        .dark .text-gray-800 {
+            color: #e5e7eb;
+        }
+
+        .dark .text-gray-700 {
+            color: #d1d5db;
+        }
+
+        .dark .text-gray-600 {
+            color: #9ca3af;
+        }
+
+        .dark .text-gray-500 {
+            color: #6b7280;
+        }
+
+        .dark .text-gray-400 {
+            color: #9ca3af;
+        }
+
+        .dark .border-gray-300 {
+            border-color: #4b5563;
+        }
+
+        .dark .border-gray-200 {
+            border-color: #374151;
+        }
+
+        .dark .border-purple-200 {
+            border-color: #7c3aed;
+        }
+
+        .dark .hover\\:text-gray-900:hover {
+            color: #f9fafb;
+        }
+
+        .dark .hover\\:text-gray-800:hover {
+            color: #e5e7eb;
+        }
+
+        .dark .hover\\:bg-gray-100:hover {
+            background-color: #374151;
+        }
+
+        .dark .bg-gradient-to-r.from-orange-50.to-yellow-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        .dark .bg-gradient-to-r.from-gray-50.to-orange-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        .dark .bg-gradient-to-r.from-green-50.to-blue-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        .dark .bg-gradient-to-r.from-blue-50.to-purple-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        /* Shopping list specific dark styles */
+        .dark .bg-gradient-to-r.from-purple-50.to-pink-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        .dark .bg-gradient-to-r.from-green-50.to-emerald-50 {
+            background: linear-gradient(to right, #1f2937, #111827);
+            border: 1px solid #374151;
+        }
+
+        .dark .border-purple-200 {
+            border-color: #4c1d95;
+        }
+
+        .dark .border-green-200 {
+            border-color: #065f46;
+        }
+
+        .dark .border-orange-200 {
+            border-color: #7c2d12;
+        }
+
+        .dark .border-blue-400 {
+            border-color: #1e3a8a;
+        }
+
+        /* Dark mode hover states */
+        .dark .hover\\:bg-gradient-to-r:hover {
+            background: #374151 !important;
+        }
+
+        .dark .hover\\:from-purple-50:hover,
+        .dark .hover\\:to-pink-50:hover {
+            background: #374151 !important;
+        }
+
+        .dark .hover\\:from-orange-100:hover,
+        .dark .hover\\:to-amber-100:hover {
+            background: #374151 !important;
+        }
+
+        .dark .hover\\:from-purple-100:hover,
+        .dark .hover\\:to-pink-100:hover {
+            background: #374151 !important;
+        }
+
+        .dark a.hover\\:bg-gradient-to-r:hover {
+            background: #374151 !important;
+            color: #e5e7eb !important;
+        }
+
+        /* Fix for navigation pill hover states */
+        .dark a[href="/"].hover\\:bg-gradient-to-r:hover,
+        .dark a[href="/shopping-list"].hover\\:bg-gradient-to-r:hover {
+            background: #374151 !important;
+        }
+
+        .dark .hover\\:text-orange-700:hover {
+            color: #fb923c !important;
+        }
+
+        .dark .hover\\:text-purple-700:hover {
+            color: #a78bfa !important;
+        }
+
+        /* Button dark mode styles */
+        .dark .bg-gray-200 {
+            background-color: #4b5563;
+        }
+
+        .dark .hover\\:bg-gray-300:hover {
+            background-color: #6b7280;
+        }
+
+        .dark .bg-gray-200.text-gray-700 {
+            color: #e5e7eb;
+        }
+
+        /* Text colors in various contexts */
+        .dark .text-purple-600 {
+            color: #c084fc;
+        }
+
+        .dark .text-red-500 {
+            color: #ef4444;
+        }
+
+        .dark .hover\\:text-red-700:hover {
+            color: #dc2626;
+        }
+
+        .dark .text-green-600 {
+            color: #34d399;
+        }
+
+        .dark .shadow-lg, .dark .shadow-md, .dark .shadow-xl {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Dark mode tag and badge styles */
+        .dark .bg-gradient-to-r.from-yellow-100.to-orange-100 {
+            background: linear-gradient(to right, #374151, #4b5563);
+        }
+
+        .dark .text-orange-700 {
+            color: #fb923c;
+        }
+
+        .dark .text-orange-600 {
+            color: #fb923c;
+        }
+
+        .dark .bg-gradient-to-r.from-purple-100.to-pink-100 {
+            background: linear-gradient(to right, #374151, #4b5563);
+        }
+
+        .dark .text-purple-700 {
+            color: #a78bfa;
+        }
+
+        .dark .bg-gray-100 {
+            background-color: #374151;
+        }
+
+        /* Recipe card specific dark styles */
+        .dark .recipe-card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+        }
+
+        /* Search results dark mode */
+        .dark #search-results {
+            background-color: #1f2937;
+            border-color: #7c3aed;
+        }
+
+        .dark #search-results a {
+            color: #e5e7eb;
+        }
+
+        .dark #search-results a:hover {
+            background-color: #374151;
+        }
+
+        .dark #search-results .text-gray-800 {
+            color: #e5e7eb;
+        }
+
+        .dark #search-results .text-gray-500 {
+            color: #9ca3af;
+        }
+
+        /* Override inline hover styles in search results */
+        .dark #search-results a.hover\\:bg-gradient-to-r:hover {
+            background: #374151 !important;
+        }
+
+        .dark #search-results .border-gray-100 {
+            border-color: #374151;
+        }
+
+        .dark #search-input {
+            background-color: #374151;
+            border-color: #7c3aed;
+            color: #e5e7eb;
+        }
+
+        .dark #search-input::placeholder {
+            color: #6b7280;
+        }
+
+        .dark #search-input:focus {
+            border-color: #a78bfa;
+        }
+
+        /* Theme toggle button styles */
+        .theme-toggle {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background-color: #9ca3af;
+            border-radius: 12px;
+            padding: 2px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .theme-toggle.dark {
+            background-color: #7c3aed;
+        }
+
+        .theme-toggle-handle {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle.dark .theme-toggle-handle {
+            transform: translateX(26px);
+        }
+
+        @media print {
+            /* Global print styles */
+            * {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            body {
+                background: white !important;
+                margin: 0;
+                padding: 0;
+            }
+
+            .viewport {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Hide navigation and non-essential elements */
+            nav, #search-container, #search-input, #search-results, .print\\:hidden, .breadcrumb {
+                display: none !important;
+            }
+
+            /* Hide entire navigation bar and its contents */
+            .bg-white.shadow-lg.rounded-2xl.mb-8 {
+                display: none !important;
+            }
+
+            /* Hide all navigation links */
+            a[href="/"], a[href="/shopping-list"], a[href="/preferences"] {
+                display: none !important;
+            }
+
+            /* Recipe layout for print */
+            .grid {
+                display: block !important;
+            }
+
+            /* Remove shadows and borders for cleaner print */
+            .shadow-lg, .shadow-md, .shadow-xl {
+                box-shadow: none !important;
+            }
+
+            .rounded-2xl, .rounded-xl, .rounded-lg {
+                border-radius: 0 !important;
+            }
+
+            /* Optimize colors for print */
+            .bg-gradient-to-r {
+                background: transparent !important;
+            }
+
+            .text-orange-600, .text-orange-700 {
+                color: #000 !important;
+                font-weight: bold;
+            }
+
+            .text-green-600 {
+                color: #000 !important;
+            }
+
+            /* Page breaks */
+            .md\\:col-span-1, .md\\:col-span-2 {
+                page-break-inside: avoid;
+                width: 100% !important;
+            }
+
+            /* Ingredient and step styling */
+            .bg-gradient-to-r.from-orange-50,
+            .bg-gradient-to-r.from-green-50,
+            .bg-gradient-to-r.from-gray-50,
+            .bg-gradient-to-r.from-blue-50 {
+                background: #f9f9f9 !important;
+                border: 1px solid #ddd !important;
+            }
+
+            /* Step numbers */
+            .step-number {
+                background: #000 !important;
+                color: #fff !important;
+            }
+
+            /* Images */
+            img {
+                max-height: 300px !important;
+                page-break-inside: avoid;
+                page-break-after: avoid;
+            }
+
+            /* Recipe sections on same page if possible */
+            h2, h3 {
+                page-break-after: avoid;
+            }
+
+            ol, ul {
+                page-break-inside: avoid;
+            }
+
+            /* Compact spacing */
+            .mb-8, .mb-6, .mb-4 {
+                margin-bottom: 0.5rem !important;
+            }
+
+            .p-6 {
+                padding: 0.5rem !important;
+            }
+
+            /* Recipe header */
+            h1 {
+                color: #000 !important;
+                font-size: 1.5rem !important;
+                margin-bottom: 0 !important;
+            }
+
+            /* Print-specific flexbox utilities */
+            .print\\:flex-row {
+                flex-direction: row !important;
+            }
+
+            .print\\:items-center {
+                align-items: center !important;
+            }
+
+            .print\\:block {
+                display: block !important;
+            }
+
+            .print\\:text-2xl {
+                font-size: 1.5rem !important;
+            }
+
+            /* Ensure ingredients and instructions stay together */
+            .bg-white {
+                background: white !important;
+                border: none !important;
+                padding: 0 !important;
+            }
         }
     </style>
 </head>
@@ -23,23 +463,23 @@
                     <a href="/" class="flex items-center space-x-3">
                         <span class="text-2xl font-bold bg-gradient-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">Cook</span>
                     </a>
-                    
+
                     <div class="relative z-50" id="search-container">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
                         </div>
-                        <input type="text" 
-                               id="search-input" 
-                               placeholder="Search recipes..." 
+                        <input type="text"
+                               id="search-input"
+                               placeholder="Search recipes..."
                                class="w-80 pl-10 pr-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition-all shadow-md hover:shadow-lg">
-                        <div id="search-results" 
+                        <div id="search-results"
                              class="absolute top-full mt-2 w-full bg-white border-2 border-purple-200 rounded-xl shadow-xl hidden max-h-96 overflow-y-auto"
                              style="z-index: 9999;">
                         </div>
                     </div>
-                    
+
                     <div class="flex space-x-2">
                         <a href="/" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>Recipes</span>
@@ -50,39 +490,58 @@
                         <a href="/preferences" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "preferences" %}bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gray-100 hover:text-gray-800 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>⚙️</span>
                         </a>
+                        <!-- Theme toggle button -->
+                        <button onclick="toggleTheme()" class="ml-2 p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors print:hidden" aria-label="Toggle theme">
+                            <svg class="w-5 h-5 hidden dark:block text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <svg class="w-5 h-5 block dark:hidden text-gray-700" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
         </nav>
-        
+
         <main>
             {% block content %}{% endblock %}
         </main>
     </div>
-    
+
     <script>
+        // Theme toggle function
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.classList.contains('dark') ? 'dark' : 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+            html.classList.toggle('dark');
+            localStorage.setItem('theme', newTheme);
+        }
+
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
         let searchTimeout;
-        
+
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const query = this.value.trim();
-            
+
             if (query.length < 2) {
                 searchResults.classList.add('hidden');
                 return;
             }
-            
+
             searchTimeout = setTimeout(async () => {
                 try {
                     const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
                     const results = await response.json();
-                    
+
                     if (results.length === 0) {
                         searchResults.innerHTML = '<div class="p-4 text-gray-500 text-center">No recipes found</div>';
                     } else {
-                        searchResults.innerHTML = results.map(recipe => 
+                        searchResults.innerHTML = results.map(recipe =>
                             `<a href="/recipe/${recipe.path}" class="block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">
                                 <div class="font-medium text-gray-800">${recipe.name}</div>
                             </a>`
@@ -94,14 +553,14 @@
                 }
             }, 300);
         });
-        
+
         document.addEventListener('click', function(e) {
             if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 searchResults.classList.add('hidden');
             }
         });
     </script>
-    
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
