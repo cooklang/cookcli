@@ -52,6 +52,13 @@ pub struct ReportArgs {
     /// Ingredients marked as pantry items can be accessed in templates.
     #[arg(short = 'p', long, value_hint = clap::ValueHint::FilePath)]
     pantry: Option<Utf8PathBuf>,
+
+    /// Base path for resolving recipe references
+    ///
+    /// Defaults to the current working directory. This is used when
+    /// recipes reference other recipes using relative paths.
+    #[arg(short = 'b', long, value_hint = clap::ValueHint::DirPath)]
+    base_path: Option<Utf8PathBuf>,
 }
 
 pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
@@ -62,7 +69,7 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let (recipe_name, scaling_factor) = split_recipe_name_and_scaling_factor(&args.recipe)
         .map(|(name, factor)| {
             let scale = factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::CliArgs::command();
+                let mut cmd = crate::args::CliArgs::command();
                 cmd.error(
                     clap::error::ErrorKind::InvalidValue,
                     format!("Invalid scaling factor for '{name}': {err}"),
@@ -81,7 +88,7 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let template = fs::read_to_string(&args.template)
         .with_context(|| format!("Failed to read template file: {}", args.template))?;
 
-    // Create config with scale, optional datastore, and base_path from context
+    // Create config with scale, optional datastore, and base_path
     let mut builder = Config::builder();
     builder.scale(scaling_factor);
 
@@ -89,12 +96,32 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
         builder.datastore_path(PathBuf::from(datastore));
     }
 
-    // Use the base_path from context
-    builder.base_path(PathBuf::from(ctx.base_path()));
+    // Use provided base_path or fall back to context
+    if let Some(base_path) = args.base_path {
+        // Convert to absolute path if relative
+        let abs_base_path = if base_path.is_absolute() {
+            PathBuf::from(base_path)
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(base_path)
+        };
+        builder.base_path(abs_base_path);
+    } else {
+        builder.base_path(PathBuf::from(ctx.base_path()));
+    }
 
     // Add aisle configuration if provided
     if let Some(aisle_path) = args.aisle {
-        builder.aisle_path(PathBuf::from(aisle_path));
+        // Convert to absolute path if relative
+        let abs_aisle_path = if aisle_path.is_absolute() {
+            PathBuf::from(aisle_path)
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(aisle_path)
+        };
+        builder.aisle_path(abs_aisle_path);
     } else if let Some(aisle_path) = ctx.aisle() {
         // Use context aisle if not explicitly provided
         builder.aisle_path(PathBuf::from(aisle_path));
@@ -102,7 +129,15 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
 
     // Add pantry configuration if provided
     if let Some(pantry_path) = args.pantry {
-        builder.pantry_path(PathBuf::from(pantry_path));
+        // Convert to absolute path if relative
+        let abs_pantry_path = if pantry_path.is_absolute() {
+            PathBuf::from(pantry_path)
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(pantry_path)
+        };
+        builder.pantry_path(abs_pantry_path);
     } else if let Some(pantry_path) = ctx.pantry() {
         // Use context pantry if not explicitly provided
         builder.pantry_path(PathBuf::from(pantry_path));
