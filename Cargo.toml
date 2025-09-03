@@ -6,6 +6,10 @@ description = "A command-line interface for managing and working with Cooklang r
 license = "MIT"
 include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static"]
 
+[lib]
+name = "cookcli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cook"
 path = "src/main.rs"
@@ -46,3 +50,12 @@ tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 yansi = "1"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+insta = { version = "1", features = ["yaml", "json", "filters"] }
+strip-ansi-escapes = "0.2"
+tokio = { version = "1", features = ["full", "test-util"] }
+reqwest = "0.11"
