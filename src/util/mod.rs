@@ -146,7 +146,7 @@ pub fn extract_ingredients(
     let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
         .map(|(name, scaling_factor)| {
             let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::CliArgs::command();
+                let mut cmd = crate::args::CliArgs::command();
                 cmd.error(
                     clap::error::ErrorKind::InvalidValue,
                     format!("Invalid scaling target for '{name}': {err}"),
@@ -157,13 +157,21 @@ pub fn extract_ingredients(
         })
         .unwrap_or((entry, 1.0));
 
-    let recipe_entry = get_recipe(base_path, name)?;
+    let recipe_entry =
+        get_recipe(base_path, name).with_context(|| format!("Failed to find recipe '{name}'"))?;
     let recipe = parse_recipe_from_entry(&recipe_entry, scaling_factor)?;
     let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
 
+    tracing::debug!(
+        "ignore_references = {}, ref_indices.len() = {}",
+        ignore_references,
+        ref_indices.len()
+    );
     if !ignore_references {
         // Determine the base path for resolving references
         // If the recipe has a path, use its parent directory as the base
+        // However, if the base_path already points to a subdirectory (like Plans/),
+        // and we have a relative reference (./), we should use the parent of base_path
         let ref_base_path = recipe_entry
             .path()
             .and_then(|p| p.parent())
@@ -175,24 +183,50 @@ pub fn extract_ingredients(
             let reference = ingredient.reference.as_ref().unwrap();
 
             // Get the referenced recipe path
-            // Handle the case where components might be ["."] or empty
+            // The parser strips the "./" prefix from components, so we need to reconstruct it
+            // For references like @./Sides/Mashed Potatoes{}, components will be ["Sides"]
+            // For references like @./recipe{}, components will be empty
             let ref_path = if reference.components.is_empty() {
+                // Direct reference like @./recipe{} or @recipe{}
                 reference.name.clone()
-            } else if reference.components.len() == 1 && reference.components[0] == "." {
-                format!("./{}", reference.name)
             } else {
-                reference.path("/")
+                // Reference with path components like @./Sides/recipe{}
+                // Always treat as relative path since cooklang uses ./ for local references
+                format!("./{}/{}", reference.components.join("/"), reference.name)
             };
 
             // If the reference starts with ./ or ../, resolve it relative to the recipe's location
             // Otherwise, use the original base_path
-            let search_base = if ref_path.starts_with("./") || ref_path.starts_with("../") {
-                &ref_base_path
-            } else {
-                base_path
-            };
+            let search_base: Utf8PathBuf =
+                if ref_path.starts_with("./") || ref_path.starts_with("../") {
+                    // For relative references starting with ./, we need to determine the correct base:
+                    // - If the recipe is in a subdirectory (like Plans/), references should be
+                    //   resolved relative to the parent of that subdirectory
+                    // - This allows Plans/menu.menu to reference ./Sides/recipe correctly
 
-            let ref_entry = get_recipe(search_base, &ref_path)?;
+                    // Check if ref_base_path has a parent (meaning it's not root)
+                    // and use the parent for ./ references to access sibling directories
+                    if ref_path.starts_with("./") && ref_base_path.parent().is_some() {
+                        // Use parent directory for ./ references to access siblings
+                        ref_base_path.parent().unwrap().to_path_buf()
+                    } else {
+                        // Use ref_base_path as-is for ../ references or if no parent
+                        ref_base_path.clone()
+                    }
+                } else {
+                    base_path.clone()
+                };
+
+            let ref_entry = get_recipe(&search_base, &ref_path).with_context(|| {
+                format!(
+                    "Failed to find referenced recipe '{}' from '{}'",
+                    ref_path,
+                    recipe_entry
+                        .path()
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| name.to_string())
+                )
+            })?;
 
             // Parse and scale the recipe based on the quantity specification
             let ref_recipe = match ingredient.quantity.as_ref() {
@@ -219,6 +253,12 @@ pub fn extract_ingredients(
                         .context("Failed to parse recipe")?;
 
                     // Use the new scale_to_target function
+                    tracing::debug!(
+                        "Scaling recipe '{}' to target {} {}",
+                        ref_path,
+                        target_value,
+                        quantity.unit().unwrap_or("(no unit)")
+                    );
                     recipe
                         .scale_to_target(target_value, quantity.unit(), PARSER.converter())
                         .context(format!(
@@ -228,10 +268,8 @@ pub fn extract_ingredients(
                             quantity.unit().unwrap_or("(no unit)")
                         ))?;
 
-                    // Apply any additional CLI scaling
-                    if scaling_factor != 1.0 {
-                        recipe.scale(scaling_factor, PARSER.converter());
-                    }
+                    // Don't apply additional CLI scaling when using scale_to_target
+                    // The target value already accounts for the scaling
 
                     Arc::new(recipe)
                 }
@@ -241,8 +279,76 @@ pub fn extract_ingredients(
                 }
             };
 
-            // Add the scaled recipe's ingredients to the list
-            list.add_recipe(&ref_recipe, converter, true);
+            // Find ingredients with references that need to be processed
+            let mut nested_refs = Vec::new();
+            for (index, ingredient) in ref_recipe.ingredients.iter().enumerate() {
+                if ingredient.reference.is_some() {
+                    nested_refs.push(index);
+                }
+            }
+
+            // Process nested references recursively
+            tracing::debug!("Found {} nested references to process", nested_refs.len());
+            for nested_index in nested_refs {
+                let nested_ingredient = &ref_recipe.ingredients[nested_index];
+                tracing::debug!("Processing nested ingredient: {:?}", nested_ingredient.name);
+                if let Some(nested_ref) = &nested_ingredient.reference {
+                    // Build the full path for the nested reference
+                    let nested_path = if nested_ref.components.is_empty() {
+                        nested_ref.name.clone()
+                    } else {
+                        format!("./{}/{}", nested_ref.components.join("/"), nested_ref.name)
+                    };
+
+                    // Get the nested recipe to check its servings metadata
+                    let nested_entry_path = get_recipe(&search_base, &nested_path)?;
+                    let nested_content = nested_entry_path
+                        .content()
+                        .context("Failed to read nested recipe")?;
+                    let (nested_recipe, _) = PARSER
+                        .parse(&nested_content)
+                        .into_result()
+                        .context("Failed to parse nested recipe")?;
+
+                    // For nested references, we need to handle scaling properly based on units
+                    if let Some(quantity) = &nested_ingredient.quantity {
+                        if quantity.unit() == Some("servings") {
+                            // This is a servings-based reference
+                            // The quantity value is the target number of servings we need
+                            if let Value::Number(target_servings) = quantity.value() {
+                                // We need to scale the nested recipe to produce target_servings
+                                let mut scaled_nested = nested_recipe;
+                                let target = target_servings.to_string().parse().unwrap_or(1.0);
+                                tracing::debug!("Scaling nested recipe to {} servings", target);
+                                scaled_nested
+                                    .scale_to_target(target, Some("servings"), PARSER.converter())
+                                    .context("Failed to scale nested recipe")?;
+
+                                // Now add this properly scaled nested recipe's ingredients
+                                // Pass false to exclude references - they will be handled recursively
+                                list.add_recipe(&Arc::new(scaled_nested), converter, false);
+                            }
+                        } else {
+                            // For non-servings units, treat the quantity as a regular scaling factor
+                            // This handles cases like "2 cups" of something
+                            if let Value::Number(num) = quantity.value() {
+                                let scaling = num.to_string().parse().unwrap_or(1.0);
+                                let mut scaled_nested = nested_recipe;
+                                scaled_nested.scale(scaling, PARSER.converter());
+                                list.add_recipe(&Arc::new(scaled_nested), converter, false);
+                            }
+                        }
+                    } else {
+                        // No quantity specified, use scale 1.0
+                        list.add_recipe(&Arc::new(nested_recipe), converter, false);
+                    }
+                }
+            }
+
+            // Now add the non-reference ingredients from the recipe
+            // We need to do this AFTER processing nested references to avoid duplicates
+            // Pass false to exclude references since we've already expanded them
+            list.add_recipe(&ref_recipe, converter, false);
         }
     }
 
@@ -252,8 +358,12 @@ pub fn extract_ingredients(
 }
 
 pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
+    // Remove ./ prefix if present before passing to cooklang_find
+    // The cooklang-find library doesn't expect the ./ prefix
+    let clean_name = name.strip_prefix("./").unwrap_or(name);
+
     Ok(cooklang_find::get_recipe(
         vec![base_path.clone()],
-        name.into(),
+        clean_name.into(),
     )?)
 }

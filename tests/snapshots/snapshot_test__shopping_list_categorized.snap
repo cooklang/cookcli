@@ -1,0 +1,11 @@
+---
+source: tests/snapshot_test.rs
+expression: cleaned_str
+---
+[dairy]
+eggs  2
+milk  1.5 cups
+[pantry]
+pasta 200 g
+[other]
+water 2 cups

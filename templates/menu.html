@@ -19,7 +19,7 @@
             {% endfor %}
         </ol>
     </nav>
-    
+
     <div class="mb-8">
         <!-- Menu image if available -->
         {% match image_path %}
@@ -41,16 +41,16 @@
             <div class="flex flex-wrap items-center gap-3">
                 <div class="flex items-center">
                     <label for="scale" class="text-sm font-medium text-gray-700 mr-2">Scale:</label>
-                    <input type="number" 
-                           id="scale" 
-                           value="{{ scale }}" 
-                           min="0.5" 
+                    <input type="number"
+                           id="scale"
+                           value="{{ scale }}"
+                           min="0.5"
                            max="200"
-                           step="0.5" 
+                           step="0.5"
                            class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
                            onchange="window.location.href = `/recipe/{{ recipe_path }}?scale=${this.value}`">
                 </div>
-                <button onclick="addToShoppingList(event, '{{ recipe_path }}')" 
+                <button onclick="addToShoppingList(event, '{{ recipe_path }}')"
                         class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -59,12 +59,12 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Menu info section -->
         <div class="space-y-4">
             {% match metadata %}
             {% when Some with (metadata) %}
-            
+
             <!-- Description if present -->
             {% match metadata.description %}
             {% when Some with (description) %}
@@ -73,7 +73,7 @@
             </div>
             {% when None %}
             {% endmatch %}
-            
+
             <!-- Metadata row -->
             <div id="metadata-container" class="flex flex-wrap gap-3">
                 {% match metadata.servings %}
@@ -81,30 +81,30 @@
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} servings</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.time %}
                 {% when Some with (time) %}
                 <span class="metadata-pill metadata-time">⏱️ {{ time }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 {% match metadata.author %}
                 {% when Some with (author) %}
                 <span class="metadata-pill metadata-author">👤 {{ author }}</span>
                 {% when None %}
                 {% endmatch %}
-                
+
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
                 {% endfor %}
             </div>
-            
+
             {% when None %}
             {% endmatch %}
         </div>
     </div>
-    
+
     <!-- Menu sections -->
     <div class="space-y-8">
             {% for section in sections %}
@@ -116,7 +116,7 @@
                 </div>
                 {% when None %}
                 {% endmatch %}
-                
+
                 <div class="p-6 space-y-4">
                     {% for line in section.lines %}
                     {% if line.len() == 1 %}
@@ -138,7 +138,7 @@
                                 {% match line[0] %}
                                 {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                     <span class="inline-flex items-center gap-1">
-                                        <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook" 
+                                        <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
                                            class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
                                             {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                         </a>
@@ -176,10 +176,10 @@
                             {% match item %}
                             {% when crate::server::templates::MenuSectionItem::Text with (text) %}
                                 <span class="text-gray-700">{{ text }}</span>
-                            
+
                             {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                 <span class="inline-flex items-center gap-1">
-                                    <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook" 
+                                    <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
                                        class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
                                         {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                     </a>
@@ -189,7 +189,7 @@
                                     {% when None %}
                                     {% endmatch %}
                                 </span>
-                            
+
                             {% when crate::server::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
                                 <span class="inline-flex items-center gap-1">
                                     <span class="ingredient-badge">
@@ -222,7 +222,7 @@ async function addToShoppingList(event, recipePath) {
     event.preventDefault();
     const button = event.currentTarget;
     const originalText = button.innerHTML;
-    
+
     try {
         const scale = document.getElementById('scale')?.value || 1;
         const response = await fetch('/api/shopping_list/add', {
@@ -230,18 +230,18 @@ async function addToShoppingList(event, recipePath) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 path: recipePath,
                 name: recipePath.split('/').pop().replace('.menu', ''),
                 scale: parseFloat(scale)
             })
         });
-        
+
         if (response.ok) {
             button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Added!';
             button.classList.add('bg-green-500', 'hover:bg-green-600');
             button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalText;
                 button.classList.remove('bg-green-500', 'hover:bg-green-600');
@@ -254,7 +254,7 @@ async function addToShoppingList(event, recipePath) {
         console.error('Error:', error);
         button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> Error';
         button.classList.add('bg-red-500', 'hover:bg-red-600');
-        
+
         setTimeout(() => {
             button.innerHTML = originalText;
             button.classList.remove('bg-red-500', 'hover:bg-red-600');

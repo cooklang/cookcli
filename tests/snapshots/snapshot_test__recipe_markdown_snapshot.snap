@@ -1,0 +1,28 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+---
+title: Pancakes
+servings: 4
+name: Pancakes
+---
+
+# Pancakes
+
+## Ingredients
+
+- *2 cups* flour
+- *1.5 cups* milk
+- *2* eggs
+- *2 tbsp* sugar
+
+## Cookware
+
+- griddle
+- 3
+
+## Steps
+
+1. Mix flour with milk. Add eggs and sugar. Cook on a griddle for 3%minutes
+per side.

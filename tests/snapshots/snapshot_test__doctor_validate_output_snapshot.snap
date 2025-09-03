@@ -1,0 +1,20 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+📄 simple.cook
+  ⚠️  Warning: Unsupported value for key: 'servings'
+  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+
+📄 sauce.cook
+  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+
+📄 with_errors.cook
+  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+
+📄 with_ref.cook
+  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+
+=== Validation Summary ===
+Total recipes scanned: 5
+⚠️  5 warning(s) found in 4 recipe(s)

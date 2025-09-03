@@ -1,0 +1,20 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+ Simple Recipe 
+
+servings: 2
+
+Ingredients:
+  water      2 cups 
+  salt       1 tsp  
+  pasta      200 g  
+
+Cookware:
+  pot      
+
+Steps:
+ 1. Boil water for 5 minutes. Add salt and pasta. Cook in a pot for another
+    10 minutes.
+     [water: 2 cups, salt: 1 tsp, pasta: 200 g]

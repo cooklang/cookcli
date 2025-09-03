@@ -1,0 +1,46 @@
+---
+source: tests/snapshot_test.rs
+expression: formatted
+---
+[
+  {
+    "category": "pantry",
+    "items": [
+      {
+        "name": "pasta",
+        "quantity": [
+          {
+            "unit": "g",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 200.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "other",
+    "items": [
+      {
+        "name": "water",
+        "quantity": [
+          {
+            "unit": "cups",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 2.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -106,7 +106,7 @@ pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
             output.push_str(&format!("{}\n\n", recipe.name));
 
             if let Some(desc) = &recipe.description {
-                output.push_str(&format!("{}\n\n", desc));
+                output.push_str(&format!("{desc}\n\n"));
             }
 
             output.push_str(&format!(

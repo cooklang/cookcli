@@ -24,7 +24,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Main content area with shopping list -->
     <div class="flex-1">
         <div id="shopping-list-results">
@@ -41,7 +41,7 @@ async function loadShoppingList() {
         const response = await fetch('/api/shopping_list/items');
         shoppingList = await response.json();
         renderSelectedRecipes();
-        
+
         // Automatically generate the shopping list if there are items
         if (shoppingList.length > 0) {
             await generateList();
@@ -53,13 +53,13 @@ async function loadShoppingList() {
 
 function renderSelectedRecipes() {
     const container = document.getElementById('selected-recipes');
-    
+
     if (shoppingList.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">No recipes selected. Add recipes from the recipe page.</p>';
         document.getElementById('list-content').innerHTML = '<p class="text-gray-500">No items in shopping list. Add recipes to get started.</p>';
         return;
     }
-    
+
     container.innerHTML = shoppingList.map((item, index) => `
         <div class="flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
             <div>
@@ -82,7 +82,7 @@ async function removeRecipe(path) {
             },
             body: JSON.stringify({ path })
         });
-        
+
         if (response.ok) {
             await loadShoppingList();
             // Note: loadShoppingList will automatically regenerate if there are items
@@ -97,7 +97,7 @@ async function clearList() {
         const response = await fetch('/api/shopping_list/clear', {
             method: 'POST',
         });
-        
+
         if (response.ok) {
             await loadShoppingList();
             document.getElementById('shopping-list-results').classList.add('hidden');
@@ -112,7 +112,7 @@ async function generateList() {
         alert('Please add some recipes first');
         return;
     }
-    
+
     try {
         const response = await fetch('/api/shopping_list', {
             method: 'POST',
@@ -124,7 +124,7 @@ async function generateList() {
                 scale: item.scale
             })))
         });
-        
+
         const data = await response.json();
         displayShoppingList(data);
     } catch (error) {
@@ -148,27 +148,27 @@ function extractNumericValue(obj) {
 function formatNumber(value) {
     // Round to reasonable precision
     const rounded = Math.round(value * 1000000) / 1000000;
-    
+
     // Check if it's effectively a whole number
     if (Math.abs(rounded % 1) < 0.0000001) {
         return Math.floor(rounded).toString();
     }
-    
+
     // Try to convert to common fraction
     const fraction = decimalToFraction(rounded);
     if (fraction) {
         return fraction;
     }
-    
+
     // Format as decimal with appropriate precision
     const rounded3 = Math.round(rounded * 1000) / 1000;
     let result = rounded3.toString();
-    
+
     // Remove trailing zeros after decimal point
     if (result.includes('.')) {
         result = result.replace(/\.?0+$/, '');
     }
-    
+
     return result;
 }
 
@@ -176,7 +176,7 @@ function decimalToFraction(value) {
     const epsilon = 0.0001;
     const whole = Math.floor(value);
     const fract = value - whole;
-    
+
     const commonFractions = [
         [0.125, "1/8"],
         [0.25, "1/4"],
@@ -188,7 +188,7 @@ function decimalToFraction(value) {
         [0.75, "3/4"],
         [0.875, "7/8"]
     ];
-    
+
     for (const [decimal, fractionStr] of commonFractions) {
         if (Math.abs(fract - decimal) < epsilon) {
             if (whole > 0) {
@@ -199,7 +199,7 @@ function decimalToFraction(value) {
             }
         }
     }
-    
+
     return null;
 }
 
@@ -210,7 +210,7 @@ function displayShoppingList(data) {
     const pantryItems = document.getElementById('pantry-items');
 
     let html = '';
-    
+
     // Display items to buy (organized by aisle)
     if (data.categories && data.categories.length > 0) {
         html += '<h2 class="text-2xl font-bold mb-4 text-orange-600">Shopping List</h2>';
@@ -224,8 +224,8 @@ function displayShoppingList(data) {
                         return `
                         <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition-colors">
                             <div class="flex items-center flex-1">
-                                <input type="checkbox" 
-                                    id="${itemId}" 
+                                <input type="checkbox"
+                                    id="${itemId}"
                                     class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 mr-3"
                                     onchange="toggleItem('${itemId}', this.checked, '${item.name}')">
                                 <label for="${itemId}" class="cursor-pointer flex-1">
@@ -266,7 +266,7 @@ function displayShoppingList(data) {
     } else {
         pantrySection.classList.add('hidden');
     }
-    
+
     if (html === '') {
         contentDiv.innerHTML = '<p class="text-gray-500">No items in shopping list</p>';
     } else {
@@ -344,7 +344,7 @@ function toggleItem(itemId, checked, ingredientName) {
             element.parentElement.querySelector('.item-name').style.opacity = '1';
         }
     }
-    
+
     // Save to localStorage using ingredient names
     localStorage.setItem('checkedShoppingItems', JSON.stringify(Array.from(checkedItems)));
 }
@@ -354,7 +354,7 @@ function loadCheckedStates() {
     const saved = localStorage.getItem('checkedShoppingItems');
     if (saved) {
         checkedItems = new Set(JSON.parse(saved));
-        
+
         // Apply checked states to checkboxes by matching ingredient names
         document.querySelectorAll('.item-name').forEach(nameElement => {
             const ingredientName = nameElement.textContent.trim();

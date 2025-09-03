@@ -21,7 +21,7 @@ pub struct RecipeTemplate {
     pub tags: Vec<String>,
     pub ingredients: Vec<IngredientData>,
     pub cookware: Vec<CookwareData>,
-    pub steps: Vec<StepData>,
+    pub sections: Vec<RecipeSection>,
     pub image_path: Option<String>,
 }
 
@@ -98,11 +98,21 @@ pub struct IngredientData {
     pub name: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
+    pub reference_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CookwareData {
     pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RecipeSection {
+    pub name: Option<String>,
+    pub steps: Vec<StepData>,
+    pub notes: Vec<String>,
+    pub step_offset: usize,
+    pub ingredients: Vec<IngredientData>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -121,7 +131,10 @@ pub struct StepIngredient {
 #[derive(Debug, Clone, Serialize)]
 pub enum StepItem {
     Text(String),
-    Ingredient(String),
+    Ingredient {
+        name: String,
+        reference_path: Option<String>,
+    },
     Cookware(String),
     Timer(String),
     Quantity(String),

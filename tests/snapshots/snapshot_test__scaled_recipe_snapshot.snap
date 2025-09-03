@@ -1,0 +1,22 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+ simple @ 3 
+
+servings: 6
+
+Ingredients:
+  water      6 cups 
+  salt       3 tsp  
+  pasta      600 g  
+
+Cookware:
+  5        
+  pot      
+  10       
+
+Steps:
+ 1. Boil water for 5%minutes. Add salt and pasta. Cook in a pot for another
+    10%minutes.
+     [water: 6 cups, salt: 3 tsp, pasta: 600 g]

@@ -17,11 +17,11 @@
         </ol>
     </nav>
     {% endif %}
-    
+
     <h1 class="text-3xl font-bold mb-8 bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
         {{ current_name }}
     </h1>
-    
+
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}
@@ -77,7 +77,7 @@
         </a>
         {% endif %}
         {% endfor %}
-        
+
         {% if items.is_empty() %}
         <div class="text-gray-500 text-center py-8">
             No recipes found in this directory.

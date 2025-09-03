@@ -433,7 +433,9 @@ fn w_section(
                     // Add extra newline for list separation
                     writeln!(w).context("Failed to write newline for list bullet")?
                 } else {
-                    print_wrapped(w, text).context("Failed to write text content")?
+                    // Format as a note with blockquote style
+                    writeln!(w, "> **Note:** {}", text.trim())
+                        .context("Failed to write text content")?
                 }
             }
         };

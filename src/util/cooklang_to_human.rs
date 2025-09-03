@@ -398,7 +398,13 @@ fn steps(w: &mut impl io::Write, recipe: &Recipe) -> Result {
                         writeln!(w)?;
                     } else {
                         writeln!(w)?;
-                        print_wrapped_with_options(w, t.trim(), |o| o.initial_indent("  "))?;
+                        // Format as a note with a visual indicator
+                        let note_style = yansi::Style::new().italic().fg(yansi::Color::Blue);
+                        let note_prefix = "📝 Note: ".paint(note_style);
+                        write!(w, "  {}", note_prefix)?;
+                        print_wrapped_with_options(w, t.trim(), |o| {
+                            o.initial_indent("").subsequent_indent("           ")
+                        })?;
                         writeln!(w)?;
                     }
                 }

@@ -1,0 +1,128 @@
+---
+source: tests/snapshot_test.rs
+expression: stdout
+---
+metadata:
+  map:
+    title: Simple Recipe
+    servings: 2
+sections:
+- name: null
+  content:
+  - type: step
+    value:
+      items:
+      - type: text
+        value: 'Boil '
+      - type: ingredient
+        index: 0
+      - type: text
+        value: ' for '
+      - type: timer
+        index: 0
+      - type: text
+        value: '. Add '
+      - type: ingredient
+        index: 1
+      - type: text
+        value: ' and '
+      - type: ingredient
+        index: 2
+      - type: text
+        value: '. Cook in a '
+      - type: cookware
+        index: 0
+      - type: text
+        value: ' for another '
+      - type: timer
+        index: 1
+      - type: text
+        value: .
+      number: 1
+ingredients:
+- name: water
+  alias: null
+  quantity:
+    value:
+      type: number
+      value:
+        type: regular
+        value: 2.0
+    unit: cups
+    scalable: true
+  note: null
+  reference: null
+  relation:
+    relation:
+      type: definition
+      referenced_from: []
+      defined_in_step: true
+    reference_target: null
+  modifiers: ''
+- name: salt
+  alias: null
+  quantity:
+    value:
+      type: number
+      value:
+        type: regular
+        value: 1.0
+    unit: tsp
+    scalable: true
+  note: null
+  reference: null
+  relation:
+    relation:
+      type: definition
+      referenced_from: []
+      defined_in_step: true
+    reference_target: null
+  modifiers: ''
+- name: pasta
+  alias: null
+  quantity:
+    value:
+      type: number
+      value:
+        type: regular
+        value: 200.0
+    unit: g
+    scalable: true
+  note: null
+  reference: null
+  relation:
+    relation:
+      type: definition
+      referenced_from: []
+      defined_in_step: true
+    reference_target: null
+  modifiers: ''
+cookware:
+- name: pot
+  alias: null
+  quantity: null
+  note: null
+  relation:
+    type: definition
+    referenced_from: []
+    defined_in_step: true
+timers:
+- name: null
+  quantity:
+    value:
+      type: number
+      value:
+        type: regular
+        value: 5.0
+    unit: minutes
+    scalable: false
+- name: null
+  quantity:
+    value:
+      type: number
+      value:
+        type: regular
+        value: 10.0
+    unit: minutes
+    scalable: false
+inline_quantities: []
