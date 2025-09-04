@@ -187,7 +187,7 @@ fn test_doctor_validate_output() {
 
     // Replace temp directory paths with a placeholder for consistent snapshots
     let temp_path = temp_dir.path().to_string_lossy();
-    cleaned_str = cleaned_str.replace(&temp_path.as_ref(), "[TEMP_DIR]");
+    cleaned_str = cleaned_str.replace(temp_path.as_ref(), "[TEMP_DIR]");
 
     // Split into recipe blocks and summary
     let mut current_recipe = Vec::new();
