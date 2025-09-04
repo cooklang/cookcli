@@ -4,6 +4,8 @@ The `import` command fetches recipes from websites and automatically converts th
 
 Requires `OPENAI_API_KEY` environment variable set to perform the conversion to Cooklang. Without the key you still can downlad recipe original content, but it won't be converted to Cooklang.
 
+Note that you can use [cook.md converter](https://cooklang.org/docs/getting-started#build-your-recipe-collection) if you don't have OpenAI key.
+
 ## Basic Usage
 
 ```bash
