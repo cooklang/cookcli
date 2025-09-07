@@ -47,10 +47,58 @@ use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
+
 pub static PARSER: Lazy<CooklangParser> = Lazy::new(|| {
-    // Use no extensions but with default converter for basic unit support
+    // Default: all extensions enabled for legacy use
     CooklangParser::new(Extensions::empty(), Converter::default())
 });
+
+/// Build Extensions from CLI args (CLIExtensions)
+use crate::recipe::CLIExtensions;
+pub fn build_extensions_from_cli(exts: &[CLIExtensions]) -> Extensions {
+    if exts.iter().any(|e| matches!(e, CLIExtensions::All)) {
+        return Extensions::all();
+    }
+    if exts.iter().any(|e| matches!(e, CLIExtensions::None)) {
+        return Extensions::empty();
+    }
+    let mut extensions = Extensions::empty();
+    for ext in exts {
+        match ext {
+            CLIExtensions::Compat => extensions |= Extensions::COMPAT,
+            CLIExtensions::ComponentModifiers => extensions |= Extensions::COMPONENT_MODIFIERS,
+            CLIExtensions::ComponentAlias => extensions |= Extensions::COMPONENT_ALIAS,
+            CLIExtensions::AdvancedUnits => extensions |= Extensions::ADVANCED_UNITS,
+            CLIExtensions::Modes => extensions |= Extensions::MODES,
+            CLIExtensions::InlineQuantities => extensions |= Extensions::INLINE_QUANTITIES,
+            CLIExtensions::RangeValues => extensions |= Extensions::RANGE_VALUES,
+            CLIExtensions::TimerRequiresTime => extensions |= Extensions::TIMER_REQUIRES_TIME,
+            CLIExtensions::IntermediatePreparations => extensions |= Extensions::INTERMEDIATE_PREPARATIONS,
+            CLIExtensions::All | CLIExtensions::None => {}, // handled above
+        }
+    }
+    extensions
+}
+
+/// Parse a Recipe from a RecipeEntry with the given scaling factor and parser
+pub fn parse_recipe_from_entry_with_parser(entry: &RecipeEntry, scaling_factor: f64, parser: &CooklangParser) -> Result<Arc<Recipe>> {
+    let content = entry.content().context("Failed to read recipe content")?;
+    let parsed = parser.parse(&content);
+
+    // Log any warnings
+    if parsed.report().has_warnings() {
+        let recipe_name = entry.name().as_deref().unwrap_or("unknown");
+        for warning in parsed.report().warnings() {
+            warn!("Recipe '{}': {}", recipe_name, warning);
+        }
+    }
+
+    let (mut recipe, _warnings) = parsed.into_result().context("Failed to parse recipe")?;
+
+    // Scale the recipe
+    recipe.scale(scaling_factor, parser.converter());
+    Ok(Arc::new(recipe))
+}
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
