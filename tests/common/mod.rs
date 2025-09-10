@@ -47,6 +47,20 @@ Add @garlic{2%cloves} and cook for ~{2%minutes}.
 "#,
     )?;
 
+    // Create a recipe with component aliases
+    fs::write(
+        recipes_dir.join("aliases.cook"),
+        r#"---
+title: Simple Recipe with Aliases
+servings: 2
+---
+
+Boil @water{2%cups} for ~{5%minutes}.
+Add @table salt|salt{1%tsp} and @pasta{200%g}.
+Cook in a #pot for another ~{10%minutes}.
+"#,
+    )?;
+
     // Create a recipe with errors for doctor testing
     fs::write(
         recipes_dir.join("with_errors.cook"),

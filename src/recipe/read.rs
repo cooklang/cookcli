@@ -35,7 +35,10 @@ use std::io::Read;
 use camino::Utf8PathBuf;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output, PARSER},
+    util::{
+        build_extensions_from_cli, parse_recipe_from_entry_with_parser,
+        split_recipe_name_and_scaling_factor, write_to_output,
+    },
     Context,
 };
 use cooklang_find::RecipeEntry;
@@ -71,6 +74,13 @@ pub struct ReadArgs {
     /// Has no effect on human, cooklang, or markdown formats.
     #[arg(long)]
     pretty: bool,
+
+    /// Extensions to enable
+    ///
+    /// Can be specified multiple times to enable multiple extensions.
+    /// If not specified, no extensions are enabled.
+    #[arg(short, long, value_enum, num_args(0..), default_values_t = vec![CLIExtensions::None])]
+    extension: Vec<CLIExtensions>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -85,8 +95,27 @@ enum OutputFormat {
     Markdown,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CLIExtensions {
+    All,
+    None,
+    Compat,
+    ComponentModifiers,
+    ComponentAlias,
+    AdvancedUnits,
+    Modes,
+    InlineQuantities,
+    RangeValues,
+    TimerRequiresTime,
+    IntermediatePreparations,
+}
+
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let mut scale = args.input.scale;
+
+    // Build extensions from CLI args
+    let extensions = build_extensions_from_cli(&args.extension);
+    let parser = cooklang::CooklangParser::new(extensions, cooklang::Converter::default());
 
     let (recipe, title) = if let Some(query) = args.input.recipe {
         let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
@@ -109,7 +138,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
         let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path().clone()], name.into())
             .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        let recipe = parse_recipe_from_entry_with_parser(&recipe_entry, scale, &parser)?;
         (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     } else {
         // Read from stdin and create a RecipeEntry
@@ -123,7 +152,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             .context("Failed to create recipe entry from stdin")?;
 
         // Use the same parsing function as for file-based recipes
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        let recipe = parse_recipe_from_entry_with_parser(&recipe_entry, scale, &parser)?;
         (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     };
 
@@ -145,7 +174,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                parser.converter(),
                 writer,
             )?,
             OutputFormat::Json => {
@@ -163,7 +192,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                parser.converter(),
                 writer,
             )?,
         }

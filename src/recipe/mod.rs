@@ -34,7 +34,9 @@ use clap::{Args, Subcommand};
 
 use crate::Context;
 
-mod read;
+pub mod read;
+
+pub use read::CLIExtensions;
 
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]

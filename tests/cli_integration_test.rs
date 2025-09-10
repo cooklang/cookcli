@@ -246,3 +246,22 @@ fn test_cli_recipe_from_subdirectory() {
         .success()
         .stdout(predicate::str::contains("Pancakes"));
 }
+
+#[test]
+fn test_cli_recipe_with_extensions() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("aliases.cook")
+        .arg("-f")
+        .arg("json")
+        .arg("--extension")
+        .arg("component-alias")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("table salt"));
+}

@@ -10,6 +10,6 @@ expression: sorted_output
   ❌ Missing reference: nonexistent
 
 === Validation Summary ===
-Total recipes scanned: 5
+Total recipes scanned: 6
 ❌ 1 error(s) found in 0 recipe(s)
 ⚠️  1 warning(s) found in 1 recipe(s)
