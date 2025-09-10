@@ -35,7 +35,10 @@ use std::io::Read;
 use camino::Utf8PathBuf;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output, build_extensions_from_cli, parse_recipe_from_entry_with_parser},
+    util::{
+        build_extensions_from_cli, parse_recipe_from_entry_with_parser,
+        split_recipe_name_and_scaling_factor, write_to_output,
+    },
     Context,
 };
 use cooklang_find::RecipeEntry;
@@ -108,7 +111,6 @@ pub enum CLIExtensions {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-
     let mut scale = args.input.scale;
 
     // Build extensions from CLI args

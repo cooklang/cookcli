@@ -47,7 +47,6 @@ use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
-
 pub static PARSER: Lazy<CooklangParser> = Lazy::new(|| {
     // Default: all extensions enabled for legacy use
     CooklangParser::new(Extensions::empty(), Converter::default())
@@ -73,15 +72,21 @@ pub fn build_extensions_from_cli(exts: &[CLIExtensions]) -> Extensions {
             CLIExtensions::InlineQuantities => extensions |= Extensions::INLINE_QUANTITIES,
             CLIExtensions::RangeValues => extensions |= Extensions::RANGE_VALUES,
             CLIExtensions::TimerRequiresTime => extensions |= Extensions::TIMER_REQUIRES_TIME,
-            CLIExtensions::IntermediatePreparations => extensions |= Extensions::INTERMEDIATE_PREPARATIONS,
-            CLIExtensions::All | CLIExtensions::None => {}, // handled above
+            CLIExtensions::IntermediatePreparations => {
+                extensions |= Extensions::INTERMEDIATE_PREPARATIONS
+            }
+            CLIExtensions::All | CLIExtensions::None => {} // handled above
         }
     }
     extensions
 }
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor and parser
-pub fn parse_recipe_from_entry_with_parser(entry: &RecipeEntry, scaling_factor: f64, parser: &CooklangParser) -> Result<Arc<Recipe>> {
+pub fn parse_recipe_from_entry_with_parser(
+    entry: &RecipeEntry,
+    scaling_factor: f64,
+    parser: &CooklangParser,
+) -> Result<Arc<Recipe>> {
     let content = entry.content().context("Failed to read recipe content")?;
     let parsed = parser.parse(&content);
 
