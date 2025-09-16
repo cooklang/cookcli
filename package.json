@@ -4,9 +4,22 @@
   "description": "CookCLI web interface",
   "scripts": {
     "build-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify",
-    "watch-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch"
+    "watch-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:chrome": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:mobile": "playwright test --project=\"Mobile Chrome\" --project=\"Mobile Safari\"",
+    "test:report": "playwright show-report",
+    "test:codegen": "playwright codegen http://localhost:9080"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.0",
+    "playwright": "^1.55.0",
     "tailwindcss": "^3.4.0"
   }
 }
