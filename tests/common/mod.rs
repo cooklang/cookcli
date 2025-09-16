@@ -1,5 +1,6 @@
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use chrono::{Duration, Local};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -101,16 +102,54 @@ garlic
 "#,
     )?;
 
-    // Create pantry.conf
-    fs::write(
-        config_dir.join("pantry.conf"),
+    // Create pantry.conf with quantities, low thresholds, and expiry dates
+    // Use dynamic dates relative to today
+    let today = Local::now().date_naive();
+    let tomorrow = today + Duration::days(1);
+    let in_2_days = today + Duration::days(2);
+    let in_3_days = today + Duration::days(3);
+    let in_4_days = today + Duration::days(4);
+    let in_10_days = today + Duration::days(10);
+    let yesterday = today - Duration::days(1);
+
+    let pantry_config = format!(
         r#"[pantry]
-salt = "1 kg"
-oil = "500 ml"
-flour = "5 kg"
-sugar = "2 kg"
+salt = {{ quantity = "1%kg", low = "500%g" }}
+oil = {{ quantity = "500%ml", low = "200%ml" }}
+flour = {{ quantity = "5%kg", low = "1%kg" }}
+sugar = {{ quantity = "2%kg", low = "500%g" }}
+pasta = {{ quantity = "1%kg", low = "200%g" }}
+water = "always available"
+
+[dairy]
+milk = {{ quantity = "1%l", expire = "{}", low = "500%ml" }}
+eggs = {{ quantity = "12", expire = "{}", low = "6" }}
+butter = {{ quantity = "200%g", low = "50%g" }}
+yogurt = {{ quantity = "500%g", expire = "{}" }}
+
+[produce]
+tomatoes = {{ quantity = "5", expire = "{}", low = "2" }}
+garlic = {{ quantity = "10", low = "3" }}
+lettuce = {{ quantity = "1", expire = "{}" }}
+
+[spices]
+"black pepper" = {{ quantity = "100%g", low = "20%g" }}
+oregano = {{ quantity = "50%g" }}
+
+[depleted]
+honey = {{ quantity = "0", low = "100%g" }}
+vinegar = {{ quantity = "50%ml", low = "200%ml" }}
+"expired item" = {{ quantity = "1", expire = "{}" }}
 "#,
-    )?;
+        in_4_days.format("%Y-%m-%d"),  // milk expires in 4 days
+        in_2_days.format("%Y-%m-%d"),  // eggs expire in 2 days
+        tomorrow.format("%Y-%m-%d"),   // yogurt expires tomorrow
+        in_3_days.format("%Y-%m-%d"),  // tomatoes expire in 3 days
+        in_10_days.format("%Y-%m-%d"), // lettuce expires in 10 days
+        yesterday.format("%Y-%m-%d"),  // expired item expired yesterday
+    );
+
+    fs::write(config_dir.join("pantry.conf"), pantry_config)?;
 
     Ok(temp_dir)
 }

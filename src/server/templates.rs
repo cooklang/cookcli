@@ -73,6 +73,7 @@ pub struct PantryItem {
     pub quantity: Option<String>,
     pub bought: Option<String>,
     pub expire: Option<String>,
+    pub low: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

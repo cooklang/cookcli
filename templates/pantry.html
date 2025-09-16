@@ -46,7 +46,8 @@
                     <div class="pantry-item p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all duration-200 group"
                          data-section="{{ section.name }}"
                          data-name="{{ item.name }}"
-                         data-quantity="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
+                         data-quantity="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}"
+                         data-low="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                         <!-- Main content with aligned name and attributes -->
                         <div class="flex items-start justify-between">
                             <div class="flex-grow">
@@ -71,6 +72,10 @@
                                             <span class="text-gray-500 mr-2">Expires:</span>
                                             <span class="item-expire">{% if let Some(expire) = item.expire %}{{ expire }}{% else %}-{% endif %}</span>
                                         </div>
+                                        <div class="flex items-center text-gray-600">
+                                            <span class="text-gray-500 mr-2">Low at:</span>
+                                            <span class="item-low">{% if let Some(low) = item.low %}{{ low }}{% else %}-{% endif %}</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -86,6 +91,9 @@
                                         <input type="text" class="edit-expire w-full px-2 py-1 text-sm border rounded"
                                                placeholder="Expires (DD.MM.YYYY)"
                                                value="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
+                                        <input type="text" class="edit-low w-full px-2 py-1 text-sm border rounded"
+                                               placeholder="Low threshold (e.g., 100%g)"
+                                               value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                                         <div class="flex items-center justify-end space-x-2 mt-2">
                                             <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">Save</button>
                                             <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 font-medium">Cancel</button>
@@ -170,6 +178,10 @@
                 <label class="block text-sm font-medium mb-2">Expiry Date (optional)</label>
                 <input type="text" id="add-expire" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="DD.MM.YYYY">
             </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Low Stock Threshold (optional)</label>
+                <input type="text" id="add-low" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="e.g., 100%g or 2">
+            </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="closeAddModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
                 <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Add Item</button>
@@ -233,38 +245,65 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Check for out-of-stock items and apply styling
+    // Parse quantity to extract numeric value and unit
+    function parseQuantity(quantity) {
+        if (!quantity) return null;
+        const cleaned = quantity.replace('%', ' ').trim();
+        const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+        if (match) {
+            return {
+                value: parseFloat(match[1]),
+                unit: match[2] || ''
+            };
+        }
+        return null;
+    }
+
+    // Check for out-of-stock and low-stock items and apply styling
     function checkOutOfStock() {
         const items = document.querySelectorAll('.pantry-item');
 
         items.forEach(item => {
             const quantity = item.dataset.quantity || '';
+            const lowThreshold = item.dataset.low || '';
             const isOutOfStock = quantity === '0' || quantity === '0%g' || quantity === '0%kg' ||
                                 quantity === '0%ml' || quantity === '0%L' || quantity === '';
 
+            // Check if low on stock
+            let isLowStock = false;
+            if (quantity && lowThreshold) {
+                const currentQty = parseQuantity(quantity);
+                const lowQty = parseQuantity(lowThreshold);
+                if (currentQty && lowQty && currentQty.unit === lowQty.unit) {
+                    isLowStock = currentQty.value <= lowQty.value;
+                }
+            }
+
             // Reset all styling first
-            item.classList.remove('out-of-stock', 'bg-gray-50', 'bg-red-50', 'border', 'border-red-200');
+            item.classList.remove('out-of-stock', 'low-stock', 'bg-gray-50', 'bg-red-50', 'bg-orange-50',
+                                 'border', 'border-2', 'border-red-200', 'border-orange-400');
 
             const statusDot = item.querySelector('.item-status-dot');
             if (statusDot) {
-                statusDot.classList.remove('in-stock', 'out-of-stock', 'animate-pulse', 'bg-green-500', 'bg-red-500');
+                statusDot.classList.remove('in-stock', 'out-of-stock', 'low-stock', 'animate-pulse',
+                                          'bg-green-500', 'bg-red-500', 'bg-orange-500');
             }
 
             const qtyDisplay = item.querySelector('.quantity-display');
             if (qtyDisplay) {
-                qtyDisplay.classList.remove('font-semibold', 'text-gray-600', 'text-red-600');
+                qtyDisplay.classList.remove('font-semibold', 'text-gray-600', 'text-red-600', 'text-orange-600');
             }
 
             const warningIcon = item.querySelector('.out-of-stock-icon');
             if (warningIcon) {
                 warningIcon.classList.add('hidden');
+                warningIcon.classList.remove('text-red-500', 'text-orange-500');
             }
 
             // Apply appropriate styling based on stock status
             if (isOutOfStock) {
                 // Apply out-of-stock styling
                 item.classList.add('out-of-stock', 'bg-red-50', 'border', 'border-red-200');
-                item.classList.remove('bg-gray-50');
 
                 if (statusDot) {
                     statusDot.classList.add('out-of-stock', 'bg-red-500', 'animate-pulse');
@@ -276,6 +315,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (warningIcon) {
                     warningIcon.classList.remove('hidden');
+                    warningIcon.classList.add('text-red-500');
+                }
+            } else if (isLowStock) {
+                // Apply low-stock styling with orange frame
+                item.classList.add('low-stock', 'bg-orange-50', 'border-2', 'border-orange-400');
+
+                if (statusDot) {
+                    statusDot.classList.add('low-stock', 'bg-orange-500', 'animate-pulse');
+                }
+
+                if (qtyDisplay) {
+                    qtyDisplay.classList.add('font-semibold', 'text-orange-600');
+                }
+
+                if (warningIcon) {
+                    warningIcon.classList.remove('hidden');
+                    warningIcon.classList.add('text-orange-500');
                 }
             } else {
                 // Apply in-stock styling
@@ -324,7 +380,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: document.getElementById('add-name').value,
                 quantity: document.getElementById('add-quantity').value || null,
                 bought: document.getElementById('add-bought').value || null,
-                expire: document.getElementById('add-expire').value || null
+                expire: document.getElementById('add-expire').value || null,
+                low: document.getElementById('add-low').value || null
             };
             
             try {
@@ -384,12 +441,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const quantityInput = item.querySelector('.edit-quantity');
                 const boughtInput = item.querySelector('.edit-bought');
                 const expireInput = item.querySelector('.edit-expire');
+                const lowInput = item.querySelector('.edit-low');
 
                 // Trim values and convert empty strings to null
                 const data = {
                     quantity: quantityInput.value.trim() || null,
                     bought: boughtInput.value.trim() || null,
-                    expire: expireInput.value.trim() || null
+                    expire: expireInput.value.trim() || null,
+                    low: lowInput.value.trim() || null
                 };
 
                 try {
@@ -406,9 +465,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         item.querySelector('.item-quantity').textContent = data.quantity || '-';
                         item.querySelector('.item-bought').textContent = data.bought || '-';
                         item.querySelector('.item-expire').textContent = data.expire || '-';
+                        item.querySelector('.item-low').textContent = data.low || '-';
 
-                        // Update data attribute for out-of-stock check - ensure it's the actual quantity value
+                        // Update data attributes for stock checks
                         item.dataset.quantity = data.quantity || '';
+                        item.dataset.low = data.low || '';
 
                         displayDiv.classList.remove('hidden');
                         editDiv.classList.add('hidden');

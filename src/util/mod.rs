@@ -74,16 +74,19 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
-    F: FnOnce(Box<dyn std::io::Write>) -> Result<()>,
+    F: FnOnce(&mut dyn std::io::Write) -> Result<()>,
 {
-    let stream: Box<dyn std::io::Write> = if let Some(path) = output {
+    let mut stream: Box<dyn std::io::Write> = if let Some(path) = output {
         let file = std::fs::File::create(path).context("Failed to create output file")?;
         let stream = anstream::StripStream::new(file);
         Box::new(stream)
     } else {
         Box::new(anstream::stdout().lock())
     };
-    f(stream)?;
+    f(stream.as_mut())?;
+    // Explicitly flush the stream to ensure all output is written
+    use std::io::Write;
+    stream.flush()?;
     Ok(())
 }
 

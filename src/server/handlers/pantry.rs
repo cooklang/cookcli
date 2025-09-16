@@ -15,6 +15,7 @@ pub struct AddPantryItem {
     pub quantity: Option<String>,
     pub bought: Option<String>,
     pub expire: Option<String>,
+    pub low: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,6 +23,7 @@ pub struct UpdatePantryItem {
     pub quantity: Option<String>,
     pub bought: Option<String>,
     pub expire: Option<String>,
+    pub low: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -44,12 +46,17 @@ pub async fn add_item(
     let mut pantry_conf = result.output().cloned().unwrap_or_default();
 
     // Create new item
-    let new_item = if item.quantity.is_some() || item.bought.is_some() || item.expire.is_some() {
+    let new_item = if item.quantity.is_some()
+        || item.bought.is_some()
+        || item.expire.is_some()
+        || item.low.is_some()
+    {
         cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
             name: item.name.clone(),
             quantity: item.quantity,
             bought: item.bought,
             expire: item.expire,
+            low: item.low,
         })
     } else {
         cooklang::pantry::PantryItem::Simple(item.name.clone())
@@ -115,7 +122,7 @@ pub async fn remove_item(
 
     Ok(Json(ApiResponse {
         success: true,
-        message: format!("Removed {} from {}", name, section),
+        message: format!("Removed {name} from {section}"),
     }))
 }
 
@@ -143,6 +150,7 @@ pub async fn update_item(
                         if update.quantity.is_some()
                             || update.bought.is_some()
                             || update.expire.is_some()
+                            || update.low.is_some()
                         {
                             cooklang::pantry::PantryItem::WithAttributes(
                                 cooklang::pantry::ItemWithAttributes {
@@ -150,6 +158,7 @@ pub async fn update_item(
                                     quantity: update.quantity.clone(),
                                     bought: update.bought.clone(),
                                     expire: update.expire.clone(),
+                                    low: update.low,
                                 },
                             )
                         } else {
@@ -163,6 +172,7 @@ pub async fn update_item(
                                 quantity: update.quantity.clone().or(attrs.quantity.clone()),
                                 bought: update.bought.clone().or(attrs.bought.clone()),
                                 expire: update.expire.clone().or(attrs.expire.clone()),
+                                low: update.low.or_else(|| attrs.low.clone()),
                             },
                         )
                     }
@@ -187,7 +197,7 @@ pub async fn update_item(
 
     Ok(Json(ApiResponse {
         success: true,
-        message: format!("Updated {} in {}", name, section),
+        message: format!("Updated {name} in {section}"),
     }))
 }
 

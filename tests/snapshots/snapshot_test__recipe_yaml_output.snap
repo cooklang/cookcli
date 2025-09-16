@@ -106,6 +106,7 @@ cookware:
     type: definition
     referenced_from: []
     defined_in_step: true
+  modifiers: ''
 timers:
 - name: null
   quantity:

@@ -729,6 +729,7 @@ async fn pantry_page(
                             quantity: item.quantity().map(|q| q.to_string()),
                             bought: item.bought().map(|b| b.to_string()),
                             expire: item.expire().map(|e| e.to_string()),
+                            low: item.low().map(|l| l.to_string()),
                         });
                     }
 

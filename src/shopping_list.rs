@@ -32,7 +32,6 @@ use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, ValueEnum};
 use std::collections::BTreeMap;
-use std::io::Write; // Still needed for write! macro with output files
 use tracing::warn;
 use yansi::Paint;
 
@@ -324,7 +323,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         list = filtered_list;
     }
 
-    write_to_output(args.output.as_deref(), |mut w| {
+    write_to_output(args.output.as_deref(), |w| {
         if args.ingredients_only {
             match format {
                 OutputFormat::Human => {

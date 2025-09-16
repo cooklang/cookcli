@@ -30,7 +30,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{doctor, import, recipe, report, search, seed, server, shopping_list};
+use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -175,4 +175,19 @@ pub enum Command {
         long_about = "Check recipe collection for potential issues and suggest improvements"
     )]
     Doctor(doctor::DoctorArgs),
+
+    /// Manage and analyze your pantry inventory
+    ///
+    /// Track pantry items, check for expiring products, find depleted items,
+    /// and discover recipes you can make with available ingredients.
+    ///
+    /// Examples:
+    ///   cook pantry depleted            # Show out-of-stock items
+    ///   cook pantry expiring            # Show items expiring soon
+    ///   cook pantry recipes             # Find recipes you can make
+    #[command(
+        alias = "p",
+        long_about = "Manage pantry inventory and find recipes based on available ingredients"
+    )]
+    Pantry(pantry::PantryArgs),
 }

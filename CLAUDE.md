@@ -253,3 +253,304 @@ Use `RUST_LOG=trace` to see detailed parsing information including:
 - Configuration loading
 - Recipe reference resolution
 - Static file serving paths
+
+# UI Testing Documentation
+
+This document describes the comprehensive UI testing setup for CookCLI using Playwright.
+
+## Overview
+
+The testing suite provides end-to-end (E2E) testing for the CookCLI web interface, covering:
+- Navigation and routing
+- Recipe display and scaling
+- Shopping list functionality
+- Search capabilities
+- Pantry management
+- User preferences
+- Accessibility compliance
+- Performance metrics
+
+## Setup
+
+### Installation
+
+```bash
+# Install dependencies
+npm install
+
+# Install Playwright browsers
+npx playwright install
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with UI mode (interactive)
+npm run test:ui
+
+# Run tests in debug mode
+npm run test:debug
+
+# Run tests with browser visible
+npm run test:headed
+
+# Run specific browser tests
+npm run test:chrome
+npm run test:firefox
+npm run test:webkit
+
+# Run mobile tests
+npm run test:mobile
+
+# Show test report
+npm run test:report
+
+# Generate tests interactively
+npm run test:codegen
+```
+
+## Test Structure
+
+### Directory Layout
+
+```
+tests/
+├── e2e/                    # End-to-end tests
+│   ├── navigation.spec.ts     # Navigation and routing tests
+│   ├── recipe-display.spec.ts # Recipe rendering tests
+│   ├── recipe-scaling.spec.ts # Recipe scaling functionality
+│   ├── search.spec.ts         # Search functionality
+│   ├── shopping-list.spec.ts  # Shopping list management
+│   ├── preferences.spec.ts    # User preferences
+│   ├── pantry.spec.ts        # Pantry management
+│   ├── accessibility.spec.ts  # WCAG compliance tests
+│   └── performance.spec.ts    # Performance metrics
+└── fixtures/              # Test utilities
+    └── test-helpers.ts    # Reusable helper functions
+```
+
+### Test Helpers
+
+The `test-helpers.ts` file provides reusable utilities:
+
+- **TestHelpers**: Common navigation and interaction methods
+- **RecipePage**: Recipe-specific page object model
+- **ShoppingListPage**: Shopping list page object model
+
+## Test Coverage
+
+### Navigation Tests (`navigation.spec.ts`)
+- Home page display
+- Recipe navigation
+- Breadcrumb navigation
+- Directory browsing
+- Navigation menu consistency
+- Browser history handling
+
+### Recipe Display (`recipe-display.spec.ts`)
+- Recipe title and description
+- Ingredients list
+- Cooking steps
+- Ingredient/cookware/timer highlighting
+- Recipe metadata
+- Responsive layout
+
+### Recipe Scaling (`recipe-scaling.spec.ts`)
+- Scale input functionality
+- URL parameter scaling
+- Decimal scaling support
+- Scaling persistence
+- Shopping list integration
+
+### Search (`search.spec.ts`)
+- Search input functionality
+- Search results display
+- No results handling
+- Special character support
+- Case-insensitive search
+- Search persistence
+
+### Shopping List (`shopping-list.spec.ts`)
+- Empty state display
+- Adding ingredients
+- Item completion toggling
+- List clearing
+- Ingredient aggregation
+- Aisle organization
+- Session persistence
+
+### Preferences (`preferences.spec.ts`)
+- Preference display
+- Pantry configuration
+- Aisle configuration
+- File upload handling
+- Configuration validation
+- Settings persistence
+
+### Pantry Management (`pantry.spec.ts`)
+- Pantry navigation
+- Item display
+- Adding/editing/removing items
+- Shopping list filtering
+- Recipe integration
+- Import/export functionality
+
+### Accessibility (`accessibility.spec.ts`)
+- WCAG 2.0 AA compliance
+- Keyboard navigation
+- Screen reader support
+- ARIA labels
+- Color contrast
+- Focus indicators
+- Form labels
+
+### Performance (`performance.spec.ts`)
+- Page load times
+- Search performance
+- Scaling responsiveness
+- Memory usage
+- Asset caching
+- Cumulative Layout Shift (CLS)
+
+## Configuration
+
+### Playwright Configuration (`playwright.config.ts`)
+
+Key settings:
+- **Base URL**: `http://localhost:9080`
+- **Web Server**: Automatically starts dev server
+- **Browsers**: Chrome, Firefox, Safari, Mobile
+- **Parallel Execution**: Enabled
+- **Retries**: 2 on CI, 0 locally
+- **Artifacts**: Screenshots, videos, traces on failure
+
+### CI/CD Integration
+
+GitHub Actions workflow (`ui-tests.yml`):
+- Runs on push/PR to main branch
+- Matrix testing across OS and browsers
+- Artifact upload for test results
+- Parallel job execution
+
+## Writing New Tests
+
+### Basic Test Structure
+
+```typescript
+import { test, expect } from '@playwright/test';
+import { TestHelpers } from '../fixtures/test-helpers';
+
+test.describe('Feature Name', () => {
+  let helpers: TestHelpers;
+
+  test.beforeEach(async ({ page }) => {
+    helpers = new TestHelpers(page);
+    await helpers.navigateTo('/');
+  });
+
+  test('should do something', async ({ page }) => {
+    // Test implementation
+    await expect(page.locator('selector')).toBeVisible();
+  });
+});
+```
+
+### Using Test Helpers
+
+```typescript
+// Navigate to a page
+await helpers.navigateTo('/recipes');
+
+// Search for a recipe
+await helpers.searchRecipe('pasta');
+
+// Scale a recipe
+await helpers.scaleRecipe(2);
+
+// Add to shopping list
+await helpers.addToShoppingList();
+```
+
+## Best Practices
+
+### Test Isolation
+- Each test should be independent
+- Use `beforeEach` for setup
+- Clean up after tests when necessary
+
+### Selectors
+- Prefer semantic selectors (roles, labels)
+- Use data attributes for test-specific targeting
+- Avoid brittle CSS selectors
+
+### Assertions
+- Use explicit waits (`waitForLoadState`)
+- Check visibility before interaction
+- Verify both positive and negative cases
+
+### Performance
+- Run tests in parallel when possible
+- Use page objects for reusability
+- Minimize test data setup
+
+## Debugging
+
+### Visual Debugging
+
+```bash
+# Run with UI mode
+npm run test:ui
+
+# Run with browser visible
+npm run test:headed
+
+# Debug specific test
+npm run test:debug
+```
+
+### Trace Viewer
+
+Traces are automatically captured on failure:
+
+```bash
+# View trace
+npx playwright show-trace trace.zip
+```
+
+### Screenshots and Videos
+
+Available in `test-results/` directory after failures.
+
+## Continuous Integration
+
+Tests run automatically on:
+- Push to main branch
+- Pull requests
+- Manual workflow dispatch
+
+Results available as GitHub Actions artifacts.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Server not starting**: Ensure `make dev_server` works locally
+2. **Browser installation**: Run `npx playwright install`
+3. **Port conflicts**: Check port 9080 is available
+4. **Slow tests**: Increase timeouts in config
+
+### Environment Variables
+
+- `CI`: Set in CI environment for different behavior
+- `DEBUG`: Enable Playwright debug output
+
+## Future Improvements
+
+- [ ] Visual regression testing
+- [ ] API mocking for edge cases
+- [ ] Load testing with multiple concurrent users
+- [ ] Internationalization testing
+- [ ] Cross-browser compatibility matrix

@@ -6,6 +6,7 @@ expression: formatted
   "cookware": [
     {
       "alias": null,
+      "modifiers": "",
       "name": "pot",
       "note": null,
       "quantity": null,
