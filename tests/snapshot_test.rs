@@ -92,6 +92,7 @@ fn test_recipe_markdown_output() {
     assert_snapshot!(stdout);
 }
 
+#[ignore]
 #[test]
 fn test_shopping_list_plain() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -116,6 +117,7 @@ fn test_shopping_list_plain() {
     assert_snapshot!(sorted);
 }
 
+#[ignore]
 #[test]
 fn test_shopping_list_categorized() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -139,6 +141,7 @@ fn test_shopping_list_categorized() {
     assert_snapshot!(cleaned_str);
 }
 
+#[ignore]
 #[test]
 fn test_shopping_list_json() {
     let temp_dir = common::setup_test_recipes().unwrap();

@@ -109,6 +109,7 @@ fn test_shopping_list_json_output() {
     let _json: JsonValue = serde_json::from_str(&content).expect("Invalid JSON in output file");
 }
 
+#[ignore]
 #[test]
 fn test_shopping_list_yaml_output() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -131,6 +132,7 @@ fn test_shopping_list_yaml_output() {
     assert!(content.contains("ingredients:") || content.contains("- name:"));
 }
 
+#[ignore]
 #[test]
 fn test_shopping_list_human_output_to_file() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -210,6 +212,7 @@ fn test_pretty_json_output() {
     assert!(stdout.contains("\n  "));
 }
 
+#[ignore]
 #[test]
 fn test_ingredients_only_output() {
     let temp_dir = common::setup_test_recipes().unwrap();

@@ -267,6 +267,28 @@ cook report -t recipe-card.md.jinja recipe.cook
 cook report -t nutrition.html.jinja recipe.cook
 ```
 
+### `cook pantry`
+
+Manage your pantry inventory, track low stock items, expiring ingredients, and find recipes you can make.
+
+```bash
+# Show items that are low or out of stock
+cook pantry depleted
+
+# Check expiring items in the next 7 days
+cook pantry expiring
+
+# Find recipes you can make with available ingredients
+cook pantry recipes
+
+# Include partial matches (recipes where most ingredients are available)
+cook pantry recipes --partial --threshold 60
+
+# Output in machine-readable formats
+cook pantry -f json depleted
+cook pantry -f yaml expiring --days 14
+```
+
 ## Documentation
 
 Detailed documentation for each command is available in the [docs/](docs/) directory:
@@ -279,6 +301,7 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 * [Doctor](docs/doctor.md) - validation and maintenance
 * [Seed](docs/seed.md) - example recipes
 * [Report](docs/report.md) - custom outputs
+* [Pantry](docs/pantry.md) - inventory management and tracking
 
 ## Configuration
 
@@ -328,7 +351,7 @@ rolls
 
 ### Pantry Configuration (`pantry.conf`)
 
-Tracks your ingredient inventory with quantities and expiration dates. Items in your pantry are excluded from shopping lists automatically.
+Tracks your ingredient inventory with quantities, expiration dates, and low stock thresholds. Items in your pantry are excluded from shopping lists automatically.
 
 ```toml
 [freezer]
@@ -337,23 +360,29 @@ frozen_peas = "500%g"
 spinach = { bought = "05.05.2024", expire = "05.06.2024", quantity = "1%kg" }
 
 [fridge]
-milk = { expire = "10.05.2024", quantity = "2%L" }
+milk = { expire = "10.05.2024", quantity = "2%L", low = "500%ml" }
 cheese = { expire = "15.05.2024" }
 butter = "250%g"
 
 [pantry]
-rice = "5%kg"
-pasta = "1%kg"
-flour = "5%kg"
-olive_oil = "1%L"
+rice = { quantity = "5%kg", low = "1%kg" }
+pasta = { quantity = "1%kg", low = "200%g" }
+flour = { quantity = "5%kg", low = "1%kg" }
+olive_oil = { quantity = "1%L", low = "250%ml" }
 salt = "1%kg"
 ```
 
 Pantry items can be specified in two formats:
 - Simple: `item = "quantity"`
-- Detailed: `item = { quantity = "amount", expire = "date", bought = "date" }`
+- Detailed: `item = { quantity = "amount", expire = "date", bought = "date", low = "threshold" }`
 
-Items listed in your pantry will be automatically excluded from shopping lists, helping you track what you already have at home.
+Attributes:
+- `quantity` - Current amount in stock
+- `low` - Threshold for low stock warnings (same units as quantity)
+- `expire` - Expiration date
+- `bought` - Purchase date
+
+Items listed in your pantry will be automatically excluded from shopping lists, helping you track what you already have at home. Use `cook pantry depleted` to see low stock items and `cook pantry expiring` to check expiration dates.
 
 ### Using Configuration Files
 
