@@ -45,6 +45,7 @@ serde_yaml = "0.9"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
+toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
 tracing = "0.1"

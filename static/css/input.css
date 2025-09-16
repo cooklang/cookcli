@@ -128,4 +128,49 @@
         background: linear-gradient(135deg, #ff6b35, #fbbf24);
         @apply w-30 h-30 rounded-full flex items-center justify-center text-white text-5xl;
     }
+
+    /* Pantry item styles with improved dark mode support */
+    .pantry-item {
+        @apply bg-gray-50 dark:bg-gray-800;
+    }
+
+    .pantry-item:hover {
+        @apply bg-gray-100 dark:bg-gray-700;
+    }
+
+    /* Out-of-stock pantry items with better dark mode contrast */
+    .pantry-item.out-of-stock {
+        @apply bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900/50;
+    }
+
+    .pantry-item.out-of-stock:hover {
+        @apply bg-red-100 dark:bg-red-950/40;
+    }
+
+    /* Pantry text colors for dark mode */
+    .pantry-item .text-gray-900 {
+        @apply dark:text-gray-100;
+    }
+
+    .pantry-item .text-gray-600 {
+        @apply dark:text-gray-400;
+    }
+
+    .pantry-item .text-gray-500 {
+        @apply dark:text-gray-400;
+    }
+
+    /* Out-of-stock text in dark mode */
+    .pantry-item.out-of-stock .quantity-display {
+        @apply text-red-600 dark:text-red-400;
+    }
+
+    /* Status dots with dark mode support */
+    .item-status-dot.in-stock {
+        @apply bg-green-500 dark:bg-green-400;
+    }
+
+    .item-status-dot.out-of-stock {
+        @apply bg-red-500 dark:bg-red-400;
+    }
 }

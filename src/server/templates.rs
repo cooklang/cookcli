@@ -54,6 +54,27 @@ pub struct PreferencesTemplate {
     pub version: String,
 }
 
+#[derive(Template)]
+#[template(path = "pantry.html")]
+pub struct PantryTemplate {
+    pub active: String,
+    pub sections: Vec<PantrySection>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PantrySection {
+    pub name: String,
+    pub items: Vec<PantryItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PantryItem {
+    pub name: String,
+    pub quantity: Option<String>,
+    pub bought: Option<String>,
+    pub expire: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Breadcrumb {
     pub name: String,

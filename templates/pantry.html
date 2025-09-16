@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-4 sm:px-8 lg:px-12 xl:px-16">
+    <div class="mt-8 mb-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-3xl font-bold text-gray-800">Pantry Inventory</h1>
+
+            {% if !sections.is_empty() %}
+            <div class="flex items-center gap-4">
+                <span id="out-of-stock-count" class="text-sm text-gray-500 dark:text-gray-400"></span>
+                <label class="flex items-center cursor-pointer group">
+                    <input type="checkbox" id="filter-out-of-stock" class="mr-2 w-4 h-4 text-orange-600 rounded focus:ring-orange-500 focus:ring-2">
+                    <span class="text-sm text-gray-600 group-hover:text-gray-800 dark:text-gray-400 dark:group-hover:text-gray-200">Show only out of stock</span>
+                </label>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if sections.is_empty() %}
+    <div class="recipe-card">
+        <div class="p-8 text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No pantry configuration found</h3>
+            <p class="text-gray-500">Create a pantry.conf file to track your inventory</p>
+            <a href="/preferences" class="mt-4 inline-block text-orange-600 hover:text-orange-700">
+                Configure pantry →
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="space-y-6">
+        {% for section in sections %}
+        <div class="recipe-card">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 capitalize">{{ section.name }}</h2>
+                
+                {% if section.items.is_empty() %}
+                <p class="text-gray-500 italic">No items in this section</p>
+                {% else %}
+                <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {% for item in section.items %}
+                    <div class="pantry-item p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all duration-200 group"
+                         data-section="{{ section.name }}"
+                         data-name="{{ item.name }}"
+                         data-quantity="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
+                        <!-- Main content with aligned name and attributes -->
+                        <div class="flex items-start justify-between">
+                            <div class="flex-grow">
+                                <!-- Name aligned with attributes -->
+                                <h3 class="font-medium text-gray-900 mb-2">{{ item.name }}</h3>
+
+                                <!-- Attributes section -->
+                                <div class="item-display">
+                                    <div class="space-y-1 text-sm">
+                                        <div class="quantity-display flex items-center text-gray-600">
+                                            <span class="text-gray-500 mr-2">Qty:</span>
+                                            <span class="item-quantity font-medium">{% if let Some(quantity) = item.quantity %}{{ quantity }}{% else %}-{% endif %}</span>
+                                            <svg class="out-of-stock-icon w-4 h-4 ml-1 text-red-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="flex items-center text-gray-600">
+                                            <span class="text-gray-500 mr-2">Bought:</span>
+                                            <span class="item-bought">{% if let Some(bought) = item.bought %}{{ bought }}{% else %}-{% endif %}</span>
+                                        </div>
+                                        <div class="flex items-center text-gray-600">
+                                            <span class="text-gray-500 mr-2">Expires:</span>
+                                            <span class="item-expire">{% if let Some(expire) = item.expire %}{{ expire }}{% else %}-{% endif %}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Edit form (hidden by default) -->
+                                <div class="item-edit hidden">
+                                    <div class="space-y-2">
+                                        <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border rounded"
+                                               placeholder="Quantity (e.g., 500%g)"
+                                               value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
+                                        <input type="text" class="edit-bought w-full px-2 py-1 text-sm border rounded"
+                                               placeholder="Bought (DD.MM.YYYY)"
+                                               value="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
+                                        <input type="text" class="edit-expire w-full px-2 py-1 text-sm border rounded"
+                                               placeholder="Expires (DD.MM.YYYY)"
+                                               value="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
+                                        <div class="flex items-center justify-end space-x-2 mt-2">
+                                            <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">Save</button>
+                                            <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 font-medium">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action buttons and status indicator -->
+                            <div class="flex items-start space-x-2 ml-4">
+                                <div class="item-status-dot w-2 h-2 bg-green-500 rounded-full mt-1 flex-shrink-0"></div>
+                                <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button class="edit-btn p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                            title="Edit item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                    </button>
+                                    <button class="delete-btn p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                            title="Remove item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="mt-8 flex justify-between items-center">
+        <div class="text-sm text-gray-500">
+            Total sections: {{ sections.len() }}
+        </div>
+        <div class="space-x-4">
+            <button id="add-item-btn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                Add Item
+            </button>
+            <a href="/preferences" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-block">
+                Edit Configuration
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Item Modal -->
+<div id="add-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+        <h2 class="text-xl font-bold mb-4">Add Pantry Item</h2>
+        <form id="add-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Section</label>
+                <select id="add-section" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required>
+                    <option value="">Select section...</option>
+                    <option value="freezer">Freezer</option>
+                    <option value="fridge">Fridge</option>
+                    <option value="pantry">Pantry</option>
+                    <option value="spices">Spices</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Item Name</label>
+                <input type="text" id="add-name" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Quantity (optional)</label>
+                <input type="text" id="add-quantity" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="e.g., 500%g or 2%L">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Bought Date (optional)</label>
+                <input type="text" id="add-bought" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="DD.MM.YYYY">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Expiry Date (optional)</label>
+                <input type="text" id="add-expire" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="DD.MM.YYYY">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="closeAddModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Add Item</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Define all functions first
+    function updateOutOfStockCount() {
+        const totalItems = document.querySelectorAll('.pantry-item').length;
+        const outOfStockItems = document.querySelectorAll('.pantry-item.out-of-stock').length;
+        const outOfStockCountSpan = document.getElementById('out-of-stock-count');
+        if (outOfStockCountSpan) {
+            outOfStockCountSpan.textContent = `(${outOfStockItems} out of stock / ${totalItems} total)`;
+        }
+    }
+
+    function applyFilter() {
+        const filterCheckbox = document.getElementById('filter-out-of-stock');
+        const showOnlyOutOfStock = filterCheckbox && filterCheckbox.checked;
+        const sections = document.querySelectorAll('.recipe-card');
+
+        sections.forEach(section => {
+            const items = section.querySelectorAll('.pantry-item');
+            let visibleItems = 0;
+
+            items.forEach(item => {
+                if (showOnlyOutOfStock && !item.classList.contains('out-of-stock')) {
+                    item.style.display = 'none';
+                } else {
+                    item.style.display = '';
+                    visibleItems++;
+                }
+            });
+
+            // Hide entire section if no items are visible
+            const sectionContainer = section.querySelector('.grid');
+            const emptyMessage = section.querySelector('.empty-section-message');
+
+            if (sectionContainer) {
+                if (visibleItems === 0 && showOnlyOutOfStock) {
+                    // Hide the grid and show empty message
+                    sectionContainer.style.display = 'none';
+                    if (!emptyMessage) {
+                        const message = document.createElement('p');
+                        message.className = 'empty-section-message text-gray-500 italic';
+                        message.textContent = 'No out-of-stock items in this section';
+                        sectionContainer.parentNode.appendChild(message);
+                    }
+                } else {
+                    // Show the grid and hide empty message
+                    sectionContainer.style.display = '';
+                    if (emptyMessage) {
+                        emptyMessage.remove();
+                    }
+                }
+            }
+        });
+    }
+
+    // Check for out-of-stock items and apply styling
+    function checkOutOfStock() {
+        const items = document.querySelectorAll('.pantry-item');
+
+        items.forEach(item => {
+            const quantity = item.dataset.quantity || '';
+            const isOutOfStock = quantity === '0' || quantity === '0%g' || quantity === '0%kg' ||
+                                quantity === '0%ml' || quantity === '0%L' || quantity === '';
+
+            // Reset all styling first
+            item.classList.remove('out-of-stock', 'bg-gray-50', 'bg-red-50', 'border', 'border-red-200');
+
+            const statusDot = item.querySelector('.item-status-dot');
+            if (statusDot) {
+                statusDot.classList.remove('in-stock', 'out-of-stock', 'animate-pulse', 'bg-green-500', 'bg-red-500');
+            }
+
+            const qtyDisplay = item.querySelector('.quantity-display');
+            if (qtyDisplay) {
+                qtyDisplay.classList.remove('font-semibold', 'text-gray-600', 'text-red-600');
+            }
+
+            const warningIcon = item.querySelector('.out-of-stock-icon');
+            if (warningIcon) {
+                warningIcon.classList.add('hidden');
+            }
+
+            // Apply appropriate styling based on stock status
+            if (isOutOfStock) {
+                // Apply out-of-stock styling
+                item.classList.add('out-of-stock', 'bg-red-50', 'border', 'border-red-200');
+                item.classList.remove('bg-gray-50');
+
+                if (statusDot) {
+                    statusDot.classList.add('out-of-stock', 'bg-red-500', 'animate-pulse');
+                }
+
+                if (qtyDisplay) {
+                    qtyDisplay.classList.add('font-semibold', 'text-red-600');
+                }
+
+                if (warningIcon) {
+                    warningIcon.classList.remove('hidden');
+                }
+            } else {
+                // Apply in-stock styling
+                item.classList.add('bg-gray-50');
+
+                if (statusDot) {
+                    statusDot.classList.add('in-stock', 'bg-green-500');
+                }
+
+                if (qtyDisplay) {
+                    qtyDisplay.classList.add('text-gray-600');
+                }
+            }
+        });
+
+        // Update count after checking stock status
+        updateOutOfStockCount();
+    }
+
+    // Initialize: Run check on page load
+    checkOutOfStock();
+
+    // Add filter event listener
+    const filterCheckbox = document.getElementById('filter-out-of-stock');
+    if (filterCheckbox) {
+        filterCheckbox.addEventListener('change', applyFilter);
+    }
+    
+    const addBtn = document.getElementById('add-item-btn');
+    const addModal = document.getElementById('add-modal');
+    const addForm = document.getElementById('add-form');
+    
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            addModal.classList.remove('hidden');
+            addModal.classList.add('flex');
+        });
+    }
+    
+    if (addForm) {
+        addForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const data = {
+                section: document.getElementById('add-section').value,
+                name: document.getElementById('add-name').value,
+                quantity: document.getElementById('add-quantity').value || null,
+                bought: document.getElementById('add-bought').value || null,
+                expire: document.getElementById('add-expire').value || null
+            };
+            
+            try {
+                const response = await fetch('/api/pantry/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to add item');
+                }
+            } catch (error) {
+                alert('Error adding item: ' + error);
+            }
+        });
+    }
+    
+    // Add inline editing and delete functionality to items
+    document.querySelectorAll('.pantry-item').forEach(item => {
+        const section = item.dataset.section;
+        const name = item.dataset.name;
+        const editBtn = item.querySelector('.edit-btn');
+        const deleteBtn = item.querySelector('.delete-btn');
+        const saveBtn = item.querySelector('.save-btn');
+        const cancelBtn = item.querySelector('.cancel-btn');
+        const displayDiv = item.querySelector('.item-display');
+        const editDiv = item.querySelector('.item-edit');
+        
+        // Edit button handler
+        if (editBtn) {
+            editBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                displayDiv.classList.add('hidden');
+                editDiv.classList.remove('hidden');
+            });
+        }
+        
+        // Cancel button handler
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                displayDiv.classList.remove('hidden');
+                editDiv.classList.add('hidden');
+            });
+        }
+        
+        // Save button handler
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+
+                const quantityInput = item.querySelector('.edit-quantity');
+                const boughtInput = item.querySelector('.edit-bought');
+                const expireInput = item.querySelector('.edit-expire');
+
+                // Trim values and convert empty strings to null
+                const data = {
+                    quantity: quantityInput.value.trim() || null,
+                    bought: boughtInput.value.trim() || null,
+                    expire: expireInput.value.trim() || null
+                };
+
+                try {
+                    const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        // Update display without reload
+                        item.querySelector('.item-quantity').textContent = data.quantity || '-';
+                        item.querySelector('.item-bought').textContent = data.bought || '-';
+                        item.querySelector('.item-expire').textContent = data.expire || '-';
+
+                        // Update data attribute for out-of-stock check - ensure it's the actual quantity value
+                        item.dataset.quantity = data.quantity || '';
+
+                        displayDiv.classList.remove('hidden');
+                        editDiv.classList.add('hidden');
+
+                        // Re-check out-of-stock status after update
+                        checkOutOfStock();
+                    } else {
+                        alert('Failed to update item');
+                    }
+                } catch (error) {
+                    alert('Error updating item: ' + error);
+                }
+            });
+        }
+        
+        // Delete button handler
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+
+                if (confirm(`Remove ${name} from ${section}?`)) {
+                    try {
+                        const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                            method: 'DELETE'
+                        });
+
+                        if (response.ok) {
+                            // Smoothly remove the item
+                            item.style.opacity = '0';
+                            item.style.transform = 'scale(0.95)';
+                            setTimeout(() => {
+                                item.remove();
+                                // Check if section is now empty and reload if needed
+                                const sectionContainer = document.querySelector(`[data-section="${section}"]`);
+                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${section}"]`)) {
+                                    window.location.reload();
+                                }
+                            }, 200);
+                        } else {
+                            alert('Failed to remove item');
+                        }
+                    } catch (error) {
+                        alert('Error removing item: ' + error);
+                    }
+                }
+            });
+        }
+    });
+});
+
+function closeAddModal() {
+    const addModal = document.getElementById('add-modal');
+    addModal.classList.add('hidden');
+    addModal.classList.remove('flex');
+    document.getElementById('add-form').reset();
+}
+</script>
+{% endblock %}

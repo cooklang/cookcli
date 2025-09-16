@@ -16,6 +16,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/directory/*path", get(recipes_directory))
         .route("/recipe/*path", get(recipe_page))
         .route("/shopping-list", get(shopping_list_page))
+        .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
 }
 
@@ -703,6 +704,47 @@ async fn shopping_list_page() -> impl askama_axum::IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
     }
+}
+
+async fn pantry_page(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+    // Load pantry configuration
+    let pantry_path = state.pantry_path.as_ref();
+
+    let mut sections = Vec::new();
+
+    if let Some(path) = pantry_path {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let result = cooklang::pantry::parse_lenient(&content);
+
+            if let Some(pantry_conf) = result.output() {
+                // Convert pantry data to template format
+                for (section_name, items) in &pantry_conf.sections {
+                    let mut pantry_items = Vec::new();
+
+                    for item in items {
+                        pantry_items.push(crate::server::templates::PantryItem {
+                            name: item.name().to_string(),
+                            quantity: item.quantity().map(|q| q.to_string()),
+                            bought: item.bought().map(|b| b.to_string()),
+                            expire: item.expire().map(|e| e.to_string()),
+                        });
+                    }
+
+                    sections.push(crate::server::templates::PantrySection {
+                        name: section_name.clone(),
+                        items: pantry_items,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(PantryTemplate {
+        active: "pantry".to_string(),
+        sections,
+    })
 }
 
 async fn preferences_page(State(state): State<Arc<AppState>>) -> impl askama_axum::IntoResponse {
