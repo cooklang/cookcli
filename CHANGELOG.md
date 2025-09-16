@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.16.0](https://github.com/cooklang/cookcli/compare/v0.15.1...v0.16.0) (2025-09-16)
+
+
+### Features
+
+* add support for notes ([2afbfd9](https://github.com/cooklang/cookcli/commit/2afbfd9716211b7b21657cfced1f9c598b15456a))
+* add support for sections ([de2dc6c](https://github.com/cooklang/cookcli/commit/de2dc6cf7f2f468d0d9745888e1a11342399b13f))
+* dark mode ([9f6e3de](https://github.com/cooklang/cookcli/commit/9f6e3de4975ad9717cf47414e1118a69d56a6a9d))
+* pantry command ([ea84f31](https://github.com/cooklang/cookcli/commit/ea84f314649c8bdf2766c85b5548b7b252193f99))
+* pantry ui ([8a5867d](https://github.com/cooklang/cookcli/commit/8a5867dafdc859a5934bbb914b1afe387ad4e624))
+* print recipe button ([4053236](https://github.com/cooklang/cookcli/commit/4053236525e305bf9a219f2c516dfa4021c6b46e))
+* test setup ([e622860](https://github.com/cooklang/cookcli/commit/e622860ef1e373490faf9f7831470b45d46f2982))
+
+
+### Bug Fixes
+
+* ci ([4ce7af4](https://github.com/cooklang/cookcli/commit/4ce7af401a9be02d1a91e74758f13a6815ab8576))
+* ci ([d3b4c77](https://github.com/cooklang/cookcli/commit/d3b4c77cc99bebbca6283c2b68f797427d9f624e))
+* ci build ([0b023a3](https://github.com/cooklang/cookcli/commit/0b023a3f001f7a6656ee2a7e054892cce7d49cdd))
+* pantry support now working ([62ba5e2](https://github.com/cooklang/cookcli/commit/62ba5e21ef4c28c2782f4f2900569fad50270bc3))
+* shopping list goes recursive ([2e831a0](https://github.com/cooklang/cookcli/commit/2e831a05c915cc6714df361dd1210711a041ebb6))
+* update actions ([26f65d6](https://github.com/cooklang/cookcli/commit/26f65d6524d45b70f0363b5d3967adb76fbce198))
+
 ## [0.15.1](https://github.com/cooklang/cookcli/compare/v0.15.1...v0.15.1) (2025-08-28)
 
 
