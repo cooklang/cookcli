@@ -72,10 +72,10 @@ Serving Web UI on http://localhost:9080
 Serving recipe files from: "/Users/chefalexey/recipes"
 ```
 
-
-<img width="1166" height="995" alt="Screenshot 2025-08-28 at 16 47 49" src="https://github.com/user-attachments/assets/73ec0a6d-f2dc-4fcc-b54b-5622e0532df3" />
-<img width="1175" height="935" alt="Screenshot 2025-08-28 at 16 47 56" src="https://github.com/user-attachments/assets/fdbfc722-cdec-401a-a9ac-6ff2bba4b7c5" />
-<img width="1276" height="866" alt="Screenshot 2025-08-28 at 16 49 20" src="https://github.com/user-attachments/assets/8e6c0ffa-0957-4769-9268-beae8efdea7a" />
+<img width="600" height="359" alt="recipes" src="https://github.com/user-attachments/assets/b18ec5b9-4959-49be-9784-86f73f0e34e2" />
+<img width="600" height="359" alt="recipe" src="https://github.com/user-attachments/assets/e24b7b90-7bf7-4a5d-b1e0-585995a647c6" />
+<img width="600" height="359" alt="shopping" src="https://github.com/user-attachments/assets/8c9036ca-a902-4f09-901c-905c6f8325a2" />
+<img width="600" height="359" alt="pantry" src="https://github.com/user-attachments/assets/92d20226-eeb4-4b64-8833-ee7d9b3578a9" />
 
 
 ## Installation
