@@ -63,6 +63,18 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         }
         self_update::Status::Updated(v) => {
             println!("Successfully updated to version {}", v);
+
+            // On macOS, try to remove quarantine attribute from the updated binary
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(current_exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new("xattr")
+                        .args(&["-d", "com.apple.quarantine"])
+                        .arg(&current_exe)
+                        .output();
+                }
+            }
+
             println!("Please restart cook to use the new version.");
         }
     }
