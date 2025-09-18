@@ -433,57 +433,106 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
+        // Save function that can be called from button click or Enter key
+        async function saveItem(e) {
+            if (e) e.stopPropagation();
+
+            const quantityInput = item.querySelector('.edit-quantity');
+            const boughtInput = item.querySelector('.edit-bought');
+            const expireInput = item.querySelector('.edit-expire');
+            const lowInput = item.querySelector('.edit-low');
+
+            // Get original values from display
+            const originalQuantity = item.querySelector('.item-quantity').textContent;
+            const originalBought = item.querySelector('.item-bought').textContent;
+            const originalExpire = item.querySelector('.item-expire').textContent;
+            const originalLow = item.querySelector('.item-low').textContent;
+
+            // Only include fields that have changed
+            const data = {};
+
+            const newQuantity = quantityInput.value.trim();
+            const displayQuantity = originalQuantity === '-' ? '' : originalQuantity;
+            if (newQuantity !== displayQuantity) {
+                data.quantity = newQuantity || null;
+            }
+
+            const newBought = boughtInput.value.trim();
+            const displayBought = originalBought === '-' ? '' : originalBought;
+            if (newBought !== displayBought) {
+                data.bought = newBought || null;
+            }
+
+            const newExpire = expireInput.value.trim();
+            const displayExpire = originalExpire === '-' ? '' : originalExpire;
+            if (newExpire !== displayExpire) {
+                data.expire = newExpire || null;
+            }
+
+            const newLow = lowInput.value.trim();
+            const displayLow = originalLow === '-' ? '' : originalLow;
+            if (newLow !== displayLow) {
+                data.low = newLow || null;
+            }
+
+            try {
+                const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    // Update display with new values, preserving unchanged fields
+                    if (data.hasOwnProperty('quantity')) {
+                        item.querySelector('.item-quantity').textContent = data.quantity || '-';
+                        item.dataset.quantity = data.quantity || '';
+                    }
+                    if (data.hasOwnProperty('bought')) {
+                        item.querySelector('.item-bought').textContent = data.bought || '-';
+                    }
+                    if (data.hasOwnProperty('expire')) {
+                        item.querySelector('.item-expire').textContent = data.expire || '-';
+                    }
+                    if (data.hasOwnProperty('low')) {
+                        item.querySelector('.item-low').textContent = data.low || '-';
+                        item.dataset.low = data.low || '';
+                    }
+
+                    displayDiv.classList.remove('hidden');
+                    editDiv.classList.add('hidden');
+
+                    // Re-check out-of-stock status after update
+                    checkOutOfStock();
+                } else {
+                    alert('Failed to update item');
+                }
+            } catch (error) {
+                alert('Error updating item: ' + error);
+            }
+        }
+
         // Save button handler
         if (saveBtn) {
-            saveBtn.addEventListener('click', async function(e) {
-                e.stopPropagation();
+            saveBtn.addEventListener('click', saveItem);
+        }
 
-                const quantityInput = item.querySelector('.edit-quantity');
-                const boughtInput = item.querySelector('.edit-bought');
-                const expireInput = item.querySelector('.edit-expire');
-                const lowInput = item.querySelector('.edit-low');
-
-                // Trim values and convert empty strings to null
-                const data = {
-                    quantity: quantityInput.value.trim() || null,
-                    bought: boughtInput.value.trim() || null,
-                    expire: expireInput.value.trim() || null,
-                    low: lowInput.value.trim() || null
-                };
-
-                try {
-                    const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    if (response.ok) {
-                        // Update display without reload
-                        item.querySelector('.item-quantity').textContent = data.quantity || '-';
-                        item.querySelector('.item-bought').textContent = data.bought || '-';
-                        item.querySelector('.item-expire').textContent = data.expire || '-';
-                        item.querySelector('.item-low').textContent = data.low || '-';
-
-                        // Update data attributes for stock checks
-                        item.dataset.quantity = data.quantity || '';
-                        item.dataset.low = data.low || '';
-
-                        displayDiv.classList.remove('hidden');
-                        editDiv.classList.add('hidden');
-
-                        // Re-check out-of-stock status after update
-                        checkOutOfStock();
-                    } else {
-                        alert('Failed to update item');
-                    }
-                } catch (error) {
-                    alert('Error updating item: ' + error);
+        // Add Enter key support for all edit inputs
+        const editInputs = item.querySelectorAll('.edit-quantity, .edit-bought, .edit-expire, .edit-low');
+        editInputs.forEach(input => {
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveItem(e);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    displayDiv.classList.remove('hidden');
+                    editDiv.classList.add('hidden');
                 }
             });
-        }
+        });
         
         // Delete button handler
         if (deleteBtn) {

@@ -172,7 +172,7 @@ pub async fn update_item(
                                 quantity: update.quantity.clone().or(attrs.quantity.clone()),
                                 bought: update.bought.clone().or(attrs.bought.clone()),
                                 expire: update.expire.clone().or(attrs.expire.clone()),
-                                low: update.low.or_else(|| attrs.low.clone()),
+                                low: update.low.clone().or(attrs.low.clone()),
                             },
                         )
                     }

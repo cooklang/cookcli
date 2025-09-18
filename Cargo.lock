@@ -560,7 +560,7 @@ dependencies = [
 [[package]]
 name = "cooklang"
 version = "0.17.0"
-source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fbullets#c4d9ca6e496748974e3b065f4350bc7c5b95d15c"
+source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fbullets#721154f26a2d8d80010cc46374b9c7cf60a290c9"
 dependencies = [
  "bitflags 2.9.1",
  "codesnake",
