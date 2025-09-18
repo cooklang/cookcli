@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.1](https://github.com/cooklang/cookcli/compare/v0.17.0...v0.17.1) (2025-09-18)
+
+
+### Bug Fixes
+
+* notarization ([aea70d2](https://github.com/cooklang/cookcli/commit/aea70d28e18a713a26f42b9a4f08de90b9a5ff7c))
+* screenshots ([37914c6](https://github.com/cooklang/cookcli/commit/37914c6050a55bf252eb212f707f3d3bf679dda3))
+
 ## [0.17.0](https://github.com/cooklang/cookcli/compare/v0.16.0...v0.17.0) (2025-09-18)
 
 
