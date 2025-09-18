@@ -134,14 +134,14 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
 fn check_for_updates() {
     match crate::update::check_for_updates() {
         Ok(Some(new_version)) => {
-            println!("🆕 A new version ({}) is available!", new_version);
+            println!("🆕 A new version ({new_version}) is available!");
             println!("   Run 'cook update' to install the latest version.");
         }
         Ok(None) => {
             println!("✅ You are running the latest version.");
         }
         Err(e) => {
-            println!("⚠️  Unable to check for updates: {}", e);
+            println!("⚠️  Unable to check for updates: {e}");
         }
     }
 }

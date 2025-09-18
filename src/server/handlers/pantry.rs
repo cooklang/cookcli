@@ -72,9 +72,8 @@ pub async fn add_item(
     // Rebuild index
     pantry_conf.rebuild_index();
 
-    // Serialize back to TOML
-    let new_content =
-        toml::to_string_pretty(&pantry_conf).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Serialize back to regular TOML format (not array format)
+    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
     std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -113,9 +112,8 @@ pub async fn remove_item(
     // Rebuild index
     pantry_conf.rebuild_index();
 
-    // Serialize back to TOML
-    let new_content =
-        toml::to_string_pretty(&pantry_conf).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Serialize back to regular TOML format (not array format)
+    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
     std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -188,9 +186,8 @@ pub async fn update_item(
     // Rebuild index
     pantry_conf.rebuild_index();
 
-    // Serialize back to TOML
-    let new_content =
-        toml::to_string_pretty(&pantry_conf).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Serialize back to regular TOML format (not array format)
+    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
     std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -214,4 +211,84 @@ pub async fn get_pantry(
     let pantry_conf = result.output().cloned().ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(pantry_conf))
+}
+
+/// Serialize PantryConf to regular TOML format (not array format)
+fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) -> String {
+    use std::fmt::Write;
+
+    let mut output = String::new();
+
+    // First, handle any top-level items (if they exist)
+    if let Some(general_items) = pantry_conf.sections.get("general") {
+        for item in general_items {
+            write_pantry_item(&mut output, item, true);
+        }
+        if !general_items.is_empty() {
+            writeln!(&mut output).unwrap();
+        }
+    }
+
+    // Then handle all other sections in alphabetical order
+    for (section_name, items) in &pantry_conf.sections {
+        if section_name == "general" {
+            continue; // Already handled
+        }
+
+        writeln!(&mut output, "[{section_name}]").unwrap();
+
+        for item in items {
+            write_pantry_item(&mut output, item, false);
+        }
+
+        writeln!(&mut output).unwrap();
+    }
+
+    output
+}
+
+fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem, is_top_level: bool) {
+    use std::fmt::Write;
+
+    match item {
+        cooklang::pantry::PantryItem::Simple(name) => {
+            if is_top_level {
+                writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
+            } else {
+                writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
+            }
+        }
+        cooklang::pantry::PantryItem::WithAttributes(attrs) => {
+            // Build the value string
+            let value = if let Some(qty) = &attrs.quantity {
+                format!("\"{}\"", qty.replace('"', "\\\""))
+            } else if attrs.bought.is_some() || attrs.expire.is_some() || attrs.low.is_some() {
+                // If there are other attributes but no quantity, use a table
+                let mut parts = Vec::new();
+                if let Some(bought) = &attrs.bought {
+                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
+                }
+                if let Some(expire) = &attrs.expire {
+                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
+                }
+                if let Some(low) = &attrs.low {
+                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
+                }
+                format!("{{ {} }}", parts.join(", "))
+            } else {
+                "true".to_string()
+            };
+
+            writeln!(output, "{} = {}", toml_escape_key(&attrs.name), value).unwrap();
+        }
+    }
+}
+
+fn toml_escape_key(key: &str) -> String {
+    // If the key contains special characters or spaces, quote it
+    if key.contains(' ') || key.contains('.') || key.contains('[') || key.contains(']') {
+        format!("\"{}\"", key.replace('"', "\\\""))
+    } else {
+        key.to_string()
+    }
 }

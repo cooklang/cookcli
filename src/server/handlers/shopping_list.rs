@@ -73,7 +73,7 @@ pub async fn shopping_list(
     let aisle = aisle_result.output().cloned().unwrap_or_default();
 
     // Load pantry configuration
-    let pantry_items = if let Some(path) = &state.pantry_path {
+    let pantry_conf = if let Some(path) = &state.pantry_path {
         match std::fs::read_to_string(path) {
             Ok(content) => {
                 tracing::debug!("Loaded pantry file from: {:?}", path);
@@ -86,62 +86,64 @@ pub async fn shopping_list(
                     }
                 }
 
-                if let Some(pantry) = result.output() {
-                    // Extract all ingredient names from pantry sections
-                    let mut items = Vec::new();
-                    for section_items in pantry.sections.values() {
-                        for item in section_items {
-                            // Handle both simple and with-attributes items
-                            let name = match item {
-                                cooklang::pantry::PantryItem::Simple(name) => name.clone(),
-                                cooklang::pantry::PantryItem::WithAttributes(attrs) => {
-                                    attrs.name.clone()
-                                }
-                            };
-                            items.push(name);
-                        }
-                    }
-                    items
-                } else {
-                    tracing::warn!("Failed to parse pantry file");
-                    Vec::new()
-                }
+                result.output().cloned()
             }
             Err(e) => {
                 tracing::warn!("Failed to read pantry file from {:?}: {}", path, e);
-                Vec::new()
+                None
             }
         }
     } else {
         tracing::debug!("No pantry file configured");
-        Vec::new()
+        None
     };
 
-    let categories = list.categorize(&aisle);
+    // Track pantry items that were found and subtracted (excluding zero quantities)
+    let mut pantry_items = Vec::new();
+    if let Some(ref pantry) = pantry_conf {
+        // Check which items from the original list are in the pantry with non-zero quantity
+        for (ingredient_name, _) in list.iter() {
+            if let Some((_, pantry_item)) = pantry.find_ingredient(ingredient_name) {
+                // Check if the pantry item has a non-zero quantity
+                if let Some(qty_str) = pantry_item.quantity() {
+                    // Special case for unlimited
+                    if qty_str == "unlim" || qty_str == "unlimited" {
+                        pantry_items.push(ingredient_name.clone());
+                    } else if let Some((value, _)) = pantry_item.parsed_quantity() {
+                        // Only include if quantity is greater than 0
+                        if value > 0.0 {
+                            pantry_items.push(ingredient_name.clone());
+                        }
+                    }
+                } else {
+                    // No quantity specified means we have it (backward compatibility)
+                    pantry_items.push(ingredient_name.clone());
+                }
+            }
+        }
+    }
 
-    // Separate items that are in pantry
+    // Apply pantry subtraction if pantry is available
+    let final_list = if let Some(ref pantry) = pantry_conf {
+        list.subtract_pantry(pantry, PARSER.converter())
+    } else {
+        list
+    };
+
+    let categories = final_list.categorize(&aisle);
+
+    // Build the response
     let mut shopping_categories = Vec::new();
-    let mut pantry_available = Vec::new();
 
     for (category, items) in categories {
         let mut shopping_items = Vec::new();
 
         for (name, qty) in items {
-            // Check if item is in pantry
-            let in_pantry = pantry_items
-                .iter()
-                .any(|pantry_item| pantry_item.to_lowercase() == name.to_lowercase());
-
             let item_json = serde_json::json!({
-                "name": name.clone(),
+                "name": name,
                 "quantities": qty.into_vec()
             });
-
-            if in_pantry {
-                pantry_available.push(item_json);
-            } else {
-                shopping_items.push(item_json);
-            }
+            shopping_items.push(item_json);
         }
 
         if !shopping_items.is_empty() {
@@ -154,7 +156,7 @@ pub async fn shopping_list(
 
     let json_value = serde_json::json!({
         "categories": shopping_categories,
-        "pantry_items": pantry_available
+        "pantry_items": pantry_items
     });
     Ok(Json(json_value))
 }

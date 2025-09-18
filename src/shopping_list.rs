@@ -306,21 +306,9 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         )?;
     }
 
-    // Filter out items that are in the pantry
+    // Subtract pantry quantities from shopping list
     if let Some(pantry_conf) = &pantry {
-        let mut filtered_list = IngredientList::new();
-        for (ingredient_name, quantity) in list {
-            if !pantry_conf.has_ingredient(&ingredient_name) {
-                // Re-add the ingredient to the filtered list
-                filtered_list.add_ingredient(ingredient_name, &quantity, PARSER.converter());
-            } else {
-                tracing::info!(
-                    "Removing '{}' from shopping list (found in pantry)",
-                    ingredient_name
-                );
-            }
-        }
-        list = filtered_list;
+        list = list.subtract_pantry(pantry_conf, PARSER.converter());
     }
 
     write_to_output(args.output.as_deref(), |w| {

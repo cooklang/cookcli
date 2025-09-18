@@ -15,7 +15,7 @@ pub struct UpdateArgs {
 pub fn run(args: UpdateArgs) -> Result<()> {
     let current_version = cargo_crate_version!();
 
-    println!("Current version: {}", current_version);
+    println!("Current version: {current_version}");
     println!("Checking for updates...");
 
     let releases = ReleaseList::configure()
@@ -33,17 +33,17 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("New version available: {}", latest_version);
+    println!("New version available: {latest_version}");
 
     if args.check_only {
         println!("Run 'cook update' to install the latest version.");
         return Ok(());
     }
 
-    println!("Downloading and installing version {}...", latest_version);
+    println!("Downloading and installing version {latest_version}...");
 
     let target = get_target_triple();
-    let binary_name = format!("cook-{}", target);
+    let binary_name = format!("cook-{target}");
 
     let status = Update::configure()
         .repo_owner("cooklang")
@@ -59,17 +59,17 @@ pub fn run(args: UpdateArgs) -> Result<()> {
 
     match status {
         self_update::Status::UpToDate(v) => {
-            println!("Already up to date (version {})", v);
+            println!("Already up to date (version {v})");
         }
         self_update::Status::Updated(v) => {
-            println!("Successfully updated to version {}", v);
+            println!("Successfully updated to version {v}");
 
             // On macOS, try to remove quarantine attribute from the updated binary
             #[cfg(target_os = "macos")]
             {
                 if let Ok(current_exe) = std::env::current_exe() {
                     let _ = std::process::Command::new("xattr")
-                        .args(&["-d", "com.apple.quarantine"])
+                        .args(["-d", "com.apple.quarantine"])
                         .arg(&current_exe)
                         .output();
                 }
@@ -137,5 +137,5 @@ fn get_target_triple() -> String {
         ""
     };
 
-    format!("{}-{}{}", arch, os, special_arm)
+    format!("{arch}-{os}{special_arm}")
 }
