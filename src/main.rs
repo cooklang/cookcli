@@ -44,6 +44,7 @@ mod search;
 mod seed;
 mod server;
 mod shopping_list;
+mod update;
 
 // other modules
 mod args;
@@ -71,6 +72,7 @@ pub fn main() -> Result<()> {
         Command::Report(args) => report::run(&ctx, args),
         Command::Doctor(args) => doctor::run(&ctx, args),
         Command::Pantry(args) => pantry::run(&ctx, args),
+        Command::Update(args) => update::run(args),
     }
 }
 

@@ -11,6 +11,7 @@ pub mod search;
 pub mod seed;
 pub mod server;
 pub mod shopping_list;
+pub mod update;
 
 // Other modules
 pub mod args;

@@ -7,6 +7,7 @@ The Cook CLI command line program provides a suite of tools to create shopping l
 * **[server](server.md)** – Run a web server to browse your recipe collection
 * **[search](search.md)** – Search through your recipes by ingredient or text
 * **[import](import.md)** – Import recipes from websites and convert to Cooklang
+* **[update](update.md)** – Update CookCLI to the latest version
 * **[doctor](doctor.md)** – Validate recipes and check for issues
 * **[seed](seed.md)** – Initialize a directory with example recipes
 * **[report](report.md)** – Generate custom reports using templates

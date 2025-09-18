@@ -107,7 +107,11 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
             // Run all doctor checks
             println!("Running all doctor checks...\n");
 
-            println!("=== Recipe Validation ===");
+            // Check for updates
+            println!("=== Version Check ===");
+            check_for_updates();
+
+            println!("\n=== Recipe Validation ===");
             run_validate(
                 ctx,
                 ValidateArgs {
@@ -123,6 +127,21 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
             run_pantry(ctx, PantryArgs { base_path: None })?;
 
             Ok(())
+        }
+    }
+}
+
+fn check_for_updates() {
+    match crate::update::check_for_updates() {
+        Ok(Some(new_version)) => {
+            println!("🆕 A new version ({}) is available!", new_version);
+            println!("   Run 'cook update' to install the latest version.");
+        }
+        Ok(None) => {
+            println!("✅ You are running the latest version.");
+        }
+        Err(e) => {
+            println!("⚠️  Unable to check for updates: {}", e);
         }
     }
 }

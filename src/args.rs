@@ -30,7 +30,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list};
+use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list, update};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -190,4 +190,20 @@ pub enum Command {
         long_about = "Manage pantry inventory and find recipes based on available ingredients"
     )]
     Pantry(pantry::PantryArgs),
+
+    /// Update CookCLI to the latest version
+    ///
+    /// Checks for new releases on GitHub and automatically downloads and
+    /// installs the latest version. The update process preserves your
+    /// current configuration and data.
+    ///
+    /// Examples:
+    ///   cook update                     # Download and install latest version
+    ///   cook update --check-only        # Check for updates without installing
+    ///   cook update --force             # Force reinstall even if up to date
+    #[command(
+        alias = "u",
+        long_about = "Check for and install updates to CookCLI from GitHub releases"
+    )]
+    Update(update::UpdateArgs),
 }
