@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.17.0](https://github.com/cooklang/cookcli/compare/v0.16.0...v0.17.0) (2025-09-18)
+
+
+### Features
+
+* add support for keyboard ([6f75986](https://github.com/cooklang/cookcli/commit/6f7598696d7ef4f1b96bde46f1c4aed879e1eb0d))
+* update command ([669899f](https://github.com/cooklang/cookcli/commit/669899f613f9fea9d6d09e5e62672b9c78954b30))
+
+
+### Bug Fixes
+
+* notarization issue ([8d9ba85](https://github.com/cooklang/cookcli/commit/8d9ba85065df3d776a2667c1d1723d53d04cb518))
+* pantry integration with shop list ([85a9993](https://github.com/cooklang/cookcli/commit/85a9993c201b52f5d2101393da15a8018b657a02))
+
 ## [0.16.0](https://github.com/cooklang/cookcli/compare/v0.15.1...v0.16.0) (2025-09-16)
 
 
