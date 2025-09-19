@@ -222,7 +222,7 @@ fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) 
     // First, handle any top-level items (if they exist)
     if let Some(general_items) = pantry_conf.sections.get("general") {
         for item in general_items {
-            write_pantry_item(&mut output, item, true);
+            write_pantry_item(&mut output, item);
         }
         if !general_items.is_empty() {
             writeln!(&mut output).unwrap();
@@ -238,7 +238,7 @@ fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) 
         writeln!(&mut output, "[{section_name}]").unwrap();
 
         for item in items {
-            write_pantry_item(&mut output, item, false);
+            write_pantry_item(&mut output, item);
         }
 
         writeln!(&mut output).unwrap();
@@ -247,16 +247,12 @@ fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) 
     output
 }
 
-fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem, is_top_level: bool) {
+fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem) {
     use std::fmt::Write;
 
     match item {
         cooklang::pantry::PantryItem::Simple(name) => {
-            if is_top_level {
-                writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
-            } else {
-                writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
-            }
+            writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
         }
         cooklang::pantry::PantryItem::WithAttributes(attrs) => {
             // Build the value string
