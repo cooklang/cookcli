@@ -10,12 +10,6 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
 
-#[derive(Debug, Deserialize, Clone, Copy, Default)]
-#[serde(default)]
-struct ColorConfig {
-    color: bool,
-}
-
 #[derive(Deserialize)]
 pub struct RecipeQuery {
     scale: Option<f64>,

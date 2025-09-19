@@ -183,7 +183,7 @@ fn tag_color(tag: &str) -> yansi::Color {
         .enumerate()
         .map(|(i, c)| c as usize * i)
         .reduce(usize::wrapping_add)
-        .map(|h| (h % 7))
+        .map(|h| h % 7)
         .unwrap_or_default();
     match hash {
         0 => yansi::Color::Red,
