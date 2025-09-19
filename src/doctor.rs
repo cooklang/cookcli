@@ -113,6 +113,12 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
                 println!("=== Version Check ===");
                 check_for_updates();
             }
+            #[cfg(not(feature = "self-update"))]
+            {
+                println!("=== Version Check ===");
+                println!("ℹ️  Self-update is disabled in this build.");
+                println!("   Please update through your package manager or build from source.");
+            }
 
             println!("\n=== Recipe Validation ===");
             run_validate(

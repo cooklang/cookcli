@@ -88,6 +88,10 @@ jobs:
       run: cargo build --release --verbose
       if: matrix.rust == 'stable'
 
+    - name: Build without self-update feature
+      run: cargo build --release --no-default-features --verbose
+      if: matrix.rust == 'stable'
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest

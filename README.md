@@ -124,6 +124,23 @@ cargo build --release
 # Binary will be at target/release/cook
 ```
 
+#### Building without Self-Update
+
+By default, CookCLI includes a self-update feature. To build without this feature (useful for CI/CD pipelines, package managers, or environments where auto-update is not desired):
+
+```bash
+# Build without self-update feature
+cargo build --release --no-default-features
+
+# This disables the 'self-update' feature flag while keeping all other functionality
+```
+
+Use cases for disabling self-update:
+* Package manager distributions (Homebrew, apt, etc.)
+* CI/CD pipelines where version control is managed externally
+* Corporate environments with restricted network access
+* When distributing through official release channels
+
 ### Development Setup
 
 For development with hot-reload of CSS changes:
