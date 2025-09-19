@@ -108,8 +108,11 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
             println!("Running all doctor checks...\n");
 
             // Check for updates
-            println!("=== Version Check ===");
-            check_for_updates();
+            #[cfg(feature = "self-update")]
+            {
+                println!("=== Version Check ===");
+                check_for_updates();
+            }
 
             println!("\n=== Recipe Validation ===");
             run_validate(
@@ -131,6 +134,7 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
     }
 }
 
+#[cfg(feature = "self-update")]
 fn check_for_updates() {
     match crate::update::check_for_updates() {
         Ok(Some(new_version)) => {

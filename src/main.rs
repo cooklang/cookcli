@@ -44,6 +44,7 @@ mod search;
 mod seed;
 mod server;
 mod shopping_list;
+#[cfg(feature = "self-update")]
 mod update;
 
 // other modules
@@ -72,6 +73,7 @@ pub fn main() -> Result<()> {
         Command::Report(args) => report::run(&ctx, args),
         Command::Doctor(args) => doctor::run(&ctx, args),
         Command::Pantry(args) => pantry::run(&ctx, args),
+        #[cfg(feature = "self-update")]
         Command::Update(args) => update::run(args),
     }
 }

@@ -30,7 +30,9 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list, update};
+#[cfg(feature = "self-update")]
+use crate::update;
+use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -201,9 +203,11 @@ pub enum Command {
     ///   cook update                     # Download and install latest version
     ///   cook update --check-only        # Check for updates without installing
     ///   cook update --force             # Force reinstall even if up to date
+    #[cfg(feature = "self-update")]
     #[command(
         alias = "u",
         long_about = "Check for and install updates to CookCLI from GitHub releases"
     )]
+    #[cfg(feature = "self-update")]
     Update(update::UpdateArgs),
 }
