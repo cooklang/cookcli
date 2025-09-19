@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.2](https://github.com/cooklang/cookcli/compare/v0.17.1...v0.17.2) (2025-09-19)
+
+
+### Bug Fixes
+
+* make self-update optional ([309af5e](https://github.com/cooklang/cookcli/commit/309af5e845240602aa6eef52d862fbc958070a4b))
+* make self-update optional ([a0ab12b](https://github.com/cooklang/cookcli/commit/a0ab12b021bb364843cd4ceb3354d281f0a297c1))
+* review ([96691aa](https://github.com/cooklang/cookcli/commit/96691aadf26df5ce99b5617fe2cb24f466e7c38d))
+
 ## [0.17.1](https://github.com/cooklang/cookcli/compare/v0.17.0...v0.17.1) (2025-09-18)
 
 
