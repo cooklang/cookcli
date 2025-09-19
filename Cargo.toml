@@ -1,6 +1,6 @@
 [package]
 name = "cookcli"
-version = "0.17.1"
+version = "0.17.2"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
