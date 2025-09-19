@@ -256,7 +256,11 @@ fn test_search_output() {
     lines.sort();
     let sorted = lines.join("\n");
 
-    assert_snapshot!(sorted);
+    // Use platform-specific snapshots
+    #[cfg(target_os = "windows")]
+    assert_snapshot!("search_output_windows", sorted);
+    #[cfg(not(target_os = "windows"))]
+    assert_snapshot!("search_output", sorted);
 }
 
 #[test]
@@ -297,8 +301,10 @@ fn test_help_output() {
     let stdout = String::from_utf8(output.stdout).unwrap();
 
     // Filter version numbers for stable snapshots
+    // On Windows, the executable name is cook.exe, normalize it to cook
     with_settings!({filters => vec![
         (r"cookcli \d+\.\d+\.\d+", "cookcli [VERSION]"),
+        (r"Usage: cook\.exe", "Usage: cook"),  // Normalize Windows executable name in usage line
     ]}, {
         assert_snapshot!(stdout);
     });

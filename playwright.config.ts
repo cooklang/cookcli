@@ -97,7 +97,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'make dev_server',
+    command: 'npm run build-css && cargo run -- server ./seed --port 9080',
     url: 'http://localhost:9080',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

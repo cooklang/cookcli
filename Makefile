@@ -13,7 +13,7 @@ release: css
 	cargo build --release
 
 dev_server: css
-	cargo run -- server ./seed
+	cargo run -- server ./seed --port 9080
 
 dev: css-watch
 	cargo run -- server ./seed
