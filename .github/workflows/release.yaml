@@ -190,7 +190,6 @@ jobs:
             --keychain $KEYCHAIN_PATH \
             --sign "$APPLICATION_KEY_IDENT" \
             --options runtime \
-            --entitlements /dev/null \
             --force \
             --verbose \
             "$BINARY_PATH"

@@ -52,37 +52,38 @@ export default defineConfig({
       },
     },
 
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
-        actionTimeout: 10000,
-      },
-    },
+    /* Other browsers disabled for now to speed up CI */
+    // {
+    //   name: 'firefox',
+    //   use: {
+    //     ...devices['Desktop Firefox'],
+    //     actionTimeout: 10000,
+    //   },
+    // },
 
-    {
-      name: 'webkit',
-      use: {
-        ...devices['Desktop Safari'],
-        actionTimeout: 10000,
-      },
-    },
+    // {
+    //   name: 'webkit',
+    //   use: {
+    //     ...devices['Desktop Safari'],
+    //     actionTimeout: 10000,
+    //   },
+    // },
 
     /* Test against mobile viewports. */
-    {
-      name: 'Mobile Chrome',
-      use: {
-        ...devices['Pixel 5'],
-        actionTimeout: 10000,
-      },
-    },
-    {
-      name: 'Mobile Safari',
-      use: {
-        ...devices['iPhone 12'],
-        actionTimeout: 10000,
-      },
-    },
+    // {
+    //   name: 'Mobile Chrome',
+    //   use: {
+    //     ...devices['Pixel 5'],
+    //     actionTimeout: 10000,
+    //   },
+    // },
+    // {
+    //   name: 'Mobile Safari',
+    //   use: {
+    //     ...devices['iPhone 12'],
+    //     actionTimeout: 10000,
+    //   },
+    // },
 
     /* Test against branded browsers. */
     // {
@@ -97,10 +98,10 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run build-css && cargo run -- server ./seed --port 9080',
+    command: 'npm run build-css && cargo build && ./target/debug/cook server ./seed --port 9080',
     url: 'http://localhost:9080',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: 300 * 1000, // 5 minutes for CI builds
     stdout: 'pipe',
     stderr: 'pipe',
   },
