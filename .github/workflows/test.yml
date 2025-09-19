@@ -75,6 +75,16 @@ jobs:
     - name: Build
       run: cargo build --verbose
 
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: matrix.rust == 'stable'
+      with:
+        name: build-${{ matrix.os }}
+        path: |
+          target/debug/cook*
+          static/css/output.css
+        retention-days: 1
+
     - name: Run unit tests
       run: cargo test --lib --verbose
 

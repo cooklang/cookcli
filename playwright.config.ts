@@ -98,10 +98,12 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run build-css && cargo build && ./target/debug/cook server ./seed --port 9080',
+    command: process.env.CI
+      ? './target/debug/cook server ./seed --port 9080'  // In CI, use pre-built binary
+      : 'npm run build-css && cargo build && ./target/debug/cook server ./seed --port 9080',  // Local dev
     url: 'http://localhost:9080',
     reuseExistingServer: !process.env.CI,
-    timeout: 300 * 1000, // 5 minutes for CI builds
+    timeout: 60 * 1000, // 1 minute should be enough with pre-built binary
     stdout: 'pipe',
     stderr: 'pipe',
   },

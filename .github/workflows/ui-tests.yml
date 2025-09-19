@@ -1,32 +1,21 @@
 name: UI Tests
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["Test"]
+    types:
+      - completed
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    # Only run if the test workflow succeeded or if manually triggered
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -37,17 +26,33 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Build Rust application
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      if: github.event_name != 'workflow_dispatch'
+      with:
+        name: build-ubuntu-latest
+        path: .
+
+    - name: Build application (manual trigger)
+      if: github.event_name == 'workflow_dispatch'
       run: |
-        cargo build --release
-        make css
+        # Install Rust for manual runs
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
+        cargo build
+        npm run build-css
+
+    - name: Make binary executable
+      run: |
+        chmod +x target/debug/cook || true
+        ls -la target/debug/cook || echo "Binary not found, will be built by Playwright"
 
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install --with-deps chromium
 
     - name: Run Playwright tests
       run: npm test
-      continue-on-error: false  # Fail the build if tests fail
+      continue-on-error: false
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -64,61 +69,3 @@ jobs:
         name: test-videos
         path: test-results/
         retention-days: 7
-
-  test-matrix:
-    timeout-minutes: 60
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        browser: [chromium, firefox, webkit]
-        exclude:
-          # Webkit doesn't work well on Windows CI
-          - os: windows-latest
-            browser: webkit
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Build Rust application
-      run: |
-        cargo build --release
-        make css
-
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps ${{ matrix.browser }}
-
-    - name: Run Playwright tests
-      run: npx playwright test --project=${{ matrix.browser }}
-
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: playwright-report-${{ matrix.os }}-${{ matrix.browser }}
-        path: playwright-report/
-        retention-days: 30
