@@ -303,9 +303,3 @@ For very large collections:
 * Organize recipes into folders
 * Search specific directories
 * Consider using external search tools like `ripgrep`
-
-## See Also
-
-* [Recipe](recipe.md) – View found recipes
-* [Shopping List](shopping-list.md) – Create lists from search results
-* [Server](server.md) – Search via web interface

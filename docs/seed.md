@@ -151,9 +151,3 @@ cook recipe "*.cook"
 cook shopping-list "*.cook"
 cook doctor validate
 ```
-
-## See Also
-
-* [Recipe](recipe.md) – View the seeded recipes
-* [Shopping List](shopping-list.md) – Create lists from seed recipes
-* [Server](server.md) – Browse seed recipes via web

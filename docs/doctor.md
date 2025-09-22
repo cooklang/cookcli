@@ -229,9 +229,3 @@ Use appropriate configuration:
 ```bash
 cook shopping-list *.cook --aisle walmart-aisle.conf
 ```
-
-## See Also
-
-* [Recipe](recipe.md) – View and validate individual recipes
-* [Shopping List](shopping-list.md) – Uses aisle configuration
-* [Server](server.md) – Browse recipes with validation status

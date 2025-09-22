@@ -187,5 +187,4 @@ cook u --check-only # Check for updates
 
 ## See Also
 
-- [`cook doctor`](doctor.md) - Check recipe collection and version status
 - [GitHub Releases](https://github.com/cooklang/cookcli/releases) - View all releases and changelogs

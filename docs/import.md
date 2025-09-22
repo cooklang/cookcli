@@ -222,9 +222,3 @@ author: Original Author
 imported: 2024-01-20
 ---
 ```
-
-## See Also
-
-* [Recipe](recipe.md) – View and validate imported recipes
-* [Doctor](doctor.md) – Check imported recipes for issues
-* [Server](server.md) – Browse your imported collection

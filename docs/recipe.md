@@ -246,8 +246,3 @@ If a recipe isn't found by name, try:
 1. Escaping whitespaces
 2. Checking you're in the right directory
 
-## See Also
-
-* [Shopping List](shopping-list.md) – Create shopping lists from recipes
-* [Doctor](doctor.md) – Validate recipe syntax and references
-* [Search](search.md) – Find recipes by content

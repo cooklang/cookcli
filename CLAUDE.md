@@ -106,6 +106,7 @@ Configuration search order:
 - `doctor`: Validate recipes and check configurations
 - `seed`: Initialize with example recipes
 - `report`: Generate custom outputs using Jinja2 templates
+- `update`: Self-update the CookCLI binary to the latest version (can be disabled with --no-self-update feature)
 
 #### Utility Modules
 - `util/`: Shared utilities for parsing, conversion, and output formatting

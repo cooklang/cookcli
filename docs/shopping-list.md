@@ -364,9 +364,3 @@ cook shopping-list ~/recipes/Pizza.cook
 # Change directory first
 cd ~/recipes && cook shopping-list Pizza.cook
 ```
-
-## See Also
-
-* [Recipe](recipe.md) – View and scale individual recipes
-* [Doctor](doctor.md) – Check aisle configuration
-* [Server](server.md) – Browse recipes and create shopping lists via web interface

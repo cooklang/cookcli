@@ -492,9 +492,3 @@ If a variable doesn't exist:
 {# Or use default #}
 {{ recipe.metadata.note | default("") }}
 ```
-
-## See Also
-
-* [Recipe](recipe.md) – View recipe data structure
-* [Shopping List](shopping-list.md) – Generate shopping lists
-* [Server](server.md) – Web-based recipe viewing
