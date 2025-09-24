@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0](https://github.com/cooklang/cookcli/compare/v0.17.2...v0.18.0) (2025-09-24)
+
+
+### Features
+
+* output latex format ([9930d99](https://github.com/cooklang/cookcli/commit/9930d99486a9535d1b63cb7991a5cc30c0098c84))
+* output schema.org format ([c3beec7](https://github.com/cooklang/cookcli/commit/c3beec72f0da063b9402e11102667fbe3600f0af))
+
 ## [0.17.2](https://github.com/cooklang/cookcli/compare/v0.17.1...v0.17.2) (2025-09-19)
 
 
