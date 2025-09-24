@@ -1,10 +1,10 @@
-use std::io;
 use anyhow::Result;
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
     Recipe,
 };
+use std::io;
 
 pub fn print_latex(
     recipe: &Recipe,
@@ -28,7 +28,7 @@ pub fn print_latex(
         write_tags(&mut writer, &tags_vec)?;
     }
 
-    write_metadata(&mut writer, &recipe)?;
+    write_metadata(&mut writer, recipe)?;
 
     write_ingredients(&mut writer, recipe, converter)?;
 
@@ -58,7 +58,10 @@ fn write_document_header(w: &mut impl io::Write) -> Result<()> {
     writeln!(w, r"\usepackage{{geometry}}")?;
     writeln!(w, r"\usepackage{{hyperref}}")?;
     writeln!(w)?;
-    writeln!(w, r"\geometry{{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}}")?;
+    writeln!(
+        w,
+        r"\geometry{{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}}"
+    )?;
     writeln!(w)?;
     writeln!(w, r"% Define colors for recipe elements")?;
     writeln!(w, r"\definecolor{{ingredientcolor}}{{RGB}}{{204, 85, 0}}")?;
@@ -66,13 +69,28 @@ fn write_document_header(w: &mut impl io::Write) -> Result<()> {
     writeln!(w, r"\definecolor{{timercolor}}{{RGB}}{{220, 20, 60}}")?;
     writeln!(w)?;
     writeln!(w, r"% Custom commands for recipe elements")?;
-    writeln!(w, r"\newcommand{{\ingredient}}[1]{{\textcolor{{ingredientcolor}}{{\textbf{{#1}}}}}}")?;
-    writeln!(w, r"\newcommand{{\cookware}}[1]{{\textcolor{{cookwarecolor}}{{\textbf{{#1}}}}}}")?;
-    writeln!(w, r"\newcommand{{\timer}}[1]{{\textcolor{{timercolor}}{{\textbf{{#1}}}}}}")?;
+    writeln!(
+        w,
+        r"\newcommand{{\ingredient}}[1]{{\textcolor{{ingredientcolor}}{{\textbf{{#1}}}}}}"
+    )?;
+    writeln!(
+        w,
+        r"\newcommand{{\cookware}}[1]{{\textcolor{{cookwarecolor}}{{\textbf{{#1}}}}}}"
+    )?;
+    writeln!(
+        w,
+        r"\newcommand{{\timer}}[1]{{\textcolor{{timercolor}}{{\textbf{{#1}}}}}}"
+    )?;
     writeln!(w)?;
     writeln!(w, r"% Customize section headers")?;
-    writeln!(w, r"\titleformat{{\section}}{{\Large\bfseries}}{{}}{{0em}}{{}}")?;
-    writeln!(w, r"\titleformat{{\subsection}}{{\large\bfseries}}{{}}{{0em}}{{}}")?;
+    writeln!(
+        w,
+        r"\titleformat{{\section}}{{\Large\bfseries}}{{}}{{0em}}{{}}"
+    )?;
+    writeln!(
+        w,
+        r"\titleformat{{\subsection}}{{\large\bfseries}}{{}}{{0em}}{{}}"
+    )?;
     writeln!(w)?;
     writeln!(w, r"\begin{{document}}")?;
     writeln!(w)?;
@@ -214,7 +232,11 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
         write!(w, r"\item ")?;
 
         if !entry.quantity.is_empty() {
-            write!(w, r"\textbf{{{}}} ", escape_latex(&entry.quantity.to_string()))?;
+            write!(
+                w,
+                r"\textbf{{{}}} ",
+                escape_latex(&entry.quantity.to_string())
+            )?;
         }
 
         if ingredient.reference.is_some() {
@@ -224,12 +246,18 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
                 r"\ingredient{{{}}}",
                 escape_latex(&ingredient.display_name())
             )?;
-            write!(w, r" \textit{{(see recipe: {}/{})}}",
+            write!(
+                w,
+                r" \textit{{(see recipe: {}/{})}}",
                 escape_latex(&path),
                 escape_latex(&ingredient.name)
             )?;
         } else {
-            write!(w, r"\ingredient{{{}}}", escape_latex(&ingredient.display_name()))?;
+            write!(
+                w,
+                r"\ingredient{{{}}}",
+                escape_latex(&ingredient.display_name())
+            )?;
         }
 
         if ingredient.modifiers().is_optional() {
@@ -266,10 +294,14 @@ fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter
         write!(w, r"\item ")?;
 
         if !item.quantity.is_empty() {
-            write!(w, r"\textbf{{{}}} ", escape_latex(&item.quantity.to_string()))?;
+            write!(
+                w,
+                r"\textbf{{{}}} ",
+                escape_latex(&item.quantity.to_string())
+            )?;
         }
 
-        write!(w, r"\cookware{{{}}}", escape_latex(&cw.display_name()))?;
+        write!(w, r"\cookware{{{}}}", escape_latex(cw.display_name()))?;
 
         if cw.modifiers().is_optional() {
             write!(w, r" \textit{{(optional)}}")?;
@@ -356,9 +388,17 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
                 let timer_text = if let Some(name) = &t.name {
-                    format!("{}: {}", name, t.quantity.as_ref().map_or("".to_string(), |q| q.to_string()))
+                    format!(
+                        "{}: {}",
+                        name,
+                        t.quantity
+                            .as_ref()
+                            .map_or("".to_string(), |q| q.to_string())
+                    )
                 } else {
-                    t.quantity.as_ref().map_or("".to_string(), |q| q.to_string())
+                    t.quantity
+                        .as_ref()
+                        .map_or("".to_string(), |q| q.to_string())
                 };
                 write!(w, r"\timer{{{}}}", escape_latex(&timer_text))?;
             }

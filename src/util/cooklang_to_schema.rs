@@ -1,11 +1,7 @@
-use std::io;
 use anyhow::{Context, Result};
+use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
-use cooklang::{
-    convert::Converter,
-    model::{Item},
-    Recipe,
-};
+use std::io;
 
 pub fn print_schema(
     recipe: &Recipe,
@@ -21,8 +17,7 @@ pub fn print_schema(
         serde_json::to_writer_pretty(writer, &schema)
             .context("Failed to write Schema.org JSON-LD")?;
     } else {
-        serde_json::to_writer(writer, &schema)
-            .context("Failed to write Schema.org JSON-LD")?;
+        serde_json::to_writer(writer, &schema).context("Failed to write Schema.org JSON-LD")?;
     }
 
     Ok(())
@@ -191,7 +186,7 @@ fn format_iso_duration(time_str: &str) -> Result<String> {
         return Ok(format!("PT{}M", minutes));
     }
 
-    Ok(format!("PT0M"))
+    Ok("PT0M".to_string())
 }
 
 fn extract_number(s: &str) -> Option<i32> {
@@ -200,16 +195,6 @@ fn extract_number(s: &str) -> Option<i32> {
         .collect::<String>()
         .parse::<i32>()
         .ok()
-}
-
-fn estimate_total_minutes(combined: &str) -> i32 {
-    // Very simplified - just extract all numbers and sum them
-    let numbers: Vec<i32> = combined
-        .split(|c: char| !c.is_numeric())
-        .filter_map(|s| s.parse::<i32>().ok())
-        .collect();
-
-    numbers.iter().sum()
 }
 
 fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) -> Result<()> {
@@ -325,7 +310,7 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<Strin
             tool_text.push(' ');
         }
 
-        tool_text.push_str(&cw.display_name());
+        tool_text.push_str(cw.display_name());
 
         if cw.modifiers().is_optional() {
             tool_text.push_str(" (optional)");
