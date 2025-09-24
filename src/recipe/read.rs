@@ -60,6 +60,8 @@ pub struct ReadArgs {
     ///   yaml     - YAML representation of the recipe data
     ///   cooklang - Regenerated Cooklang format
     ///   markdown - Markdown formatted recipe
+    ///   latex    - LaTeX formatted recipe for creating cookbooks
+    ///   schema   - Schema.org Recipe JSON-LD format
     ///
     /// If not specified, format is inferred from output file extension.
     #[arg(short, long, value_enum)]
@@ -83,6 +85,10 @@ enum OutputFormat {
     Cooklang,
     #[value(alias("md"))]
     Markdown,
+    #[value(alias("tex"))]
+    Latex,
+    #[value(alias("jsonld"))]
+    Schema,
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
@@ -134,6 +140,9 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             Some("md") => OutputFormat::Markdown,
             Some("yaml") => OutputFormat::Yaml,
             Some("yml") => OutputFormat::Yaml,
+            Some("tex") => OutputFormat::Latex,
+            Some("latex") => OutputFormat::Latex,
+            Some("jsonld") => OutputFormat::Schema,
             _ => OutputFormat::Human,
         },
         None => OutputFormat::Human,
@@ -165,6 +174,21 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 writer,
+            )?,
+            OutputFormat::Latex => crate::util::cooklang_to_latex::print_latex(
+                &recipe,
+                &title,
+                scale,
+                PARSER.converter(),
+                writer,
+            )?,
+            OutputFormat::Schema => crate::util::cooklang_to_schema::print_schema(
+                &recipe,
+                &title,
+                scale,
+                PARSER.converter(),
+                writer,
+                args.pretty,
             )?,
         }
 

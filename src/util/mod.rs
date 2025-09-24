@@ -30,7 +30,9 @@
 
 pub mod cooklang_to_cooklang;
 pub mod cooklang_to_human;
+pub mod cooklang_to_latex;
 pub mod cooklang_to_md;
+pub mod cooklang_to_schema;
 pub mod format;
 
 use anyhow::{Context as _, Result};
