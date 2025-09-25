@@ -159,6 +159,25 @@ Regenerate clean Cooklang markup:
 cook recipe "Neapolitan Pizza" -f cooklang
 ```
 
+### LaTeX Format
+
+Export recipes as LaTeX documents for professional typesetting:
+
+```bash
+cook recipe "Neapolitan Pizza" -f latex
+
+# Pipe directly to pdflatex to create a PDF
+cook recipe "Neapolitan Pizza" -f latex | pdflatex -jobname="pizza-recipe"
+```
+
+### Schema.org Format
+
+Generate structured data in Schema.org Recipe format for SEO and web integration:
+
+```bash
+cook recipe "Neapolitan Pizza" -f schema
+```
+
 ## Saving Output
 
 Write the output to a file:
