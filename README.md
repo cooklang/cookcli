@@ -1,8 +1,37 @@
 # CookCLI
 
-Command line tools for working with Cooklang recipes.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/cooklang/CookCLI)](https://github.com/cooklang/CookCLI/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/cooklang/CookCLI?style=social)](https://github.com/cooklang/CookCLI)
+[![Discord](https://img.shields.io/discord/868598288781148200?label=Discord&logo=discord)](https://discord.gg/fUVVvUzEEK)
 
-## What is CookCLI?
+**Command line tools for working with [Cooklang](https://cooklang.org) recipes.**
+
+### 🎯 Quick Install
+
+```bash
+# macOS/Linux (Homebrew)
+brew install tap/cookcli
+
+# Download binary (all platforms)
+# Visit: https://github.com/cooklang/CookCLI/releases
+```
+
+## 📋 Table of Contents
+
+- [What is CookCLI?](#-what-is-cookcli)
+- [Getting Started](#-getting-started)
+- [Installation](#-installation)
+- [Commands](#-commands)
+- [Documentation](#-documentation)
+- [Configuration](#️-configuration)
+- [Tips](#-tips)
+- [Contributing](#-contributing)
+- [Contributors](#-contributors)
+- [License](#-license)
+- [Support](#-support)
+
+## 📖 What is CookCLI?
 
 CookCLI provides a suite of commands to create shopping lists,
 reports and maintain recipes. We've built it to be simple and useful
@@ -11,14 +40,17 @@ UNIX command line and scripting tools. It can also function
 as a webserver for your recipes, making them browsable on
 any device with a web browser.
 
-With CookCLI, you can:
+### ✨ Features
 
-* integrate your Cooklang recipes with other tools
-* script meal planning and shopping
-* evaluate your recipes or menus with reports
-* of course cook with your terminal open
+* 🔧 **UNIX Philosophy** - Integrate your Cooklang recipes with other tools
+* 📝 **Meal Planning** - Script meal planning and shopping
+* 📊 **Reports** - Evaluate your recipes or menus with custom reports
+* 🌐 **Web Interface** - Browse recipes from any device
+* 🛒 **Smart Shopping** - Generate organized shopping lists
+* 🔍 **Recipe Search** - Find recipes quickly
+* 📦 **Pantry Tracking** - Manage inventory and expiration dates
 
-## Getting Started
+## 🚀 Getting Started
 
 First, install CookCLI using one of the methods below. CookCLI comes with a few sample recipes to play with:
 
@@ -78,7 +110,7 @@ Serving recipe files from: "/Users/chefalexey/recipes"
 <img width="600" height="359" alt="pantry" src="https://github.com/user-attachments/assets/92d20226-eeb4-4b64-8833-ee7d9b3578a9" />
 
 
-## Installation
+## 📦 Installation
 
 ### Download Binary
 
@@ -159,7 +191,7 @@ cargo run -- server ./seed
 make dev_server  # Builds CSS and starts server
 ```
 
-## Commands
+## 🛠 Commands
 
 CookCLI follows the UNIX philosophy: each command does one thing well.
 
@@ -306,7 +338,7 @@ cook pantry -f json depleted
 cook pantry -f yaml expiring --days 14
 ```
 
-## Documentation
+## 📚 Documentation
 
 Detailed documentation for each command is available in the [docs/](docs/) directory:
 
@@ -320,7 +352,7 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 * [Report](docs/report.md) - custom outputs
 * [Pantry](docs/pantry.md) - inventory management and tracking
 
-## Configuration
+## ⚙️ Configuration
 
 CookCLI looks for configuration files in:
 
@@ -418,7 +450,7 @@ cook shopping-list "Recipe.cook" --aisle ./my-config/aisle.conf
 # Shopping list will only show: pepper, chicken, tomatoes
 ```
 
-## Tips
+## 💡 Tips
 
 ### Logging
 
@@ -447,11 +479,11 @@ for r in *.cook; do
 done
 ```
 
-## Give us a star
+## ⭐ Give us a star
 
 Why not? It will help more people discover this tool and Cooklang.
 
-## Contributing
+## 🤝 Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -464,18 +496,32 @@ Areas where we'd love help:
 * Translations
 * UI/UX improvements
 
-## License
+## 👥 Contributors
+
+Thanks to all the people who have contributed to CookCLI!
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<a href="https://github.com/cooklang/CookCLI/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=cooklang/CookCLI" />
+</a>
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+## 📄 License
 
 MIT License. See [LICENSE](LICENSE) for details.
 
 Some source files include code from [cooklang-chef](https://github.com/Zheoni/cooklang-chef), also under MIT license.
 
-## Links
+## 🔗 Links
 
 * [Cooklang Specification](https://cooklang.org/docs/spec) - the recipe markup language
 * [Cooklang Apps](https://cooklang.org/app/) - iOS and Android apps
 
-## Support
+## 💬 Support
 
 * [Issue Tracker](https://github.com/cooklang/CookCLI/issues) - report bugs
 * [Twitter](https://twitter.com/cooklang_org) - updates and news
