@@ -3,7 +3,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/cooklang/CookCLI)](https://github.com/cooklang/CookCLI/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/cooklang/CookCLI?style=social)](https://github.com/cooklang/CookCLI)
-[![Discord](https://img.shields.io/discord/868598288781148200?label=Discord&logo=discord)](https://discord.gg/fUVVvUzEEK)
 
 **Command line tools for working with [Cooklang](https://cooklang.org) recipes.**
 
