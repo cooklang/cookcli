@@ -10,7 +10,7 @@
 
 ```bash
 # macOS/Linux (Homebrew)
-brew install tap/cookcli
+brew install cookcli
 
 # Download binary (all platforms)
 # Visit: https://github.com/cooklang/CookCLI/releases
