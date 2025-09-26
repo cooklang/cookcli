@@ -165,12 +165,6 @@ cargo build --release --no-default-features
 # This disables the 'self-update' feature flag while keeping all other functionality
 ```
 
-Use cases for disabling self-update:
-* Package manager distributions (Homebrew, apt, etc.)
-* CI/CD pipelines where version control is managed externally
-* Corporate environments with restricted network access
-* When distributing through official release channels
-
 ### Development Setup
 
 For development with hot-reload of CSS changes:
@@ -469,7 +463,7 @@ CookCLI works great with pipes and standard tools:
 
 ```bash
 # Find all recipes with chicken and create a shopping list
-cook search eggs | xargs cook shopping-list
+cook search chicken | xargs cook shopping-list
 
 # Convert all recipes to Markdown
 for r in *.cook; do
