@@ -120,8 +120,7 @@ Download the latest release for your platform from the [releases page](https://g
 Using Homebrew:
 
 ```bash
-brew tap cooklang/tap
-brew install cooklang/tap/cookcli
+brew install cookcli
 ```
 
 ### Install with Cargo
