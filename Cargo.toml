@@ -31,7 +31,7 @@ axum = { version = "0.7" }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
-cooklang = { git = "https://github.com/cooklang/cooklang-rs.git", branch = "feat/bullets", default-features = false, features = ["aisle", "pantry"] }
+cooklang = { version = "0.17.1", default-features = false, features = ["aisle", "pantry"] }
 cooklang-find = { version = "0.4.0" }
 cooklang-import = "0.6.0"
 cooklang-reports = { version = "0.2" }

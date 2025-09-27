@@ -502,7 +502,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
- "cooklang 0.17.0 (git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fbullets)",
+ "cooklang",
  "cooklang-find",
  "cooklang-import",
  "cooklang-reports",
@@ -537,30 +537,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "471bfb28efa997330a7101c55a7914857d7de8daa4de4090b1babc713b4b2f39"
-dependencies = [
- "bitflags 2.9.1",
- "codesnake",
- "enum-map",
- "finl_unicode",
- "serde",
- "serde_yaml",
- "smallvec",
- "strum",
- "thiserror",
- "toml 0.8.23",
- "tracing",
- "unicase",
- "unicode-width 0.2.0",
- "yansi",
-]
-
-[[package]]
-name = "cooklang"
-version = "0.17.0"
-source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fbullets#0bc5049a645b88678eae0c5de32775370f3e00d4"
+checksum = "eb47b181d3374889527492659c9c8a1a21db41530a467608d339b23c3b97328e"
 dependencies = [
  "bitflags 2.9.1",
  "codesnake",
@@ -616,7 +595,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "139ad7cc4d2651fa6f7d821121f41ea121bef194b8f80ad6432e0bb265518ad1"
 dependencies = [
  "anyhow",
- "cooklang 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cooklang",
  "cooklang-find",
  "minijinja",
  "serde",
