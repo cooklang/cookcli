@@ -92,6 +92,10 @@ jobs:
       run: cargo build --release --no-default-features --verbose
       if: matrix.rust == 'stable'
 
+    - name: Run tests without default features
+      run: cargo test --no-default-features --verbose
+      if: matrix.rust == 'stable'
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
@@ -156,6 +160,9 @@ jobs:
 
     - name: Run snapshot tests
       run: cargo test --test snapshot_test
+
+    - name: Run snapshot tests without default features
+      run: cargo test --no-default-features --test snapshot_test
 
     - name: Upload snapshot diffs
       if: failure()

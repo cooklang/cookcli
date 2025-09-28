@@ -306,7 +306,11 @@ fn test_help_output() {
         (r"cookcli \d+\.\d+\.\d+", "cookcli [VERSION]"),
         (r"Usage: cook\.exe", "Usage: cook"),  // Normalize Windows executable name in usage line
     ]}, {
-        assert_snapshot!(stdout);
+        // Use different snapshots based on whether self-update feature is enabled
+        #[cfg(feature = "self-update")]
+        assert_snapshot!("help_output", stdout);
+        #[cfg(not(feature = "self-update"))]
+        assert_snapshot!("help_output_no_update", stdout);
     });
 }
 

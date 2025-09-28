@@ -1,0 +1,27 @@
+---
+source: tests/snapshot_test.rs
+assertion_line: 313
+expression: stdout
+---
+A command-line interface for managing and working with Cooklang recipes
+
+Usage: cook [OPTIONS] <COMMAND>
+
+Commands:
+  recipe         Parse, validate and display recipe files in various formats
+  server         Start a local web server to browse and view your recipe collection
+  shopping-list  Generate a combined shopping list from multiple recipes [aliases: sl]
+  seed           Initialize a directory with example Cooklang recipes
+  search         Search through your recipe collection for matching text
+  import         Import recipes from supported websites and convert to Cooklang
+  report         Generate custom reports from recipes using templates
+  doctor         Analyze your recipe collection for issues and improvements
+  pantry         Manage and analyze your pantry inventory
+  help           Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose...  Increase verbosity (-v for info, -vv for debug, -vvv for trace)
+  -h, --help        Print help
+  -V, --version     Print version
+
+Docs: https://cooklang.org/cli/help/
