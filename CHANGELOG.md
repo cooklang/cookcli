@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.1](https://github.com/cooklang/cookcli/compare/v0.18.0...v0.18.1) (2025-09-28)
+
+
+### Bug Fixes
+
+* clippy ([b860677](https://github.com/cooklang/cookcli/commit/b86067758b3e5b5d9394417a5d400fabf08aa298))
+* remove discord badge ([f62b8c4](https://github.com/cooklang/cookcli/commit/f62b8c473c16c752dfedf8883596feb7340bb2f5))
+
 ## [0.18.0](https://github.com/cooklang/cookcli/compare/v0.17.2...v0.18.0) (2025-09-24)
 
 
