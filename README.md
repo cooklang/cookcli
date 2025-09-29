@@ -1,5 +1,6 @@
 # CookCLI
 
+[![Test](https://github.com/cooklang/cookcli/actions/workflows/test.yml/badge.svg)](https://github.com/cooklang/cookcli/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/cooklang/CookCLI)](https://github.com/cooklang/CookCLI/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/cooklang/CookCLI?style=social)](https://github.com/cooklang/CookCLI)
