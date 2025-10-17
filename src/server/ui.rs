@@ -237,7 +237,8 @@ async fn recipe_page(
             if r.components.is_empty() {
                 r.name.clone()
             } else {
-                format!("{}/{}", r.components.join("/"), r.name)
+                let sep = std::path::MAIN_SEPARATOR.to_string();
+                format!("{}{}{}", r.components.join(&sep), sep, r.name)
             }
         });
 
@@ -289,7 +290,8 @@ async fn recipe_page(
                                         if r.components.is_empty() {
                                             r.name.clone()
                                         } else {
-                                            format!("{}/{}", r.components.join("/"), r.name)
+                                            let sep = std::path::MAIN_SEPARATOR.to_string();
+                                            format!("{}{}{}", r.components.join(&sep), sep, r.name)
                                         }
                                     });
 
@@ -385,7 +387,8 @@ async fn recipe_page(
                         if r.components.is_empty() {
                             r.name.clone()
                         } else {
-                            format!("{}/{}", r.components.join("/"), r.name)
+                            let sep = std::path::MAIN_SEPARATOR.to_string();
+                            format!("{}{}{}", r.components.join(&sep), sep, r.name)
                         }
                     });
 
@@ -581,9 +584,11 @@ async fn menu_page_handler(
                                     let name = if recipe_ref.components.is_empty() {
                                         recipe_ref.name.clone()
                                     } else {
+                                        let sep = std::path::MAIN_SEPARATOR.to_string();
                                         format!(
-                                            "{}/{}",
-                                            recipe_ref.components.join("/"),
+                                            "{}{}{}",
+                                            recipe_ref.components.join(&sep),
+                                            sep,
                                             recipe_ref.name
                                         )
                                     };
