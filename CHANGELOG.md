@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.2](https://github.com/cooklang/cookcli/compare/v0.18.1...v0.18.2) (2025-10-18)
+
+
+### Bug Fixes
+
+* always use base path for finding refsi ([338fbc7](https://github.com/cooklang/cookcli/commit/338fbc7abae99d1884d9473e4e7dae25144f4ce1))
+* clippy ([ee687b9](https://github.com/cooklang/cookcli/commit/ee687b9810ece48e9bda21dbd8df29d0575f5b49))
+* fmt ([2143f4a](https://github.com/cooklang/cookcli/commit/2143f4af21abaa915636c631c4f040300214a01e))
+* proper separator ([1fd3f61](https://github.com/cooklang/cookcli/commit/1fd3f61bbf87834de9c35225b1072023e946b8ea))
+* remove .claude ([2f21d24](https://github.com/cooklang/cookcli/commit/2f21d24aba457e4c460baab68500e7b11a8e7542))
+* remove junk ([9c43d49](https://github.com/cooklang/cookcli/commit/9c43d49a4f4fe9aac01dceb64f4b69c0e87d25b0))
+* return favicon https://github.com/cooklang/cookcli/issues/174 ([b807434](https://github.com/cooklang/cookcli/commit/b807434d11198e8ab4bc1986c966d6dac91d7184))
+* review suggestions ([43add8b](https://github.com/cooklang/cookcli/commit/43add8b1b5769af7f205f7610cc4309e69457599))
+* shorthand ingredients display ([1d36107](https://github.com/cooklang/cookcli/commit/1d3610753dd3d8a5b5696140fd84a775a6cf275c))
+* shorthand ingredients display ([43287c7](https://github.com/cooklang/cookcli/commit/43287c7a6d0242ec0ccbefc4895c2345157d2748))
+* spelling https://github.com/cooklang/cookcli/issues/123 ([b6d8d27](https://github.com/cooklang/cookcli/commit/b6d8d2731d917aa38404476f490fbd9b2a100a77))
+* test ([db79534](https://github.com/cooklang/cookcli/commit/db7953425d504795fb81ff214fa175c3f75642ed))
+* url separator ([88755ae](https://github.com/cooklang/cookcli/commit/88755ae3d429d8f14ba98662d8d49c64b47dc7d9))
+
 ## [0.18.1](https://github.com/cooklang/cookcli/compare/v0.18.0...v0.18.1) (2025-09-28)
 
 
