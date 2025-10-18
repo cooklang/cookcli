@@ -110,7 +110,13 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
 
                 let name = if let Some(reference) = &igr.reference {
                     let sep = std::path::MAIN_SEPARATOR.to_string();
-                    format!(".{}{}{}{}", sep, reference.components.join(&sep), sep, &igr.name)
+                    format!(
+                        ".{}{}{}{}",
+                        sep,
+                        reference.components.join(&sep),
+                        sep,
+                        &igr.name
+                    )
                 } else {
                     igr.name.clone()
                 };

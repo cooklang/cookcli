@@ -260,7 +260,13 @@ pub fn extract_ingredients(
                         nested_ref.name.clone()
                     } else {
                         let sep = std::path::MAIN_SEPARATOR.to_string();
-                        format!(".{}{}{}{}", sep, nested_ref.components.join(&sep), sep, nested_ref.name)
+                        format!(
+                            ".{}{}{}{}",
+                            sep,
+                            nested_ref.components.join(&sep),
+                            sep,
+                            nested_ref.name
+                        )
                     };
 
                     // Get the nested recipe to check its servings metadata
