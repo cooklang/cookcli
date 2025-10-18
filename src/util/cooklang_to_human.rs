@@ -280,9 +280,10 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
         let mut row = Row::new().with_cell(igr.display_name());
 
         if igr.reference.is_some() {
-            let path = igr.reference.as_ref().unwrap().components.join("/");
+            let sep = std::path::MAIN_SEPARATOR.to_string();
+            let path = igr.reference.as_ref().unwrap().components.join(&sep);
             row.add_ansi_cell(
-                format!("(recipe: {}/{})", path, igr.name).paint(styles().reference_marker),
+                format!("(recipe: {}{}{})", path, sep, igr.name).paint(styles().reference_marker),
             );
         } else {
             row.add_cell("");

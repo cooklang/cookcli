@@ -173,56 +173,13 @@ pub fn extract_ingredients(
         ref_indices.len()
     );
     if !ignore_references {
-        // Determine the base path for resolving references
-        // If the recipe has a path, use its parent directory as the base
-        // However, if the base_path already points to a subdirectory (like Plans/),
-        // and we have a relative reference (./), we should use the parent of base_path
-        let ref_base_path = recipe_entry
-            .path()
-            .and_then(|p| p.parent())
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| base_path.clone());
-
         for ref_index in ref_indices {
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
 
-            // Get the referenced recipe path
-            // The parser strips the "./" prefix from components, so we need to reconstruct it
-            // For references like @./Sides/Mashed Potatoes{}, components will be ["Sides"]
-            // For references like @./recipe{}, components will be empty
-            let ref_path = if reference.components.is_empty() {
-                // Direct reference like @./recipe{} or @recipe{}
-                reference.name.clone()
-            } else {
-                // Reference with path components like @./Sides/recipe{}
-                // Always treat as relative path since cooklang uses ./ for local references
-                format!("./{}/{}", reference.components.join("/"), reference.name)
-            };
+            let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
 
-            // If the reference starts with ./ or ../, resolve it relative to the recipe's location
-            // Otherwise, use the original base_path
-            let search_base: Utf8PathBuf =
-                if ref_path.starts_with("./") || ref_path.starts_with("../") {
-                    // For relative references starting with ./, we need to determine the correct base:
-                    // - If the recipe is in a subdirectory (like Plans/), references should be
-                    //   resolved relative to the parent of that subdirectory
-                    // - This allows Plans/menu.menu to reference ./Sides/recipe correctly
-
-                    // Check if ref_base_path has a parent (meaning it's not root)
-                    // and use the parent for ./ references to access sibling directories
-                    if ref_path.starts_with("./") && ref_base_path.parent().is_some() {
-                        // Use parent directory for ./ references to access siblings
-                        ref_base_path.parent().unwrap().to_path_buf()
-                    } else {
-                        // Use ref_base_path as-is for ../ references or if no parent
-                        ref_base_path.clone()
-                    }
-                } else {
-                    base_path.clone()
-                };
-
-            let ref_entry = get_recipe(&search_base, &ref_path).with_context(|| {
+            let ref_entry = get_recipe(base_path, &ref_path).with_context(|| {
                 format!(
                     "Failed to find referenced recipe '{}' from '{}'",
                     ref_path,
@@ -302,11 +259,18 @@ pub fn extract_ingredients(
                     let nested_path = if nested_ref.components.is_empty() {
                         nested_ref.name.clone()
                     } else {
-                        format!("./{}/{}", nested_ref.components.join("/"), nested_ref.name)
+                        let sep = std::path::MAIN_SEPARATOR.to_string();
+                        format!(
+                            ".{}{}{}{}",
+                            sep,
+                            nested_ref.components.join(&sep),
+                            sep,
+                            nested_ref.name
+                        )
                     };
 
                     // Get the nested recipe to check its servings metadata
-                    let nested_entry_path = get_recipe(&search_base, &nested_path)?;
+                    let nested_entry_path = get_recipe(base_path, &nested_path)?;
                     let nested_content = nested_entry_path
                         .content()
                         .context("Failed to read nested recipe")?;

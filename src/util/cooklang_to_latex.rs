@@ -115,11 +115,11 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
     let escaped_name = escape_latex(name);
     if scale != 1.0 {
         writeln!(w, r"\begin{{center}}")?;
-        writeln!(w, r"\huge\textbf{{{} @ {}}}", escaped_name, scale)?;
+        writeln!(w, r"\huge\textbf{{{escaped_name} @ {scale}}}")?;
         writeln!(w, r"\end{{center}}")?;
     } else {
         writeln!(w, r"\begin{{center}}")?;
-        writeln!(w, r"\huge\textbf{{{}}}", escaped_name)?;
+        writeln!(w, r"\huge\textbf{{{escaped_name}}}")?;
         writeln!(w, r"\end{{center}}")?;
     }
     writeln!(w, r"\vspace{{0.5cm}}")?;
@@ -157,39 +157,39 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
     let mut metadata_items = Vec::new();
 
     if let Some(servings) = recipe.metadata.servings() {
-        writeln!(w, "% SERVINGS: {}", servings)?;
-        metadata_items.push(format!("Servings: {}", servings));
+        writeln!(w, "% SERVINGS: {servings}")?;
+        metadata_items.push(format!("Servings: {servings}"));
     }
 
     // Get prep time from metadata
     if let Some(prep_time_val) = recipe.metadata.get("prep time") {
         if let Some(prep_time_str) = prep_time_val.as_str() {
-            writeln!(w, "% PREP_TIME: {}", prep_time_str)?;
-            metadata_items.push(format!("Prep time: {}", prep_time_str));
+            writeln!(w, "% PREP_TIME: {prep_time_str}")?;
+            metadata_items.push(format!("Prep time: {prep_time_str}"));
         }
     }
 
     // Get cook time from metadata
     if let Some(cook_time_val) = recipe.metadata.get("cook time") {
         if let Some(cook_time_str) = cook_time_val.as_str() {
-            writeln!(w, "% COOK_TIME: {}", cook_time_str)?;
-            metadata_items.push(format!("Cook time: {}", cook_time_str));
+            writeln!(w, "% COOK_TIME: {cook_time_str}")?;
+            metadata_items.push(format!("Cook time: {cook_time_str}"));
         }
     }
 
     // Add author if present
     if let Some(author) = recipe.metadata.author() {
         if let Some(author_name) = author.name() {
-            writeln!(w, "% AUTHOR: {}", author_name)?;
+            writeln!(w, "% AUTHOR: {author_name}")?;
         }
     }
 
     // Add source if present
     if let Some(source) = recipe.metadata.source() {
         if let Some(url) = source.url() {
-            writeln!(w, "% SOURCE: {}", url)?;
+            writeln!(w, "% SOURCE: {url}")?;
         } else if let Some(name) = source.name() {
-            writeln!(w, "% SOURCE: {}", name)?;
+            writeln!(w, "% SOURCE: {name}")?;
         }
     }
 
@@ -240,7 +240,8 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
         }
 
         if ingredient.reference.is_some() {
-            let path = ingredient.reference.as_ref().unwrap().components.join("/");
+            let sep = std::path::MAIN_SEPARATOR.to_string();
+            let path = ingredient.reference.as_ref().unwrap().components.join(&sep);
             write!(
                 w,
                 r"\ingredient{{{}}}",
@@ -248,8 +249,9 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
             )?;
             write!(
                 w,
-                r" \textit{{(see recipe: {}/{})}}",
+                r" \textit{{(see recipe: {}{}{})}}",
                 escape_latex(&path),
+                sep,
                 escape_latex(&ingredient.name)
             )?;
         } else {
@@ -341,7 +343,7 @@ fn write_section(
         if let Some(name) = &section.name {
             writeln!(w, r"\subsection*{{{}}}", escape_latex(name))?;
         } else {
-            writeln!(w, r"\subsection*{{Section {}}}", num)?;
+            writeln!(w, r"\subsection*{{Section {num}}}")?;
         }
         writeln!(w)?;
     }
