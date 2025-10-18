@@ -139,6 +139,48 @@ test.describe.skip('Recipe Display', () => {  // Skip - requires recipe content
     }
   });
 
+  test('should display ingredient notes from shorthand notation', async ({ page }) => {
+    // Navigate to Red Beans recipe which has shorthand notation
+    await helpers.navigateTo('/recipe/Shared/Red Beans.cook');
+    await page.waitForLoadState('networkidle');
+
+    // Check that ingredients with notes are displayed
+    const ingredientsList = page.locator('ul.space-y-3 li');
+    const count = await ingredientsList.count();
+    expect(count).toBeGreaterThan(0);
+
+    // Find an ingredient with a note (e.g., "garlic (peeled and finely sliced)")
+    const ingredientWithNote = ingredientsList.filter({ hasText: 'garlic' });
+
+    if (await ingredientWithNote.count() > 0) {
+      // Check note is displayed with correct styling
+      const noteSpan = ingredientWithNote.locator('span.italic.text-gray-600');
+      await expect(noteSpan).toBeVisible();
+
+      // Check note content
+      const noteText = await noteSpan.textContent();
+      expect(noteText).toContain('peeled');
+
+      // Check accessibility attributes
+      await expect(noteSpan).toHaveAttribute('aria-label');
+      await expect(noteSpan).toHaveAttribute('title');
+
+      // Check truncation classes are present for long notes
+      await expect(noteSpan).toHaveClass(/truncate/);
+      await expect(noteSpan).toHaveClass(/max-w-/);
+    }
+
+    // Check step-level ingredient notes
+    const stepIngredients = page.locator('.text-sm.text-gray-600.mt-2');
+    if (await stepIngredients.count() > 0) {
+      const stepNoteSpan = stepIngredients.locator('span.italic').first();
+      if (await stepNoteSpan.count() > 0) {
+        await expect(stepNoteSpan).toHaveAttribute('title');
+        await expect(stepNoteSpan).toHaveAttribute('aria-label');
+      }
+    }
+  });
+
   test('should display recipe image if present', async ({ page }) => {
     if (!page.url().includes('/recipe/')) {
       expect(true).toBe(true);
