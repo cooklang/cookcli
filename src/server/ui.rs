@@ -234,11 +234,11 @@ async fn recipe_page(
 
     for ingredient in &recipe.ingredients {
         let reference_path = ingredient.reference.as_ref().map(|r| {
+            // For web URLs - always use forward slash
             if r.components.is_empty() {
                 r.name.clone()
             } else {
-                let sep = std::path::MAIN_SEPARATOR.to_string();
-                format!("{}{}{}", r.components.join(&sep), sep, r.name)
+                format!("{}/{}", r.components.join("/"), r.name)
             }
         });
 
@@ -287,11 +287,11 @@ async fn recipe_page(
                                 section_ingredient_indices.insert(*index);
                                 if let Some(ing) = recipe.ingredients.get(*index) {
                                     let reference_path = ing.reference.as_ref().map(|r| {
+                                        // For web URLs - always use forward slash
                                         if r.components.is_empty() {
                                             r.name.clone()
                                         } else {
-                                            let sep = std::path::MAIN_SEPARATOR.to_string();
-                                            format!("{}{}{}", r.components.join(&sep), sep, r.name)
+                                            format!("{}/{}", r.components.join("/"), r.name)
                                         }
                                     });
 
@@ -384,11 +384,11 @@ async fn recipe_page(
             for idx in section_ingredient_indices {
                 if let Some(ingredient) = recipe.ingredients.get(idx) {
                     let reference_path = ingredient.reference.as_ref().map(|r| {
+                        // For web URLs - always use forward slash
                         if r.components.is_empty() {
                             r.name.clone()
                         } else {
-                            let sep = std::path::MAIN_SEPARATOR.to_string();
-                            format!("{}{}{}", r.components.join(&sep), sep, r.name)
+                            format!("{}/{}", r.components.join("/"), r.name)
                         }
                     });
 
@@ -581,14 +581,13 @@ async fn menu_page_handler(
                                     let final_scale = recipe_scale.map(|s| s * scale);
 
                                     // Build the full path from components
+                                    // For web URLs - always use forward slash
                                     let name = if recipe_ref.components.is_empty() {
                                         recipe_ref.name.clone()
                                     } else {
-                                        let sep = std::path::MAIN_SEPARATOR.to_string();
                                         format!(
-                                            "{}{}{}",
-                                            recipe_ref.components.join(&sep),
-                                            sep,
+                                            "{}/{}",
+                                            recipe_ref.components.join("/"),
                                             recipe_ref.name
                                         )
                                     };
