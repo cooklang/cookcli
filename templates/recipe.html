@@ -178,18 +178,25 @@
                             <ul class="space-y-3 {% if !loop.last %}mb-4{% endif %}">
                             {% for ingredient in section.ingredients %}
                             <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
-                                {% match ingredient.reference_path %}
-                                {% when Some with (path) %}
-                                    <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-                                        </svg>
-                                        {{ ingredient.name }}
-                                    </a>
-                                {% when None %}
-                                    <span class="font-medium">{{ ingredient.name }}</span>
-                                {% endmatch %}
-                                <span class="text-orange-700 font-semibold">
+                                <div class="flex-1">
+                                    {% match ingredient.reference_path %}
+                                    {% when Some with (path) %}
+                                        <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                            </svg>
+                                            {{ ingredient.name }}
+                                        </a>
+                                    {% when None %}
+                                        <span class="font-medium">{{ ingredient.name }}</span>
+                                    {% endmatch %}
+                                    {% match ingredient.note %}
+                                    {% when Some with (note) %}
+                                        <span class="text-sm text-gray-600 italic ml-1">({{ note }})</span>
+                                    {% when None %}
+                                    {% endmatch %}
+                                </div>
+                                <span class="text-orange-700 font-semibold ml-2">
                                     {% match ingredient.quantity %}
                                     {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
                                     {% match ingredient.unit %}
@@ -205,18 +212,25 @@
                     <ul class="space-y-3">
                     {% for ingredient in ingredients %}
                     <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
-                        {% match ingredient.reference_path %}
-                        {% when Some with (path) %}
-                            <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-                                </svg>
-                                {{ ingredient.name }}
-                            </a>
-                        {% when None %}
-                            <span class="font-medium">{{ ingredient.name }}</span>
-                        {% endmatch %}
-                        <span class="text-orange-700 font-semibold">
+                        <div class="flex-1">
+                            {% match ingredient.reference_path %}
+                            {% when Some with (path) %}
+                                <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                    {{ ingredient.name }}
+                                </a>
+                            {% when None %}
+                                <span class="font-medium">{{ ingredient.name }}</span>
+                            {% endmatch %}
+                            {% match ingredient.note %}
+                            {% when Some with (note) %}
+                                <span class="text-sm text-gray-600 italic ml-1">({{ note }})</span>
+                            {% when None %}
+                            {% endmatch %}
+                        </div>
+                        <span class="text-orange-700 font-semibold ml-2">
                             {% match ingredient.quantity %}
                             {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
                             {% match ingredient.unit %}
@@ -277,7 +291,7 @@
                                     <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
                                         {% for ing in step.ingredients %}
                                             <span class="inline-block mr-3">
-                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
                                             </span>
                                         {% endfor %}
                                     </div>

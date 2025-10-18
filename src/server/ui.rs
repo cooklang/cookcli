@@ -251,6 +251,7 @@ async fn recipe_page(
                 .quantity
                 .as_ref()
                 .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+            note: ingredient.note.clone(),
             reference_path,
         });
     }
@@ -308,6 +309,7 @@ async fn recipe_page(
                                             .quantity
                                             .as_ref()
                                             .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+                                        note: ing.note.clone(),
                                     });
                                 }
                             }
@@ -399,6 +401,7 @@ async fn recipe_page(
                             .quantity
                             .as_ref()
                             .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+                        note: ingredient.note.clone(),
                         reference_path,
                     });
                 }

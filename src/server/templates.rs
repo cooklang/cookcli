@@ -120,6 +120,7 @@ pub struct IngredientData {
     pub name: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
+    pub note: Option<String>,
     pub reference_path: Option<String>,
 }
 
@@ -148,6 +149,7 @@ pub struct StepIngredient {
     pub name: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
