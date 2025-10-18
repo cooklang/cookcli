@@ -177,9 +177,9 @@ pub fn extract_ingredients(
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
 
-            let ref_path = reference.path(&std::path::MAIN_SEPARATOR.to_string());
+            let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
 
-            let ref_entry = get_recipe(&base_path, &ref_path).with_context(|| {
+            let ref_entry = get_recipe(base_path, &ref_path).with_context(|| {
                 format!(
                     "Failed to find referenced recipe '{}' from '{}'",
                     ref_path,
@@ -270,7 +270,7 @@ pub fn extract_ingredients(
                     };
 
                     // Get the nested recipe to check its servings metadata
-                    let nested_entry_path = get_recipe(&base_path, &nested_path)?;
+                    let nested_entry_path = get_recipe(base_path, &nested_path)?;
                     let nested_content = nested_entry_path
                         .content()
                         .context("Failed to read nested recipe")?;

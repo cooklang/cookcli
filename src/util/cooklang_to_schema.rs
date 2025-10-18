@@ -33,7 +33,7 @@ fn create_schema_object(
         "@context": "https://schema.org",
         "@type": "Recipe",
         "name": if scale != 1.0 {
-            format!("{} (scaled {}x)", name, scale)
+            format!("{name} (scaled {scale}x)")
         } else {
             name.to_string()
         }
@@ -173,17 +173,17 @@ fn format_iso_duration(time_str: &str) -> Result<String> {
 
     if lower.contains("hour") {
         if let Some(hours) = extract_number(&lower) {
-            return Ok(format!("PT{}H", hours));
+            return Ok(format!("PT{hours}H"));
         }
     } else if lower.contains("min") {
         if let Some(minutes) = extract_number(&lower) {
-            return Ok(format!("PT{}M", minutes));
+            return Ok(format!("PT{minutes}M"));
         }
     }
 
     // Fallback: assume minutes if just a number
     if let Some(minutes) = extract_number(&lower) {
-        return Ok(format!("PT{}M", minutes));
+        return Ok(format!("PT{minutes}M"));
     }
 
     Ok("PT0M".to_string())
@@ -288,7 +288,7 @@ fn create_ingredients_list(recipe: &Recipe, converter: &Converter) -> Result<Vec
         }
 
         if let Some(note) = &ingredient.note {
-            ingredient_text.push_str(&format!(", {}", note));
+            ingredient_text.push_str(&format!(", {note}"));
         }
 
         ingredients.push(ingredient_text);
@@ -317,7 +317,7 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<Strin
         }
 
         if let Some(note) = &cw.note {
-            tool_text.push_str(&format!(", {}", note));
+            tool_text.push_str(&format!(", {note}"));
         }
 
         tools.push(tool_text);
@@ -354,7 +354,7 @@ fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
                             &Item::Timer { index } => {
                                 let t = &recipe.timers[index];
                                 if let Some(name) = &t.name {
-                                    step_text.push_str(&format!("{} for ", name));
+                                    step_text.push_str(&format!("{name} for "));
                                 }
                                 if let Some(quantity) = &t.quantity {
                                     step_text.push_str(&quantity.to_string());
