@@ -120,6 +120,7 @@ pub struct IngredientData {
     pub name: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
+    /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
     pub reference_path: Option<String>,
 }
@@ -149,6 +150,7 @@ pub struct StepIngredient {
     pub name: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
+    /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
 }
 
