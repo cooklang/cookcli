@@ -453,10 +453,12 @@ async fn recipe_page(
             course: get_field("course"),
             prep_time: get_field("prep time")
                 .or_else(|| get_field("prep_time"))
-                .or_else(|| get_field("preptime")),
+                .or_else(|| get_field("preptime"))
+                .or_else(|| get_field("time.prep")),
             cook_time: get_field("cook time")
                 .or_else(|| get_field("cook_time"))
-                .or_else(|| get_field("cooktime")),
+                .or_else(|| get_field("cooktime"))
+                .or_else(|| get_field("time.cook")),
             cuisine: get_field("cuisine"),
             diet: get_field("diet"),
             author: get_field("author"),
