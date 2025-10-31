@@ -53,10 +53,17 @@ async fn recipes_handler(
 
     for (name, child) in &tree.children {
         let is_dir = !child.children.is_empty();
-        let item_path = if let Some(p) = &path {
-            format!("{p}/{name}")
-        } else {
-            name.to_string()
+        let item_path = {
+            let url_path = child
+                .recipe
+                .as_ref()
+                .and_then(|recipe| recipe.file_name())
+                .unwrap_or_else(|| name.to_string());
+
+            match &path {
+                Some(p) => format!("{p}/{url_path}"),
+                None => url_path.to_string(),
+            }
         };
 
         // Extract tags, image, and is_menu if this is a recipe
