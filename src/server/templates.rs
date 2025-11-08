@@ -1,6 +1,18 @@
 use askama::Template;
 use serde::{Deserialize, Serialize};
 
+mod filters {
+    use askama::Result;
+    use url::Url;
+
+    pub fn hostname(url: &str) -> Result<String> {
+        Ok(Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(String::from))
+            .unwrap_or_else(|| url.to_string()))
+    }
+}
+
 #[derive(Template)]
 #[template(path = "recipes.html")]
 pub struct RecipesTemplate {
@@ -112,6 +124,8 @@ pub struct RecipeMetadata {
     pub diet: Option<String>,
     pub author: Option<String>,
     pub description: Option<String>,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
     pub custom: Vec<(String, String)>,
 }
 
