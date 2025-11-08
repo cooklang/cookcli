@@ -461,8 +461,12 @@ async fn recipe_page(
                 .or_else(|| get_field("time.cook")),
             cuisine: get_field("cuisine"),
             diet: get_field("diet"),
-            author: get_field("author"),
+            author: get_field("author")
+                .or_else(|| get_field("source.author")),
             description: get_field("description"),
+            source: get_field("source")
+                .or_else(|| get_field("source.name")),
+            source_url: get_field("source.url"),
             custom: custom_metadata,
         })
     };
@@ -677,8 +681,12 @@ async fn menu_page_handler(
                 .or_else(|| get_field("cooktime")),
             cuisine: get_field("cuisine"),
             diet: get_field("diet"),
-            author: get_field("author"),
+            author: get_field("author")
+                .or_else(|| get_field("source.author")),
             description: get_field("description"),
+            source: get_field("source")
+                .or_else(|| get_field("source.name")),
+            source_url: get_field("source.url"),
             custom: custom_metadata,
         })
     };
