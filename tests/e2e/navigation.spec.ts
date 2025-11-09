@@ -129,4 +129,22 @@ test.describe('Navigation', () => {
     const linkCountOnShoppingList = await navLinksOnShoppingList.count();
     expect(linkCountOnShoppingList).toBeGreaterThan(0);
   });
+
+  test('should use recipe filename in URLs instead of display names', async ({ page }) => {
+    // Check the recipe with title 'Sicilian-style Scottadito Lamb Chops' and filename 'lamb-chops.cook'
+
+    const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops.cook"]');
+    await expect(simpleRecipeCard).toBeVisible();
+
+    const recipeName = await simpleRecipeCard.locator('h3').textContent();
+    expect(recipeName).toContain('Sicilian-style Scottadito Lamb Chops');
+
+    await simpleRecipeCard.click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify we're on the correct recipe page
+    expect(page.url()).toContain('/recipe/lamb-chops.cook');
+    const recipeTitle = page.locator('h1, h2').first();
+    await expect(recipeTitle).toContainText('Sicilian-style Scottadito Lamb Chops');
+  });
 });
