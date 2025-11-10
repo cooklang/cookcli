@@ -445,6 +445,7 @@ async fn recipe_page(
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
+        custom_metadata.retain(|(k, _)| !k.starts_with("source.") && !k.starts_with("time."));
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
