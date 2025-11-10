@@ -442,10 +442,13 @@ async fn recipe_page(
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
             if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                if key_str.starts_with("source.") || key_str.starts_with("time.") {
+                    continue;
+                }
+
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
-        custom_metadata.retain(|(k, _)| !k.starts_with("source.") && !k.starts_with("time."));
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
