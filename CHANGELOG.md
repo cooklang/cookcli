@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.3](https://github.com/cooklang/cookcli/compare/v0.18.2...v0.18.3) (2025-11-11)
+
+
+### Bug Fixes
+
+* **server:** use filename for recipe path resolution ([3fba010](https://github.com/cooklang/cookcli/commit/3fba0102510d600f970758b9d62c4138d1b7d17f))
+* **server:** use filename for recipe path resolution ([b22fc87](https://github.com/cooklang/cookcli/commit/b22fc87728586e7b5c309b525450de9bbb3f4332))
+
 ## [0.18.2](https://github.com/cooklang/cookcli/compare/v0.18.1...v0.18.2) (2025-10-18)
 
 
