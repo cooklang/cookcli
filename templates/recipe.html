@@ -148,6 +148,18 @@
                 {% when None %}
                 {% endmatch %}
 
+                {% match metadata.source %}
+                {% when Some with (source) %}
+                <span class="metadata-pill metadata-source">📖 {{ source }}</span>
+                {% when None %}
+                {% endmatch %}
+
+                {% match metadata.source_url %}
+                {% when Some with (source_url) %}
+                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url }}" class="text-blue-600 hover:text-blue-800 hover:underline">{{ source_url|hostname }}</a></span>
+                {% when None %}
+                {% endmatch %}
+
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
