@@ -89,6 +89,10 @@ pub struct PlanArgs {
     /// Skip the first N ingredients (useful if you already have common items)
     #[arg(short = 's', long, default_value = "0")]
     pub skip: usize,
+
+    /// Allow recipes to be considered cookable even if N ingredients are missing
+    #[arg(short = 'm', long, default_value = "0")]
+    pub allow_missing: usize,
 }
 
 // Output structures for JSON/YAML formats
@@ -669,8 +673,8 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
         for mut missing_set in recipe_missing {
             missing_set.remove(&best_ingredient);
 
-            if missing_set.is_empty() {
-                // This recipe is now fully cookable
+            if missing_set.len() <= args.allow_missing {
+                // This recipe is now cookable (with N or fewer missing ingredients)
                 newly_cookable += 1;
             } else {
                 // Still missing some ingredients
@@ -695,6 +699,13 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
         OutputFormat::Human => {
             println!("Optimal Pantry Plan (Greedy Coverage):");
             println!("=======================================");
+            if args.allow_missing > 0 {
+                println!(
+                    "Note: Allowing recipes with up to {} missing ingredient{}",
+                    args.allow_missing,
+                    if args.allow_missing == 1 { "" } else { "s" }
+                );
+            }
             println!();
 
             if args.skip > 0 && args.skip < selected_ingredients.len() {
