@@ -16,8 +16,13 @@ recipe-cookware = Kochgeschirr
 recipe-timers = Timer
 recipe-tags = Schlagwörter
 recipe-add-to-shopping = Zur Einkaufsliste hinzufügen
+recipe-add-all-to-shopping = Alles zur Einkaufsliste hinzufügen
 recipe-scale-label = Skalierung
 recipe-servings-label = Portionen
+recipe-print = Rezept drucken
+recipe-added = Hinzugefügt!
+recipe-main-section = Hauptteil
+recipe-preparation = Vorbereitung
 
 # Recipe Metadata
 meta-course = Gang

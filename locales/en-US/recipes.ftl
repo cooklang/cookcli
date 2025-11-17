@@ -16,8 +16,13 @@ recipe-cookware = Cookware
 recipe-timers = Timers
 recipe-tags = Tags
 recipe-add-to-shopping = Add to Shopping List
+recipe-add-all-to-shopping = Add All to Shopping List
 recipe-scale-label = Scale
 recipe-servings-label = servings
+recipe-print = Print Recipe
+recipe-added = Added!
+recipe-main-section = Main
+recipe-preparation = preparation
 
 # Recipe Metadata
 meta-course = Course

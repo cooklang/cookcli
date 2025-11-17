@@ -16,8 +16,13 @@ recipe-cookware = Ustensiles
 recipe-timers = Minuteries
 recipe-tags = Étiquettes
 recipe-add-to-shopping = Ajouter à la liste de courses
+recipe-add-all-to-shopping = Tout ajouter à la liste de courses
 recipe-scale-label = Échelle
 recipe-servings-label = portions
+recipe-print = Imprimer la recette
+recipe-added = Ajouté !
+recipe-main-section = Principal
+recipe-preparation = préparation
 
 # Recipe Metadata
 meta-course = Plat

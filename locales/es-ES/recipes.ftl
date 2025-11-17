@@ -16,8 +16,13 @@ recipe-cookware = Utensilios
 recipe-timers = Temporizadores
 recipe-tags = Etiquetas
 recipe-add-to-shopping = Agregar a la lista de compras
+recipe-add-all-to-shopping = Agregar todo a la lista de compras
 recipe-scale-label = Escala
 recipe-servings-label = porciones
+recipe-print = Imprimir receta
+recipe-added = ¡Agregado!
+recipe-main-section = Principal
+recipe-preparation = preparación
 
 # Recipe Metadata
 meta-course = Plato

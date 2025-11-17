@@ -6,7 +6,7 @@
 <div>
     <nav class="mb-4 breadcrumb print:hidden">
         <ol class="flex space-x-2 text-sm text-gray-600">
-            <li><a href="/" class="hover:text-gray-900">Recipes</a></li>
+            <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
                 <span class="mx-2 text-gray-400">/</span>
@@ -36,11 +36,11 @@
                 {{ recipe.name }}
             </h1>
             {% if scale != 1.0 %}
-            <div class="hidden print:block text-lg font-normal text-gray-700">Scale: {{ scale }}x</div>
+            <div class="hidden print:block text-lg font-normal text-gray-700">{{ tr.t("recipe-scale-label") }}: {{ scale }}x</div>
             {% endif %}
             <div class="flex flex-wrap items-center gap-3 print:hidden">
                 <div class="flex items-center">
-                    <label for="scale" class="text-sm font-medium text-gray-700 mr-2">Scale:</label>
+                    <label for="scale" class="text-sm font-medium text-gray-700 mr-2">{{ tr.t("recipe-scale-label") }}:</label>
                     <input type="number"
                            id="scale"
                            value="{{ scale }}"
@@ -55,14 +55,14 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
-                    Add to Shopping List
+                    {{ tr.t("recipe-add-to-shopping") }}
                 </button>
                 <button onclick="window.print()"
                         class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md flex items-center gap-2 print:hidden">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                     </svg>
-                    Print Recipe
+                    {{ tr.t("recipe-print") }}
                 </button>
             </div>
         </div>
@@ -96,7 +96,7 @@
 
                 {% match metadata.servings %}
                 {% when Some with (servings) %}
-                <span class="metadata-pill metadata-servings">👥 {{ servings }} servings</span>
+                <span class="metadata-pill metadata-servings">👥 {{ servings }} {{ tr.t("recipe-servings-label") }}</span>
                 {% when None %}
                 {% endmatch %}
 
@@ -120,13 +120,13 @@
 
                 {% match metadata.prep_time %}
                 {% when Some with (prep_time) %}
-                <span class="metadata-pill metadata-prep">⏱️ Prep: {{ prep_time }}</span>
+                <span class="metadata-pill metadata-prep">⏱️ {{ tr.t("meta-prep-time") }}: {{ prep_time }}</span>
                 {% when None %}
                 {% endmatch %}
 
                 {% match metadata.cook_time %}
                 {% when Some with (cook_time) %}
-                <span class="metadata-pill metadata-cook">🔥 Cook: {{ cook_time }}</span>
+                <span class="metadata-pill metadata-cook">🔥 {{ tr.t("meta-cook-time") }}: {{ cook_time }}</span>
                 {% when None %}
                 {% endmatch %}
 
@@ -174,7 +174,7 @@
     <div class="grid md:grid-cols-3 gap-8 mb-8">
         <div class="md:col-span-1">
             <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4 text-orange-600">🥘 Ingredients</h2>
+                <h2 class="text-xl font-bold mb-4 text-orange-600">🥘 {{ tr.t("recipe-ingredients") }}</h2>
 
                 {% if sections.len() > 1 %}
                     <!-- Display ingredients grouped by section -->
@@ -184,7 +184,7 @@
                             {% when Some with (name) %}
                                 <h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">{{ name }}</h3>
                             {% when None %}
-                                {% if !loop.first %}<h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">Main</h3>{% endif %}
+                                {% if !loop.first %}<h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">{{ tr.t("recipe-main-section") }}</h3>{% endif %}
                             {% endmatch %}
 
                             <ul class="space-y-3 {% if !loop.last %}mb-4{% endif %}">
@@ -204,7 +204,7 @@
                                     {% endmatch %}
                                     {% match ingredient.note %}
                                     {% when Some with (note) %}
-                                        <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="preparation: {{ note }}">({{ note }})</span>
+                                        <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                                     {% when None %}
                                     {% endmatch %}
                                 </div>
@@ -238,7 +238,7 @@
                             {% endmatch %}
                             {% match ingredient.note %}
                             {% when Some with (note) %}
-                                <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="preparation: {{ note }}">({{ note }})</span>
+                                <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                             {% when None %}
                             {% endmatch %}
                         </div>
@@ -254,7 +254,7 @@
                 {% endif %}
 
             {% if cookware.len() > 0 %}
-            <h2 class="text-xl font-bold mt-6 mb-4 text-green-600">🍳 Cookware</h2>
+            <h2 class="text-xl font-bold mt-6 mb-4 text-green-600">🍳 {{ tr.t("recipe-cookware") }}</h2>
             <ul class="space-y-2">
                 {% for item in cookware %}
                 <li class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg px-3 py-2">
@@ -303,7 +303,7 @@
                                     <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
                                         {% for ing in step.ingredients %}
                                             <span class="inline-block mr-3">
-                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 truncate max-w-[200px] inline-block align-bottom" title="{{ note }}" aria-label="preparation: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 truncate max-w-[200px] inline-block align-bottom" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
                                             </span>
                                         {% endfor %}
                                     </div>
@@ -344,7 +344,7 @@ async function addToShoppingList(event, recipePath) {
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
-                Added!
+                {{ tr.t("recipe-added") }}
             `;
             button.classList.add('bg-gradient-to-r', 'from-green-500', 'to-green-600');
             button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
@@ -356,11 +356,11 @@ async function addToShoppingList(event, recipePath) {
                 button.classList.add('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
             }, 2000);
         } else {
-            alert('Failed to add to shopping list');
+            alert('{{ tr.t("shopping-failed-to-add") }}');
         }
     } catch (error) {
         console.error('Failed to add to shopping list:', error);
-        alert('Failed to add to shopping list');
+        alert('{{ tr.t("shopping-failed-to-add") }}');
     }
 }
 </script>

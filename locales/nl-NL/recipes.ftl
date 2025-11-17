@@ -16,8 +16,13 @@ recipe-cookware = Keukengerei
 recipe-timers = Timers
 recipe-tags = Tags
 recipe-add-to-shopping = Toevoegen aan boodschappenlijst
+recipe-add-all-to-shopping = Alles toevoegen aan boodschappenlijst
 recipe-scale-label = Schaal
 recipe-servings-label = porties
+recipe-print = Recept afdrukken
+recipe-added = Toegevoegd!
+recipe-main-section = Hoofdgedeelte
+recipe-preparation = voorbereiding
 
 # Recipe Metadata
 meta-course = Gang
