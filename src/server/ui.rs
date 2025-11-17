@@ -7,6 +7,7 @@ use axum::{
     Router,
 };
 use camino::Utf8PathBuf;
+use fluent_templates::Loader;
 use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
@@ -137,7 +138,7 @@ async fn recipes_handler(
     let current_name = if let Some(ref p) = path {
         p.split('/').next_back().unwrap_or("Recipes").to_string()
     } else {
-        "All Recipes".to_string()
+        crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
     };
 
     let template = RecipesTemplate {
