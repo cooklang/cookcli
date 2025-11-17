@@ -145,7 +145,7 @@ async fn recipes_handler(
         current_name,
         breadcrumbs,
         items,
-        lang,
+        tr: Tr::new(lang),
     };
 
     Ok(template)
@@ -513,7 +513,7 @@ async fn recipe_page(
         cookware,
         sections,
         image_path,
-        lang,
+        tr: Tr::new(lang),
     };
 
     Ok(template.into_response())
@@ -727,7 +727,7 @@ async fn menu_page_handler(
         metadata,
         sections,
         image_path,
-        lang,
+        tr: Tr::new(lang),
     };
 
     Ok(template)
@@ -738,7 +738,7 @@ async fn shopping_list_page(
 ) -> impl askama_axum::IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
-        lang,
+        tr: Tr::new(lang),
     }
 }
 
@@ -782,7 +782,7 @@ async fn pantry_page(
     Ok(PantryTemplate {
         active: "pantry".to_string(),
         sections,
-        lang,
+        tr: Tr::new(lang),
     })
 }
 
@@ -804,6 +804,6 @@ async fn preferences_page(
             .unwrap_or_else(|| "Not configured".to_string()),
         base_path: state.base_path.to_string(),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
-        lang,
+        tr: Tr::new(lang),
     }
 }

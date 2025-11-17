@@ -4,18 +4,45 @@
 
 {% block content %}
 <div>
-    <h1 class="text-2xl font-bold mb-6">Preferences</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ tr.t("pref-title") }}</h1>
 
     <div class="space-y-6">
+        <!-- Language Selector -->
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-2xl border-2 border-purple-200">
+            <h2 class="text-lg font-semibold mb-4 text-purple-900">{{ tr.t("pref-language") }}</h2>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="setLanguage('en-US')"
+                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 {% if tr.lang_string() == "en-US" %}bg-purple-600 text-white shadow-lg scale-105{% else %}bg-white text-gray-700 hover:bg-purple-100 hover:scale-105{% endif %}">
+                    🇺🇸 English
+                </button>
+                <button onclick="setLanguage('de-DE')"
+                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 {% if tr.lang_string() == "de-DE" %}bg-purple-600 text-white shadow-lg scale-105{% else %}bg-white text-gray-700 hover:bg-purple-100 hover:scale-105{% endif %}">
+                    🇩🇪 Deutsch
+                </button>
+                <button onclick="setLanguage('nl-NL')"
+                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 {% if tr.lang_string() == "nl-NL" %}bg-purple-600 text-white shadow-lg scale-105{% else %}bg-white text-gray-700 hover:bg-purple-100 hover:scale-105{% endif %}">
+                    🇳🇱 Nederlands
+                </button>
+                <button onclick="setLanguage('fr-FR')"
+                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 {% if tr.lang_string() == "fr-FR" %}bg-purple-600 text-white shadow-lg scale-105{% else %}bg-white text-gray-700 hover:bg-purple-100 hover:scale-105{% endif %}">
+                    🇫🇷 Français
+                </button>
+                <button onclick="setLanguage('es-ES')"
+                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 {% if tr.lang_string() == "es-ES" %}bg-purple-600 text-white shadow-lg scale-105{% else %}bg-white text-gray-700 hover:bg-purple-100 hover:scale-105{% endif %}">
+                    🇪🇸 Español
+                </button>
+            </div>
+            <p class="text-sm text-purple-700 mt-3">Your language preference will be saved in a cookie.</p>
+        </div>
         <div class="bg-gray-50 p-4 rounded">
             <h2 class="text-lg font-semibold mb-3">Configuration Files</h2>
             <div class="space-y-2 text-sm">
                 <div>
-                    <span class="font-medium">Aisle Configuration:</span>
+                    <span class="font-medium">{{ tr.t("pref-aisle-path") }}:</span>
                     <span class="text-gray-600 ml-2">{{ aisle_path }}</span>
                 </div>
                 <div>
-                    <span class="font-medium">Pantry Configuration:</span>
+                    <span class="font-medium">{{ tr.t("pref-pantry-path") }}:</span>
                     <span class="text-gray-600 ml-2">{{ pantry_path }}</span>
                 </div>
             </div>
@@ -24,7 +51,7 @@
         <div class="bg-gray-50 p-4 rounded">
             <h2 class="text-lg font-semibold mb-3">Recipe Directory</h2>
             <div class="text-sm">
-                <span class="font-medium">Base Path:</span>
+                <span class="font-medium">{{ tr.t("pref-base-path") }}:</span>
                 <span class="text-gray-600 ml-2">{{ base_path }}</span>
             </div>
         </div>
@@ -33,7 +60,7 @@
             <h2 class="text-lg font-semibold mb-3">About</h2>
             <div class="space-y-2 text-sm">
                 <div>
-                    <span class="font-medium">Version:</span>
+                    <span class="font-medium">{{ tr.t("pref-version") }}:</span>
                     <span class="text-gray-600 ml-2">{{ version }}</span>
                 </div>
                 <div>
@@ -78,4 +105,17 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function setLanguage(lang) {
+        // Set cookie for 1 year
+        const maxAge = 365 * 24 * 60 * 60;
+        document.cookie = `lang=${lang}; path=/; max-age=${maxAge}; SameSite=Lax`;
+
+        // Reload page to apply new language
+        window.location.reload();
+    }
+</script>
 {% endblock %}

@@ -1,11 +1,31 @@
 use askama::Template;
+use fluent_templates::Loader;
 use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
+/// Helper struct for translations in templates
+#[derive(Clone, Debug, Serialize)]
+pub struct Tr {
+    #[serde(skip)]
+    lang: LanguageIdentifier,
+}
+
+impl Tr {
+    pub fn new(lang: LanguageIdentifier) -> Self {
+        Self { lang }
+    }
+
+    pub fn t(&self, key: &str) -> String {
+        crate::server::i18n::LOCALES.lookup(&self.lang, key)
+    }
+
+    pub fn lang_string(&self) -> String {
+        self.lang.to_string()
+    }
+}
+
 mod filters {
     use askama::Result;
-    use fluent_templates::Loader;
-    use unic_langid::LanguageIdentifier;
     use url::Url;
 
     pub fn hostname(url: &str) -> Result<String> {
@@ -13,11 +33,6 @@ mod filters {
             .ok()
             .and_then(|u| u.host_str().map(String::from))
             .unwrap_or_else(|| url.to_string()))
-    }
-
-    /// Translate a key using the current language
-    pub fn t(key: &str, lang: &LanguageIdentifier) -> Result<String> {
-        Ok(crate::server::i18n::LOCALES.lookup(lang, key))
     }
 }
 
@@ -28,7 +43,7 @@ pub struct RecipesTemplate {
     pub current_name: String,
     pub breadcrumbs: Vec<Breadcrumb>,
     pub items: Vec<RecipeItem>,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Template)]
@@ -44,7 +59,7 @@ pub struct RecipeTemplate {
     pub cookware: Vec<CookwareData>,
     pub sections: Vec<RecipeSection>,
     pub image_path: Option<String>,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Template)]
@@ -58,14 +73,14 @@ pub struct MenuTemplate {
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
     pub image_path: Option<String>,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Template)]
 #[template(path = "shopping_list.html")]
 pub struct ShoppingListTemplate {
     pub active: String,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Template)]
@@ -76,7 +91,7 @@ pub struct PreferencesTemplate {
     pub pantry_path: String,
     pub base_path: String,
     pub version: String,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Template)]
@@ -84,7 +99,7 @@ pub struct PreferencesTemplate {
 pub struct PantryTemplate {
     pub active: String,
     pub sections: Vec<PantrySection>,
-    pub lang: LanguageIdentifier,
+    pub tr: Tr,
 }
 
 #[derive(Debug, Clone, Serialize)]
