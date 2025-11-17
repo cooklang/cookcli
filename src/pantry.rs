@@ -82,9 +82,9 @@ pub struct RecipesArgs {
 
 #[derive(Debug, Args)]
 pub struct PlanArgs {
-    /// Minimum number of recipes an ingredient must appear in to be listed (default: 1)
-    #[arg(short = 'm', long, default_value = "1")]
-    pub min_count: usize,
+    /// Maximum number of ingredients to show (default: show all needed for 100% coverage)
+    #[arg(short = 'n', long)]
+    pub max_ingredients: Option<usize>,
 }
 
 // Output structures for JSON/YAML formats
@@ -131,13 +131,17 @@ struct PartialMatch {
 
 #[derive(Debug, Serialize)]
 struct PlanOutput {
-    ingredients: Vec<IngredientUsage>,
+    total_recipes: usize,
+    cookable_recipes: usize,
+    coverage_percentage: usize,
+    ingredients: Vec<IngredientStep>,
 }
 
 #[derive(Debug, Serialize)]
-struct IngredientUsage {
+struct IngredientStep {
     name: String,
-    count: usize,
+    new_recipes_unlocked: usize,
+    total_cookable: usize,
 }
 
 pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
@@ -544,13 +548,16 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
     // Build recipe tree
     let tree = build_tree(ctx.base_path()).context("Failed to build recipe tree")?;
 
-    let mut ingredient_counts: HashMap<String, usize> = HashMap::new();
+    // Structure to hold recipe information
+    struct RecipeInfo {
+        name: String,
+        ingredients: HashSet<String>,
+    }
+
+    let mut recipes: Vec<RecipeInfo> = Vec::new();
 
     // Recursively process recipes in the tree
-    fn process_tree(
-        tree: &cooklang_find::RecipeTree,
-        ingredient_counts: &mut HashMap<String, usize>,
-    ) {
+    fn process_tree(tree: &cooklang_find::RecipeTree, recipes: &mut Vec<RecipeInfo>) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             // Skip .menu files - only process .cook files
@@ -560,6 +567,8 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
             // Parse the recipe
             if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+                let mut recipe_ingredients = HashSet::new();
+
                 // Get all ingredients from the recipe (excluding recipe references)
                 for ingredient in &recipe.ingredients {
                     // Skip recipe references
@@ -568,68 +577,163 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
                     }
                     if ingredient.modifiers().should_be_listed() {
                         let name = ingredient.display_name().to_string();
-                        *ingredient_counts.entry(name).or_insert(0) += 1;
+                        recipe_ingredients.insert(name);
                     }
+                }
+
+                if !recipe_ingredients.is_empty() {
+                    recipes.push(RecipeInfo {
+                        name: entry.name().as_deref().unwrap_or("unknown").to_string(),
+                        ingredients: recipe_ingredients,
+                    });
                 }
             }
         }
 
         // Recursively check children
         for subtree in tree.children.values() {
-            process_tree(subtree, ingredient_counts);
+            process_tree(subtree, recipes);
         }
     }
 
-    process_tree(&tree, &mut ingredient_counts);
+    process_tree(&tree, &mut recipes);
 
-    // Filter by minimum count and convert to sorted vector
-    let mut ingredient_list: Vec<_> = ingredient_counts
-        .into_iter()
-        .filter(|(_, count)| *count >= args.min_count)
-        .map(|(name, count)| IngredientUsage { name, count })
+    if recipes.is_empty() {
+        match format {
+            OutputFormat::Human => println!("No recipes found in collection."),
+            OutputFormat::Json => {
+                let output = PlanOutput {
+                    total_recipes: 0,
+                    cookable_recipes: 0,
+                    coverage_percentage: 0,
+                    ingredients: vec![],
+                };
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            }
+            OutputFormat::Yaml => {
+                let output = PlanOutput {
+                    total_recipes: 0,
+                    cookable_recipes: 0,
+                    coverage_percentage: 0,
+                    ingredients: vec![],
+                };
+                println!("{}", serde_yaml::to_string(&output)?);
+            }
+        }
+        return Ok(());
+    }
+
+    // Greedy coverage algorithm
+    // Track which ingredients are still needed for each recipe
+    let mut recipe_missing: Vec<HashSet<String>> = recipes
+        .iter()
+        .map(|r| r.ingredients.clone())
         .collect();
 
-    // Sort by count (descending), then by name (ascending) for ties
-    ingredient_list.sort_by(|a, b| {
-        b.count
-            .cmp(&a.count)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    let mut selected_ingredients: Vec<IngredientStep> = Vec::new();
+    let mut cookable_count = 0;
+    let total_recipes = recipes.len();
 
+    // Continue until all recipes are cookable or we hit the limit
+    let max_ingredients = args.max_ingredients.unwrap_or(usize::MAX);
+
+    while cookable_count < total_recipes && selected_ingredients.len() < max_ingredients {
+        // Count how many recipes each ingredient appears in (among remaining recipes)
+        let mut ingredient_scores: HashMap<String, usize> = HashMap::new();
+
+        for missing_set in &recipe_missing {
+            for ingredient in missing_set {
+                *ingredient_scores.entry(ingredient.clone()).or_insert(0) += 1;
+            }
+        }
+
+        if ingredient_scores.is_empty() {
+            break; // No more ingredients to select
+        }
+
+        // Select the ingredient that appears in the most recipes
+        let best_ingredient = ingredient_scores
+            .iter()
+            .max_by_key(|(_, &count)| count)
+            .map(|(ing, _)| ing.clone())
+            .unwrap();
+
+        // Remove this ingredient from all recipe missing lists
+        let mut new_recipe_missing = Vec::new();
+        let mut newly_cookable = 0;
+
+        for mut missing_set in recipe_missing {
+            missing_set.remove(&best_ingredient);
+
+            if missing_set.is_empty() {
+                // This recipe is now fully cookable
+                newly_cookable += 1;
+            } else {
+                // Still missing some ingredients
+                new_recipe_missing.push(missing_set);
+            }
+        }
+
+        recipe_missing = new_recipe_missing;
+        cookable_count += newly_cookable;
+
+        selected_ingredients.push(IngredientStep {
+            name: best_ingredient,
+            new_recipes_unlocked: newly_cookable,
+            total_cookable: cookable_count,
+        });
+    }
+
+    let coverage_percentage = (cookable_count * 100) / total_recipes.max(1);
+
+    // Output results
     match format {
         OutputFormat::Human => {
-            println!("Ingredient Usage Across Recipes:");
-            println!("=================================");
+            println!("Optimal Pantry Plan (Greedy Coverage):");
+            println!("=======================================");
+            println!();
+            println!(
+                "With these {} ingredients, you can cook {} out of {} recipes:",
+                selected_ingredients.len(),
+                cookable_count,
+                total_recipes
+            );
+            println!();
 
-            if ingredient_list.is_empty() {
-                println!("\nNo ingredients found in recipe collection.");
-            } else {
+            for (i, step) in selected_ingredients.iter().enumerate() {
+                let new_str = if step.new_recipes_unlocked == 1 {
+                    "recipe"
+                } else {
+                    "recipes"
+                };
                 println!(
-                    "\n{:<40} {:>10}",
-                    "Ingredient", "Used In"
+                    "{:3}. {:<40} (+{} {}, {} total)",
+                    i + 1,
+                    step.name,
+                    step.new_recipes_unlocked,
+                    new_str,
+                    step.total_cookable
                 );
-                println!("{:-<40} {:->10}", "", "");
-
-                for item in &ingredient_list {
-                    let recipe_word = if item.count == 1 { "recipe" } else { "recipes" };
-                    println!(
-                        "{:<40} {:>6} {}",
-                        item.name, item.count, recipe_word
-                    );
-                }
-
-                println!("\nTotal unique ingredients: {}", ingredient_list.len());
             }
+
+            println!();
+            println!("Coverage: {}% of recipes", coverage_percentage);
         }
         OutputFormat::Json => {
             let output = PlanOutput {
-                ingredients: ingredient_list,
+                total_recipes,
+                cookable_recipes: cookable_count,
+                coverage_percentage,
+                ingredients: selected_ingredients,
             };
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
         OutputFormat::Yaml => {
             let output = PlanOutput {
-                ingredients: ingredient_list,
+                total_recipes,
+                cookable_recipes: cookable_count,
+                coverage_percentage,
+                ingredients: selected_ingredients,
             };
             println!("{}", serde_yaml::to_string(&output)?);
         }
