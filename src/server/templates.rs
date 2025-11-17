@@ -1,8 +1,11 @@
 use askama::Template;
 use serde::{Deserialize, Serialize};
+use unic_langid::LanguageIdentifier;
 
 mod filters {
     use askama::Result;
+    use fluent_templates::Loader;
+    use unic_langid::LanguageIdentifier;
     use url::Url;
 
     pub fn hostname(url: &str) -> Result<String> {
@@ -10,6 +13,11 @@ mod filters {
             .ok()
             .and_then(|u| u.host_str().map(String::from))
             .unwrap_or_else(|| url.to_string()))
+    }
+
+    /// Translate a key using the current language
+    pub fn t(key: &str, lang: &LanguageIdentifier) -> Result<String> {
+        Ok(crate::server::i18n::LOCALES.lookup(lang, key))
     }
 }
 
@@ -20,6 +28,7 @@ pub struct RecipesTemplate {
     pub current_name: String,
     pub breadcrumbs: Vec<Breadcrumb>,
     pub items: Vec<RecipeItem>,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Template)]
@@ -35,6 +44,7 @@ pub struct RecipeTemplate {
     pub cookware: Vec<CookwareData>,
     pub sections: Vec<RecipeSection>,
     pub image_path: Option<String>,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Template)]
@@ -48,12 +58,14 @@ pub struct MenuTemplate {
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
     pub image_path: Option<String>,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Template)]
 #[template(path = "shopping_list.html")]
 pub struct ShoppingListTemplate {
     pub active: String,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Template)]
@@ -64,6 +76,7 @@ pub struct PreferencesTemplate {
     pub pantry_path: String,
     pub base_path: String,
     pub version: String,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Template)]
@@ -71,6 +84,7 @@ pub struct PreferencesTemplate {
 pub struct PantryTemplate {
     pub active: String,
     pub sections: Vec<PantrySection>,
+    pub lang: LanguageIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize)]

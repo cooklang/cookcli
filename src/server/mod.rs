@@ -46,6 +46,8 @@ use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
 mod handlers;
+mod i18n;
+mod language;
 mod shopping_list_store;
 mod templates;
 mod ui;
@@ -128,11 +130,14 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .route("/static/*file", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
 
-    let app = app.with_state(state).layer(
-        CorsLayer::new()
-            .allow_origin("*".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST]),
-    );
+    let app = app
+        .with_state(state)
+        .layer(axum::middleware::from_fn(language::language_middleware))
+        .layer(
+            CorsLayer::new()
+                .allow_origin("*".parse::<HeaderValue>().unwrap())
+                .allow_methods([Method::GET, Method::POST]),
+        );
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
