@@ -85,6 +85,10 @@ pub struct PlanArgs {
     /// Maximum number of ingredients to show (default: show all needed for 100% coverage)
     #[arg(short = 'n', long)]
     pub max_ingredients: Option<usize>,
+
+    /// Skip the first N ingredients (useful if you already have common items)
+    #[arg(short = 's', long, default_value = "0")]
+    pub skip: usize,
 }
 
 // Output structures for JSON/YAML formats
@@ -692,32 +696,71 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
             println!("Optimal Pantry Plan (Greedy Coverage):");
             println!("=======================================");
             println!();
-            println!(
-                "With these {} ingredients, you can cook {} out of {} recipes:",
-                selected_ingredients.len(),
-                cookable_count,
-                total_recipes
-            );
-            println!();
 
-            for (i, step) in selected_ingredients.iter().enumerate() {
-                let new_str = if step.new_recipes_unlocked == 1 {
-                    "recipe"
-                } else {
-                    "recipes"
-                };
+            if args.skip > 0 && args.skip < selected_ingredients.len() {
+                // Show summary of skipped ingredients
+                let skipped_coverage = selected_ingredients[args.skip - 1].total_cookable;
+                let skipped_pct = (skipped_coverage * 100) / total_recipes.max(1);
+
                 println!(
-                    "{:3}. {:<40} (+{} {}, {} total)",
-                    i + 1,
-                    step.name,
-                    step.new_recipes_unlocked,
-                    new_str,
-                    step.total_cookable
+                    "Already have (first {} ingredients):",
+                    args.skip
                 );
+                println!(
+                    "  → Can cook {} out of {} recipes ({}% coverage)",
+                    skipped_coverage,
+                    total_recipes,
+                    skipped_pct
+                );
+                println!();
+                println!("Recommended additions:");
+                println!();
+
+                // Show remaining ingredients
+                for (i, step) in selected_ingredients.iter().enumerate().skip(args.skip) {
+                    let new_str = if step.new_recipes_unlocked == 1 {
+                        "recipe"
+                    } else {
+                        "recipes"
+                    };
+                    println!(
+                        "{:3}. {:<40} (+{} {}, {} total)",
+                        i + 1,
+                        step.name,
+                        step.new_recipes_unlocked,
+                        new_str,
+                        step.total_cookable
+                    );
+                }
+            } else {
+                // Normal output without skipping
+                println!(
+                    "With these {} ingredients, you can cook {} out of {} recipes:",
+                    selected_ingredients.len(),
+                    cookable_count,
+                    total_recipes
+                );
+                println!();
+
+                for (i, step) in selected_ingredients.iter().enumerate() {
+                    let new_str = if step.new_recipes_unlocked == 1 {
+                        "recipe"
+                    } else {
+                        "recipes"
+                    };
+                    println!(
+                        "{:3}. {:<40} (+{} {}, {} total)",
+                        i + 1,
+                        step.name,
+                        step.new_recipes_unlocked,
+                        new_str,
+                        step.total_cookable
+                    );
+                }
             }
 
             println!();
-            println!("Coverage: {}% of recipes", coverage_percentage);
+            println!("Final coverage: {}% of recipes", coverage_percentage);
         }
         OutputFormat::Json => {
             let output = PlanOutput {
