@@ -4,7 +4,7 @@ use clap::{Args, Subcommand, ValueEnum};
 use cooklang::pantry::PantryItem;
 use cooklang_find::build_tree;
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{util::parse_recipe_from_entry, Context as AppContext};
 
@@ -45,6 +45,10 @@ pub enum PantryCommand {
     /// List recipes that can be made with items currently in pantry
     #[command(alias = "r")]
     Recipes(RecipesArgs),
+
+    /// Analyze ingredient usage across recipes to help plan pantry items
+    #[command(alias = "pl")]
+    Plan(PlanArgs),
 }
 
 #[derive(Debug, Args)]
@@ -74,6 +78,13 @@ pub struct RecipesArgs {
     /// Minimum percentage of ingredients that must be available for partial matches (default: 75)
     #[arg(long, default_value = "75")]
     pub threshold: u8,
+}
+
+#[derive(Debug, Args)]
+pub struct PlanArgs {
+    /// Minimum number of recipes an ingredient must appear in to be listed (default: 1)
+    #[arg(short = 'm', long, default_value = "1")]
+    pub min_count: usize,
 }
 
 // Output structures for JSON/YAML formats
@@ -118,6 +129,17 @@ struct PartialMatch {
     missing_ingredients: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct PlanOutput {
+    ingredients: Vec<IngredientUsage>,
+}
+
+#[derive(Debug, Serialize)]
+struct IngredientUsage {
+    name: String,
+    count: usize,
+}
+
 pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
     // Create a new context with the provided base path if specified
     let new_ctx;
@@ -135,6 +157,7 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
         PantryCommand::Depleted(depleted_args) => run_depleted(ctx, depleted_args, format),
         PantryCommand::Expiring(expiring_args) => run_expiring(ctx, expiring_args, format),
         PantryCommand::Recipes(recipes_args) => run_recipes(ctx, recipes_args, format),
+        PantryCommand::Plan(plan_args) => run_plan(ctx, plan_args, format),
     }
 }
 
@@ -509,6 +532,104 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
             let output = RecipesOutput {
                 full_matches,
                 partial_matches,
+            };
+            println!("{}", serde_yaml::to_string(&output)?);
+        }
+    }
+
+    Ok(())
+}
+
+fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()> {
+    // Build recipe tree
+    let tree = build_tree(ctx.base_path()).context("Failed to build recipe tree")?;
+
+    let mut ingredient_counts: HashMap<String, usize> = HashMap::new();
+
+    // Recursively process recipes in the tree
+    fn process_tree(
+        tree: &cooklang_find::RecipeTree,
+        ingredient_counts: &mut HashMap<String, usize>,
+    ) {
+        // Check if this node has a recipe
+        if let Some(entry) = &tree.recipe {
+            // Skip .menu files - only process .cook files
+            if entry.is_menu() {
+                return;
+            }
+
+            // Parse the recipe
+            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+                // Get all ingredients from the recipe (excluding recipe references)
+                for ingredient in &recipe.ingredients {
+                    // Skip recipe references
+                    if ingredient.reference.is_some() {
+                        continue;
+                    }
+                    if ingredient.modifiers().should_be_listed() {
+                        let name = ingredient.display_name().to_string();
+                        *ingredient_counts.entry(name).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
+        // Recursively check children
+        for subtree in tree.children.values() {
+            process_tree(subtree, ingredient_counts);
+        }
+    }
+
+    process_tree(&tree, &mut ingredient_counts);
+
+    // Filter by minimum count and convert to sorted vector
+    let mut ingredient_list: Vec<_> = ingredient_counts
+        .into_iter()
+        .filter(|(_, count)| *count >= args.min_count)
+        .map(|(name, count)| IngredientUsage { name, count })
+        .collect();
+
+    // Sort by count (descending), then by name (ascending) for ties
+    ingredient_list.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    match format {
+        OutputFormat::Human => {
+            println!("Ingredient Usage Across Recipes:");
+            println!("=================================");
+
+            if ingredient_list.is_empty() {
+                println!("\nNo ingredients found in recipe collection.");
+            } else {
+                println!(
+                    "\n{:<40} {:>10}",
+                    "Ingredient", "Used In"
+                );
+                println!("{:-<40} {:->10}", "", "");
+
+                for item in &ingredient_list {
+                    let recipe_word = if item.count == 1 { "recipe" } else { "recipes" };
+                    println!(
+                        "{:<40} {:>6} {}",
+                        item.name, item.count, recipe_word
+                    );
+                }
+
+                println!("\nTotal unique ingredients: {}", ingredient_list.len());
+            }
+        }
+        OutputFormat::Json => {
+            let output = PlanOutput {
+                ingredients: ingredient_list,
+            };
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        OutputFormat::Yaml => {
+            let output = PlanOutput {
+                ingredients: ingredient_list,
             };
             println!("{}", serde_yaml::to_string(&output)?);
         }
