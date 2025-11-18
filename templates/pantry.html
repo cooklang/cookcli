@@ -539,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteBtn.addEventListener('click', async function(e) {
                 e.stopPropagation();
 
-                if (confirm('{{ tr.t("pantry-confirm-remove") }}'.replace('{name}', name).replace('{section}', section))) {
+                if (confirm('{{ tr.t("pantry-confirm-remove-template") }}'.replace('%s', name).replace('%s', section))) {
                     try {
                         const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
