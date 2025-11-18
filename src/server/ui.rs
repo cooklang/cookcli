@@ -1,14 +1,16 @@
 use crate::server::{templates::*, AppState};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Router,
 };
 use camino::Utf8PathBuf;
+use fluent_templates::Loader;
 use serde::Deserialize;
 use std::sync::Arc;
+use unic_langid::LanguageIdentifier;
 
 pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
@@ -22,20 +24,23 @@ pub fn ui() -> Router<Arc<AppState>> {
 
 async fn recipes_page(
     State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
 ) -> Result<impl askama_axum::IntoResponse, StatusCode> {
-    recipes_handler(state, None).await
+    recipes_handler(state, None, lang).await
 }
 
 async fn recipes_directory(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
 ) -> Result<impl askama_axum::IntoResponse, StatusCode> {
-    recipes_handler(state, Some(path)).await
+    recipes_handler(state, Some(path), lang).await
 }
 
 async fn recipes_handler(
     state: Arc<AppState>,
     path: Option<String>,
+    lang: LanguageIdentifier,
 ) -> Result<impl askama_axum::IntoResponse, StatusCode> {
     let base = &state.base_path;
     let search_path = if let Some(p) = &path {
@@ -133,7 +138,7 @@ async fn recipes_handler(
     let current_name = if let Some(ref p) = path {
         p.split('/').next_back().unwrap_or("Recipes").to_string()
     } else {
-        "All Recipes".to_string()
+        crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
     };
 
     let template = RecipesTemplate {
@@ -141,6 +146,7 @@ async fn recipes_handler(
         current_name,
         breadcrumbs,
         items,
+        tr: Tr::new(lang),
     };
 
     Ok(template)
@@ -169,6 +175,7 @@ async fn recipe_page(
     Path(path): Path<String>,
     Query(query): Query<RecipeQuery>,
     State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
 ) -> Result<axum::response::Response, StatusCode> {
     let scale = query.scale.unwrap_or(1.0);
 
@@ -193,7 +200,7 @@ async fn recipe_page(
         entry.is_menu()
     );
     if entry.is_menu() {
-        let template = menu_page_handler(path, scale, entry, state).await?;
+        let template = menu_page_handler(path, scale, entry, state, lang).await?;
         return Ok(template.into_response());
     }
 
@@ -507,6 +514,7 @@ async fn recipe_page(
         cookware,
         sections,
         image_path,
+        tr: Tr::new(lang),
     };
 
     Ok(template.into_response())
@@ -517,6 +525,7 @@ async fn menu_page_handler(
     scale: f64,
     entry: cooklang_find::RecipeEntry,
     state: Arc<AppState>,
+    lang: LanguageIdentifier,
 ) -> Result<MenuTemplate, StatusCode> {
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
         tracing::error!("Failed to parse menu: {e}");
@@ -719,19 +728,24 @@ async fn menu_page_handler(
         metadata,
         sections,
         image_path,
+        tr: Tr::new(lang),
     };
 
     Ok(template)
 }
 
-async fn shopping_list_page() -> impl askama_axum::IntoResponse {
+async fn shopping_list_page(
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> impl askama_axum::IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
+        tr: Tr::new(lang),
     }
 }
 
 async fn pantry_page(
     State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
 ) -> Result<impl askama_axum::IntoResponse, StatusCode> {
     // Load pantry configuration
     let pantry_path = state.pantry_path.as_ref();
@@ -769,10 +783,14 @@ async fn pantry_page(
     Ok(PantryTemplate {
         active: "pantry".to_string(),
         sections,
+        tr: Tr::new(lang),
     })
 }
 
-async fn preferences_page(State(state): State<Arc<AppState>>) -> impl askama_axum::IntoResponse {
+async fn preferences_page(
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> impl askama_axum::IntoResponse {
     PreferencesTemplate {
         active: "preferences".to_string(),
         aisle_path: state
@@ -787,5 +805,6 @@ async fn preferences_page(State(state): State<Arc<AppState>>) -> impl askama_axu
             .unwrap_or_else(|| "Not configured".to_string()),
         base_path: state.base_path.to_string(),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
+        tr: Tr::new(lang),
     }
 }

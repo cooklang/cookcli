@@ -4,14 +4,14 @@
 <div class="px-4 sm:px-8 lg:px-12 xl:px-16">
     <div class="mt-8 mb-6">
         <div class="flex items-center justify-between">
-            <h1 class="text-3xl font-bold text-gray-800">Pantry Inventory</h1>
+            <h1 class="text-3xl font-bold text-gray-800">{{ tr.t("pantry-title") }}</h1>
 
             {% if !sections.is_empty() %}
             <div class="flex items-center gap-4">
                 <span id="out-of-stock-count" class="text-sm text-gray-500 dark:text-gray-400"></span>
                 <label class="flex items-center cursor-pointer group">
                     <input type="checkbox" id="filter-out-of-stock" class="mr-2 w-4 h-4 text-orange-600 rounded focus:ring-orange-500 focus:ring-2">
-                    <span class="text-sm text-gray-600 group-hover:text-gray-800 dark:text-gray-400 dark:group-hover:text-gray-200">Show only out of stock</span>
+                    <span class="text-sm text-gray-600 group-hover:text-gray-800 dark:text-gray-400 dark:group-hover:text-gray-200">{{ tr.t("pantry-show-out-of-stock") }}</span>
                 </label>
             </div>
             {% endif %}
@@ -24,10 +24,10 @@
             <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">No pantry configuration found</h3>
-            <p class="text-gray-500">Create a pantry.conf file to track your inventory</p>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">{{ tr.t("pantry-no-config") }}</h3>
+            <p class="text-gray-500">{{ tr.t("pantry-create-config") }}</p>
             <a href="/preferences" class="mt-4 inline-block text-orange-600 hover:text-orange-700">
-                Configure pantry →
+                {{ tr.t("pantry-configure") }}
             </a>
         </div>
     </div>
@@ -39,7 +39,7 @@
                 <h2 class="text-xl font-semibold text-gray-800 mb-4 capitalize">{{ section.name }}</h2>
                 
                 {% if section.items.is_empty() %}
-                <p class="text-gray-500 italic">No items in this section</p>
+                <p class="text-gray-500 italic">{{ tr.t("pantry-no-items-section") }}</p>
                 {% else %}
                 <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                     {% for item in section.items %}
@@ -58,22 +58,22 @@
                                 <div class="item-display">
                                     <div class="space-y-1 text-sm">
                                         <div class="quantity-display flex items-center text-gray-600">
-                                            <span class="text-gray-500 mr-2">Qty:</span>
+                                            <span class="text-gray-500 mr-2">{{ tr.t("pantry-item-quantity-short") }}</span>
                                             <span class="item-quantity font-medium">{% if let Some(quantity) = item.quantity %}{{ quantity }}{% else %}-{% endif %}</span>
                                             <svg class="out-of-stock-icon w-4 h-4 ml-1 text-red-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                                             </svg>
                                         </div>
                                         <div class="flex items-center text-gray-600">
-                                            <span class="text-gray-500 mr-2">Bought:</span>
+                                            <span class="text-gray-500 mr-2">{{ tr.t("pantry-item-bought") }}</span>
                                             <span class="item-bought">{% if let Some(bought) = item.bought %}{{ bought }}{% else %}-{% endif %}</span>
                                         </div>
                                         <div class="flex items-center text-gray-600">
-                                            <span class="text-gray-500 mr-2">Expires:</span>
+                                            <span class="text-gray-500 mr-2">{{ tr.t("pantry-item-expire") }}</span>
                                             <span class="item-expire">{% if let Some(expire) = item.expire %}{{ expire }}{% else %}-{% endif %}</span>
                                         </div>
                                         <div class="flex items-center text-gray-600">
-                                            <span class="text-gray-500 mr-2">Low at:</span>
+                                            <span class="text-gray-500 mr-2">{{ tr.t("pantry-item-low") }}</span>
                                             <span class="item-low">{% if let Some(low) = item.low %}{{ low }}{% else %}-{% endif %}</span>
                                         </div>
                                     </div>
@@ -95,8 +95,8 @@
                                                placeholder="Low threshold (e.g., 100%g)"
                                                value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                                         <div class="flex items-center justify-end space-x-2 mt-2">
-                                            <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">Save</button>
-                                            <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 font-medium">Cancel</button>
+                                            <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">{{ tr.t("pantry-save") }}</button>
+                                            <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 font-medium">{{ tr.t("pantry-cancel") }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -107,13 +107,13 @@
                                 <div class="item-status-dot w-2 h-2 bg-green-500 rounded-full mt-1 flex-shrink-0"></div>
                                 <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button class="edit-btn p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
-                                            title="Edit item">
+                                            title="{{ tr.t("pantry-edit-item") }}">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                         </svg>
                                     </button>
                                     <button class="delete-btn p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                            title="Remove item">
+                                            title="{{ tr.t("pantry-remove-item") }}">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                         </svg>
@@ -132,14 +132,14 @@
     
     <div class="mt-8 flex justify-between items-center">
         <div class="text-sm text-gray-500">
-            Total sections: {{ sections.len() }}
+            {{ tr.t("pantry-total-sections") }} {{ sections.len() }}
         </div>
         <div class="space-x-4">
             <button id="add-item-btn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
-                Add Item
+                {{ tr.t("pantry-add-item") }}
             </button>
             <a href="/preferences" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-block">
-                Edit Configuration
+                {{ tr.t("pantry-edit-config") }}
             </a>
         </div>
     </div>
@@ -149,42 +149,42 @@
 <!-- Add Item Modal -->
 <div id="add-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-        <h2 class="text-xl font-bold mb-4">Add Pantry Item</h2>
+        <h2 class="text-xl font-bold mb-4">{{ tr.t("pantry-add-pantry-item") }}</h2>
         <form id="add-form">
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Section</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-label") }}</label>
                 <select id="add-section" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required>
-                    <option value="">Select section...</option>
-                    <option value="freezer">Freezer</option>
-                    <option value="fridge">Fridge</option>
-                    <option value="pantry">Pantry</option>
-                    <option value="spices">Spices</option>
-                    <option value="other">Other</option>
+                    <option value="">{{ tr.t("pantry-section-select") }}</option>
+                    <option value="freezer">{{ tr.t("pantry-section-freezer") }}</option>
+                    <option value="fridge">{{ tr.t("pantry-section-fridge") }}</option>
+                    <option value="pantry">{{ tr.t("pantry-section-pantry") }}</option>
+                    <option value="spices">{{ tr.t("pantry-section-spices") }}</option>
+                    <option value="other">{{ tr.t("pantry-section-other") }}</option>
                 </select>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Item Name</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-name") }}</label>
                 <input type="text" id="add-name" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Quantity (optional)</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-quantity") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-quantity" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="e.g., 500%g or 2%L">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Bought Date (optional)</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-bought-date") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-bought" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="DD.MM.YYYY">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Expiry Date (optional)</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-expire-date") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-expire" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="DD.MM.YYYY">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Low Stock Threshold (optional)</label>
+                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-low-threshold") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-low" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="e.g., 100%g or 2">
             </div>
             <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeAddModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Add Item</button>
+                <button type="button" onclick="closeAddModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">{{ tr.t("pantry-cancel") }}</button>
+                <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">{{ tr.t("pantry-save") }}</button>
             </div>
         </form>
     </div>
@@ -231,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!emptyMessage) {
                         const message = document.createElement('p');
                         message.className = 'empty-section-message text-gray-500 italic';
-                        message.textContent = 'No out-of-stock items in this section';
+                        message.textContent = '{{ tr.t("pantry-no-out-of-stock") }}';
                         sectionContainer.parentNode.appendChild(message);
                     }
                 } else {
@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.ok) {
                     window.location.reload();
                 } else {
-                    alert('Failed to add item');
+                    alert('{{ tr.t("pantry-failed-add") }}');
                 }
             } catch (error) {
                 alert('Error adding item: ' + error);
@@ -507,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Re-check out-of-stock status after update
                     checkOutOfStock();
                 } else {
-                    alert('Failed to update item');
+                    alert('{{ tr.t("pantry-failed-update") }}');
                 }
             } catch (error) {
                 alert('Error updating item: ' + error);
@@ -539,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteBtn.addEventListener('click', async function(e) {
                 e.stopPropagation();
 
-                if (confirm(`Remove ${name} from ${section}?`)) {
+                if (confirm('{{ tr.t("pantry-confirm-remove-template") }}'.replace('%s', name).replace('%s', section))) {
                     try {
                         const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
@@ -558,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }, 200);
                         } else {
-                            alert('Failed to remove item');
+                            alert('{{ tr.t("pantry-failed-remove") }}');
                         }
                     } catch (error) {
                         alert('Error removing item: ' + error);

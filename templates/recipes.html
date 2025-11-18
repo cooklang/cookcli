@@ -7,7 +7,7 @@
     {% if !breadcrumbs.is_empty() %}
     <nav class="mb-4">
         <ol class="flex space-x-2 text-sm text-gray-600">
-            <li><a href="/" class="hover:text-gray-900">Recipes</a></li>
+            <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
                 <span class="mx-2 text-gray-400">/</span>
@@ -55,7 +55,7 @@
             <h3 class="font-bold text-lg mb-2 text-gray-800">
                 {{ item.name }}
                 {% if item.is_menu %}
-                <span class="ml-2 text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-1 rounded-full font-semibold">Menu</span>
+                <span class="ml-2 text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-1 rounded-full font-semibold">{{ tr.t("recipe-type-menu") }}</span>
                 {% endif %}
             </h3>
             {% match item.description %}
@@ -80,7 +80,7 @@
 
         {% if items.is_empty() %}
         <div class="text-gray-500 text-center py-8">
-            No recipes found in this directory.
+            {{ tr.t("recipes-empty") }}
         </div>
         {% endif %}
     </div>

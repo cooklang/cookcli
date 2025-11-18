@@ -1,0 +1,27 @@
+# Navigation
+nav-recipes = Recepten
+nav-shopping-list = Boodschappenlijst
+nav-pantry = Voorraadkast
+nav-preferences = Voorkeuren
+
+# Search
+search-placeholder = Recepten zoeken...
+search-no-results = Geen recepten gevonden
+
+# Common Actions
+action-add = Toevoegen
+action-remove = Verwijderen
+action-edit = Bewerken
+action-save = Opslaan
+action-cancel = Annuleren
+action-delete = Verwijderen
+action-clear = Wissen
+action-print = Afdrukken
+
+# Common Labels
+label-scale = Schaal
+label-servings = Porties
+label-time = Tijd
+label-difficulty = Moeilijkheidsgraad
+label-name = Naam
+label-description = Beschrijving
