@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.19.0](https://github.com/cooklang/cookcli/compare/v0.18.2...v0.19.0) (2025-11-18)
+
+
+### Features
+
+* add --allow-missing parameter for flexible pantry planning ([c30ffed](https://github.com/cooklang/cookcli/commit/c30ffedab452780d71b92bb45310fba8bafdf465))
+* add --skip parameter to pantry plan command ([7441f8a](https://github.com/cooklang/cookcli/commit/7441f8a20142f197b21f7777193e6000e662245d))
+* add pantry plan command to analyze ingredient usage ([04ed7b8](https://github.com/cooklang/cookcli/commit/04ed7b8960751a6a8c79ac9057a59d1388f346f0))
+
+
+### Bug Fixes
+
+* clean research ([8fddfd2](https://github.com/cooklang/cookcli/commit/8fddfd2f41f6ed53cc92a791f9c1f78dc1074107))
+* **server:** use filename for recipe path resolution ([3fba010](https://github.com/cooklang/cookcli/commit/3fba0102510d600f970758b9d62c4138d1b7d17f))
+* **server:** use filename for recipe path resolution ([b22fc87](https://github.com/cooklang/cookcli/commit/b22fc87728586e7b5c309b525450de9bbb3f4332))
+
 ## [0.18.2](https://github.com/cooklang/cookcli/compare/v0.18.1...v0.18.2) (2025-10-18)
 
 
