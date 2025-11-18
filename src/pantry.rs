@@ -631,10 +631,8 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
     // Greedy coverage algorithm
     // Track which ingredients are still needed for each recipe
-    let mut recipe_missing: Vec<HashSet<String>> = recipes
-        .iter()
-        .map(|r| r.ingredients.clone())
-        .collect();
+    let mut recipe_missing: Vec<HashSet<String>> =
+        recipes.iter().map(|r| r.ingredients.clone()).collect();
 
     let mut selected_ingredients: Vec<IngredientStep> = Vec::new();
     let mut cookable_count = 0;
@@ -711,15 +709,10 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
                 let skipped_coverage = selected_ingredients[args.skip - 1].total_cookable;
                 let skipped_pct = (skipped_coverage * 100) / total_recipes.max(1);
 
-                println!(
-                    "Already have (first {} ingredients):",
-                    args.skip
-                );
+                println!("Already have (first {} ingredients):", args.skip);
                 println!(
                     "  → Can cook {} out of {} recipes ({}% coverage)",
-                    skipped_coverage,
-                    total_recipes,
-                    skipped_pct
+                    skipped_coverage, total_recipes, skipped_pct
                 );
                 println!();
                 println!("Recommended additions:");
