@@ -558,7 +558,6 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
     // Structure to hold recipe information
     struct RecipeInfo {
-        name: String,
         ingredients: HashSet<String>,
     }
 
@@ -591,7 +590,6 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
                 if !recipe_ingredients.is_empty() {
                     recipes.push(RecipeInfo {
-                        name: entry.name().as_deref().unwrap_or("unknown").to_string(),
                         ingredients: recipe_ingredients,
                     });
                 }
