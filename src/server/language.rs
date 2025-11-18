@@ -53,7 +53,7 @@ pub fn get_preferred_language(headers: &HeaderMap) -> LanguageIdentifier {
                 }
 
                 // Try to match just the language part (e.g., "de" matches "de-DE")
-                let base_lang = user_lang.split('-').next().unwrap_or(&user_lang);
+                let base_lang = user_lang.split('-').next().unwrap_or(user_lang);
 
                 for supported_lang in SUPPORTED_LANGUAGES {
                     let supported_str = supported_lang.to_string();
