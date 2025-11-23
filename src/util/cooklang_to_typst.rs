@@ -20,14 +20,14 @@ pub fn print_typst(
 
     write_title(&mut writer, name, scale)?;
 
-    /*if let Some(desc) = recipe.metadata.description() {
+    if let Some(desc) = recipe.metadata.description() {
         write_description(&mut writer, desc)?;
-    }*/
+    }
 
-    /*if let Some(tags) = recipe.metadata.tags() {
+    if let Some(tags) = recipe.metadata.tags() {
         let tags_vec: Vec<String> = tags.into_iter().map(|t| t.to_string()).collect();
         write_tags(&mut writer, &tags_vec)?;
-    }*/
+    }
 
     write_metadata(&mut writer, recipe)?;
 
@@ -70,21 +70,6 @@ fn write_document_header(w: &mut impl io::Write) -> Result<()> {
         w,
         r"#let timer(timer) = {{ text(fill: timercolor)[*#timer*] }}"
     )?;
-    //writeln!(w)?;
-    //writeln!(w, r"% Customize section headers")?;
-    //writeln!(
-    //    w,
-    //    r"\titleformat{{\section}}{{\Large\bfseries}}{{}}{{0em}}{{}}"
-    //)?;
-    //writeln!(
-    //    w,
-    //    r"\titleformat{{\subsection}}{{\large\bfseries}}{{}}{{0em}}{{}}"
-    //)?;
-    //writeln!(w)?;
-    //writeln!(w, r"\begin{{document}}")?;
-    //writeln!(w)?;
-    //writeln!(w, r"\pagestyle{{empty}}")?;
-    //writeln!(w)?;
 
     Ok(())
 }
@@ -113,6 +98,29 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
     writeln!(w, r"#v(0.5cm)")?;
     writeln!(w, "// END_TITLE")?;
     writeln!(w)?;
+    Ok(())
+}
+
+fn write_description(w: &mut impl io::Write, description: &str) -> Result<()> {
+    writeln!(w, "// DESCRIPTION: {}", description.replace('\n', " "))?;
+    writeln!(w, r#"#quote[_"{}"_]"#, escape_typst(description))?;
+    writeln!(w)?;
+    Ok(())
+}
+
+fn write_tags(w: &mut impl io::Write, tags: &[String]) -> Result<()> {
+    if !tags.is_empty() {
+        writeln!(w, "// TAGS: {}", tags.join(", "))?;
+        write!(w, r"*Tags:* ")?;
+        for (i, tag) in tags.iter().enumerate() {
+            write!(w, r"`{}`", escape_typst(tag))?;
+            if i < tags.len() - 1 {
+                write!(w, ", ")?;
+            }
+        }
+        writeln!(w)?;
+        writeln!(w)?;
+    }
     Ok(())
 }
 
