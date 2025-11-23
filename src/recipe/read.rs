@@ -61,6 +61,7 @@ pub struct ReadArgs {
     ///   cooklang - Regenerated Cooklang format
     ///   markdown - Markdown formatted recipe
     ///   latex    - LaTeX formatted recipe for creating cookbooks
+    ///   typst    - Typst formatted recipe for creating cookbooks
     ///   schema   - Schema.org Recipe JSON-LD format
     ///
     /// If not specified, format is inferred from output file extension.
@@ -144,6 +145,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             Some("yml") => OutputFormat::Yaml,
             Some("tex") => OutputFormat::Latex,
             Some("latex") => OutputFormat::Latex,
+            Some("typst") => OutputFormat::Typst,
             Some("jsonld") => OutputFormat::Schema,
             _ => OutputFormat::Human,
         },
