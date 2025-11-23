@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cooklang::{
     convert::Converter,
-    //model::{Item, Section, Step},
+    model::{Item, Section, Step},
     Recipe,
 };
 use std::io;
@@ -35,7 +35,7 @@ pub fn print_typst(
 
     write_cookware(&mut writer, recipe, converter)?;
 
-    //write_instructions(&mut writer, recipe)?;
+    write_instructions(&mut writer, recipe)?;
 
     writeln!(writer, "// END_RECIPE_CONTENT")?;
 
@@ -222,6 +222,97 @@ fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter
     Ok(())
 }
 
+fn write_instructions(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
+    writeln!(w, r"== Instructions")?;
+    writeln!(w)?;
+
+    for (idx, section) in recipe.sections.iter().enumerate() {
+        write_section(w, section, recipe, idx + 1)?;
+    }
+
+    Ok(())
+}
+
+fn write_section(
+    w: &mut impl io::Write,
+    section: &Section,
+    recipe: &Recipe,
+    num: usize,
+) -> Result<()> {
+    if section.name.is_some() || recipe.sections.len() > 1 {
+        if let Some(name) = &section.name {
+            writeln!(w, r"=== {}", escape_typst(name))?;
+        } else {
+            writeln!(w, r"=== Section {num}")?;
+        }
+        writeln!(w)?;
+    }
+
+    for content in &section.content {
+        match content {
+            cooklang::Content::Step(step) => {
+                write_step(w, step, recipe)?;
+            }
+            cooklang::Content::Text(text) => {
+                if text.trim() != "-" {
+                    writeln!(w)?;
+                    writeln!(w, r"_Note: {}_", escape_typst(text.trim()))?;
+                    writeln!(w)?;
+                }
+            }
+        }
+    }
+
+    writeln!(w)?;
+
+    Ok(())
+}
+
+fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
+    write!(w, r"+ ")?;
+
+    for item in &step.items {
+        match item {
+            Item::Text { value } => {
+                write!(w, "{}", escape_typst(value))?;
+            }
+            &Item::Ingredient { index } => {
+                let igr = &recipe.ingredients[index];
+                write!(w, r#"#ingredient("{}")"#, escape_typst(&igr.display_name()))?;
+            }
+            &Item::Cookware { index } => {
+                let cw = &recipe.cookware[index];
+                write!(w, r#"#cookware("{}")"#, escape_typst(&cw.name))?;
+            }
+            &Item::Timer { index } => {
+                let t = &recipe.timers[index];
+                let timer_text = if let Some(name) = &t.name {
+                    format!(
+                        "{}: {}",
+                        name,
+                        t.quantity
+                            .as_ref()
+                            .map_or("".to_string(), |q| q.to_string())
+                    )
+                } else {
+                    t.quantity
+                        .as_ref()
+                        .map_or("".to_string(), |q| q.to_string())
+                };
+                write!(w, r#"#timer("{}")"#, escape_typst(&timer_text))?;
+            }
+            &Item::InlineQuantity { index } => {
+                let q = &recipe.inline_quantities[index];
+                write!(w, r"*{}*", escape_typst(&q.to_string()))?;
+            }
+        }
+    }
+
+    writeln!(w)?;
+
+    Ok(())
+}
+
 //todo: correct escaping for typst
 fn escape_typst(text: &str) -> String {
     text.chars()
@@ -239,7 +330,6 @@ fn escape_typst(text: &str) -> String {
             '<' => r"\textless{}".to_string(),
             '>' => r"\textgreater{}".to_string(),
             '|' => r"\textbar{}".to_string(),
-            '°' => r"\textdegree{}".to_string(),
             '½' => r"\textonehalf{}".to_string(),
             '¼' => r"\textonequarter{}".to_string(),
             '¾' => r"\textthreequarters{}".to_string(),
