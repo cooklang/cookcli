@@ -145,7 +145,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             Some("yml") => OutputFormat::Yaml,
             Some("tex") => OutputFormat::Latex,
             Some("latex") => OutputFormat::Latex,
-            Some("typst") => OutputFormat::Typst,
+            Some("typ") => OutputFormat::Typst,
             Some("jsonld") => OutputFormat::Schema,
             _ => OutputFormat::Human,
         },
