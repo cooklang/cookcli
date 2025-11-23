@@ -48,7 +48,7 @@ pub struct ReadArgs {
     /// File to write output (stdout if not specified)
     ///
     /// The output format can be automatically inferred from the file
-    /// extension (.json, .yaml, .md, .cook, .txt)
+    /// extension (.json, .yaml, .md, .cook, .tex, .typ, .txt)
     #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     output: Option<Utf8PathBuf>,
 
@@ -87,6 +87,8 @@ enum OutputFormat {
     Markdown,
     #[value(alias("tex"))]
     Latex,
+    #[value(alias("typ"))]
+    Typst,
     #[value(alias("jsonld"))]
     Schema,
 }
@@ -176,6 +178,13 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 writer,
             )?,
             OutputFormat::Latex => crate::util::cooklang_to_latex::print_latex(
+                &recipe,
+                &title,
+                scale,
+                PARSER.converter(),
+                writer,
+            )?,
+            OutputFormat::Typst => crate::util::cooklang_to_typst::print_typst(
                 &recipe,
                 &title,
                 scale,
