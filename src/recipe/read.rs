@@ -48,7 +48,7 @@ pub struct ReadArgs {
     /// File to write output (stdout if not specified)
     ///
     /// The output format can be automatically inferred from the file
-    /// extension (.json, .yaml, .md, .cook, .txt)
+    /// extension (.json, .yaml, .md, .cook, .tex, .typ, .txt)
     #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     output: Option<Utf8PathBuf>,
 
@@ -61,6 +61,7 @@ pub struct ReadArgs {
     ///   cooklang - Regenerated Cooklang format
     ///   markdown - Markdown formatted recipe
     ///   latex    - LaTeX formatted recipe for creating cookbooks
+    ///   typst    - Typst formatted recipe for creating cookbooks
     ///   schema   - Schema.org Recipe JSON-LD format
     ///
     /// If not specified, format is inferred from output file extension.
@@ -87,6 +88,8 @@ enum OutputFormat {
     Markdown,
     #[value(alias("tex"))]
     Latex,
+    #[value(alias("typ"))]
+    Typst,
     #[value(alias("jsonld"))]
     Schema,
 }
@@ -142,6 +145,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             Some("yml") => OutputFormat::Yaml,
             Some("tex") => OutputFormat::Latex,
             Some("latex") => OutputFormat::Latex,
+            Some("typ") => OutputFormat::Typst,
             Some("jsonld") => OutputFormat::Schema,
             _ => OutputFormat::Human,
         },
@@ -176,6 +180,13 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 writer,
             )?,
             OutputFormat::Latex => crate::util::cooklang_to_latex::print_latex(
+                &recipe,
+                &title,
+                scale,
+                PARSER.converter(),
+                writer,
+            )?,
+            OutputFormat::Typst => crate::util::cooklang_to_typst::print_typst(
                 &recipe,
                 &title,
                 scale,
