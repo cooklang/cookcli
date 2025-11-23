@@ -376,7 +376,6 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()
     Ok(())
 }
 
-//todo: correct escaping for typst
 fn escape_typst(text: &str) -> String {
     text.chars()
         .map(|c| match c {
