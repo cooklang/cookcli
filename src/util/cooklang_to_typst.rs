@@ -33,7 +33,7 @@ pub fn print_typst(
 
     write_ingredients(&mut writer, recipe, converter)?;
 
-    //write_cookware(&mut writer, recipe, converter)?;
+    write_cookware(&mut writer, recipe, converter)?;
 
     //write_instructions(&mut writer, recipe)?;
 
@@ -54,22 +54,22 @@ fn write_document_header(w: &mut impl io::Write) -> Result<()> {
     writeln!(w)?;
     writeln!(w, r"// Define colors for recipe elements")?;
     writeln!(w, r"#let ingredientcolor = rgb(204, 85, 0)")?;
-    //writeln!(w, r"\definecolor{{cookwarecolor}}{{RGB}}{{34, 139, 34}}")?;
-    //writeln!(w, r"\definecolor{{timercolor}}{{RGB}}{{220, 20, 60}}")?;
-    //writeln!(w)?;
-    //writeln!(w, r"% Custom commands for recipe elements")?;
+    writeln!(w, r"#let cookwarecolor = rgb(34, 139, 34)")?;
+    writeln!(w, r"#let timercolor = rgb(220, 20, 60)")?;
+    writeln!(w)?;
+    writeln!(w, r"// Custom commands for recipe elements")?;
     writeln!(
         w,
-        "#let ingredient(ingredient) = {{ text(fill: ingredientcolor)[#ingredient] }}"
+        "#let ingredient(ingredient) = {{ text(fill: ingredientcolor)[*#ingredient*] }}"
     )?;
-    //writeln!(
-    //    w,
-    //    r"\newcommand{{\cookware}}[1]{{\textcolor{{cookwarecolor}}{{\textbf{{#1}}}}}}"
-    //)?;
-    //writeln!(
-    //    w,
-    //    r"\newcommand{{\timer}}[1]{{\textcolor{{timercolor}}{{\textbf{{#1}}}}}}"
-    //)?;
+    writeln!(
+        w,
+        r"#let cookware(cookware) = {{ text(fill: cookwarecolor)[*#cookware*] }}"
+    )?;
+    writeln!(
+        w,
+        r"#let timer(timer) = {{ text(fill: timercolor)[*#timer*] }}"
+    )?;
     //writeln!(w)?;
     //writeln!(w, r"% Customize section headers")?;
     //writeln!(
@@ -102,14 +102,11 @@ fn write_document_footer(w: &mut impl io::Write) -> Result<()> {
 fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
     writeln!(w)?;
     writeln!(w, "// BEGIN_TITLE")?;
-    //let escaped_name = escape_latex(name);
-    let escaped_name = name;
+    let escaped_name = escape_typst(name);
     writeln!(w, r"#set align(center)")?;
     if scale != 1.0 {
-        //writeln!(w, r"\begin{{center}}")?;
         writeln!(w, r"= {escaped_name} @ {scale}")?;
     } else {
-        //writeln!(w, r"\begin{{center}}")?;
         writeln!(w, r"= {escaped_name}")?;
     }
     writeln!(w, r"#set align(left)")?;
@@ -175,6 +172,45 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
         }
 
         if let Some(note) = &ingredient.note {
+            write!(w, r" --- {}", escape_typst(note))?;
+        }
+
+        writeln!(w)?;
+    }
+
+    writeln!(w)?;
+
+    Ok(())
+}
+
+fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -> Result<()> {
+    if recipe.cookware.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(w, r"== Cookware")?;
+    writeln!(w)?;
+
+    for item in recipe.group_cookware(converter) {
+        let cw = item.cookware;
+
+        write!(w, r"- ")?;
+
+        if !item.quantity.is_empty() {
+            write!(
+                w,
+                r"*{}* ",
+                escape_typst(&item.quantity.to_string())
+            )?;
+        }
+
+        write!(w, r#"#cookware("{}")"#, escape_typst(cw.display_name()))?;
+
+        if cw.modifiers().is_optional() {
+            write!(w, r" _(optional)_")?;
+        }
+
+        if let Some(note) = &cw.note {
             write!(w, r" --- {}", escape_typst(note))?;
         }
 
