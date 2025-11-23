@@ -14,7 +14,7 @@ pub fn print_typst(
     mut writer: impl io::Write,
 ) -> Result<()> {
     write_document_header(&mut writer)?;
-    
+
     writeln!(writer)?;
     writeln!(writer, "// BEGIN_RECIPE_CONTENT")?;
 
@@ -45,7 +45,10 @@ pub fn print_typst(
 }
 
 fn write_document_header(w: &mut impl io::Write) -> Result<()> {
-    writeln!(w, r#"#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#)?;
+    writeln!(
+        w,
+        r#"#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#
+    )?;
     writeln!(w)?;
     writeln!(w, r"#set text(size: 11pt)")?;
     writeln!(w)?;
@@ -187,7 +190,7 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
     writeln!(w, r"== Ingredients")?;
     writeln!(w)?;
 
-    //Typst does offer a column element, but ut does not balance the element height, instead it fills the parent container height. Balancing is planned for the future now. I think it's best to omit multiple columns for now. 
+    //Typst does offer a column element, but ut does not balance the element height, instead it fills the parent container height. Balancing is planned for the future now. I think it's best to omit multiple columns for now.
     //writeln!(w, r"\begin{{multicols}}{{2}}")?;
 
     for entry in recipe.group_ingredients(converter) {
@@ -200,11 +203,7 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
         write!(w, r"- ")?;
 
         if !entry.quantity.is_empty() {
-            write!(
-                w,
-                r"*{}* ",
-                escape_typst(&entry.quantity.to_string())
-            )?;
+            write!(w, r"*{}* ", escape_typst(&entry.quantity.to_string()))?;
         }
 
         if ingredient.reference.is_some() {
@@ -260,11 +259,7 @@ fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter
         write!(w, r"- ")?;
 
         if !item.quantity.is_empty() {
-            write!(
-                w,
-                r"*{}* ",
-                escape_typst(&item.quantity.to_string())
-            )?;
+            write!(w, r"*{}* ", escape_typst(&item.quantity.to_string()))?;
         }
 
         write!(w, r#"#cookware("{}")"#, escape_typst(cw.display_name()))?;
