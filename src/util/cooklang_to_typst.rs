@@ -29,7 +29,7 @@ pub fn print_typst(
         write_tags(&mut writer, &tags_vec)?;
     }*/
 
-    //write_metadata(&mut writer, recipe)?;
+    write_metadata(&mut writer, recipe)?;
 
     write_ingredients(&mut writer, recipe, converter)?;
 
@@ -113,6 +113,64 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
     writeln!(w, r"#v(0.5cm)")?;
     writeln!(w, "// END_TITLE")?;
     writeln!(w)?;
+    Ok(())
+}
+
+fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
+    let mut metadata_items = Vec::new();
+
+    if let Some(servings) = recipe.metadata.servings() {
+        writeln!(w, "// SERVINGS: {servings}")?;
+        metadata_items.push(format!("Servings: {servings}"));
+    }
+
+    // Get prep time from metadata
+    if let Some(prep_time_val) = recipe.metadata.get("prep time") {
+        if let Some(prep_time_str) = prep_time_val.as_str() {
+            writeln!(w, "// PREP_TIME: {prep_time_str}")?;
+            metadata_items.push(format!("Prep time: {prep_time_str}"));
+        }
+    }
+
+    // Get cook time from metadata
+    if let Some(cook_time_val) = recipe.metadata.get("cook time") {
+        if let Some(cook_time_str) = cook_time_val.as_str() {
+            writeln!(w, "// COOK_TIME: {cook_time_str}")?;
+            metadata_items.push(format!("Cook time: {cook_time_str}"));
+        }
+    }
+
+    // Add author if present
+    if let Some(author) = recipe.metadata.author() {
+        if let Some(author_name) = author.name() {
+            writeln!(w, "// AUTHOR: {author_name}")?;
+        }
+    }
+
+    // Add source if present
+    if let Some(source) = recipe.metadata.source() {
+        if let Some(url) = source.url() {
+            writeln!(w, "// SOURCE: {url}")?;
+        } else if let Some(name) = source.name() {
+            writeln!(w, "// SOURCE: {name}")?;
+        }
+    }
+
+    if !metadata_items.is_empty() {
+        writeln!(w, "// BEGIN_METADATA")?;
+        writeln!(w, r"#set align(center)")?;
+        for (i, item) in metadata_items.iter().enumerate() {
+            write!(w, "{}", escape_typst(item))?;
+            if i < metadata_items.len() - 1 {
+                write!(w, r" #h(1em) ")?;
+            }
+        }
+        writeln!(w)?;
+        writeln!(w, r"#set align(left)")?;
+        writeln!(w, "// END_METADATA")?;
+        writeln!(w)?;
+    }
+
     Ok(())
 }
 
