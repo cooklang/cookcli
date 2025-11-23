@@ -45,10 +45,7 @@ pub fn print_typst(
 }
 
 fn write_document_header(w: &mut impl io::Write) -> Result<()> {
-    writeln!(w, r#"#set page(
-        paper: "a4",
-        margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#
-    )?;
+    writeln!(w, r#"#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#)?;
     writeln!(w)?;
     writeln!(w, r"#set text(size: 11pt)")?;
     writeln!(w)?;
@@ -389,27 +386,19 @@ fn escape_typst(text: &str) -> String {
             '$' => r"\$".to_string(),
             '&' => r"\&".to_string(),
             '#' => r"\#".to_string(),
-            '^' => r"\^{}".to_string(),
+            '^' => r"\^".to_string(),
             '_' => r"\_".to_string(),
-            '~' => r"\~{}".to_string(),
+            '~' => r"\~".to_string(),
             '%' => r"\%".to_string(),
-            '<' => r"\textless{}".to_string(),
-            '>' => r"\textgreater{}".to_string(),
-            '|' => r"\textbar{}".to_string(),
-            '½' => r"\textonehalf{}".to_string(),
-            '¼' => r"\textonequarter{}".to_string(),
-            '¾' => r"\textthreequarters{}".to_string(),
-            '⅓' => r"\textfrac{1}{3}".to_string(),
-            '⅔' => r"\textfrac{2}{3}".to_string(),
-            '×' => r"\texttimes{}".to_string(),
-            '÷' => r"\textdiv{}".to_string(),
-            '–' => r"\textendash{}".to_string(),
-            '—' => r"\textemdash{}".to_string(),
-            '€' => r"\texteuro{}".to_string(),
-            '£' => r"\textsterling{}".to_string(),
-            '™' => r"\texttrademark{}".to_string(),
-            '®' => r"\textregistered{}".to_string(),
-            '©' => r"\textcopyright{}".to_string(),
+            '<' => r"\<".to_string(),
+            '>' => r"\>".to_string(),
+            '`' => r"\`".to_string(),
+            '@' => r"\@".to_string(),
+            '=' => r"\=".to_string(),
+            '-' => r"\-".to_string(),
+            '+' => r"\+".to_string(),
+            '/' => r"\/".to_string(),
+            '*' => r"\*".to_string(),
             _ => c.to_string(),
         })
         .collect()
