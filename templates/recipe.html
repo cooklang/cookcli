@@ -291,23 +291,30 @@
                     <ol class="space-y-4 {% if !loop.first %}mt-4{% endif %}">
                         {% for step in section.steps %}
                         <li class="bg-gradient-to-r from-gray-50 to-orange-50 rounded-xl p-4">
-                            <div class="flex gap-4">
-                                <div class="step-number">{{ section.step_offset + loop.index }}</div>
-                                <div class="flex-1">
-                                    <div class="text-gray-700 mb-2 leading-8">
-                                    {% for item in step.items %}
-                                        {% match item %}
-                                            {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% endmatch %}{% endfor %}
+                            <div class="flex flex-col gap-4">
+                                {% match step.image_path %}
+                                {% when Some with (img) %}
+                                <img class="image-step" src="{{ img }}" />
+                                {% when None %}
+                                {% endmatch %}
+                                <div class="flex gap-4">
+                                    <div class="step-number">{{ section.step_offset + loop.index }}</div>
+                                    <div class="flex-1">
+                                        <div class="text-gray-700 mb-2 leading-8">
+                                        {% for item in step.items %}
+                                            {% match item %}
+                                                {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% endmatch %}{% endfor %}
+                                        </div>
+                                        {% if step.ingredients.len() > 0 %}
+                                        <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
+                                            {% for ing in step.ingredients %}
+                                                <span class="inline-block mr-3">
+                                                    {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 truncate max-w-[200px] inline-block align-bottom" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
                                     </div>
-                                    {% if step.ingredients.len() > 0 %}
-                                    <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
-                                        {% for ing in step.ingredients %}
-                                            <span class="inline-block mr-3">
-                                                {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 truncate max-w-[200px] inline-block align-bottom" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
-                                            </span>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
                                 </div>
                             </div>
                         </li>

@@ -352,9 +352,18 @@ async fn recipe_page(
                             }
                         }
                     }
+
+                    let section_image_path = entry
+                        .step_images()
+                        .get(0, section_steps.len() + 1)
+                        .and_then(|img_path| {
+                            get_image_path(&state.base_path, img_path.to_string())
+                        });
+
                     section_steps.push(StepData {
                         items: step_items,
                         ingredients: step_ingredients,
+                        image_path: section_image_path,
                     });
                 }
                 Content::Text(text) => {

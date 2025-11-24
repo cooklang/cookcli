@@ -186,6 +186,7 @@ pub struct RecipeSection {
 pub struct StepData {
     pub items: Vec<StepItem>,
     pub ingredients: Vec<StepIngredient>,
+    pub image_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
