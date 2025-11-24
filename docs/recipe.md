@@ -178,6 +178,17 @@ Generate structured data in Schema.org Recipe format for SEO and web integration
 cook recipe "Neapolitan Pizza" -f schema
 ```
 
+### Typst Format
+
+Export recipes as Typst documents for professional typesetting:
+
+```bash
+cook recipe "Neapolitan Pizza" -f typst
+
+# Pipe directly to typst to create a PDF
+cook recipe "Neapolitan Pizza" -f typst | typst compile - pizza-recipe.pdf
+```
+
 ## Saving Output
 
 Write the output to a file:
