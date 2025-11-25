@@ -355,7 +355,7 @@ async fn recipe_page(
 
                     let section_image_path = entry
                         .step_images()
-                        .get(0, section_steps.len() + 1)
+                        .get(0, total_steps + section_steps.len() + 1)
                         .and_then(|img_path| {
                             get_image_path(&state.base_path, img_path.to_string())
                         });
