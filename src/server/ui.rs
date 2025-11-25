@@ -212,35 +212,10 @@ async fn recipe_page(
     let tags = entry.tags();
 
     // Get the image path if available
-    let image_path = entry.title_image().clone().and_then(|img_path| {
-        tracing::debug!("Recipe image path from entry: {}", img_path);
-        // If it's a URL, use it directly
-        if img_path.starts_with("http://") || img_path.starts_with("https://") {
-            Some(img_path)
-        } else {
-            // For file paths, we need to make them relative to the base path and accessible via /api/static
-            let img_path = camino::Utf8Path::new(&img_path);
-
-            // Try to strip the base_path prefix to get a relative path
-            if let Ok(relative) = img_path.strip_prefix(&state.base_path) {
-                let result = format!("/api/static/{relative}");
-                tracing::debug!("Image path relative to base: {}", result);
-                Some(result)
-            } else {
-                // If the path doesn't start with base_path, it might already be relative
-                // or it might be an absolute path to a file within base_path
-                // Let's check if it's a file name or relative path
-                if !img_path.is_absolute() {
-                    Some(format!("/api/static/{img_path}"))
-                } else {
-                    // Last resort: try to get just the filename
-                    img_path
-                        .file_name()
-                        .map(|name| format!("/api/static/{name}"))
-                }
-            }
-        }
-    });
+    let image_path = entry
+        .title_image()
+        .clone()
+        .and_then(|img_path| get_image_path(&state.base_path, img_path));
 
     let mut ingredients = Vec::new();
     let mut cookware = Vec::new();
@@ -377,9 +352,18 @@ async fn recipe_page(
                             }
                         }
                     }
+
+                    let section_image_path = entry
+                        .step_images()
+                        .get(0, section_steps.len() + 1)
+                        .and_then(|img_path| {
+                            get_image_path(&state.base_path, img_path.to_string())
+                        });
+
                     section_steps.push(StepData {
                         items: step_items,
                         ingredients: step_ingredients,
+                        image_path: section_image_path,
                     });
                 }
                 Content::Text(text) => {
@@ -518,6 +502,36 @@ async fn recipe_page(
     };
 
     Ok(template.into_response())
+}
+
+fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {
+    tracing::debug!("Recipe image path from entry: {}", img_path);
+    // If it's a URL, use it directly
+    if img_path.starts_with("http://") || img_path.starts_with("https://") {
+        Some(img_path)
+    } else {
+        // For file paths, we need to make them relative to the base path and accessible via /api/static
+        let img_path = camino::Utf8Path::new(&img_path);
+
+        // Try to strip the base_path prefix to get a relative path
+        if let Ok(relative) = img_path.strip_prefix(base_path) {
+            let result = format!("/api/static/{relative}");
+            tracing::debug!("Image path relative to base: {}", result);
+            Some(result)
+        } else {
+            // If the path doesn't start with base_path, it might already be relative
+            // or it might be an absolute path to a file within base_path
+            // Let's check if it's a file name or relative path
+            if !img_path.is_absolute() {
+                Some(format!("/api/static/{img_path}"))
+            } else {
+                // Last resort: try to get just the filename
+                img_path
+                    .file_name()
+                    .map(|name| format!("/api/static/{name}"))
+            }
+        }
+    }
 }
 
 async fn menu_page_handler(

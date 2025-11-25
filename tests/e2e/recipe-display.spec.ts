@@ -231,3 +231,32 @@ test.describe.skip('Recipe Display', () => {  // Skip - requires recipe content
     }
   });
 });
+
+test.describe('Recipe Display images', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/recipe/Breakfast/Easy Pancakes');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should not display image before the targeted cooking step when missing', async ({ page }) => {
+    const steps = page.locator('main ol li:has(.step-number)');
+    const beforeStep = steps.nth(1);
+    const imageStep = beforeStep.locator('.image-step');
+    await expect(imageStep).not.toBeVisible();
+  });
+
+  test('should display images in cooking steps', async ({ page }) => {
+    const steps = page.locator('main ol li:has(.step-number)');
+    const targetStep = steps.nth(2);
+    const imageStep = targetStep.locator('.image-step');
+    await expect(imageStep).toBeVisible();
+    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Easy Pancakes.3.jpg');
+  });
+
+  test('should not display image after the targeted cooking step when missing', async ({ page }) => {
+    const steps = page.locator('main ol li:has(.step-number)');
+    const afterStep = steps.nth(3);
+    const imageStep = afterStep.locator('.image-step');
+    await expect(imageStep).not.toBeVisible();
+  });
+});
