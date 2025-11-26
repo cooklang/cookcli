@@ -260,3 +260,17 @@ test.describe('Recipe Display images', () => {
     await expect(imageStep).not.toBeVisible();
   });
 });
+
+test.describe('Recipe Display images respecting section', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/recipe/Breakfast/Chocolate Toast Delight');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should display images in cooking steps', async ({ page }) => {
+    const steps = page.locator('main ol li:has(.step-number)');
+    const targetStep = steps.nth(2);
+    const imageStep = targetStep.locator('.image-step');
+    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Chocolate Toast Delight.3.jpg');
+  });
+});
