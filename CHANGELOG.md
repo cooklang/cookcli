@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.19.0](https://github.com/cooklang/cookcli/compare/v0.18.2...v0.19.0) (2025-11-26)
+
+
+### Features
+
+* add --allow-missing parameter for flexible pantry planning ([c30ffed](https://github.com/cooklang/cookcli/commit/c30ffedab452780d71b92bb45310fba8bafdf465))
+* add --skip parameter to pantry plan command ([7441f8a](https://github.com/cooklang/cookcli/commit/7441f8a20142f197b21f7777193e6000e662245d))
+* add pantry plan command to analyze ingredient usage ([04ed7b8](https://github.com/cooklang/cookcli/commit/04ed7b8960751a6a8c79ac9057a59d1388f346f0))
+* added Cooking instructions ([4cbb414](https://github.com/cooklang/cookcli/commit/4cbb41414e6d587942ed2058bb6f2d35bf9f5e5b))
+* added cookware ([f7490f3](https://github.com/cooklang/cookcli/commit/f7490f3b607fb79b8aa643313f5901be3d29c7a4))
+* added metadata ([a836cc9](https://github.com/cooklang/cookcli/commit/a836cc9a3bbdb1477ab739e393e1e0b287118877))
+* added tags ([d5121af](https://github.com/cooklang/cookcli/commit/d5121afebd90dcee951887e1b6b9b4fde86e2ec0))
+* adjusted character escaping to Typst. This is a best effort since there is no official list. ([5825864](https://github.com/cooklang/cookcli/commit/582586428bb748210de83438c5718a69be79fee5))
+* implemented simple header, footer and title but Style is not quite correct yet ([a6f4fe0](https://github.com/cooklang/cookcli/commit/a6f4fe0bfb7e3b320e1ad91b3183360e3ca285b7))
+* ingredient list added. No multicol for now... ([01f5259](https://github.com/cooklang/cookcli/commit/01f525996c39157719435fe78a4eb9ea9cec2bc0))
+* initial Hello World for Typst export ([f04790a](https://github.com/cooklang/cookcli/commit/f04790a43d75fbf1899596fbdbd039b55f7c565c))
+* small adjustments ([02377a6](https://github.com/cooklang/cookcli/commit/02377a6de811998351527c86ba2b923b1f6885ff))
+
+
+### Bug Fixes
+
+* clean research ([8fddfd2](https://github.com/cooklang/cookcli/commit/8fddfd2f41f6ed53cc92a791f9c1f78dc1074107))
+* minor cargo fmt changes ([eace0de](https://github.com/cooklang/cookcli/commit/eace0debf85f0bb883ed1819261ccd981ffae201))
+* missing typst format ([d71cf71](https://github.com/cooklang/cookcli/commit/d71cf719f419207f2a2210b07b88ea3a1003ae5b))
+* **server:** use filename for recipe path resolution ([3fba010](https://github.com/cooklang/cookcli/commit/3fba0102510d600f970758b9d62c4138d1b7d17f))
+* **server:** use filename for recipe path resolution ([b22fc87](https://github.com/cooklang/cookcli/commit/b22fc87728586e7b5c309b525450de9bbb3f4332))
+* Typst file extension ([94b1d2c](https://github.com/cooklang/cookcli/commit/94b1d2cba3e65c8600a4d82e1155b0641bf69b56))
+
 ## [0.18.2](https://github.com/cooklang/cookcli/compare/v0.18.1...v0.18.2) (2025-10-18)
 
 
