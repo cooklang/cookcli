@@ -6,7 +6,7 @@
 <div>
     {% if !breadcrumbs.is_empty() %}
     <nav class="mb-4">
-        <ol class="flex space-x-2 text-sm text-gray-600">
+        <ol class="flex items-center space-x-2 text-sm text-gray-600">
             <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
