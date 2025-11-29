@@ -419,7 +419,10 @@ async fn recipe_page(
         }
     }
 
-    let breadcrumbs: Vec<String> = path.split('/').map(|s| s.to_string()).collect();
+    let breadcrumbs: Vec<String> = path
+        .split('/')
+        .map(|s| s.trim_end_matches(".cook").to_string())
+        .collect();
 
     let metadata = if recipe.metadata.map.is_empty() {
         None
