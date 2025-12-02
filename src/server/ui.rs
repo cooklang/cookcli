@@ -221,7 +221,8 @@ async fn recipe_page(
     let mut cookware = Vec::new();
     let mut sections = Vec::new();
 
-    for ingredient in &recipe.ingredients {
+    for ingredient in recipe.group_ingredients(crate::util::PARSER.converter()) {
+        let ingredient = ingredient.ingredient;
         let reference_path = ingredient.reference.as_ref().map(|r| {
             // For web URLs - always use forward slash
             if r.components.is_empty() {
@@ -246,9 +247,9 @@ async fn recipe_page(
         });
     }
 
-    for item in &recipe.cookware {
+    for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
         cookware.push(CookwareData {
-            name: item.name.to_string(),
+            name: item.cookware.name.to_string(),
         });
     }
 
