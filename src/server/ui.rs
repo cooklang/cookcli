@@ -255,9 +255,9 @@ async fn recipe_page(
 
     let mut total_steps = 0;
     for section in &recipe.sections {
-        let mut section_steps = Vec::new();
-        let mut section_notes = Vec::new();
+        let mut section_items = Vec::new();
         let mut section_ingredient_indices = std::collections::HashSet::new();
+        let mut step_count = 0;
 
         for content in &section.content {
             use cooklang::Content;
@@ -356,28 +356,30 @@ async fn recipe_page(
 
                     let section_image_path = entry
                         .step_images()
-                        .get(0, total_steps + section_steps.len() + 1)
+                        .get(0, total_steps + step_count + 1)
                         .and_then(|img_path| {
                             get_image_path(&state.base_path, img_path.to_string())
                         });
 
-                    section_steps.push(StepData {
+                    section_items.push(RecipeSectionItem::Step(StepData {
+                        number: step_count + 1,
                         items: step_items,
                         ingredients: step_ingredients,
                         image_path: section_image_path,
-                    });
+                    }));
+                    step_count += 1;
                 }
                 Content::Text(text) => {
                     // Skip list bullet items
                     if text.trim() != "-" {
-                        section_notes.push(text.trim().to_string());
+                        section_items.push(RecipeSectionItem::Note(text.trim().to_string()));
                     }
                 }
             }
         }
 
-        // Only add sections that have steps or notes
-        if !section_steps.is_empty() || !section_notes.is_empty() {
+        // Only add sections that have items (steps or notes)
+        if !section_items.is_empty() {
             use crate::server::templates::RecipeSection;
 
             // Collect ingredients used in this section
@@ -411,12 +413,11 @@ async fn recipe_page(
 
             sections.push(RecipeSection {
                 name: section.name.clone(),
-                steps: section_steps.clone(),
-                notes: section_notes.clone(),
+                items: section_items.clone(),
                 step_offset: total_steps,
                 ingredients: section_ingredients,
             });
-            total_steps += section_steps.len();
+            total_steps += step_count;
         }
     }
 

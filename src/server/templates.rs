@@ -176,14 +176,20 @@ pub struct CookwareData {
 #[derive(Debug, Clone, Serialize)]
 pub struct RecipeSection {
     pub name: Option<String>,
-    pub steps: Vec<StepData>,
-    pub notes: Vec<String>,
+    pub items: Vec<RecipeSectionItem>,
     pub step_offset: usize,
     pub ingredients: Vec<IngredientData>,
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub enum RecipeSectionItem {
+    Step(StepData),
+    Note(String),
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct StepData {
+    pub number: usize,
     pub items: Vec<StepItem>,
     pub ingredients: Vec<StepIngredient>,
     pub image_path: Option<String>,
