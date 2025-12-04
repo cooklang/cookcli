@@ -51,8 +51,8 @@ use tracing::warn;
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
 pub static PARSER: Lazy<CooklangParser> = Lazy::new(|| {
-    // Use no extensions but with default converter for basic unit support
-    CooklangParser::new(Extensions::empty(), Converter::default())
+    // Use default converter for basic unit support
+    CooklangParser::new(Extensions::all(), Converter::default())
 });
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
