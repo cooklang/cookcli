@@ -801,6 +801,7 @@ async fn pantry_page(
 
     Ok(PantryTemplate {
         active: "pantry".to_string(),
+        configured: pantry_path.is_some(),
         sections,
         tr: Tr::new(lang),
     })
