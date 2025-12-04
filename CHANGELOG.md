@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/cooklang/cookcli/compare/v0.19.0...v0.20.0) (2025-12-04)
+
+
+### Features
+
+* improve breadcrumb ([b9618a8](https://github.com/cooklang/cookcli/commit/b9618a855db56a9d114fb1ed6569cb43b0853076))
+* remove ".cook" in the breadcrumb ([0cd458c](https://github.com/cooklang/cookcli/commit/0cd458c54ef285620993a5703d8223a166a98208))
+
+
+### Bug Fixes
+
+* better alignment in the breadcrumb ([f148fdf](https://github.com/cooklang/cookcli/commit/f148fdfc25fbf2bb670b70611c7cbc8a94908320))
+* notes are rendered in correct order between steps (web interface) ([e4ad193](https://github.com/cooklang/cookcli/commit/e4ad1933e426aa0df25b563d3bf3f25119ad85db))
+* show pantry inventory even if pantry.conf is empty, but show link to preferences page only if pantry.conf is not found ([f535295](https://github.com/cooklang/cookcli/commit/f535295e93e8a96e36df442a095d8a97d306e9ea))
+
 ## [0.19.0](https://github.com/cooklang/cookcli/compare/v0.18.2...v0.19.0) (2025-11-26)
 
 
