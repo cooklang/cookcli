@@ -98,6 +98,7 @@ pub struct PreferencesTemplate {
 #[template(path = "pantry.html")]
 pub struct PantryTemplate {
     pub active: String,
+    pub configured: bool,
     pub sections: Vec<PantrySection>,
     pub tr: Tr,
 }
