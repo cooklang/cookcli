@@ -119,6 +119,7 @@ enum OutputFormat {
     Human,
     Json,
     Yaml,
+    Markdown,
 }
 
 pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
@@ -339,6 +340,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                         list.into_iter().map(|(ingredient, _)| ingredient).collect();
                     serde_yaml::to_writer(w, &ingredients)?;
                 }
+                OutputFormat::Markdown => {
+                    let value = build_md_value(list, &aisle, args.plain, args.ingredients_only);
+                    write!(w, "{value}")?;
+                }
             }
         } else {
             match format {
@@ -358,6 +363,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                     let value = build_yaml_value(list, &aisle);
 
                     serde_yaml::to_writer(w, &value)?;
+                }
+                OutputFormat::Markdown => {
+                    let value = build_md_value(list, &aisle, args.plain, args.ingredients_only);
+                    write!(w, "{value}")?;
                 }
             }
         }
@@ -402,6 +411,46 @@ fn build_human_table(list: IngredientList, aisle: &AisleConf, plain: bool) -> ta
         }
     }
     table
+}
+
+fn build_md_value(
+    list: IngredientList,
+    aisle: &AisleConf,
+    plain: bool,
+    ingredients_only: bool,
+) -> String {
+    let mut output = String::new();
+
+    let format_ingredient = |ingredient: &str, quantity: &GroupedQuantity| {
+        if ingredients_only {
+            format!("- {ingredient}\n")
+        } else {
+            let quantity_string = quantity
+                .iter()
+                .map(quantity_fmt)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("- *{quantity_string}* {ingredient}\n")
+        }
+    };
+    if plain {
+        // no categories, simple list
+        for (ingredient, quantity) in list {
+            output.push_str(&format_ingredient(&ingredient, &quantity));
+        }
+    } else {
+        let categories = list.categorize(aisle);
+        for (i, (category, items)) in categories.into_iter().enumerate() {
+            if i > 0 {
+                output.push('\n');
+            }
+            output.push_str(&format!("# {category}\n"));
+            for (ingredient, quantity) in items {
+                output.push_str(&format_ingredient(&ingredient, &quantity));
+            }
+        }
+    }
+    output
 }
 
 fn build_json_value<'a>(
