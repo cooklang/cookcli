@@ -95,12 +95,15 @@ pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
                     } else {
                         let value: serde_json::Value = serde_yaml::from_str(&recipe.metadata)
                             .map_err(|e| anyhow::anyhow!("Failed to parse metadata: {}", e))?;
-                        serde_json::to_string_pretty(&value)
-                            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata to JSON: {}", e))
+                        serde_json::to_string_pretty(&value).map_err(|e| {
+                            anyhow::anyhow!("Failed to serialize metadata to JSON: {}", e)
+                        })
                     }
                 }
                 MetadataFormat::Yaml => Ok(recipe.metadata.clone()),
-                MetadataFormat::Frontmatter => Ok(generate_frontmatter(&recipe.name, &recipe.metadata)),
+                MetadataFormat::Frontmatter => {
+                    Ok(generate_frontmatter(&recipe.name, &recipe.metadata))
+                }
                 MetadataFormat::None => Ok(String::new()),
             };
         }
