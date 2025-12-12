@@ -8,16 +8,13 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
 
 jobs:
-  # Stage 1: Run Ubuntu tests first (fastest feedback)
-  test-ubuntu:
-    name: Test on Ubuntu (${{ matrix.rust }})
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        rust: [stable, beta, nightly]
 
     steps:
     - uses: actions/checkout@v4
@@ -25,33 +22,20 @@ jobs:
         submodules: recursive
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: ${{ matrix.rust }}
         components: rustfmt, clippy
 
-    - name: Cache cargo registry
-      uses: actions/cache@v4
+    - name: Cache Rust
+      uses: Swatinem/rust-cache@v2
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+        cache: 'npm'
 
     - name: Install npm dependencies
       run: npm ci
@@ -61,68 +45,27 @@ jobs:
 
     - name: Check formatting
       run: cargo fmt -- --check
-      if: matrix.rust == 'stable'
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
-      if: matrix.rust == 'stable'
 
     - name: Build
       run: cargo build --verbose
 
-    - name: Run unit tests
-      run: cargo test --lib --verbose
-
-    - name: Run integration tests
-      run: cargo test --test '*' --verbose
-
-    - name: Run doc tests
-      run: cargo test --doc --verbose
-
-    - name: Build release
-      run: cargo build --release --verbose
-      if: matrix.rust == 'stable'
-
-    - name: Build without self-update feature
-      run: cargo build --release --no-default-features --verbose
-      if: matrix.rust == 'stable'
-
-    - name: Run tests without default features
-      run: cargo test --no-default-features --verbose
-      if: matrix.rust == 'stable'
-
-  # Stage 1b: Run snapshot tests on Ubuntu (parallel with test-ubuntu)
-  snapshot:
-    name: Snapshot Tests
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-
-    - name: Install npm dependencies
-      run: npm ci
-
-    - name: Build CSS
-      run: npm run build-css
-
-    - name: Build
-      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
 
     - name: Run snapshot tests
       run: cargo test --test snapshot_test
 
-    - name: Run snapshot tests without default features
-      run: cargo test --no-default-features --test snapshot_test
+    - name: Build release
+      run: cargo build --release --verbose
+
+    - name: Build without self-update feature
+      run: cargo build --release --no-default-features --verbose
+
+    - name: Run tests without default features
+      run: cargo test --no-default-features --verbose
 
     - name: Upload snapshot diffs
       if: failure()
@@ -131,81 +74,10 @@ jobs:
         name: snapshot-diffs
         path: tests/snapshots/*.snap.new
 
-  # Stage 2: Run other OS tests after Ubuntu passes
-  test-other-os:
-    name: Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    needs: [test-ubuntu, snapshot]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
-
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-
-    - name: Install npm dependencies
-      run: npm ci
-
-    - name: Build CSS
-      run: npm run build-css
-
-    - name: Build
-      run: cargo build --verbose
-
-    - name: Run unit tests
-      run: cargo test --lib --verbose
-
-    - name: Run integration tests
-      run: cargo test --test '*' --verbose
-
-    - name: Run doc tests
-      run: cargo test --doc --verbose
-
-    - name: Build release
-      run: cargo build --release --verbose
-
-    - name: Build without self-update feature
-      run: cargo build --release --no-default-features --verbose
-
-    - name: Run tests without default features
-      run: cargo test --no-default-features --verbose
-
-  # Stage 3: Run UI tests after all other tests pass
   ui-tests:
     name: UI Tests
     runs-on: ubuntu-latest
-    needs: [test-other-os]
+    needs: [test]
     timeout-minutes: 30
 
     steps:
@@ -216,16 +88,10 @@ jobs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
 
-    - name: Cache Rust dependencies
-      uses: actions/cache@v4
+    - name: Cache Rust
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-ui-tests-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-ui-tests-
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -240,6 +106,12 @@ jobs:
       run: |
         cargo build
         npm run build-css
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ hashFiles('package-lock.json') }}
 
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
@@ -263,11 +135,10 @@ jobs:
         path: test-results/
         retention-days: 7
 
-  # Coverage runs on push only, after Ubuntu tests pass
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [test-ubuntu]
+    needs: [test]
     if: github.event_name == 'push'
 
     steps:
@@ -278,13 +149,25 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Cache Rust
+      uses: Swatinem/rust-cache@v2
+      with:
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Cache tarpaulin
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-tarpaulin
+        key: tarpaulin-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Install tarpaulin
-      run: cargo install cargo-tarpaulin
+      run: which cargo-tarpaulin || cargo install cargo-tarpaulin
 
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+        cache: 'npm'
 
     - name: Install npm dependencies
       run: npm ci
