@@ -1,6 +1,0 @@
----
-source: tests/snapshot_test.rs
-assertion_line: 139
-expression: cleaned_str
----
-

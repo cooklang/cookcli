@@ -1,5 +1,6 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 236
 expression: sorted_output
 ---
 📄 with_errors.cook
@@ -7,7 +8,7 @@ expression: sorted_output
 === Recipe References ===
 
 📄 with_errors.cook
-  ❌ Missing reference: nonexistent
+  ❌ Missing reference: ./nonexistent
 
 === Validation Summary ===
 Total recipes scanned: 5

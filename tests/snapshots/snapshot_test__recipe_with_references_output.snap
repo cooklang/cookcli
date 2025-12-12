@@ -1,5 +1,6 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 340
 expression: formatted
 ---
 {
@@ -12,7 +13,9 @@ expression: formatted
       "note": null,
       "quantity": null,
       "reference": {
-        "components": [],
+        "components": [
+          "."
+        ],
         "name": "sauce"
       },
       "relation": {
