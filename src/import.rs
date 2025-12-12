@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Args, ValueEnum};
-use cooklang_import::{fetch_recipe, generate_frontmatter, import_recipe};
+use cooklang_import::{text_to_cooklang, url_to_recipe};
 
 use crate::Context;
 
@@ -56,20 +56,51 @@ pub struct ImportArgs {
     metadata_only: bool,
 }
 
+/// Generate YAML frontmatter from metadata string
+fn generate_frontmatter(name: &str, metadata: &str) -> String {
+    let has_name = !name.is_empty();
+    let has_metadata = !metadata.is_empty();
+
+    if !has_name && !has_metadata {
+        return String::new();
+    }
+
+    let mut frontmatter = String::from("---\n");
+    if has_name {
+        frontmatter.push_str(&format!("title: {}\n", name));
+    }
+    if has_metadata {
+        frontmatter.push_str(metadata);
+        if !metadata.ends_with('\n') {
+            frontmatter.push('\n');
+        }
+    }
+    frontmatter.push_str("---\n\n");
+    frontmatter
+}
+
 pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
     let output = tokio::runtime::Runtime::new()?.block_on(async {
-        let recipe = fetch_recipe(&args.url)
+        let recipe = url_to_recipe(&args.url)
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Handle metadata-only output
         if args.metadata_only {
             return match args.metadata {
-                MetadataFormat::Json => serde_json::to_string_pretty(&recipe.metadata)
-                    .map_err(|e| anyhow::anyhow!("Failed to serialize metadata to JSON: {}", e)),
-                MetadataFormat::Yaml => serde_yaml::to_string(&recipe.metadata)
-                    .map_err(|e| anyhow::anyhow!("Failed to serialize metadata to YAML: {}", e)),
-                MetadataFormat::Frontmatter => Ok(generate_frontmatter(&recipe.metadata)),
+                MetadataFormat::Json => {
+                    // Parse YAML metadata to JSON
+                    if recipe.metadata.is_empty() {
+                        Ok("{}".to_string())
+                    } else {
+                        let value: serde_json::Value = serde_yaml::from_str(&recipe.metadata)
+                            .map_err(|e| anyhow::anyhow!("Failed to parse metadata: {}", e))?;
+                        serde_json::to_string_pretty(&value)
+                            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata to JSON: {}", e))
+                    }
+                }
+                MetadataFormat::Yaml => Ok(recipe.metadata.clone()),
+                MetadataFormat::Frontmatter => Ok(generate_frontmatter(&recipe.name, &recipe.metadata)),
                 MetadataFormat::None => Ok(String::new()),
             };
         }
@@ -81,47 +112,37 @@ pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
             // Add metadata based on format
             match args.metadata {
                 MetadataFormat::Frontmatter => {
-                    output.push_str(&generate_frontmatter(&recipe.metadata));
+                    output.push_str(&generate_frontmatter(&recipe.name, &recipe.metadata));
                 }
                 MetadataFormat::Json => {
                     if !recipe.metadata.is_empty() {
+                        let value: serde_json::Value = serde_yaml::from_str(&recipe.metadata)
+                            .map_err(|e| anyhow::anyhow!("Failed to parse metadata: {}", e))?;
                         output.push_str(&format!(
                             "[Metadata]\n{}\n\n",
-                            serde_json::to_string_pretty(&recipe.metadata)?
+                            serde_json::to_string_pretty(&value)?
                         ));
                     }
                 }
                 MetadataFormat::Yaml => {
                     if !recipe.metadata.is_empty() {
-                        output.push_str(&format!(
-                            "[Metadata]\n{}\n\n",
-                            serde_yaml::to_string(&recipe.metadata)?
-                        ));
+                        output.push_str(&format!("[Metadata]\n{}\n\n", recipe.metadata));
                     }
                 }
                 MetadataFormat::None => {}
             }
 
             // Add recipe content
-            output.push_str(&format!("{}\n\n", recipe.name));
-
-            if let Some(desc) = &recipe.description {
-                output.push_str(&format!("{desc}\n\n"));
+            if !recipe.name.is_empty() {
+                output.push_str(&format!("{}\n\n", recipe.name));
             }
 
-            output.push_str(&format!(
-                "[Ingredients]\n{}\n\n[Instructions]\n{}",
-                recipe.ingredients, recipe.instructions
-            ));
-
-            if !recipe.image.is_empty() {
-                output.push_str(&format!("\n\n[Images]\n{}", recipe.image.join("\n")));
-            }
+            output.push_str(&recipe.text);
 
             Ok(output)
         } else {
             // Convert to Cooklang (includes metadata as frontmatter by default)
-            import_recipe(&args.url)
+            text_to_cooklang(&recipe)
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }

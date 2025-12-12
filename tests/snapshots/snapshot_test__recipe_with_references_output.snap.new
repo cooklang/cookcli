@@ -1,0 +1,99 @@
+---
+source: tests/snapshot_test.rs
+assertion_line: 340
+expression: formatted
+---
+{
+  "cookware": [],
+  "ingredients": [
+    {
+      "alias": null,
+      "modifiers": "",
+      "name": "sauce",
+      "note": null,
+      "quantity": null,
+      "reference": {
+        "components": [
+          "."
+        ],
+        "name": "sauce"
+      },
+      "relation": {
+        "reference_target": null,
+        "relation": {
+          "defined_in_step": true,
+          "referenced_from": [],
+          "type": "definition"
+        }
+      }
+    },
+    {
+      "alias": null,
+      "modifiers": "",
+      "name": "tomatoes",
+      "note": null,
+      "quantity": {
+        "scalable": true,
+        "unit": null,
+        "value": {
+          "type": "number",
+          "value": {
+            "type": "regular",
+            "value": 3.0
+          }
+        }
+      },
+      "reference": null,
+      "relation": {
+        "reference_target": null,
+        "relation": {
+          "defined_in_step": true,
+          "referenced_from": [],
+          "type": "definition"
+        }
+      }
+    }
+  ],
+  "inline_quantities": [],
+  "metadata": {
+    "map": {
+      "title": "Recipe with Reference"
+    }
+  },
+  "sections": [
+    {
+      "content": [
+        {
+          "type": "step",
+          "value": {
+            "items": [
+              {
+                "type": "text",
+                "value": "Make "
+              },
+              {
+                "index": 0,
+                "type": "ingredient"
+              },
+              {
+                "type": "text",
+                "value": ". Add "
+              },
+              {
+                "index": 1,
+                "type": "ingredient"
+              },
+              {
+                "type": "text",
+                "value": " to the sauce."
+              }
+            ],
+            "number": 1
+          }
+        }
+      ],
+      "name": null
+    }
+  ],
+  "timers": []
+}
