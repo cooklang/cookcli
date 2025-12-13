@@ -332,6 +332,11 @@ pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
     // The cooklang-find library doesn't expect the ./ prefix
     let clean_name = name.strip_prefix("./").unwrap_or(name);
 
+    // Normalize path separators for cross-platform compatibility
+    // On Windows, convert forward slashes to backslashes
+    #[cfg(target_os = "windows")]
+    let clean_name = clean_name.replace('/', "\\");
+
     Ok(cooklang_find::get_recipe(
         vec![base_path.clone()],
         clean_name.into(),
