@@ -55,6 +55,11 @@ pub async fn recipe(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     check_path(&path)?;
 
+    // Normalize path separators for cross-platform compatibility
+    // On Windows, convert forward slashes from URL to backslashes for filesystem
+    #[cfg(target_os = "windows")]
+    let path = path.replace('/', "\\");
+
     let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
         .map_err(|_| {
             tracing::error!("Recipe not found: {path}");

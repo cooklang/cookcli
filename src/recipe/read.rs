@@ -116,6 +116,11 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             scale = scaling_factor;
         }
 
+        // Normalize path separators for cross-platform compatibility
+        // On Windows, convert forward slashes to backslashes
+        #[cfg(target_os = "windows")]
+        let name = name.replace('/', "\\");
+
         let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path().clone()], name.into())
             .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
         let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
