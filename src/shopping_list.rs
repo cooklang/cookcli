@@ -307,6 +307,9 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         )?;
     }
 
+    // Use common names from aisle configuration
+    list = list.use_common_names(&aisle, PARSER.converter());
+
     // Subtract pantry quantities from shopping list
     if let Some(pantry_conf) = &pantry {
         list = list.subtract_pantry(pantry_conf, PARSER.converter());

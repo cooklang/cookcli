@@ -98,6 +98,9 @@ pub async fn shopping_list(
         None
     };
 
+    // Use common names from aisle configuration
+    list = list.use_common_names(&aisle, PARSER.converter());
+
     // Track pantry items that were found and subtracted (excluding zero quantities)
     let mut pantry_items = Vec::new();
     if let Some(ref pantry) = pantry_conf {
