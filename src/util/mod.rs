@@ -328,9 +328,12 @@ pub fn extract_ingredients(
 }
 
 pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
-    // Remove ./ prefix if present before passing to cooklang_find
-    // The cooklang-find library doesn't expect the ./ prefix
-    let clean_name = name.strip_prefix("./").unwrap_or(name);
+    // Remove ./ or .\ prefix if present before passing to cooklang_find
+    // The cooklang-find library doesn't expect these prefixes
+    let clean_name = name
+        .strip_prefix("./")
+        .or_else(|| name.strip_prefix(".\\"))
+        .unwrap_or(name);
 
     // Normalize path separators for cross-platform compatibility
     // On Windows, convert forward slashes to backslashes
