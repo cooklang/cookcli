@@ -501,7 +501,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
                                 let ref_path = if reference.components.is_empty() {
                                     reference.name.clone()
                                 } else {
-                                    reference.path(std::path::MAIN_SEPARATOR_STR)
+                                    reference.path("/")
                                 };
                                 refs.push(ref_path);
                             }
