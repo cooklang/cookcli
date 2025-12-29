@@ -199,10 +199,28 @@ fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> R
                 match item {
                     PantryItem::Simple(_) => args.all,
                     PantryItem::WithAttributes(attrs) => {
-                        if let Some(quantity) = &attrs.quantity {
-                            is_low_quantity(quantity)
+                        // Check if user set an explicit low threshold
+                        if let Some(low) = &attrs.low {
+                            // User has set a threshold
+                            // Only trust it if the units match (so we can actually compare them)
+                            if let Some(quantity) = &attrs.quantity {
+                                if units_match(quantity, low) {
+                                    // Units match, trust the threshold comparison result
+                                    args.all
+                                } else {
+                                    // Units don't match, use default rules instead
+                                    is_low_quantity(quantity)
+                                }
+                            } else {
+                                args.all
+                            }
                         } else {
-                            args.all
+                            // No explicit threshold set, use default rules
+                            if let Some(quantity) = &attrs.quantity {
+                                is_low_quantity(quantity)
+                            } else {
+                                args.all
+                            }
                         }
                     }
                 }
@@ -787,9 +805,29 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
     Ok(())
 }
 
+/// Check if two quantity strings have matching units
+fn units_match(quantity: &str, low_threshold: &str) -> bool {
+    let parse_unit = |s: &str| -> Option<String> {
+        regex::Regex::new(r"^(\d+(?:\.\d+)?)\s*%?\s*(.*)$")
+            .ok()
+            .and_then(|re| re.captures(s))
+            .map(|captures| {
+                captures
+                    .get(2)
+                    .map(|m| m.as_str().to_lowercase())
+                    .unwrap_or_default()
+            })
+    };
+
+    match (parse_unit(quantity), parse_unit(low_threshold)) {
+        (Some(q_unit), Some(l_unit)) => q_unit == l_unit,
+        _ => false,
+    }
+}
+
 fn is_low_quantity(quantity: &str) -> bool {
-    // Simple heuristic: parse the quantity and check if it's low
-    // This could be made more sophisticated based on unit types
+    // Default rules for when no explicit threshold is set
+    // Grams/ml: <= 100, Kg/L: < 0.5, Items: <= 1
     if let Some(captures) = regex::Regex::new(r"^(\d+(?:\.\d+)?)\s*%?\s*(.*)$")
         .ok()
         .and_then(|re| re.captures(quantity))
