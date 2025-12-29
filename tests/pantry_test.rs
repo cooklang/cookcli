@@ -355,3 +355,86 @@ fn test_pantry_format_aliases() {
         .success()
         .stdout(predicate::str::contains("Recipes"));
 }
+
+#[test]
+fn test_pantry_depleted_respects_explicit_threshold() {
+    // Test for GitHub issue #228: Explicit low thresholds should take precedence over heuristics
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    std::fs::create_dir(&config_dir).unwrap();
+
+    // Create a pantry.conf with test cases for the bug fix
+    let pantry_config = r#"[test]
+# Should appear as depleted (15 < 20)
+"item_below_threshold" = { quantity = "15%g", low = "20%g" }
+
+# Should NOT appear as depleted (85 > 20) - This was the reported bug
+"item_above_threshold" = { quantity = "85%g", low = "20%g" }
+
+# Should appear using heuristic (50 <= 100)
+"item_no_threshold" = "50%g"
+
+# Should NOT appear (200 > 100 heuristic)
+"item_high_no_threshold" = "200%g"
+"#;
+    std::fs::write(config_dir.join("pantry.conf"), pantry_config).unwrap();
+
+    // Test default depleted output
+    let output = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("pantry")
+        .arg("depleted")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).unwrap();
+
+    // Item below explicit threshold should appear
+    assert!(
+        stdout.contains("item_below_threshold"),
+        "Item below explicit threshold (15g < 20g) should appear in depleted list"
+    );
+
+    // Item above explicit threshold should NOT appear (this is the bug fix)
+    assert!(
+        !stdout.contains("item_above_threshold"),
+        "Item above explicit threshold (85g > 20g) should NOT appear in depleted list"
+    );
+
+    // Item without threshold but low by heuristic should appear
+    assert!(
+        stdout.contains("item_no_threshold"),
+        "Item without explicit threshold (50g <= 100g heuristic) should appear"
+    );
+
+    // Item without threshold and high by heuristic should NOT appear
+    assert!(
+        !stdout.contains("item_high_no_threshold"),
+        "Item without threshold (200g > 100g heuristic) should NOT appear"
+    );
+
+    // Test with --all flag to verify item_above_threshold can appear when requested
+    let output_all = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("pantry")
+        .arg("depleted")
+        .arg("--all")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout_all = String::from_utf8(output_all).unwrap();
+
+    // With --all flag, item_above_threshold should now appear
+    assert!(
+        stdout_all.contains("item_above_threshold"),
+        "Item above threshold should appear with --all flag"
+    );
+}
