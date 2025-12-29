@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.2](https://github.com/cooklang/cookcli/compare/v0.19.1...v0.19.2) (2025-12-28)
+
+
+### Bug Fixes
+
+* add Windows-specific snapshot for doctor validate test ([e543dbd](https://github.com/cooklang/cookcli/commit/e543dbd1c2c4fb87470f90bf9a1bac480f6c371a))
+* use consistent path separator in doctor validate output ([f42d359](https://github.com/cooklang/cookcli/commit/f42d359fcf07422419d894270594f859f715bbc0))
+
 ## [0.19.1](https://github.com/cooklang/cookcli/compare/v0.19.0...v0.19.1) (2025-12-27)
 
 
