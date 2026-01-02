@@ -179,6 +179,11 @@ async fn recipe_page(
 ) -> Result<axum::response::Response, StatusCode> {
     let scale = query.scale.unwrap_or(1.0);
 
+    // Normalize path separators for cross-platform compatibility
+    // On Windows, convert forward slashes from URL to backslashes for filesystem
+    #[cfg(target_os = "windows")]
+    let path = path.replace('/', "\\");
+
     let recipe_path = Utf8PathBuf::from(&path);
     tracing::info!(
         "Looking for recipe at path: {}, extension: {:?}",

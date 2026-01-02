@@ -247,21 +247,28 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     let ignore_references = args.ignore_references;
 
     for entry in expanded_recipes {
+        // Normalize path separators for cross-platform compatibility
+        // On Windows, convert forward slashes to backslashes
+        #[cfg(target_os = "windows")]
+        let entry = entry.replace('/', "\\");
+
         // Determine the base path for this entry
         // If the entry is an absolute path or relative path to a file,
         // use its parent directory as the base for resolving references
         let entry_without_scaling = entry.split(':').next().unwrap_or(&entry);
         let entry_path = Utf8PathBuf::from(entry_without_scaling);
 
-        // Check if this is a file path (contains '/' or starts with './')
-        let (actual_entry, base_path) = if entry_without_scaling.contains('/') {
+        // Check if this is a file path (contains path separator or starts with './')
+        let (actual_entry, base_path) =
+            if entry_without_scaling.contains(std::path::MAIN_SEPARATOR) {
             // This looks like a file path, not just a recipe name
             let full_path = if entry_path.is_absolute() {
                 entry_path.clone()
             } else {
-                // Clean up the path by removing ./ prefix if present
+                // Clean up the path by removing ./ or .\ prefix if present
                 let clean_entry = entry_without_scaling
                     .strip_prefix("./")
+                    .or_else(|| entry_without_scaling.strip_prefix(".\\"))
                     .unwrap_or(entry_without_scaling);
                 ctx.base_path().join(clean_entry)
             };
