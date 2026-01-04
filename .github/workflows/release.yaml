@@ -62,12 +62,12 @@ jobs:
             name: cook-arm-unknown-linux-musleabihf.tar.gz
 
           - target: x86_64-apple-darwin
-            os: macOS-13
+            os: macos-15-intel
             name: cook-x86_64-apple-darwin.tar.gz
             notarize: true
 
           - target: aarch64-apple-darwin
-            os: macOS-13
+            os: macos-14
             name: cook-aarch64-apple-darwin.tar.gz
             notarize: true
 
@@ -149,7 +149,7 @@ jobs:
 
       # Sign and notarize macOS binaries before packaging
       - name: Notarize | Sign and Notarize [macOS]
-        if: matrix.notarize == true && matrix.os == 'macOS-13'
+        if: matrix.notarize == true
         env:
           APP_CERTIFICATE_BASE64: ${{ secrets.APPLEDEV_APPSIGNKEY_BASE64 }}
           P12_PASSWORD: ${{ secrets.APPLEDEV_SIGNKEY_PASS }}
