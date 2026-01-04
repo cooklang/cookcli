@@ -4,7 +4,11 @@ version = "0.19.3"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
-include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static"]
+include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static", "/seed", "/locales"]
+repository = "https://github.com/cooklang/cookcli"
+homepage = "https://cooklang.org"
+keywords = ["cooklang", "recipes", "cli", "cooking"]
+categories = ["command-line-utilities"]
 
 [features]
 default = ["self-update"]
