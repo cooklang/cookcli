@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.3](https://github.com/cooklang/cookcli/compare/v0.19.2...v0.19.3) (2026-01-04)
+
+
+### Bug Fixes
+
+* respect explicit low thresholds in pantry depleted command ([f2f8371](https://github.com/cooklang/cookcli/commit/f2f83717fe3d4533777785d78764f78659ed0f6f)), closes [#228](https://github.com/cooklang/cookcli/issues/228)
+* update macOS runners from deprecated macOS-13 ([94cf605](https://github.com/cooklang/cookcli/commit/94cf60576a8967153d69706a963ddafca26f4fe8))
+
 ## [0.19.2](https://github.com/cooklang/cookcli/compare/v0.19.1...v0.19.2) (2025-12-28)
 
 
