@@ -476,20 +476,18 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
                         if has_errors {
                             stats.1 += 1; // recipes_with_errors
                             stats.3 += errors.len(); // total_errors
-
-                            for error in errors {
-                                println!("  ❌ Error: {error}");
-                            }
                         }
 
                         if has_warnings {
                             stats.2 += 1; // recipes_with_warnings
                             stats.4 += warnings.len(); // total_warnings
-
-                            for warning in warnings {
-                                println!("  ⚠️  Warning: {warning}");
-                            }
                         }
+
+                        // Print formatted errors/warnings with line context
+                        parsed
+                            .report()
+                            .print(relative_path.as_str(), &content, true)
+                            .ok();
                     }
 
                     // Collect recipe references

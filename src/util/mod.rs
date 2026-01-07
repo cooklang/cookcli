@@ -68,7 +68,29 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
         }
     }
 
-    let (mut recipe, _warnings) = parsed.into_result().context("Failed to parse recipe")?;
+    let recipe_path = entry
+        .path()
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Check for parsing errors and format them with line context
+    if parsed.report().has_errors() {
+        let mut error_output = Vec::new();
+        parsed
+            .report()
+            .write(&recipe_path, &content, false, &mut error_output)
+            .ok();
+        let error_details = String::from_utf8_lossy(&error_output);
+        return Err(anyhow::anyhow!(
+            "Failed to parse recipe '{}'\n{}",
+            recipe_path,
+            error_details
+        ));
+    }
+
+    let (mut recipe, _warnings) = parsed
+        .into_result()
+        .expect("already checked for errors");
 
     // Scale the recipe
     recipe.scale(scaling_factor, PARSER.converter());
@@ -210,10 +232,26 @@ pub fn extract_ingredients(
                     let content = ref_entry
                         .content()
                         .context("Failed to read recipe content")?;
-                    let (mut recipe, _warnings) = PARSER
-                        .parse(&content)
+                    let parsed = PARSER.parse(&content);
+
+                    // Check for parsing errors and format them with line context
+                    if parsed.report().has_errors() {
+                        let mut error_output = Vec::new();
+                        parsed
+                            .report()
+                            .write(&ref_path, &content, false, &mut error_output)
+                            .ok();
+                        let error_details = String::from_utf8_lossy(&error_output);
+                        return Err(anyhow::anyhow!(
+                            "Failed to parse referenced recipe '{}'\n{}",
+                            ref_path,
+                            error_details
+                        ));
+                    }
+
+                    let (mut recipe, _warnings) = parsed
                         .into_result()
-                        .context("Failed to parse recipe")?;
+                        .expect("already checked for errors");
 
                     // Use the new scale_to_target function
                     tracing::debug!(
