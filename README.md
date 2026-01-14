@@ -426,6 +426,26 @@ Attributes:
 
 Items listed in your pantry will be automatically excluded from shopping lists, helping you track what you already have at home. Use `cook pantry depleted` to see low stock items and `cook pantry expiring` to check expiration dates.
 
+### Units Configuration (`units.toml`)
+
+You can define custom units or override default conversions by creating a `units.toml` file in your configuration directory.
+
+```toml
+[[quantity]]
+quantity = "volume"
+[quantity.units]
+metric = [
+    { names = ["litro", "litros"], symbols = ["l"], ratio = 1 },
+]
+
+[[quantity]]
+quantity = "mass"
+[quantity.units]
+metric = [
+    { names = ["gramo", "gramos"], symbols = ["g"], ratio = 1 },
+]
+```
+
 ### Using Configuration Files
 
 ```bash
@@ -456,6 +476,16 @@ Use the `:` notation to scale any recipe:
 ```bash
 cook recipe "Pizza.cook:2"              # Double
 cook shopping-list "Pasta.cook:0.5"     # Half
+```
+
+### Cooklang Extensions
+
+CookCLI supports all standard [Cooklang extensions](https://github.com/cooklang/cooklang-rs/tree/main/cooklang/src/cooklang#extensions) (like range values `2-4`, temperature, etc.). However, to preserve compatibility with existing behavior, they are disabled by default.
+
+To enable them, use the `--extensions` flag:
+
+```bash
+cook --extensions recipe "Cake.cook"
 ```
 
 ### Combining with UNIX Tools

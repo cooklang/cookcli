@@ -1,5 +1,6 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 311
 expression: stdout
 ---
 A command-line interface for managing and working with Cooklang recipes
@@ -21,6 +22,7 @@ Commands:
 
 Options:
   -v, --verbose...  Increase verbosity (-v for info, -vv for debug, -vvv for trace)
+      --extensions  Enable all Cooklang extensions
   -h, --help        Print help
   -V, --version     Print version
 

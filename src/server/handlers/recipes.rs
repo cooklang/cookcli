@@ -1,4 +1,4 @@
-use crate::{server::AppState, util::PARSER};
+use crate::server::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -62,7 +62,7 @@ pub async fn recipe(
         })?;
 
     let recipe =
-        crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0)).map_err(|e| {
+        crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0), &state.parser).map_err(|e| {
             tracing::error!("Failed to parse recipe: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
@@ -102,7 +102,7 @@ pub async fn recipe(
     }
 
     let grouped_ingredients = recipe
-        .group_ingredients(PARSER.converter())
+        .group_ingredients(state.parser.converter())
         .into_iter()
         .map(|entry| {
             serde_json::json!({

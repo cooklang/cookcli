@@ -46,6 +46,10 @@ pub struct CliArgs {
     #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true)]
     pub verbosity: u8,
 
+    /// Enable all Cooklang extensions
+    #[arg(long = "extensions", global = true)]
+    pub extensions: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }

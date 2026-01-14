@@ -40,6 +40,7 @@ use axum::{
 };
 use camino::Utf8PathBuf;
 use clap::Args;
+use cooklang::CooklangParser;
 use rust_embed::RustEmbed;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
@@ -163,7 +164,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 }
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
-    let Context { base_path } = ctx;
+    let Context { base_path, parser } = ctx;
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
     let absolute_path = resolve_to_absolute_path(path)?;
@@ -175,7 +176,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     tracing::info!("Using absolute base path: {:?}", absolute_path);
 
     // Create a new Context with the actual base path to properly search for config files
-    let server_ctx = Context::new(absolute_path.clone());
+    let server_ctx = Context::new(absolute_path.clone(), parser.clone());
     let aisle_path = server_ctx.aisle();
     let pantry_path = server_ctx.pantry();
 
@@ -186,6 +187,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         base_path: absolute_path,
         aisle_path,
         pantry_path,
+        parser,
     }))
 }
 
@@ -219,6 +221,7 @@ pub struct AppState {
     pub base_path: Utf8PathBuf,
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
+    pub parser: Arc<CooklangParser>,
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {

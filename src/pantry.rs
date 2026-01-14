@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 use crate::{util::parse_recipe_from_entry, Context as AppContext};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -157,7 +158,7 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
     let new_ctx;
     let ctx = if let Some(base_path) = args.base_path {
         let absolute_base_path = crate::util::resolve_to_absolute_path(&base_path)?;
-        new_ctx = AppContext::new(absolute_base_path);
+        new_ctx = AppContext::new(absolute_base_path, Arc::clone(&ctx.parser));
         &new_ctx
     } else {
         ctx
@@ -434,11 +435,12 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
         full_matches: &mut Vec<String>,
         partial_matches: &mut Vec<(String, usize, Vec<String>)>,
         args: &RecipesArgs,
+        parser: &cooklang::CooklangParser,
     ) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0, parser) {
                 // Get all ingredients from the recipe (excluding recipe references)
                 let mut recipe_ingredients = HashSet::new();
                 for ingredient in &recipe.ingredients {
@@ -486,6 +488,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
                 full_matches,
                 partial_matches,
                 args,
+                parser,
             );
         }
     }
@@ -496,6 +499,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
         &mut full_matches,
         &mut partial_matches_raw,
         &args,
+        &ctx.parser,
     );
 
     match format {
@@ -582,7 +586,11 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
     let mut recipes: Vec<RecipeInfo> = Vec::new();
 
     // Recursively process recipes in the tree
-    fn process_tree(tree: &cooklang_find::RecipeTree, recipes: &mut Vec<RecipeInfo>) {
+    fn process_tree(
+        tree: &cooklang_find::RecipeTree,
+        recipes: &mut Vec<RecipeInfo>,
+        parser: &cooklang::CooklangParser,
+    ) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             // Skip .menu files - only process .cook files
@@ -591,7 +599,7 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
             }
 
             // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0, parser) {
                 let mut recipe_ingredients = HashSet::new();
 
                 // Get all ingredients from the recipe (excluding recipe references)
@@ -616,11 +624,11 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
         // Recursively check children
         for subtree in tree.children.values() {
-            process_tree(subtree, recipes);
+            process_tree(subtree, recipes, parser);
         }
     }
 
-    process_tree(&tree, &mut recipes);
+    process_tree(&tree, &mut recipes, &ctx.parser);
 
     if recipes.is_empty() {
         match format {
