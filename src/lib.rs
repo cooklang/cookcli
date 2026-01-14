@@ -49,6 +49,15 @@ impl Context {
         }
     }
 
+    pub fn units(&self) -> Option<Utf8PathBuf> {
+        let local_config = self.base_path.join("config").join("units.toml");
+        if local_config.is_file() {
+            Some(local_config)
+        } else {
+            None
+        }
+    }
+
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }

@@ -33,7 +33,9 @@ use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use cooklang::{Converter, CooklangParser, Extensions};
+use cooklang::{
+    convert::units_file::UnitsFile, Converter, CooklangParser, Extensions,
+};
 use std::sync::Arc;
 
 // commands
@@ -58,6 +60,9 @@ const APP_NAME: &str = "cook";
 const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
 const AUTO_AISLE: &str = "aisle.conf";
 const AUTO_PANTRY: &str = "pantry.conf";
+const AUTO_UNITS: &str = "units.toml";
+
+const DEFAULT_UNITS: &str = include_str!("units.toml");
 
 pub fn main() -> Result<()> {
     let args = CliArgs::parse();
@@ -114,6 +119,18 @@ impl Context {
         })
     }
 
+    pub fn units(&self) -> Option<Utf8PathBuf> {
+        let auto = self.base_path.join(LOCAL_CONFIG_DIR).join(AUTO_UNITS);
+
+        tracing::trace!("checking auto units file: {auto}");
+
+        auto.is_file().then_some(auto).or_else(|| {
+            let global = global_file_path(AUTO_UNITS).ok()?;
+            tracing::trace!("checking global auto units file: {global}");
+            global.is_file().then_some(global)
+        })
+    }
+
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
@@ -143,7 +160,27 @@ fn configure_context() -> Result<Context> {
         Extensions::empty()
     };
 
-    let parser = CooklangParser::new(extensions, Converter::default());
+    let mut converter_builder = Converter::builder();
+
+    // Load bundled units
+    let default_units = toml::from_str::<UnitsFile>(DEFAULT_UNITS)
+        .context("Failed to parse bundled units.toml")?;
+    converter_builder.add_units_file(default_units).unwrap();
+
+    // Check for user units.toml
+    // Create a temporary context to find the file
+    let temp_ctx = Context::new(absolute_base_path.clone(), Arc::new(CooklangParser::new(Extensions::empty(), Converter::empty())));
+    if let Some(path) = temp_ctx.units() {
+        tracing::info!("Loading units from: {path}");
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read units file: {path}"))?;
+        let user_units = toml::from_str::<UnitsFile>(&content)
+            .with_context(|| format!("Failed to parse units file: {path}"))?;
+        converter_builder.add_units_file(user_units).unwrap();
+    }
+
+    let converter = converter_builder.finish().context("Failed to build converter")?;
+    let parser = CooklangParser::new(extensions, converter);
 
     Ok(Context {
         base_path: absolute_base_path,
