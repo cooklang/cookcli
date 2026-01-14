@@ -33,6 +33,8 @@ use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
+use cooklang::{Converter, CooklangParser, Extensions};
+use std::sync::Arc;
 
 // commands
 mod doctor;
@@ -80,11 +82,12 @@ pub fn main() -> Result<()> {
 
 pub struct Context {
     base_path: Utf8PathBuf,
+    parser: Arc<CooklangParser>,
 }
 
 impl Context {
-    pub fn new(base_path: Utf8PathBuf) -> Self {
-        Self { base_path }
+    pub fn new(base_path: Utf8PathBuf, parser: Arc<CooklangParser>) -> Self {
+        Self { base_path, parser }
     }
 
     pub fn aisle(&self) -> Option<Utf8PathBuf> {
@@ -134,8 +137,17 @@ fn configure_context() -> Result<Context> {
         bail!("Base path is not a directory: {}", absolute_base_path);
     }
 
+    let extensions = if args.extensions {
+        Extensions::all()
+    } else {
+        Extensions::empty()
+    };
+
+    let parser = CooklangParser::new(extensions, Converter::default());
+
     Ok(Context {
         base_path: absolute_base_path,
+        parser: Arc::new(parser),
     })
 }
 

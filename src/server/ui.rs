@@ -204,7 +204,7 @@ async fn recipe_page(
         return Ok(template.into_response());
     }
 
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
+    let recipe = crate::util::parse_recipe_from_entry(&entry, scale, &state.parser).map_err(|e| {
         tracing::error!("Failed to parse recipe: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -221,7 +221,7 @@ async fn recipe_page(
     let mut cookware = Vec::new();
     let mut sections = Vec::new();
 
-    for ingredient in recipe.group_ingredients(crate::util::PARSER.converter()) {
+    for ingredient in recipe.group_ingredients(state.parser.converter()) {
         let ingredient = ingredient.ingredient;
         let reference_path = ingredient.reference.as_ref().map(|r| {
             // For web URLs - always use forward slash
@@ -247,7 +247,7 @@ async fn recipe_page(
         });
     }
 
-    for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
+    for item in &recipe.group_cookware(state.parser.converter()) {
         cookware.push(CookwareData {
             name: item.cookware.name.to_string(),
         });
@@ -546,7 +546,7 @@ async fn menu_page_handler(
     state: Arc<AppState>,
     lang: LanguageIdentifier,
 ) -> Result<MenuTemplate, StatusCode> {
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
+    let recipe = crate::util::parse_recipe_from_entry(&entry, scale, &state.parser).map_err(|e| {
         tracing::error!("Failed to parse menu: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;

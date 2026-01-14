@@ -215,13 +215,14 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
         pantry_ingredients: &mut BTreeSet<String>,
         pantry: &Option<cooklang::pantry::PantryConf>,
         recipe_count: &mut usize,
+        parser: &cooklang::CooklangParser,
     ) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             *recipe_count += 1;
 
             // Parse the recipe
-            let recipe = match parse_recipe_from_entry(entry, 1.0) {
+            let recipe = match parse_recipe_from_entry(entry, 1.0, parser) {
                 Ok(r) => r,
                 Err(e) => {
                     let name = entry.name().as_deref().unwrap_or("unknown");
@@ -260,6 +261,7 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
                 pantry_ingredients,
                 pantry,
                 recipe_count,
+                parser,
             );
         }
     }
@@ -270,6 +272,7 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
         &mut pantry_ingredients,
         &pantry,
         &mut recipe_count,
+        &ctx.parser,
     );
 
     println!(
@@ -340,13 +343,14 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
         tree: &cooklang_find::RecipeTree,
         all_ingredients: &mut BTreeSet<String>,
         recipe_count: &mut usize,
+        parser: &cooklang::CooklangParser,
     ) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             *recipe_count += 1;
 
             // Parse the recipe
-            let recipe = match parse_recipe_from_entry(entry, 1.0) {
+            let recipe = match parse_recipe_from_entry(entry, 1.0, parser) {
                 Ok(r) => r,
                 Err(e) => {
                     let name = entry.name().as_deref().unwrap_or("unknown");
@@ -371,11 +375,11 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
 
         // Recursively check children
         for subtree in tree.children.values() {
-            process_recipes(subtree, all_ingredients, recipe_count);
+            process_recipes(subtree, all_ingredients, recipe_count, parser);
         }
     }
 
-    process_recipes(&tree, &mut all_ingredients, &mut recipe_count);
+    process_recipes(&tree, &mut all_ingredients, &mut recipe_count, &ctx.parser);
 
     println!(
         "Scanned {} recipes, found {} unique ingredients",
@@ -443,6 +447,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
         base_path: &Utf8PathBuf,
         stats: &mut (usize, usize, usize, usize, usize),
         recipe_refs: &mut BTreeMap<String, Vec<String>>,
+        parser: &cooklang::CooklangParser,
     ) {
         if let Some(entry) = &tree.recipe {
             stats.0 += 1; // total_recipes
@@ -462,7 +467,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
             match fs::read_to_string(&recipe_path) {
                 Ok(content) => {
                     // Parse with our configured parser to get all errors and warnings
-                    let parsed = crate::util::PARSER.parse(&content);
+                    let parsed = parser.parse(&content);
 
                     let errors: Vec<_> = parsed.report().errors().collect();
                     let warnings: Vec<_> = parsed.report().warnings().collect();
@@ -522,7 +527,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
 
         // Recursively check children
         for subtree in tree.children.values() {
-            validate_recipes(subtree, base_path, stats, recipe_refs);
+            validate_recipes(subtree, base_path, stats, recipe_refs, parser);
         }
     }
 
@@ -533,7 +538,13 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
         total_errors,
         total_warnings,
     );
-    validate_recipes(&tree, base_path, &mut stats, &mut recipe_references);
+    validate_recipes(
+        &tree,
+        base_path,
+        &mut stats,
+        &mut recipe_references,
+        &ctx.parser,
+    );
     (
         total_recipes,
         recipes_with_errors,

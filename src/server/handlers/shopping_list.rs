@@ -2,7 +2,7 @@ use crate::server::{
     shopping_list_store::{ShoppingListItem, ShoppingListStore},
     AppState,
 };
-use crate::util::{extract_ingredients, PARSER};
+use crate::util::extract_ingredients;
 use axum::{extract::State, http::StatusCode, Json};
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
@@ -35,7 +35,7 @@ pub async fn shopping_list(
             &mut list,
             &mut seen,
             &state.base_path,
-            PARSER.converter(),
+            &state.parser,
             false,
         )
         .map_err(|e| {
@@ -99,7 +99,7 @@ pub async fn shopping_list(
     };
 
     // Use common names from aisle configuration
-    list = list.use_common_names(&aisle, PARSER.converter());
+    list = list.use_common_names(&aisle, state.parser.converter());
 
     // Track pantry items that were found and subtracted (excluding zero quantities)
     let mut pantry_items = Vec::new();
@@ -128,7 +128,7 @@ pub async fn shopping_list(
 
     // Apply pantry subtraction if pantry is available
     let final_list = if let Some(ref pantry) = pantry_conf {
-        list.subtract_pantry(pantry, PARSER.converter())
+        list.subtract_pantry(pantry, state.parser.converter())
     } else {
         list
     };

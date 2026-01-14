@@ -1,5 +1,7 @@
 // Re-export modules for testing
 use camino::Utf8PathBuf;
+use cooklang::CooklangParser;
+use std::sync::Arc;
 
 // Commands - make them available as public modules
 pub mod doctor;
@@ -21,11 +23,12 @@ pub mod util;
 // Context struct for testing - matches the one in main.rs
 pub struct Context {
     base_path: Utf8PathBuf,
+    pub parser: Arc<CooklangParser>,
 }
 
 impl Context {
-    pub fn new(base_path: Utf8PathBuf) -> Self {
-        Self { base_path }
+    pub fn new(base_path: Utf8PathBuf, parser: Arc<CooklangParser>) -> Self {
+        Self { base_path, parser }
     }
 
     pub fn aisle(&self) -> Option<Utf8PathBuf> {

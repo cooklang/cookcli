@@ -35,7 +35,7 @@ use std::io::Read;
 use camino::Utf8PathBuf;
 
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output, PARSER},
+    util::{split_recipe_name_and_scaling_factor, write_to_output},
     Context,
 };
 use cooklang_find::RecipeEntry;
@@ -118,7 +118,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
         let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path().clone()], name.into())
             .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale, &ctx.parser)?;
         (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     } else {
         // Read from stdin and create a RecipeEntry
@@ -132,7 +132,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             .context("Failed to create recipe entry from stdin")?;
 
         // Use the same parsing function as for file-based recipes
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
+        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale, &ctx.parser)?;
         (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     };
 
@@ -158,7 +158,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                ctx.parser.converter(),
                 writer,
             )?,
             OutputFormat::Json => {
@@ -176,28 +176,28 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                ctx.parser.converter(),
                 writer,
             )?,
             OutputFormat::Latex => crate::util::cooklang_to_latex::print_latex(
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                ctx.parser.converter(),
                 writer,
             )?,
             OutputFormat::Typst => crate::util::cooklang_to_typst::print_typst(
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                ctx.parser.converter(),
                 writer,
             )?,
             OutputFormat::Schema => crate::util::cooklang_to_schema::print_schema(
                 &recipe,
                 &title,
                 scale,
-                PARSER.converter(),
+                ctx.parser.converter(),
                 writer,
                 args.pretty,
             )?,

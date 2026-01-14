@@ -43,7 +43,7 @@ use cooklang::{
 use serde::Serialize;
 
 use crate::{
-    util::{extract_ingredients, write_to_output, PARSER},
+    util::{extract_ingredients, write_to_output},
     Context,
 };
 
@@ -302,17 +302,17 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             &mut list,
             &mut seen,
             &base_path,
-            PARSER.converter(),
+            &ctx.parser,
             ignore_references,
         )?;
     }
 
     // Use common names from aisle configuration
-    list = list.use_common_names(&aisle, PARSER.converter());
+    list = list.use_common_names(&aisle, ctx.parser.converter());
 
     // Subtract pantry quantities from shopping list
     if let Some(pantry_conf) = &pantry {
-        list = list.subtract_pantry(pantry_conf, PARSER.converter());
+        list = list.subtract_pantry(pantry_conf, ctx.parser.converter());
     }
 
     write_to_output(args.output.as_deref(), |w| {
