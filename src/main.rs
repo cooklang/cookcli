@@ -62,8 +62,6 @@ const AUTO_AISLE: &str = "aisle.conf";
 const AUTO_PANTRY: &str = "pantry.conf";
 const AUTO_UNITS: &str = "units.toml";
 
-// const DEFAULT_UNITS: &str = include_str!("units.toml");
-
 pub fn main() -> Result<()> {
     let args = CliArgs::parse();
     configure_logging(args.verbosity);
@@ -86,8 +84,8 @@ pub fn main() -> Result<()> {
 }
 
 pub struct Context {
-    base_path: Utf8PathBuf,
-    parser: Arc<CooklangParser>,
+    pub base_path: Utf8PathBuf,
+    pub parser: Arc<CooklangParser>,
 }
 
 impl Context {
@@ -161,11 +159,6 @@ fn configure_context() -> Result<Context> {
     };
 
     let mut converter_builder = Converter::builder();
-
-    // Load bundled units
-    // let default_units = toml::from_str::<UnitsFile>(DEFAULT_UNITS)
-    //     .context("Failed to parse bundled units.toml")?;
-    // converter_builder.add_units_file(default_units).unwrap();
 
     // Check for user units.toml
     // Create a temporary context to find the file
