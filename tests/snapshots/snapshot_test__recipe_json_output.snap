@@ -1,6 +1,5 @@
 ---
 source: tests/snapshot_test.rs
-assertion_line: 50
 expression: formatted
 ---
 {
@@ -25,8 +24,8 @@ expression: formatted
       "name": "water",
       "note": null,
       "quantity": {
-        "scalable": false,
-        "unit": "c",
+        "scalable": true,
+        "unit": "cups",
         "value": {
           "type": "number",
           "value": {
@@ -51,7 +50,7 @@ expression: formatted
       "name": "salt",
       "note": null,
       "quantity": {
-        "scalable": false,
+        "scalable": true,
         "unit": "tsp",
         "value": {
           "type": "number",
@@ -77,7 +76,7 @@ expression: formatted
       "name": "pasta",
       "note": null,
       "quantity": {
-        "scalable": false,
+        "scalable": true,
         "unit": "g",
         "value": {
           "type": "number",

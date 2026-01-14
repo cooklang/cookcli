@@ -1,6 +1,5 @@
 ---
 source: tests/snapshot_test.rs
-assertion_line: 92
 expression: stdout
 ---
 ---
@@ -13,8 +12,8 @@ name: Pancakes
 
 ## Ingredients
 
-- *2 c* flour
-- *1 1/2 c* milk
+- *2 cups* flour
+- *1.5 cups* milk
 - *2* eggs
 - *2 tbsp* sugar
 

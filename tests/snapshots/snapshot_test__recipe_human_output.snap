@@ -1,6 +1,5 @@
 ---
 source: tests/snapshot_test.rs
-assertion_line: 24
 expression: stdout
 ---
  Simple Recipe 
@@ -8,7 +7,7 @@ expression: stdout
 servings: 2
 
 Ingredients:
-  water      2 c
+  water      2 cups
   salt       1 tsp
   pasta      200 g
 
@@ -18,4 +17,4 @@ Cookware:
 Steps:
  1. Boil water for 5 minutes. Add salt and pasta. Cook in a pot for another
     10 minutes.
-     [water: 2 c, salt: 1 tsp, pasta: 200 g]
+     [water: 2 cups, salt: 1 tsp, pasta: 200 g]
