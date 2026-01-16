@@ -2,7 +2,7 @@
 
 * Install a syntax highlighting package for your text editor. We have packages for SublimeText and VSCode. See  [cooklang.org](https://cooklang.org/docs/syntax-highlighting/) for full instructions.
 * Add your own recipes. Dive into the Cook ecoysystem and discover how easy it is to write in CookLang. It's the best way to learn the [CookLang syntax](https://cooklang.org/docs/spec/).
-* Check out the [examples](https://cooklang.org/docs/examples/) page with linked user examples.
+* Check out the [use-cases](https://cooklang.org/docs/use-cases/) and user created recipes in [aggregator](https://recipes.cooklang.org/browse).
 
 ### Read the recipe
 
@@ -31,7 +31,7 @@ Then open [http://127.0.0.1:9080](http://127.0.0.1:9080) in your browser.
 
 ### Automate something
 
-Explore [the docs](https://cooklang.org/cli/help/), which describe how to use CookCLI's automation tools.
+Explore [the docs](https://cooklang.org/cli/), which describe how to use CookCLI's automation tools.
 
 ### Customize your instance
 
