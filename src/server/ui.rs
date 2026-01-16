@@ -221,9 +221,33 @@ async fn recipe_page(
     let mut cookware = Vec::new();
     let mut sections = Vec::new();
 
-    for ingredient in recipe.group_ingredients(crate::util::PARSER.converter()) {
-        let ingredient = ingredient.ingredient;
-        let reference_path = ingredient.reference.as_ref().map(|r| {
+    // Group ingredients by display name and merge quantities
+    let mut grouped_ingredients: std::collections::HashMap<
+        String,
+        (cooklang::quantity::GroupedQuantity, Vec<&cooklang::model::Ingredient>),
+    > = std::collections::HashMap::new();
+
+    for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
+        let ingredient = entry.ingredient;
+        let display_name = ingredient.display_name().to_string();
+
+        grouped_ingredients
+            .entry(display_name)
+            .and_modify(|(merged_qty, igrs)| {
+                merged_qty.merge(&entry.quantity, crate::util::PARSER.converter());
+                igrs.push(ingredient);
+            })
+            .or_insert_with(|| (entry.quantity.clone(), vec![ingredient]));
+    }
+
+    // Sort by name for consistent display
+    let mut sorted_ingredients: Vec<_> = grouped_ingredients.into_iter().collect();
+    sorted_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (display_name, (quantity, ingredient_list)) in sorted_ingredients {
+        // Use the first ingredient's data for reference path and notes
+        let first_ingredient = ingredient_list[0];
+        let reference_path = first_ingredient.reference.as_ref().map(|r| {
             // For web URLs - always use forward slash
             if r.components.is_empty() {
                 r.name.clone()
@@ -232,17 +256,45 @@ async fn recipe_page(
             }
         });
 
+        // Combine notes from all ingredients
+        let combined_note = if ingredient_list.len() > 1 {
+            let notes: Vec<_> = ingredient_list
+                .iter()
+                .filter_map(|i| i.note.as_ref())
+                .collect();
+            if notes.is_empty() {
+                None
+            } else {
+                Some(notes.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", "))
+            }
+        } else {
+            first_ingredient.note.clone()
+        };
+
+        // Format the merged quantity - show all quantities comma-separated
+        let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
+            (None, None)
+        } else {
+            let quantities: Vec<_> = quantity
+                .iter()
+                .map(|q| {
+                    let qty_str = crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                    let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
+                    if unit_str.is_empty() {
+                        qty_str
+                    } else {
+                        format!("{} {}", qty_str, unit_str)
+                    }
+                })
+                .collect();
+            (Some(quantities.join(", ")), None)
+        };
+
         ingredients.push(IngredientData {
-            name: ingredient.name.to_string(),
-            quantity: ingredient
-                .quantity
-                .as_ref()
-                .and_then(|q| crate::util::format::format_quantity(q.value())),
-            unit: ingredient
-                .quantity
-                .as_ref()
-                .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
-            note: ingredient.note.clone(),
+            name: display_name,
+            quantity: formatted_quantity,
+            unit: formatted_unit,
+            note: combined_note,
             reference_path,
         });
     }
@@ -382,33 +434,98 @@ async fn recipe_page(
         if !section_items.is_empty() {
             use crate::server::templates::RecipeSection;
 
-            // Collect ingredients used in this section
-            let mut section_ingredients = Vec::new();
+            // Collect and group ingredients used in this section
+            let mut section_grouped_ingredients: std::collections::HashMap<
+                String,
+                (cooklang::quantity::GroupedQuantity, Vec<&cooklang::model::Ingredient>),
+            > = std::collections::HashMap::new();
+
             for idx in section_ingredient_indices {
                 if let Some(ingredient) = recipe.ingredients.get(idx) {
-                    let reference_path = ingredient.reference.as_ref().map(|r| {
-                        // For web URLs - always use forward slash
-                        if r.components.is_empty() {
-                            r.name.clone()
-                        } else {
-                            format!("{}/{}", r.components.join("/"), r.name)
-                        }
-                    });
+                    let display_name = ingredient.display_name().to_string();
+                    let qty = if let Some(q) = &ingredient.quantity {
+                        let mut grouped_qty = cooklang::quantity::GroupedQuantity::empty();
+                        grouped_qty.add(q, crate::util::PARSER.converter());
+                        grouped_qty
+                    } else {
+                        cooklang::quantity::GroupedQuantity::empty()
+                    };
 
-                    section_ingredients.push(IngredientData {
-                        name: ingredient.name.to_string(),
-                        quantity: ingredient
-                            .quantity
-                            .as_ref()
-                            .and_then(|q| crate::util::format::format_quantity(q.value())),
-                        unit: ingredient
-                            .quantity
-                            .as_ref()
-                            .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
-                        note: ingredient.note.clone(),
-                        reference_path,
-                    });
+                    section_grouped_ingredients
+                        .entry(display_name)
+                        .and_modify(|(merged_qty, igrs)| {
+                            if let Some(q) = &ingredient.quantity {
+                                merged_qty.add(q, crate::util::PARSER.converter());
+                            }
+                            igrs.push(ingredient);
+                        })
+                        .or_insert_with(|| (qty, vec![ingredient]));
                 }
+            }
+
+            // Sort section ingredients by name
+            let mut sorted_section_ingredients: Vec<_> =
+                section_grouped_ingredients.into_iter().collect();
+            sorted_section_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
+
+            let mut section_ingredients = Vec::new();
+            for (display_name, (quantity, ingredient_list)) in sorted_section_ingredients {
+                let first_ingredient = ingredient_list[0];
+                let reference_path = first_ingredient.reference.as_ref().map(|r| {
+                    // For web URLs - always use forward slash
+                    if r.components.is_empty() {
+                        r.name.clone()
+                    } else {
+                        format!("{}/{}", r.components.join("/"), r.name)
+                    }
+                });
+
+                // Combine notes from all ingredients in the section
+                let combined_note = if ingredient_list.len() > 1 {
+                    let notes: Vec<_> = ingredient_list
+                        .iter()
+                        .filter_map(|i| i.note.as_ref())
+                        .collect();
+                    if notes.is_empty() {
+                        None
+                    } else {
+                        Some(notes.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", "))
+                    }
+                } else {
+                    first_ingredient.note.clone()
+                };
+
+                // Format the merged quantity
+                let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
+                    (None, None)
+                } else {
+                    let quantities: Vec<_> = quantity
+                        .iter()
+                        .map(|q| {
+                            let qty_str =
+                                crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                            let unit_str = q
+                                .unit()
+                                .as_ref()
+                                .map(|u| u.to_string())
+                                .unwrap_or_default();
+                            if unit_str.is_empty() {
+                                qty_str
+                            } else {
+                                format!("{} {}", qty_str, unit_str)
+                            }
+                        })
+                        .collect();
+                    (Some(quantities.join(", ")), None)
+                };
+
+                section_ingredients.push(IngredientData {
+                    name: display_name,
+                    quantity: formatted_quantity,
+                    unit: formatted_unit,
+                    note: combined_note,
+                    reference_path,
+                });
             }
 
             sections.push(RecipeSection {
