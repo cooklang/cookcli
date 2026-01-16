@@ -74,7 +74,7 @@ pub fn main() -> Result<()> {
         Command::Report(args) => report::run(&ctx, args),
         Command::Doctor(args) => doctor::run(&ctx, args),
         Command::Pantry(args) => pantry::run(&ctx, args),
-        Command::Lsp(args) => lsp::run(args),
+        Command::Lsp(args) => lsp::run(&ctx, args),
         #[cfg(feature = "self-update")]
         Command::Update(args) => update::run(args),
     }
