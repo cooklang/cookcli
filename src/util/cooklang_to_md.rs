@@ -379,7 +379,7 @@ fn cookware(
         write!(w, "- ").context("Failed to write cookware bullet")?;
         if !item.quantity.is_empty() {
             if opts.italic_amounts {
-                write!(w, "*{} * ", item.quantity).context("Failed to write italicized amount")?;
+                write!(w, "*{}* ", item.quantity).context("Failed to write italicized amount")?;
             } else {
                 write!(w, "{} ", item.quantity).context("Failed to write amount")?;
             }
