@@ -190,7 +190,7 @@ test.describe('Pantry Management', () => {
       // Go to recipes and add to shopping list
       await helpers.navigateTo('/');
 
-      const recipes = page.locator('a[href^="/recipe/"]');
+      const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
       const recipeCount = await recipes.count();
 
       if (recipeCount > 0) {
@@ -228,8 +228,8 @@ test.describe('Pantry Management', () => {
   });
 
   test('should show pantry status in recipe view', async ({ page }) => {
-    // Navigate to a real recipe
-    const recipes = page.locator('a[href^="/recipe/"]');
+    // Navigate to a real recipe (not menu)
+    const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
     const count = await recipes.count();
 
     if (count > 0) {

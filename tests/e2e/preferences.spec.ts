@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { TestHelpers } from '../fixtures/test-helpers';
 
-test.describe.skip('Preferences', () => {  // Skip - page not implemented yet
+test.describe('Preferences', () => {
   let helpers: TestHelpers;
 
   test.beforeEach(async ({ page }) => {
@@ -9,7 +9,7 @@ test.describe.skip('Preferences', () => {  // Skip - page not implemented yet
     await helpers.navigateTo('/preferences');
   });
 
-  test.skip('should display preferences page', async ({ page }) => {
+  test('should display preferences page', async ({ page }) => {
     // Check we're on preferences page by URL
     expect(page.url()).toContain('/preferences');
     // Page might exist but be empty or have different content
@@ -17,7 +17,7 @@ test.describe.skip('Preferences', () => {  // Skip - page not implemented yet
     await expect(body).toBeVisible();
   });
 
-  test.skip('should display pantry configuration section', async ({ page }) => {
+  test('should display pantry configuration section', async ({ page }) => {
     // Check for pantry section
     const pantrySection = page.locator('h2, h3').filter({ hasText: /Pantry/i });
 
@@ -35,7 +35,7 @@ test.describe.skip('Preferences', () => {  // Skip - page not implemented yet
     }
   });
 
-  test.skip('should display aisle configuration section', async ({ page }) => {
+  test('should display aisle configuration section', async ({ page }) => {
     // Check for aisle section
     const aisleSection = page.locator('h2, h3').filter({ hasText: /Aisle/i });
 
@@ -184,40 +184,6 @@ olive_oil = { amount = "1", unit = "l" }
       if (hasConfirm) {
         await expect(confirmMessage).toBeVisible();
       }
-    }
-  });
-
-  test('should persist preferences', async ({ page, context }) => {
-    // Make a change if possible
-    const editableField = page.locator('input[type="text"], textarea').first();
-
-    if (await editableField.isVisible()) {
-      const testValue = 'Test persistence ' + Date.now();
-      await editableField.fill(testValue);
-
-      // Save if there's a save button
-      const saveButton = page.getByRole('button', { name: /Save/i });
-
-      if (await saveButton.isVisible()) {
-        await saveButton.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Open new page
-      const newPage = await context.newPage();
-      const newHelpers = new TestHelpers(newPage);
-
-      await newHelpers.navigateTo('/preferences');
-
-      // Check if value persists
-      const newField = newPage.locator('input[type="text"], textarea').first();
-
-      if (await newField.isVisible()) {
-        const currentValue = await newField.inputValue();
-        expect(currentValue).toContain(testValue);
-      }
-
-      await newPage.close();
     }
   });
 

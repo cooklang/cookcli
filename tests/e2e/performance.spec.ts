@@ -20,7 +20,7 @@ test.describe('Performance', () => {
   test('should load recipe page quickly', async ({ page }) => {
     await helpers.navigateTo('/');
 
-    const recipes = page.locator('a[href^="/recipe/"]');
+    const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
     const count = await recipes.count();
 
     if (count > 0) {
@@ -41,7 +41,7 @@ test.describe('Performance', () => {
     await helpers.navigateTo('/');
 
     // Check initial render performance
-    const recipeCards = await helpers.getRecipeCards();
+    const recipeCards = helpers.getRecipeCards();
     const cardCount = await recipeCards.count();
 
     // Even with many recipes, should render quickly
@@ -76,7 +76,7 @@ test.describe('Performance', () => {
   test('should scale recipes quickly', async ({ page }) => {
     await helpers.navigateTo('/');
 
-    const recipes = page.locator('a[href^="/recipe/"]');
+    const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
     const count = await recipes.count();
 
     if (count > 0) {
@@ -104,7 +104,7 @@ test.describe('Performance', () => {
   test('should add to shopping list quickly', async ({ page }) => {
     await helpers.navigateTo('/');
 
-    const recipes = page.locator('a[href^="/recipe/"]');
+    const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
     const count = await recipes.count();
 
     if (count > 0) {
@@ -126,44 +126,6 @@ test.describe('Performance', () => {
         expect(true).toBe(true);
       }
     } else {
-      expect(true).toBe(true);
-    }
-  });
-
-  test.skip('should have acceptable memory usage', async ({ page }) => {
-    // Skip - memory usage varies by system
-    if (page.context().browser()?.browserType().name() === 'chromium') {
-      await helpers.navigateTo('/');
-
-      // Navigate through several pages
-      const recipes = page.locator('a[href^="/recipe/"]');
-      const count = await recipes.count();
-      const maxToTest = Math.min(count, 3);
-
-      for (let i = 0; i < maxToTest; i++) {
-        await recipes.nth(i).click();
-        await page.waitForLoadState('networkidle');
-        await page.goBack();
-        await page.waitForLoadState('networkidle');
-      }
-
-      // Check memory usage
-      const metrics = await page.evaluate(() => {
-        if ('memory' in performance) {
-          return (performance as any).memory;
-        }
-        return null;
-      });
-
-      if (metrics) {
-        // Used JS heap should be reasonable (less than 100MB for more tolerance)
-        expect(metrics.usedJSHeapSize).toBeLessThan(100 * 1024 * 1024);
-      } else {
-        // Memory API not available
-        expect(true).toBe(true);
-      }
-    } else {
-      // Not chromium
       expect(true).toBe(true);
     }
   });
@@ -252,7 +214,7 @@ test.describe('Performance', () => {
     await helpers.navigateTo('/');
 
     // Add multiple recipes to shopping list
-    const recipes = await helpers.getRecipeCards();
+    const recipes = helpers.getRecipeCards();
     const count = Math.min(await recipes.count(), 3);
 
     for (let i = 0; i < count; i++) {

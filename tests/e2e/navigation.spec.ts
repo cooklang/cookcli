@@ -14,7 +14,7 @@ test.describe('Navigation', () => {
     await expect(page.locator('h1')).toContainText(/Recipe/);
 
     // Check if recipe cards are displayed
-    const recipeCards = await helpers.getRecipeCards();
+    const recipeCards = helpers.getRecipeCards();
     const count = await recipeCards.count();
     expect(count).toBeGreaterThan(0);
   });

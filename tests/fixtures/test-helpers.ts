@@ -116,7 +116,7 @@ export class TestHelpers {
   /**
    * Get all recipe cards on the page
    */
-  async getRecipeCards() {
+  getRecipeCards() {
     return this.page.locator('.recipe-card');
   }
 
@@ -154,7 +154,7 @@ export class TestHelpers {
    * Get shopping list items count
    */
   async getShoppingListCount() {
-    const items = await this.page.locator('#shopping-list li').count();
+    const items = await this.page.locator('#list-content li').count();
     return items;
   }
 
@@ -254,15 +254,15 @@ export class ShoppingListPage {
   constructor(private page: Page, private helpers: TestHelpers) {}
 
   async getItems() {
-    return this.page.locator('#shopping-list li label').allTextContents();
+    return this.page.locator('#list-content li label .item-name').allTextContents();
   }
 
   async getCheckedItems() {
-    return this.page.locator('#shopping-list li input:checked + label').allTextContents();
+    return this.page.locator('#list-content li input:checked + label .item-name').allTextContents();
   }
 
   async getUncheckedItems() {
-    return this.page.locator('#shopping-list li input:not(:checked) + label').allTextContents();
+    return this.page.locator('#list-content li input:not(:checked) + label .item-name').allTextContents();
   }
 
   async toggleItem(itemText: string) {
