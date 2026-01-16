@@ -39,7 +39,7 @@ use crate::{doctor, import, pantry, recipe, report, search, seed, server, shoppi
     author,
     version = concat!(env!("CARGO_PKG_VERSION"), " - in food we trust"),
     about,
-    after_help = "Docs: https://cooklang.org/cli/help/"
+    after_help = "Docs: https://cooklang.org/cli/"
 )]
 pub struct CliArgs {
     /// Increase verbosity (-v for info, -vv for debug, -vvv for trace)
