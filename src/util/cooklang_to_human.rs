@@ -266,7 +266,10 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
         return Ok(());
     }
     writeln!(w, "Ingredients:")?;
-    let mut table = Table::new("  {:<} {:<}    {:<} {:<} {:<}");
+
+    // Group ingredients by display name and merge quantities
+    let mut grouped: HashMap<String, (cooklang::quantity::GroupedQuantity, Vec<&Ingredient>)> = HashMap::new();
+
     for entry in recipe.group_ingredients(converter) {
         let GroupedIngredient {
             ingredient: igr,
@@ -274,12 +277,32 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
             ..
         } = entry;
 
+        let display_name = igr.display_name().to_string();
+        grouped.entry(display_name)
+            .and_modify(|(merged_qty, igrs)| {
+                merged_qty.merge(&quantity, converter);
+                igrs.push(igr);
+            })
+            .or_insert_with(|| {
+                (quantity.clone(), vec![igr])
+            });
+    }
+
+    // Sort by name for consistent display
+    let mut sorted_ingredients: Vec<_> = grouped.into_iter().collect();
+    sorted_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut table = Table::new("  {:<} {:<}    {:<} {:<} {:<}");
+    for (display_name, (quantity, ingredients)) in sorted_ingredients {
         let outcome_style = yansi::Style::new();
         let outcome_char = "";
 
-        let mut row = Row::new().with_cell(igr.display_name());
+        let mut row = Row::new().with_cell(display_name);
 
-        if igr.reference.is_some() {
+        // Show reference if any ingredient has one
+        let has_reference = ingredients.iter().any(|igr| igr.reference.is_some());
+        if has_reference {
+            let igr = ingredients.iter().find(|igr| igr.reference.is_some()).unwrap();
             let sep = std::path::MAIN_SEPARATOR.to_string();
             let path = igr.reference.as_ref().unwrap().components.join(&sep);
             row.add_ansi_cell(
@@ -289,7 +312,9 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
             row.add_cell("");
         }
 
-        if igr.modifiers().is_optional() {
+        // Mark as optional only if ALL occurrences are optional
+        let all_optional = ingredients.iter().all(|igr| igr.modifiers().is_optional());
+        if all_optional {
             row.add_ansi_cell("(optional)".paint(styles().opt_marker));
         } else {
             row.add_cell("");
@@ -303,8 +328,16 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
 
         row.add_ansi_cell(format!("{content}{}", outcome_char.paint(outcome_style)));
 
-        if let Some(note) = &igr.note {
-            row.add_cell(format!("({note})"));
+        // Combine notes from all ingredients
+        let notes: Vec<_> = ingredients.iter()
+            .filter_map(|igr| igr.note.as_ref())
+            .collect();
+        if !notes.is_empty() {
+            let combined_notes = notes.iter()
+                .map(|n| n.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            row.add_cell(format!("({combined_notes})"));
         } else {
             row.add_cell("");
         }

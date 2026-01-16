@@ -1,14 +1,22 @@
 ---
 source: tests/snapshot_test.rs
-assertion_line: 236
 expression: sorted_output
 ---
 📄 with_errors.cook
-  ⚠️  Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
-=== Recipe References ===
+  ❌ Missing reference: ./nonexistent
 
 📄 with_errors.cook
-  ❌ Missing reference: ./nonexistent
+Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
+  ╭─[with_errors.cook]
+  │
+1 │ >> title: Recipe with Errors
+  ┆   ──────────────────────────
+──╯
+Help: Replace the entries with this at the top of the document:
+---
+title: Recipe with Errors
+---
+=== Recipe References ===
 
 === Validation Summary ===
 Total recipes scanned: 5
