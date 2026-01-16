@@ -88,9 +88,7 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
         ));
     }
 
-    let (mut recipe, _warnings) = parsed
-        .into_result()
-        .expect("already checked for errors");
+    let (mut recipe, _warnings) = parsed.into_result().expect("already checked for errors");
 
     // Scale the recipe
     recipe.scale(scaling_factor, PARSER.converter());
@@ -249,9 +247,8 @@ pub fn extract_ingredients(
                         ));
                     }
 
-                    let (mut recipe, _warnings) = parsed
-                        .into_result()
-                        .expect("already checked for errors");
+                    let (mut recipe, _warnings) =
+                        parsed.into_result().expect("already checked for errors");
 
                     // Use the new scale_to_target function
                     tracing::debug!(

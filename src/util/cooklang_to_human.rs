@@ -268,7 +268,8 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
     writeln!(w, "Ingredients:")?;
 
     // Group ingredients by display name and merge quantities
-    let mut grouped: HashMap<String, (cooklang::quantity::GroupedQuantity, Vec<&Ingredient>)> = HashMap::new();
+    let mut grouped: HashMap<String, (cooklang::quantity::GroupedQuantity, Vec<&Ingredient>)> =
+        HashMap::new();
 
     for entry in recipe.group_ingredients(converter) {
         let GroupedIngredient {
@@ -278,14 +279,13 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
         } = entry;
 
         let display_name = igr.display_name().to_string();
-        grouped.entry(display_name)
+        grouped
+            .entry(display_name)
             .and_modify(|(merged_qty, igrs)| {
                 merged_qty.merge(&quantity, converter);
                 igrs.push(igr);
             })
-            .or_insert_with(|| {
-                (quantity.clone(), vec![igr])
-            });
+            .or_insert_with(|| (quantity.clone(), vec![igr]));
     }
 
     // Sort by name for consistent display
@@ -302,7 +302,10 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
         // Show reference if any ingredient has one
         let has_reference = ingredients.iter().any(|igr| igr.reference.is_some());
         if has_reference {
-            let igr = ingredients.iter().find(|igr| igr.reference.is_some()).unwrap();
+            let igr = ingredients
+                .iter()
+                .find(|igr| igr.reference.is_some())
+                .unwrap();
             let sep = std::path::MAIN_SEPARATOR.to_string();
             let path = igr.reference.as_ref().unwrap().components.join(&sep);
             row.add_ansi_cell(
@@ -329,11 +332,13 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
         row.add_ansi_cell(format!("{content}{}", outcome_char.paint(outcome_style)));
 
         // Combine notes from all ingredients
-        let notes: Vec<_> = ingredients.iter()
+        let notes: Vec<_> = ingredients
+            .iter()
             .filter_map(|igr| igr.note.as_ref())
             .collect();
         if !notes.is_empty() {
-            let combined_notes = notes.iter()
+            let combined_notes = notes
+                .iter()
                 .map(|n| n.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");

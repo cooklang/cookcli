@@ -224,7 +224,10 @@ async fn recipe_page(
     // Group ingredients by display name and merge quantities
     let mut grouped_ingredients: std::collections::HashMap<
         String,
-        (cooklang::quantity::GroupedQuantity, Vec<&cooklang::model::Ingredient>),
+        (
+            cooklang::quantity::GroupedQuantity,
+            Vec<&cooklang::model::Ingredient>,
+        ),
     > = std::collections::HashMap::new();
 
     for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
@@ -265,7 +268,13 @@ async fn recipe_page(
             if notes.is_empty() {
                 None
             } else {
-                Some(notes.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", "))
+                Some(
+                    notes
+                        .iter()
+                        .map(|n| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
             }
         } else {
             first_ingredient.note.clone()
@@ -278,7 +287,8 @@ async fn recipe_page(
             let quantities: Vec<_> = quantity
                 .iter()
                 .map(|q| {
-                    let qty_str = crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                    let qty_str =
+                        crate::util::format::format_quantity(q.value()).unwrap_or_default();
                     let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                     if unit_str.is_empty() {
                         qty_str
@@ -437,7 +447,10 @@ async fn recipe_page(
             // Collect and group ingredients used in this section
             let mut section_grouped_ingredients: std::collections::HashMap<
                 String,
-                (cooklang::quantity::GroupedQuantity, Vec<&cooklang::model::Ingredient>),
+                (
+                    cooklang::quantity::GroupedQuantity,
+                    Vec<&cooklang::model::Ingredient>,
+                ),
             > = std::collections::HashMap::new();
 
             for idx in section_ingredient_indices {
@@ -489,7 +502,13 @@ async fn recipe_page(
                     if notes.is_empty() {
                         None
                     } else {
-                        Some(notes.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", "))
+                        Some(
+                            notes
+                                .iter()
+                                .map(|n| n.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        )
                     }
                 } else {
                     first_ingredient.note.clone()
@@ -504,11 +523,8 @@ async fn recipe_page(
                         .map(|q| {
                             let qty_str =
                                 crate::util::format::format_quantity(q.value()).unwrap_or_default();
-                            let unit_str = q
-                                .unit()
-                                .as_ref()
-                                .map(|u| u.to_string())
-                                .unwrap_or_default();
+                            let unit_str =
+                                q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                             if unit_str.is_empty() {
                                 qty_str
                             } else {
