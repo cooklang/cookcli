@@ -212,21 +212,6 @@ For JSON and YAML outputs, use `--pretty` for formatted output:
 cook recipe "Neapolitan Pizza" -f json --pretty
 ```
 
-## Recipe Discovery
-
-CookCLI can find recipes by name without the full path:
-
-```bash
-# Searches in current directory and subdirectories
-cook recipe "Pizza"
-
-# Automatically adds .cook extension
-cook recipe "Pasta Carbonara"
-
-# Searches in recipe directories
-cook recipe "Neapolitan Pizza"
-```
-
 ## Advanced Examples
 
 ### Recipe Analysis Pipeline
