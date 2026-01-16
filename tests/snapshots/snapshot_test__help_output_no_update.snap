@@ -17,6 +17,7 @@ Commands:
   report         Generate custom reports from recipes using templates
   doctor         Analyze your recipe collection for issues and improvements
   pantry         Manage and analyze your pantry inventory
+  lsp            Start the Cooklang Language Server Protocol (LSP) server
   help           Print this message or the help of the given subcommand(s)
 
 Options:

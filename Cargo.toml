@@ -39,6 +39,7 @@ clap = { version = "4.5", features = ["derive"] }
 cooklang = { version = "0.17.4", default-features = false, features = ["aisle", "pantry"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.8.7"
+cooklang-language-server = "0.1.0"
 cooklang-reports = { version = "0.2" }
 directories = "6"
 fluent = "0.16"
@@ -61,6 +62,7 @@ tokio = { version = "1", features = ["full"] }
 toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
+tower-lsp = "0.20"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unic-langid = "0.9"

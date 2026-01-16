@@ -32,7 +32,7 @@ use clap::{Parser, Subcommand};
 
 #[cfg(feature = "self-update")]
 use crate::update;
-use crate::{doctor, import, pantry, recipe, report, search, seed, server, shopping_list};
+use crate::{doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -192,6 +192,26 @@ pub enum Command {
         long_about = "Manage pantry inventory and find recipes based on available ingredients"
     )]
     Pantry(pantry::PantryArgs),
+
+    /// Start the Cooklang Language Server Protocol (LSP) server
+    ///
+    /// Launches an LSP server that provides IDE features for Cooklang recipe files.
+    /// The server communicates over stdin/stdout using the standard LSP protocol,
+    /// enabling integration with editors like VS Code, Neovim, Emacs, and others.
+    ///
+    /// Features include:
+    ///   - Real-time syntax checking and validation
+    ///   - Auto-completion for ingredients, cookware, and timers
+    ///   - Semantic syntax highlighting
+    ///   - Hover documentation
+    ///   - Document symbols and navigation
+    ///
+    /// Examples:
+    ///   cook lsp                         # Start the LSP server
+    #[command(
+        long_about = "Start the Language Server Protocol server for Cooklang editor integration"
+    )]
+    Lsp(lsp::LspArgs),
 
     /// Update CookCLI to the latest version
     ///
