@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use cooklang_language_server::Backend;
 use tower_lsp::{LspService, Server};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::Context;
 
@@ -12,11 +12,25 @@ pub struct LspArgs {}
 
 /// Start the Cooklang Language Server Protocol server.
 ///
-/// The Context parameter is included for consistency with other commands
-/// and future extensibility (e.g., accessing aisle.conf, pantry.conf, or base_path).
+/// Note: The LSP server receives workspace configuration from the editor during
+/// the LSP initialization handshake. The editor sends workspace folders, and the
+/// server loads aisle.conf from those locations. The Context paths logged below
+/// are for debugging and future extensibility when the upstream cooklang-language-server
+/// crate supports custom configuration paths.
 #[tokio::main]
-pub async fn run(_ctx: &Context, _args: LspArgs) -> Result<()> {
+pub async fn run(ctx: &Context, _args: LspArgs) -> Result<()> {
     info!("Starting Cooklang LSP server");
+
+    // Log available configuration paths for debugging
+    // Currently the LSP server uses workspace paths from the editor,
+    // but these could be used in the future for global config support
+    debug!("Base path: {}", ctx.base_path());
+    if let Some(aisle) = ctx.aisle() {
+        debug!("Aisle config: {}", aisle);
+    }
+    if let Some(pantry) = ctx.pantry() {
+        debug!("Pantry config: {}", pantry);
+    }
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
