@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.20.0](https://github.com/cooklang/cookcli/compare/v0.19.3...v0.20.0) (2026-01-16)
+
+
+### Features
+
+* add cook lsp subcommand for language server support ([2d12e09](https://github.com/cooklang/cookcli/commit/2d12e09fdafd53e98abe958efa51799ad6873ae3))
+* also publish in crate ([e42ed51](https://github.com/cooklang/cookcli/commit/e42ed5169488a5c21b10336bf0020c6944c10127))
+* combine duplicate ingredients in recipe display ([debdbf0](https://github.com/cooklang/cookcli/commit/debdbf06de58e8c8723a8c249fe1d466ecd946bc))
+* combine duplicate ingredients in web UI recipe display ([5f57b18](https://github.com/cooklang/cookcli/commit/5f57b181aa6826ae7a71b696d633d7897ff03050))
+* log context paths in LSP for debugging ([8d372cd](https://github.com/cooklang/cookcli/commit/8d372cd9a29adf9b215ea0da085e6604946d1ca9))
+
+
+### Bug Fixes
+
+* display more context for errors ([5b0126a](https://github.com/cooklang/cookcli/commit/5b0126ab98d05bc377c2023d50132757c6e4d73b))
+* extra space removed [#226](https://github.com/cooklang/cookcli/issues/226) ([4723b2d](https://github.com/cooklang/cookcli/commit/4723b2df40f9655a6b2bcfd4ecff9bb936ed45f3))
+
 ## [0.19.3](https://github.com/cooklang/cookcli/compare/v0.19.2...v0.19.3) (2026-01-04)
 
 
