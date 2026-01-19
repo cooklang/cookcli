@@ -25,3 +25,10 @@ label-time = Temps
 label-difficulty = Difficulté
 label-name = Nom
 label-description = Description
+
+# Editor
+editor-unsaved-changes = Modifications non enregistrées
+editor-saved = Enregistré
+editor-saving = Enregistrement...
+editor-save-failed = Échec de l'enregistrement
+editor-placeholder = Entrez votre recette ici...

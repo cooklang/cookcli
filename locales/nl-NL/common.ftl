@@ -25,3 +25,10 @@ label-time = Tijd
 label-difficulty = Moeilijkheidsgraad
 label-name = Naam
 label-description = Beschrijving
+
+# Editor
+editor-unsaved-changes = Niet-opgeslagen wijzigingen
+editor-saved = Opgeslagen
+editor-saving = Opslaan...
+editor-save-failed = Opslaan mislukt
+editor-placeholder = Voer hier uw recept in...
