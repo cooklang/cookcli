@@ -27,24 +27,23 @@
     </div>
 
     <!-- Editor area -->
-    <div class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden">
-        <textarea
-            id="editor"
-            class="w-full h-full p-6 font-mono text-sm resize-none focus:outline-none"
-            spellcheck="false"
-            placeholder="Enter your recipe here...">{{ content }}</textarea>
-    </div>
+    <div id="editor-container" class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden"></div>
 </div>
 
+<script src="/static/js/editor.bundle.js"></script>
 <script>
 const recipePath = {{ recipe_path|json }};
-let originalContent = document.getElementById('editor').value;
+let originalContent = {{ content|json }};
 let hasUnsavedChanges = false;
+let editorView = null;
 
-// Track changes
-document.getElementById('editor').addEventListener('input', function() {
-    hasUnsavedChanges = this.value !== originalContent;
-    updateSaveStatus();
+// Initialize CodeMirror editor
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('editor-container');
+    editorView = window.CooklangEditor.initEditor(container, originalContent, function(newContent) {
+        hasUnsavedChanges = newContent !== originalContent;
+        updateSaveStatus();
+    });
 });
 
 function updateSaveStatus() {
@@ -59,7 +58,7 @@ function updateSaveStatus() {
 }
 
 async function saveRecipe() {
-    const content = document.getElementById('editor').value;
+    const content = window.CooklangEditor.getContent(editorView);
     const saveBtn = document.getElementById('save-btn');
     const status = document.getElementById('save-status');
 
