@@ -32,6 +32,6 @@ test:
 clean:
 	cargo clean
 	rm -rf static/css/tailwind.css
-	rm -rf static/js/bundle.js
+	rm -rf static/js/editor.bundle.js
 
 .PHONY: all build release dev_server test clean css js assets dev_assets

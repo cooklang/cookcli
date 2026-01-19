@@ -26,6 +26,10 @@ export const cooklang = StreamLanguage.define({
     state.afterSection = false;
 
     if (sol) {
+      // Reset single-line states at start of new line
+      state.inNote = false;
+      state.inMetadata = false;
+
       if (state.nextMultiline) {
         state.inMultiline = true;
         state.nextMultiline = false;
