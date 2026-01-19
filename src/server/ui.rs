@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Router,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use fluent_templates::Loader;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -17,6 +17,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/", get(recipes_page))
         .route("/directory/*path", get(recipes_directory))
         .route("/recipe/*path", get(recipe_page))
+        .route("/edit/*path", get(edit_page))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
@@ -640,6 +641,61 @@ async fn recipe_page(
     };
 
     Ok(template.into_response())
+}
+
+async fn edit_page(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+    tracing::info!("Edit page requested for path: {}", path);
+
+    // Validate path to prevent directory traversal
+    let path_check = Utf8Path::new(&path);
+    if !path_check
+        .components()
+        .all(|c| matches!(c, Utf8Component::Normal(_)))
+    {
+        tracing::error!("Invalid path: {path}");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let recipe_path = Utf8PathBuf::from(&path);
+
+    // Find the actual file
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|_| {
+        tracing::error!("Recipe not found: {path}");
+        StatusCode::NOT_FOUND
+    })?;
+
+    let file_path = entry.path().ok_or_else(|| {
+        tracing::error!("Recipe has no file path: {path}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Read raw content
+    let content = std::fs::read_to_string(file_path).map_err(|e| {
+        tracing::error!("Failed to read recipe file: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Get recipe name from path
+    let recipe_name = path
+        .split('/')
+        .next_back()
+        .unwrap_or(&path)
+        .replace(".cook", "")
+        .replace(".menu", "");
+
+    let template = crate::server::templates::EditTemplate {
+        active: "recipes".to_string(),
+        recipe_name,
+        recipe_path: path,
+        content,
+        tr: crate::server::templates::Tr::new(lang),
+    };
+
+    Ok(template)
 }
 
 fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {
