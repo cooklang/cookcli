@@ -5,6 +5,8 @@
   "scripts": {
     "build-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify",
     "watch-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch",
+    "build-js": "esbuild static/js/src/editor.js --bundle --outfile=static/js/editor.bundle.js --format=iife --minify",
+    "watch-js": "esbuild static/js/src/editor.js --bundle --outfile=static/js/editor.bundle.js --format=iife --watch",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
