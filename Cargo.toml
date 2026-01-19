@@ -30,7 +30,7 @@ anstream = "0.6"
 anstyle = "1"
 anstyle-yansi = "2"
 anyhow = "1"
-askama = "0.12"
+askama = { version = "0.12", features = ["serde-json"] }
 askama_axum = "0.4"
 axum = { version = "0.7" }
 camino = { version = "1", features = ["serde1"] }

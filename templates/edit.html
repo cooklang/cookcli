@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Edit: {{ recipe_name }} - Cook{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-12rem)]">
+    <!-- Header bar -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+            <a href="/recipe/{{ recipe_path }}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                {{ tr.t("action-cancel") }}
+            </a>
+            <h1 class="text-2xl font-bold text-gray-800">{{ recipe_name }}</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="save-status" class="text-sm text-gray-500"></span>
+            <button onclick="saveRecipe()" id="save-btn" class="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all shadow-md flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {{ tr.t("action-save") }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Editor area -->
+    <div class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden">
+        <textarea
+            id="editor"
+            class="w-full h-full p-6 font-mono text-sm resize-none focus:outline-none"
+            spellcheck="false"
+            placeholder="Enter your recipe here...">{{ content }}</textarea>
+    </div>
+</div>
+
+<script>
+const recipePath = {{ recipe_path|json }};
+let originalContent = document.getElementById('editor').value;
+let hasUnsavedChanges = false;
+
+// Track changes
+document.getElementById('editor').addEventListener('input', function() {
+    hasUnsavedChanges = this.value !== originalContent;
+    updateSaveStatus();
+});
+
+function updateSaveStatus() {
+    const status = document.getElementById('save-status');
+    if (hasUnsavedChanges) {
+        status.textContent = 'Unsaved changes';
+        status.className = 'text-sm text-orange-500';
+    } else {
+        status.textContent = 'Saved';
+        status.className = 'text-sm text-green-500';
+    }
+}
+
+async function saveRecipe() {
+    const content = document.getElementById('editor').value;
+    const saveBtn = document.getElementById('save-btn');
+    const status = document.getElementById('save-status');
+
+    saveBtn.disabled = true;
+    status.textContent = 'Saving...';
+    status.className = 'text-sm text-gray-500';
+
+    try {
+        const response = await fetch(`/api/recipes/${encodeURIComponent(recipePath)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'text/plain',
+            },
+            body: content
+        });
+
+        if (response.ok) {
+            originalContent = content;
+            hasUnsavedChanges = false;
+            status.textContent = 'Saved';
+            status.className = 'text-sm text-green-500';
+        } else {
+            const error = await response.text();
+            status.textContent = 'Save failed';
+            status.className = 'text-sm text-red-500';
+            alert('Failed to save: ' + error);
+        }
+    } catch (error) {
+        status.textContent = 'Save failed';
+        status.className = 'text-sm text-red-500';
+        alert('Failed to save: ' + error.message);
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+// Keyboard shortcut: Ctrl+S / Cmd+S
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveRecipe();
+    }
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// Initial status
+updateSaveStatus();
+</script>
+{% endblock %}

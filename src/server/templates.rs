@@ -103,6 +103,16 @@ pub struct PantryTemplate {
     pub tr: Tr,
 }
 
+#[derive(Template)]
+#[template(path = "edit.html")]
+pub struct EditTemplate {
+    pub active: String,
+    pub recipe_name: String,
+    pub recipe_path: String,
+    pub content: String,
+    pub tr: Tr,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PantrySection {
     pub name: String,
