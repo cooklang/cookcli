@@ -8,6 +8,7 @@ use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::io::Write;
 use std::sync::Arc;
 
 #[derive(Deserialize)]
@@ -156,6 +157,60 @@ pub async fn recipe_raw(
         tracing::error!("Failed to read recipe file {}: {}", file_path, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })
+}
+
+pub async fn recipe_save(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: String,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    check_path(&path)?;
+
+    let recipe_path = state.base_path.join(&path);
+
+    // Determine actual file path (with extension)
+    let file_path = if recipe_path.exists() {
+        recipe_path
+    } else {
+        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
+        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
+
+        if cook_path.exists() {
+            cook_path
+        } else if menu_path.exists() {
+            menu_path
+        } else {
+            // Default to .cook for new files
+            Utf8PathBuf::from(format!("{}.cook", recipe_path))
+        }
+    };
+
+    // Atomic write: write to temp file, then rename
+    let temp_path = file_path.with_extension("tmp");
+
+    let mut temp_file = std::fs::File::create(&temp_path).map_err(|e| {
+        tracing::error!("Failed to create temp file {}: {}", temp_path, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    temp_file.write_all(body.as_bytes()).map_err(|e| {
+        tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
+        let _ = std::fs::remove_file(&temp_path);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    std::fs::rename(&temp_path, &file_path).map_err(|e| {
+        tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
+        let _ = std::fs::remove_file(&temp_path);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tracing::info!("Saved recipe: {}", file_path);
+
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "path": path
+    })))
 }
 
 pub async fn reload() -> Result<Json<serde_json::Value>, StatusCode> {

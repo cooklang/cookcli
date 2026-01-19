@@ -136,7 +136,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .layer(
             CorsLayer::new()
                 .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST]),
+                .allow_methods([Method::GET, Method::POST, Method::PUT]),
         );
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
@@ -246,7 +246,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/recipes", get(handlers::all_recipes))
         .route("/recipes/raw/*path", get(handlers::recipe_raw))  // More specific route must come first
-        .route("/recipes/*path", get(handlers::recipe))
+        .route(
+            "/recipes/*path",
+            get(handlers::recipe).put(handlers::recipe_save),
+        )
         .route("/search", get(handlers::search))
         .route("/reload", get(handlers::reload).post(handlers::reload));
 
