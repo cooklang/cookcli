@@ -245,6 +245,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             axum::routing::put(handlers::update_pantry_item),
         )
         .route("/recipes", get(handlers::all_recipes))
+        .route("/recipes/raw/*path", get(handlers::recipe_raw))  // More specific route must come first
         .route("/recipes/*path", get(handlers::recipe))
         .route("/search", get(handlers::search))
         .route("/reload", get(handlers::reload).post(handlers::reload));

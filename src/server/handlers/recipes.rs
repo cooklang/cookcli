@@ -127,6 +127,37 @@ pub async fn recipe(
     Ok(Json(value))
 }
 
+pub async fn recipe_raw(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<String, StatusCode> {
+    check_path(&path)?;
+
+    let recipe_path = state.base_path.join(&path);
+
+    // Try .cook extension first, then .menu
+    let file_path = if recipe_path.exists() {
+        recipe_path
+    } else {
+        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
+        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
+
+        if cook_path.exists() {
+            cook_path
+        } else if menu_path.exists() {
+            menu_path
+        } else {
+            tracing::error!("Recipe file not found: {path}");
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    std::fs::read_to_string(&file_path).map_err(|e| {
+        tracing::error!("Failed to read recipe file {}: {}", file_path, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
 pub async fn reload() -> Result<Json<serde_json::Value>, StatusCode> {
     // Since the server reads from disk on each request, there's no cache to clear.
     // This endpoint just returns success to indicate the reload was processed.
