@@ -1,6 +1,6 @@
 all: build
 
-build: css
+build: assets
 	cargo build
 
 css:
@@ -9,10 +9,18 @@ css:
 css-watch:
 	npm run watch-css
 
-release: css
+js:
+	npm run build-js
+
+assets: css js
+
+dev_assets:
+	npm run watch-css & npm run watch-js
+
+release: assets
 	cargo build --release
 
-dev_server: css
+dev_server: assets
 	cargo run -- server ./seed --port 9080
 
 dev: css-watch
@@ -24,5 +32,6 @@ test:
 clean:
 	cargo clean
 	rm -rf static/css/tailwind.css
+	rm -rf static/js/bundle.js
 
-.PHONY: all build release dev_server test clean
+.PHONY: all build release dev_server test clean css js assets dev_assets
