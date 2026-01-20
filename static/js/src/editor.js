@@ -3,7 +3,24 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLi
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { linter } from "@codemirror/lint";
 import { cooklang } from "./cooklang-mode.js";
+
+// Diagnostics support
+let currentDiagnostics = [];
+
+export function setDiagnostics(view, diagnostics) {
+    currentDiagnostics = diagnostics;
+    // Trigger a state update to rerun the linter
+    if (view) {
+        view.dispatch({
+            effects: []
+        });
+    }
+}
+
+// Linter that returns current diagnostics
+const cooklangLinter = linter((view) => currentDiagnostics, { delay: 0 });
 
 // Custom theme for Cooklang highlighting
 const cooklangTheme = EditorView.theme({
@@ -71,6 +88,7 @@ export function initEditor(container, initialContent, onChange) {
       cooklang,
       syntaxHighlighting(defaultHighlightStyle),
       cooklangTheme,
+      cooklangLinter,
       keymap.of([
         ...defaultKeymap,
         ...historyKeymap,
@@ -109,5 +127,6 @@ export function setContent(view, content) {
 window.CooklangEditor = {
   initEditor,
   getContent,
-  setContent
+  setContent,
+  setDiagnostics
 };

@@ -240,8 +240,34 @@ function openDocument() {
 }
 
 function handleDiagnostics(params) {
-    // Will be implemented in Task 2
-    console.log('Diagnostics received:', params.diagnostics?.length || 0, 'items');
+    if (!editorView) return;
+
+    const doc = editorView.state.doc;
+    const diagnostics = (params.diagnostics || []).map(d => {
+        // Convert LSP position (0-based line/char) to CodeMirror offset
+        const startLine = Math.min(d.range.start.line + 1, doc.lines);
+        const endLine = Math.min(d.range.end.line + 1, doc.lines);
+
+        const line1 = doc.line(startLine);
+        const line2 = doc.line(endLine);
+
+        const from = line1.from + Math.min(d.range.start.character, line1.length);
+        const to = line2.from + Math.min(d.range.end.character, line2.length);
+
+        return {
+            from: Math.max(0, from),
+            to: Math.max(from, to),
+            severity: d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
+            message: d.message
+        };
+    });
+
+    window.CooklangEditor.setDiagnostics(editorView, diagnostics);
+
+    // Update status bar
+    const errorCount = diagnostics.filter(d => d.severity === 'error').length;
+    const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+    console.log(`Diagnostics: ${errorCount} errors, ${warningCount} warnings`);
 }
 
 function handleLspMessage(message) {
