@@ -145,6 +145,7 @@ let lspMessageId = 1;
 let documentUri = null;
 let documentVersion = 0;
 let lspInitialized = false;
+let pendingCompletions = new Map();
 
 function connectLsp() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -271,8 +272,17 @@ function handleDiagnostics(params) {
 }
 
 function handleLspMessage(message) {
-    if (message.id !== undefined && message.result !== undefined) {
-        console.log('LSP response:', message);
+    if (message.id !== undefined) {
+        // Check for pending completion request
+        if (pendingCompletions.has(message.id)) {
+            const resolve = pendingCompletions.get(message.id);
+            pendingCompletions.delete(message.id);
+            const items = message.result?.items || message.result || [];
+            resolve(items);
+            return;
+        }
+
+        // Handle other responses
         if (message.result && message.result.capabilities) {
             sendLspNotification('initialized', {});
             lspInitialized = true;
@@ -314,5 +324,33 @@ function updateLspStatus(status) {
 
 // Connect to LSP after editor is initialized
 setTimeout(connectLsp, 500);
+
+// Set up completion resolver
+window.CooklangEditor.setCompletionResolver(async (line, character) => {
+    return new Promise((resolve) => {
+        if (!lspInitialized || !documentUri) {
+            resolve([]);
+            return;
+        }
+
+        const id = sendLspRequest('textDocument/completion', {
+            textDocument: { uri: documentUri },
+            position: { line: line, character: character }
+        });
+
+        if (id) {
+            pendingCompletions.set(id, resolve);
+            // Timeout after 2 seconds
+            setTimeout(() => {
+                if (pendingCompletions.has(id)) {
+                    pendingCompletions.delete(id);
+                    resolve([]);
+                }
+            }, 2000);
+        } else {
+            resolve([]);
+        }
+    });
+});
 </script>
 {% endblock %}

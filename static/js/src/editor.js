@@ -4,6 +4,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter } from "@codemirror/lint";
+import { autocompletion } from "@codemirror/autocomplete";
 import { cooklang } from "./cooklang-mode.js";
 
 // Diagnostics support
@@ -21,6 +22,48 @@ export function setDiagnostics(view, diagnostics) {
 
 // Linter that returns current diagnostics
 const cooklangLinter = linter((view) => currentDiagnostics, { delay: 0 });
+
+// Completion support
+let completionResolver = null;
+
+export function setCompletionResolver(resolver) {
+    completionResolver = resolver;
+}
+
+// Async completion source for Cooklang
+async function cooklangCompletions(context) {
+    if (!completionResolver) return null;
+
+    const pos = context.pos;
+    const line = context.state.doc.lineAt(pos);
+    const textBefore = line.text.slice(0, pos - line.from);
+
+    // Check for trigger characters (@, #, ~)
+    const match = textBefore.match(/[@#~]([a-zA-Z0-9_]*)$/);
+    if (!match) return null;
+
+    const prefix = match[1];
+    const from = pos - prefix.length;
+    const triggerChar = match[0][0];
+
+    try {
+        const items = await completionResolver(line.number - 1, pos - line.from);
+        if (!items || items.length === 0) return null;
+
+        return {
+            from: from,
+            options: items.map(item => ({
+                label: item.label,
+                type: item.kind === 6 ? 'variable' : item.kind === 14 ? 'keyword' : 'text',
+                detail: item.detail || '',
+                apply: item.insertText || item.label
+            }))
+        };
+    } catch (e) {
+        console.error('Completion error:', e);
+        return null;
+    }
+}
 
 // Custom theme for Cooklang highlighting
 const cooklangTheme = EditorView.theme({
@@ -89,6 +132,10 @@ export function initEditor(container, initialContent, onChange) {
       syntaxHighlighting(defaultHighlightStyle),
       cooklangTheme,
       cooklangLinter,
+      autocompletion({
+        override: [cooklangCompletions],
+        activateOnTyping: true
+      }),
       keymap.of([
         ...defaultKeymap,
         ...historyKeymap,
@@ -128,5 +175,6 @@ window.CooklangEditor = {
   initEditor,
   getContent,
   setContent,
-  setDiagnostics
+  setDiagnostics,
+  setCompletionResolver
 };
