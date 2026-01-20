@@ -15,7 +15,8 @@ export const cooklang = StreamLanguage.define({
       inFrontmatter: false,
       inMetadata: false,
       inNote: false,
-      inComment: false
+      inComment: false,
+      afterAmount: false  // Track if we just closed a {} to look for (prep)
     };
   },
 
@@ -57,6 +58,12 @@ export const cooklang = StreamLanguage.define({
     if (state.inFrontmatter) {
       stream.skipToEnd();
       return "meta";
+    }
+
+    // Sections (= Section Name, == Section ==, etc.)
+    if (sol && stream.match(/^=+/)) {
+      stream.skipToEnd();
+      return "heading";
     }
 
     // Line comments (-- comment)
@@ -112,6 +119,17 @@ export const cooklang = StreamLanguage.define({
       return "comment";
     }
 
+    // Shorthand preparations (prep) after ingredient amounts like @onion{1}(chopped)
+    if (state.afterAmount && stream.match(/^\([^)]*\)/)) {
+      state.afterAmount = false;
+      return "string";  // Use string style for prep instructions
+    }
+
+    // Reset afterAmount if we see anything else
+    if (state.afterAmount && !stream.match(/^\s*(?=\()/, false)) {
+      state.afterAmount = false;
+    }
+
     // Ingredients (@ingredient{amount})
     if (stream.match(/^@([^@#~]+?(?={))/)) {
       return "variableName";
@@ -144,6 +162,7 @@ export const cooklang = StreamLanguage.define({
 
     if (ch === '}') {
       state.position = null;
+      state.afterAmount = true;  // Look for (prep) after closing brace
       return null;
     }
 

@@ -42,7 +42,13 @@ lsp-error = LSP Error
 
 # New Recipe
 new-recipe = New Recipe
+new-recipe-path = Recipe path
 new-recipe-filename = Recipe name
-new-recipe-placeholder = my-recipe
-new-recipe-hint = Use letters, numbers, dashes, and underscores only
+new-recipe-placeholder = Dinner/Italian/Pasta Carbonara
+new-recipe-hint = Use folder/recipe-name format
 new-recipe-create = Create Recipe
+
+# Delete Recipe
+delete-recipe = Delete Recipe
+delete-recipe-confirm = Are you sure you want to delete this recipe?
+delete-recipe-warning = This action cannot be undone.

@@ -718,35 +718,57 @@ async fn create_recipe(
     State(state): State<Arc<AppState>>,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
-    // Sanitize filename - only allow alphanumeric, dash, underscore
-    let filename: String = form
+    // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
+    let recipe_path: String = form
         .filename
         .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_' || *c == '/')
         .collect();
 
-    if filename.is_empty() {
+    // Clean up path: remove leading/trailing slashes, collapse multiple slashes
+    let recipe_path = recipe_path
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+
+    if recipe_path.is_empty() {
         return axum::response::Redirect::to("/new").into_response();
     }
 
-    let file_path = state.base_path.join(format!("{}.cook", filename));
+    let file_path = state.base_path.join(format!("{}.cook", recipe_path));
 
     // Check if file already exists
     if file_path.exists() {
         return axum::response::Redirect::to("/new").into_response();
     }
 
+    // Create parent directories if they don't exist
+    if let Some(parent) = file_path.parent() {
+        if !parent.exists() {
+            if std::fs::create_dir_all(parent).is_err() {
+                return axum::response::Redirect::to("/new").into_response();
+            }
+        }
+    }
+
+    // Get the recipe name (last component of path) for the title
+    let recipe_name = recipe_path
+        .split('/')
+        .last()
+        .unwrap_or(&recipe_path)
+        .replace('-', " ")
+        .replace('_', " ");
+
     // Create empty recipe file with template
-    let template = format!(
-        ">> title: {}\n\n",
-        filename.replace('-', " ").replace('_', " ")
-    );
+    let template = format!(">> title: {}\n\n", recipe_name);
     if std::fs::write(&file_path, template).is_err() {
         return axum::response::Redirect::to("/new").into_response();
     }
 
     // Redirect to editor
-    axum::response::Redirect::to(&format!("/edit/{}", filename)).into_response()
+    axum::response::Redirect::to(&format!("/edit/{}.cook", recipe_path)).into_response()
 }
 
 fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {

@@ -42,7 +42,13 @@ lsp-error = LSP-fout
 
 # New Recipe
 new-recipe = Nieuw Recept
+new-recipe-path = Receptpad
 new-recipe-filename = Receptnaam
-new-recipe-placeholder = mijn-recept
-new-recipe-hint = Gebruik alleen letters, cijfers, streepjes en underscores
+new-recipe-placeholder = Avondeten/Italiaans/Pasta Carbonara
+new-recipe-hint = Formaat: map/receptnaam
 new-recipe-create = Recept Aanmaken
+
+# Delete Recipe
+delete-recipe = Recept Verwijderen
+delete-recipe-confirm = Weet je zeker dat je dit recept wilt verwijderen?
+delete-recipe-warning = Deze actie kan niet ongedaan worden gemaakt.

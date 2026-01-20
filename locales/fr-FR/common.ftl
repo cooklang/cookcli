@@ -42,7 +42,13 @@ lsp-error = Erreur LSP
 
 # New Recipe
 new-recipe = Nouvelle Recette
+new-recipe-path = Chemin de la recette
 new-recipe-filename = Nom de la recette
-new-recipe-placeholder = ma-recette
-new-recipe-hint = Utilisez uniquement des lettres, chiffres, tirets et underscores
+new-recipe-placeholder = Diner/Italien/Pates Carbonara
+new-recipe-hint = Format: dossier/nom-recette
 new-recipe-create = Creer la Recette
+
+# Delete Recipe
+delete-recipe = Supprimer la Recette
+delete-recipe-confirm = Êtes-vous sûr de vouloir supprimer cette recette?
+delete-recipe-warning = Cette action est irréversible.

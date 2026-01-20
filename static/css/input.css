@@ -173,4 +173,37 @@
     .item-status-dot.out-of-stock {
         @apply bg-red-500 dark:bg-red-400;
     }
+
+    /* CodeMirror editor dark mode support */
+    .dark .cm-editor {
+        @apply bg-gray-900;
+    }
+
+    .dark .cm-gutters {
+        @apply bg-gray-800 border-gray-700;
+    }
+
+    .dark .cm-lineNumbers .cm-gutterElement {
+        @apply text-gray-400;
+    }
+
+    .dark .cm-activeLineGutter {
+        @apply bg-gray-700;
+    }
+
+    .dark .cm-activeLine {
+        @apply bg-gray-800/50;
+    }
+
+    .dark .cm-content {
+        caret-color: white;
+    }
+
+    .dark .cm-cursor {
+        border-left-color: white;
+    }
+
+    .dark .cm-selectionBackground {
+        @apply bg-blue-800/50 !important;
+    }
 }
