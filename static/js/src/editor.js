@@ -1,10 +1,11 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
+import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter } from "@codemirror/lint";
 import { autocompletion } from "@codemirror/autocomplete";
+import { tags as t } from "@lezer/highlight";
 import { cooklang } from "./cooklang-mode.js";
 
 // Diagnostics support
@@ -65,8 +66,18 @@ async function cooklangCompletions(context) {
     }
 }
 
-// Custom theme for Cooklang highlighting
-const cooklangTheme = EditorView.theme({
+// Custom highlight style for Cooklang syntax
+const cooklangHighlightStyle = HighlightStyle.define([
+  { tag: t.variableName, color: "#ea580c", fontWeight: "600" },  // Ingredients (orange)
+  { tag: t.keyword, color: "#16a34a", fontWeight: "600" },       // Cookware (green)
+  { tag: t.number, color: "#dc2626", fontWeight: "600" },        // Timers (red)
+  { tag: t.comment, color: "#9ca3af", fontStyle: "italic" },     // Comments
+  { tag: t.meta, color: "#8b5cf6" },                             // Metadata
+  { tag: t.unit, color: "#6366f1" }                              // Units
+]);
+
+// Editor base theme for layout
+const cooklangBaseTheme = EditorView.theme({
   "&": {
     height: "100%",
     fontSize: "14px"
@@ -80,34 +91,6 @@ const cooklangTheme = EditorView.theme({
   },
   ".cm-line": {
     padding: "0 0.5rem"
-  },
-  // Ingredient highlighting (orange)
-  ".cm-variableName": {
-    color: "#ea580c",
-    fontWeight: "600"
-  },
-  // Cookware highlighting (green)
-  ".cm-keyword": {
-    color: "#16a34a",
-    fontWeight: "600"
-  },
-  // Timer highlighting (red)
-  ".cm-number": {
-    color: "#dc2626",
-    fontWeight: "600"
-  },
-  // Measurements
-  ".cm-measurement": {
-    color: "#6366f1"
-  },
-  // Comments
-  ".cm-comment": {
-    color: "#9ca3af",
-    fontStyle: "italic"
-  },
-  // Metadata
-  ".cm-meta": {
-    color: "#8b5cf6"
   }
 });
 
@@ -129,8 +112,8 @@ export function initEditor(container, initialContent, onChange) {
       bracketMatching(),
       highlightSelectionMatches(),
       cooklang,
-      syntaxHighlighting(defaultHighlightStyle),
-      cooklangTheme,
+      syntaxHighlighting(cooklangHighlightStyle),
+      cooklangBaseTheme,
       cooklangLinter,
       autocompletion({
         override: [cooklangCompletions],
