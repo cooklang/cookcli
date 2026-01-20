@@ -56,6 +56,18 @@ document.addEventListener('DOMContentLoaded', function() {
     editorView = window.CooklangEditor.initEditor(container, originalContent, function(newContent) {
         hasUnsavedChanges = newContent !== originalContent;
         updateSaveStatus();
+
+        // Send didChange to LSP
+        if (lspInitialized && documentUri) {
+            documentVersion++;
+            sendLspNotification('textDocument/didChange', {
+                textDocument: {
+                    uri: documentUri,
+                    version: documentVersion
+                },
+                contentChanges: [{ text: newContent }]
+            });
+        }
     });
 });
 
@@ -130,6 +142,9 @@ updateSaveStatus();
 // LSP WebSocket connection
 let lspSocket = null;
 let lspMessageId = 1;
+let documentUri = null;
+let documentVersion = 0;
+let lspInitialized = false;
 
 function connectLsp() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -210,21 +225,38 @@ function sendLspNotification(method, params) {
     lspSocket.send(JSON.stringify(message));
 }
 
+function openDocument() {
+    documentUri = 'file://' + recipePath;
+    documentVersion = 1;
+    sendLspNotification('textDocument/didOpen', {
+        textDocument: {
+            uri: documentUri,
+            languageId: 'cooklang',
+            version: documentVersion,
+            text: window.CooklangEditor.getContent(editorView)
+        }
+    });
+    console.log('Document opened:', documentUri);
+}
+
+function handleDiagnostics(params) {
+    // Will be implemented in Task 2
+    console.log('Diagnostics received:', params.diagnostics?.length || 0, 'items');
+}
+
 function handleLspMessage(message) {
     if (message.id !== undefined && message.result !== undefined) {
-        // Response to a request
         console.log('LSP response:', message);
         if (message.result && message.result.capabilities) {
-            // Initialize response received, send initialized notification
             sendLspNotification('initialized', {});
+            lspInitialized = true;
+            openDocument();
             console.log('LSP initialized successfully');
         }
     } else if (message.method) {
-        // Server notification
         console.log('LSP notification:', message.method);
         if (message.method === 'textDocument/publishDiagnostics') {
-            // Handle diagnostics in Phase 4
-            console.log('Diagnostics:', message.params);
+            handleDiagnostics(message.params);
         }
     }
 }
