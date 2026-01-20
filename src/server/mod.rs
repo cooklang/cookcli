@@ -48,6 +48,7 @@ use tracing::{error, info};
 mod handlers;
 mod i18n;
 mod language;
+mod lsp_bridge;
 mod shopping_list_store;
 mod templates;
 mod ui;
@@ -251,7 +252,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             get(handlers::recipe).put(handlers::recipe_save),
         )
         .route("/search", get(handlers::search))
-        .route("/reload", get(handlers::reload).post(handlers::reload));
+        .route("/reload", get(handlers::reload).post(handlers::reload))
+        .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
 
     Ok(router)
 }
