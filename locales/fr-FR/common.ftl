@@ -32,3 +32,8 @@ editor-saved = Enregistré
 editor-saving = Enregistrement...
 editor-save-failed = Échec de l'enregistrement
 editor-placeholder = Entrez votre recette ici...
+
+# LSP Status
+lsp-connected = LSP connecté
+lsp-disconnected = Déconnecté
+lsp-error = Erreur LSP

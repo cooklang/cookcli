@@ -32,3 +32,8 @@ editor-saved = Opgeslagen
 editor-saving = Opslaan...
 editor-save-failed = Opslaan mislukt
 editor-placeholder = Voer hier uw recept in...
+
+# LSP Status
+lsp-connected = LSP verbonden
+lsp-disconnected = Niet verbonden
+lsp-error = LSP-fout

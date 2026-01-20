@@ -32,3 +32,8 @@ editor-saved = Guardado
 editor-saving = Guardando...
 editor-save-failed = Error al guardar
 editor-placeholder = Escribe tu receta aquí...
+
+# LSP Status
+lsp-connected = LSP conectado
+lsp-disconnected = Desconectado
+lsp-error = Error de LSP
