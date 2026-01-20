@@ -28,6 +28,19 @@
 
     <!-- Editor area -->
     <div id="editor-container" class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden"></div>
+
+    <!-- Status bar -->
+    <div id="status-bar" class="mt-2 px-4 py-2 bg-gray-100 rounded-lg flex items-center justify-between text-sm">
+        <div class="flex items-center gap-2">
+            <span id="lsp-status" class="flex items-center gap-1">
+                <span id="lsp-indicator" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                <span id="lsp-text">Disconnected</span>
+            </span>
+        </div>
+        <div id="cursor-position" class="text-gray-500">
+            Line 1, Col 1
+        </div>
+    </div>
 </div>
 
 <script src="/static/js/editor.bundle.js"></script>
@@ -113,5 +126,135 @@ window.addEventListener('beforeunload', function(e) {
 
 // Initial status
 updateSaveStatus();
+
+// LSP WebSocket connection
+let lspSocket = null;
+let lspMessageId = 1;
+
+function connectLsp() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/lsp`;
+
+    console.log('Connecting to LSP at:', wsUrl);
+    lspSocket = new WebSocket(wsUrl);
+
+    lspSocket.onopen = function() {
+        console.log('LSP WebSocket connected');
+        updateLspStatus('connected');
+        // Send initialize request
+        sendLspRequest('initialize', {
+            processId: null,
+            rootUri: 'file://' + window.location.pathname,
+            capabilities: {
+                textDocument: {
+                    completion: {
+                        completionItem: {
+                            snippetSupport: false
+                        }
+                    },
+                    publishDiagnostics: {
+                        relatedInformation: true
+                    }
+                }
+            }
+        });
+    };
+
+    lspSocket.onclose = function() {
+        console.log('LSP WebSocket closed');
+        updateLspStatus('disconnected');
+        // Reconnect after delay
+        setTimeout(connectLsp, 3000);
+    };
+
+    lspSocket.onerror = function(error) {
+        console.error('LSP WebSocket error:', error);
+        updateLspStatus('error');
+    };
+
+    lspSocket.onmessage = function(event) {
+        try {
+            const message = JSON.parse(event.data);
+            handleLspMessage(message);
+        } catch (e) {
+            console.error('Failed to parse LSP message:', e);
+        }
+    };
+}
+
+function sendLspRequest(method, params) {
+    if (!lspSocket || lspSocket.readyState !== WebSocket.OPEN) {
+        return null;
+    }
+    const id = lspMessageId++;
+    const message = {
+        jsonrpc: '2.0',
+        id: id,
+        method: method,
+        params: params
+    };
+    console.log('Sending LSP request:', method);
+    lspSocket.send(JSON.stringify(message));
+    return id;
+}
+
+function sendLspNotification(method, params) {
+    if (!lspSocket || lspSocket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+    const message = {
+        jsonrpc: '2.0',
+        method: method,
+        params: params
+    };
+    lspSocket.send(JSON.stringify(message));
+}
+
+function handleLspMessage(message) {
+    if (message.id !== undefined && message.result !== undefined) {
+        // Response to a request
+        console.log('LSP response:', message);
+        if (message.result && message.result.capabilities) {
+            // Initialize response received, send initialized notification
+            sendLspNotification('initialized', {});
+            console.log('LSP initialized successfully');
+        }
+    } else if (message.method) {
+        // Server notification
+        console.log('LSP notification:', message.method);
+        if (message.method === 'textDocument/publishDiagnostics') {
+            // Handle diagnostics in Phase 4
+            console.log('Diagnostics:', message.params);
+        }
+    }
+}
+
+function updateLspStatus(status) {
+    const indicator = document.getElementById('lsp-indicator');
+    const text = document.getElementById('lsp-text');
+
+    if (!indicator || !text) return;
+
+    switch (status) {
+        case 'connected':
+            indicator.className = 'w-2 h-2 rounded-full bg-green-500';
+            text.textContent = 'LSP Connected';
+            text.className = 'text-green-600';
+            break;
+        case 'disconnected':
+            indicator.className = 'w-2 h-2 rounded-full bg-gray-400';
+            text.textContent = 'Disconnected';
+            text.className = 'text-gray-500';
+            break;
+        case 'error':
+            indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+            text.textContent = 'LSP Error';
+            text.className = 'text-red-600';
+            break;
+    }
+}
+
+// Connect to LSP after editor is initialized
+setTimeout(connectLsp, 500);
 </script>
 {% endblock %}
