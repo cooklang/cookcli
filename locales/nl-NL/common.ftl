@@ -14,6 +14,7 @@ action-remove = Verwijderen
 action-edit = Bewerken
 action-save = Opslaan
 action-cancel = Annuleren
+action-back = Terug
 action-delete = Verwijderen
 action-clear = Wissen
 action-print = Afdrukken

@@ -14,6 +14,7 @@ action-remove = Видалити
 action-edit = Редагувати
 action-save = Зберегти
 action-cancel = Скасувати
+action-back = Назад
 action-delete = Видалити
 action-clear = Очистити
 action-print = Друкувати

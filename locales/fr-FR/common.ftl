@@ -14,6 +14,7 @@ action-remove = Retirer
 action-edit = Modifier
 action-save = Enregistrer
 action-cancel = Annuler
+action-back = Retour
 action-delete = Supprimer
 action-clear = Effacer
 action-print = Imprimer
