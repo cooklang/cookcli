@@ -38,3 +38,10 @@ editor-placeholder = Geben Sie hier Ihr Rezept ein...
 lsp-connected = LSP verbunden
 lsp-disconnected = Getrennt
 lsp-error = LSP-Fehler
+
+# New Recipe
+new-recipe = Neues Rezept
+new-recipe-filename = Rezeptname
+new-recipe-placeholder = mein-rezept
+new-recipe-hint = Verwenden Sie nur Buchstaben, Zahlen, Bindestriche und Unterstriche
+new-recipe-create = Rezept erstellen

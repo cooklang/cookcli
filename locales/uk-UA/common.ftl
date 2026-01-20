@@ -38,3 +38,10 @@ editor-placeholder = Введіть ваш рецепт тут...
 lsp-connected = LSP підключено
 lsp-disconnected = Відключено
 lsp-error = Помилка LSP
+
+# New Recipe
+new-recipe = Новий Рецепт
+new-recipe-filename = Назва рецепту
+new-recipe-placeholder = мій-рецепт
+new-recipe-hint = Використовуйте лише букви, цифри, тире та підкреслення
+new-recipe-create = Створити Рецепт

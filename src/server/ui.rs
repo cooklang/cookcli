@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
     routing::get,
-    Router,
+    Form, Router,
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use fluent_templates::Loader;
@@ -18,6 +18,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/directory/*path", get(recipes_directory))
         .route("/recipe/*path", get(recipe_page))
         .route("/edit/*path", get(edit_page))
+        .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
@@ -696,6 +697,55 @@ async fn edit_page(
     };
 
     Ok(template)
+}
+
+async fn new_page(
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> impl askama_axum::IntoResponse {
+    crate::server::templates::NewTemplate {
+        active: "recipes".to_string(),
+        tr: Tr::new(lang),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewRecipeForm {
+    filename: String,
+}
+
+async fn create_recipe(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<NewRecipeForm>,
+) -> impl IntoResponse {
+    // Sanitize filename - only allow alphanumeric, dash, underscore
+    let filename: String = form
+        .filename
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
+
+    if filename.is_empty() {
+        return axum::response::Redirect::to("/new").into_response();
+    }
+
+    let file_path = state.base_path.join(format!("{}.cook", filename));
+
+    // Check if file already exists
+    if file_path.exists() {
+        return axum::response::Redirect::to("/new").into_response();
+    }
+
+    // Create empty recipe file with template
+    let template = format!(
+        ">> title: {}\n\n",
+        filename.replace('-', " ").replace('_', " ")
+    );
+    if std::fs::write(&file_path, template).is_err() {
+        return axum::response::Redirect::to("/new").into_response();
+    }
+
+    // Redirect to editor
+    axum::response::Redirect::to(&format!("/edit/{}", filename)).into_response()
 }
 
 fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {

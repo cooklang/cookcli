@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tr.t("new-recipe") }} - Cook{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-8">{{ tr.t("new-recipe") }}</h1>
+
+    <form action="/new" method="POST" class="space-y-6">
+        <div>
+            <label for="filename" class="block text-sm font-medium text-gray-700 mb-2">
+                {{ tr.t("new-recipe-filename") }}
+            </label>
+            <div class="flex items-center gap-2">
+                <input
+                    type="text"
+                    id="filename"
+                    name="filename"
+                    required
+                    pattern="[a-zA-Z0-9_-]+"
+                    placeholder="{{ tr.t("new-recipe-placeholder") }}"
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                >
+                <span class="text-gray-500">.cook</span>
+            </div>
+            <p class="mt-2 text-sm text-gray-500">{{ tr.t("new-recipe-hint") }}</p>
+        </div>
+
+        <div class="flex gap-4">
+            <a href="/" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                {{ tr.t("action-cancel") }}
+            </a>
+            <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md">
+                {{ tr.t("new-recipe-create") }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

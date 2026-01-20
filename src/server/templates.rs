@@ -113,6 +113,13 @@ pub struct EditTemplate {
     pub tr: Tr,
 }
 
+#[derive(Template)]
+#[template(path = "new.html")]
+pub struct NewTemplate {
+    pub active: String,
+    pub tr: Tr,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PantrySection {
     pub name: String,
