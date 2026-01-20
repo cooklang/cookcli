@@ -17,6 +17,7 @@ action-cancel = Annuleren
 action-delete = Verwijderen
 action-clear = Wissen
 action-print = Afdrukken
+action-preview = Voorbeeld
 
 # Common Labels
 label-scale = Schaal

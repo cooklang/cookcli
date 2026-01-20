@@ -17,6 +17,7 @@ action-cancel = Скасувати
 action-delete = Видалити
 action-clear = Очистити
 action-print = Друкувати
+action-preview = Попередній перегляд
 
 # Common Labels
 label-scale = Масштаб
