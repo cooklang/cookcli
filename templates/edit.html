@@ -55,8 +55,8 @@
 
 <script src="/static/js/editor.bundle.js"></script>
 <script>
-const recipePath = {{ recipe_path|json }};
-let originalContent = {{ content|json }};
+const recipePath = {{ recipe_path|json|safe }};
+let originalContent = {{ content|json|safe }};
 let hasUnsavedChanges = false;
 let editorView = null;
 
