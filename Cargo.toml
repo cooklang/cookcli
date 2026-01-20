@@ -32,7 +32,7 @@ anstyle-yansi = "2"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
 askama_axum = "0.4"
-axum = { version = "0.7" }
+axum = { version = "0.7", features = ["ws"] }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
@@ -43,6 +43,7 @@ cooklang-language-server = "0.1.0"
 cooklang-reports = { version = "0.2" }
 directories = "6"
 fluent = "0.16"
+futures-util = "0.3"
 fluent-templates = "0.10"
 humantime = "2"
 mime_guess = "2.0"
