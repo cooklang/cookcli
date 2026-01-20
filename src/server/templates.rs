@@ -110,6 +110,7 @@ pub struct EditTemplate {
     pub recipe_name: String,
     pub recipe_path: String,
     pub content: String,
+    pub base_path: String,
     pub tr: Tr,
 }
 

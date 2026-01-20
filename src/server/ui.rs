@@ -693,6 +693,7 @@ async fn edit_page(
         recipe_name,
         recipe_path: path,
         content,
+        base_path: state.base_path.to_string(),
         tr: crate::server::templates::Tr::new(lang),
     };
 

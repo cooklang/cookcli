@@ -56,6 +56,7 @@
 <script src="/static/js/editor.bundle.js"></script>
 <script>
 const recipePath = {{ recipe_path|json|safe }};
+const basePath = {{ base_path|json|safe }};
 let originalContent = {{ content|json|safe }};
 let hasUnsavedChanges = false;
 let editorView = null;
@@ -170,7 +171,7 @@ function connectLsp() {
         // Send initialize request
         sendLspRequest('initialize', {
             processId: null,
-            rootUri: 'file://' + window.location.pathname,
+            rootUri: 'file://' + basePath,
             capabilities: {
                 textDocument: {
                     completion: {
