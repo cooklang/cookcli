@@ -8,8 +8,8 @@ use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::io::Write;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Deserialize)]
 pub struct RecipeQuery {
@@ -188,20 +188,23 @@ pub async fn recipe_save(
     // Atomic write: write to temp file, then rename
     let temp_path = file_path.with_extension("tmp");
 
-    let mut temp_file = std::fs::File::create(&temp_path).map_err(|e| {
+    let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
         tracing::error!("Failed to create temp file {}: {}", temp_path, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    temp_file.write_all(body.as_bytes()).map_err(|e| {
+    temp_file.write_all(body.as_bytes()).await.map_err(|e| {
         tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
-        let _ = std::fs::remove_file(&temp_path);
+        // Fire-and-forget cleanup - spawn so we don't block the error path
+        let temp_path_clone = temp_path.clone();
+        tokio::spawn(async move { let _ = tokio::fs::remove_file(&temp_path_clone).await; });
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    std::fs::rename(&temp_path, &file_path).map_err(|e| {
+    tokio::fs::rename(&temp_path, &file_path).await.map_err(|e| {
         tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
-        let _ = std::fs::remove_file(&temp_path);
+        let temp_path_clone = temp_path.clone();
+        tokio::spawn(async move { let _ = tokio::fs::remove_file(&temp_path_clone).await; });
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
