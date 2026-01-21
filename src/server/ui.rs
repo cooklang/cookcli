@@ -876,10 +876,7 @@ async fn create_recipe(
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return new_page_error(
-                "A recipe with this name already exists",
-                &original_filename,
-            );
+            return new_page_error("A recipe with this name already exists", &original_filename);
         }
         Err(e) => {
             tracing::error!("Failed to create recipe file: {}", e);

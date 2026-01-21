@@ -118,7 +118,9 @@ async fn run_bridge(
 
             // Read the JSON content
             let mut content = vec![0u8; content_length];
-            if let Err(e) = tokio::io::AsyncReadExt::read_exact(&mut stdout_reader, &mut content).await {
+            if let Err(e) =
+                tokio::io::AsyncReadExt::read_exact(&mut stdout_reader, &mut content).await
+            {
                 error!("Error reading LSP content: {}", e);
                 return;
             }
