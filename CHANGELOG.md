@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.21.0](https://github.com/cooklang/cookcli/compare/v0.20.0...v0.21.0) (2026-01-21)
+
+
+### Features
+
+* **api:** add GET /api/recipes/raw/{path} endpoint ([423c0c6](https://github.com/cooklang/cookcli/commit/423c0c66d21205b59cfecbfd02120310896f0417))
+* **api:** add PUT /api/recipes/{path} endpoint ([59da892](https://github.com/cooklang/cookcli/commit/59da892e4c1df24376ca0c0470c5378edf1866d1))
+* **editor:** add autosave, remove preview, rename Cancel to Back ([0fef824](https://github.com/cooklang/cookcli/commit/0fef824746e2065cb01f7c552fbbf0e402b528a9))
+* **editor:** add CodeMirror editor entry point ([a22bf4a](https://github.com/cooklang/cookcli/commit/a22bf4aeca43f0a46afa916a03e32889b23c4f9c))
+* **editor:** add Cooklang syntax mode for CodeMirror 6 ([42bcebb](https://github.com/cooklang/cookcli/commit/42bcebbc04404456263f6fb3ee90c92ef0c315f7))
+* **editor:** add delete recipe, improve editor UX ([f64365b](https://github.com/cooklang/cookcli/commit/f64365bb5efad413b980e48770687caff97cc212))
+* **editor:** add LSP connection status indicator ([72d007a](https://github.com/cooklang/cookcli/commit/72d007acb9460f680cf363c58727a71b8d9e3dd6))
+* **editor:** add LSP document synchronization ([14baf81](https://github.com/cooklang/cookcli/commit/14baf81850808d4cb2d4628d4dfad7ce39426746))
+* **editor:** add LSP-powered autocomplete ([28b95aa](https://github.com/cooklang/cookcli/commit/28b95aa7d1b9feb13c23059e69e7dcac3906dcc1))
+* **editor:** add new recipe creation page ([20fd5f4](https://github.com/cooklang/cookcli/commit/20fd5f4d726725c907461a9eb662bd29f4ef6dca))
+* **editor:** add preview toggle ([1f40bb6](https://github.com/cooklang/cookcli/commit/1f40bb677c64d57d89111bb3f83ea39b51ad4882))
+* **editor:** display LSP diagnostics in editor ([30e34b9](https://github.com/cooklang/cookcli/commit/30e34b93e00cb8ec310330e371741811452a7fb2))
+* **editor:** integrate CodeMirror with syntax highlighting ([3d8849e](https://github.com/cooklang/cookcli/commit/3d8849e2bdbe71e3fc2de385f59315df97bc3454))
+* **editor:** Phase 4 - LSP client & full features ([8e5f98f](https://github.com/cooklang/cookcli/commit/8e5f98f38b7b6416c6eab55fd141c2f3906c4043))
+* **i18n:** add editor translation keys ([abb341c](https://github.com/cooklang/cookcli/commit/abb341c8051235f806e57cb21dd0b3209cba24c1))
+* **i18n:** add LSP status translation keys ([39ce0fa](https://github.com/cooklang/cookcli/commit/39ce0faf670227b600ea43060660147de0673dfc))
+* improve PWA [#239](https://github.com/cooklang/cookcli/issues/239) ([aacebac](https://github.com/cooklang/cookcli/commit/aacebac355758fa4e5e2b969a78d8875091b2f64))
+* **lsp:** add WebSocket to LSP subprocess bridge ([7e0d6d7](https://github.com/cooklang/cookcli/commit/7e0d6d71ccfd3bbd9006ab63f2d0d554d0ad9d7c))
+* **lsp:** register WebSocket LSP endpoint at /api/ws/lsp ([a02251d](https://github.com/cooklang/cookcli/commit/a02251d59367cb9ed3f7aca96451a122a977b4b2))
+* **ui:** add /edit/{path} route for recipe editor ([d7a30b9](https://github.com/cooklang/cookcli/commit/d7a30b9bd5cd6e7f5074443cef9aaaf3f74e022f))
+* **ui:** add Edit button to menu page ([fd669e4](https://github.com/cooklang/cookcli/commit/fd669e4793cad1ee3de866c2459720e06ea385ab))
+* **ui:** add Edit button to recipe detail page ([c84896f](https://github.com/cooklang/cookcli/commit/c84896f673fbd336b71d8bdeb061ebe91c9089af))
+* **ui:** add editor template with textarea ([405cae3](https://github.com/cooklang/cookcli/commit/405cae34a3e485f5b3ca5a1dbcad099bf125f7aa))
+* **ui:** add New Recipe button to recipes list ([926e069](https://github.com/cooklang/cookcli/commit/926e069d348942290aaede43904d6b22cdf66c55))
+
+
+### Bug Fixes
+
+* add 1MB request body size limit ([8ffd54a](https://github.com/cooklang/cookcli/commit/8ffd54a5ef3e57df5b1e89f7ae7f0c2baa9643b9))
+* address TOCTOU race condition in create_recipe ([ad14fa8](https://github.com/cooklang/cookcli/commit/ad14fa8cf892da88a25033c5c17decbce22f5e35))
+* clippy ([252905c](https://github.com/cooklang/cookcli/commit/252905cabd6f7e5acd431a1d6c4607aa9f6dd836))
+* display errors to user via toast notifications ([ae6d1da](https://github.com/cooklang/cookcli/commit/ae6d1da379d167801462f5ddf612abbf94985ea8))
+* **editor:** address code review feedback for recipe creation ([7343753](https://github.com/cooklang/cookcli/commit/7343753b82c0b7af17f80d49ce2586e72602eea1))
+* **editor:** pass base_path to LSP for aisle.conf loading ([35dfc04](https://github.com/cooklang/cookcli/commit/35dfc045f415c9e2b0832ca19d3650072fe1e85d))
+* **editor:** prevent HTML escaping of JSON in template ([af31eb9](https://github.com/cooklang/cookcli/commit/af31eb9be833e9eb0a095a891cddbab7f0ead3fb))
+* **editor:** reset line-scoped states and fix Makefile clean target ([20a3063](https://github.com/cooklang/cookcli/commit/20a3063cce388a182d05325978d9bfb7cb97d3d6))
+* **editor:** use HighlightStyle for proper syntax highlighting ([cce9148](https://github.com/cooklang/cookcli/commit/cce914891b21887afd3cd2ffae2599956f7426b6))
+* fmt ([0f0e48e](https://github.com/cooklang/cookcli/commit/0f0e48eb4ca58dc1f4b3ca6abea7e1615fb2602b))
+* fmt ([f919af2](https://github.com/cooklang/cookcli/commit/f919af2b5a58e3cab0695a1e28b26e17a6a37d94))
+* improve LSP bridge task cleanup and document buffer size ([88dadc0](https://github.com/cooklang/cookcli/commit/88dadc0c516b9cc783b924891890078891537906))
+* lsp version ([c9447dc](https://github.com/cooklang/cookcli/commit/c9447dcc8a2101a908a92244821ebd6bb6d3dc2e))
+* use published language srver ([197e528](https://github.com/cooklang/cookcli/commit/197e5281bb8eb4a98eb4a84882e65e41d47eeed4))
+* use spawn_blocking for synchronous canonicalize calls ([8505956](https://github.com/cooklang/cookcli/commit/85059563c160e9d64674fdda1f0bd9432dace191))
+* use tokio::fs for async file deletion in recipe_delete ([5e2b90c](https://github.com/cooklang/cookcli/commit/5e2b90c877fc78fcb503c56ba7b108336612c8ba))
+* use tokio::fs for async file operations in recipe_save ([8be79a0](https://github.com/cooklang/cookcli/commit/8be79a059384ce6748964ef248068dfd8e84bf1b))
+* use tokio::fs for async file reading in edit_page ([37a31f9](https://github.com/cooklang/cookcli/commit/37a31f97c27794ceee6d1a8ca54a8888e9e4401e))
+* use tokio::fs for async file reading in pantry_page ([521575f](https://github.com/cooklang/cookcli/commit/521575f9cf0e88da7dd1a561de11710633e09b9c))
+* use tokio::fs for async file reading in recipe_raw ([d2ce797](https://github.com/cooklang/cookcli/commit/d2ce79714855f73a402302f9bd057f09fdd399bc))
+* validate filename before sanitization in create_recipe ([e0f4bae](https://github.com/cooklang/cookcli/commit/e0f4bae1d9459dcdac8cc1c6da587111b33bfa90))
+
 ## [0.20.0](https://github.com/cooklang/cookcli/compare/v0.19.3...v0.20.0) (2026-01-16)
 
 
