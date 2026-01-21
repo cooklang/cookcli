@@ -622,6 +622,7 @@ dependencies = [
  "tracing-subscriber",
  "unic-langid",
  "url",
+ "urlencoding",
  "yansi",
 ]
 
@@ -701,8 +702,6 @@ dependencies = [
 [[package]]
 name = "cooklang-language-server"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5589a2a285d563904cd12348dca1f848c043ec558c5e9cf267746bb0395d077f"
 dependencies = [
  "anyhow",
  "cooklang",

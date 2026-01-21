@@ -1,7 +1,7 @@
 use crate::server::{templates::*, AppState};
 use axum::{
-    extract::{Extension, Path, Query, State},
-    http::StatusCode,
+    extract::{Extension, Host, Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Form, Router,
@@ -700,12 +700,21 @@ async fn edit_page(
     Ok(template)
 }
 
+#[derive(Deserialize, Default)]
+struct NewPageQuery {
+    error: Option<String>,
+    filename: Option<String>,
+}
+
 async fn new_page(
     Extension(lang): Extension<LanguageIdentifier>,
+    Query(query): Query<NewPageQuery>,
 ) -> impl askama_axum::IntoResponse {
     crate::server::templates::NewTemplate {
         active: "recipes".to_string(),
         tr: Tr::new(lang),
+        error: query.error,
+        filename: query.filename,
     }
 }
 
@@ -714,10 +723,73 @@ struct NewRecipeForm {
     filename: String,
 }
 
+/// Helper to build redirect URL with error message
+fn new_page_error(error: &str, filename: &str) -> axum::response::Response {
+    let encoded_error = urlencoding::encode(error);
+    let encoded_filename = urlencoding::encode(filename);
+    axum::response::Redirect::to(&format!(
+        "/new?error={}&filename={}",
+        encoded_error, encoded_filename
+    ))
+    .into_response()
+}
+
+/// Validates that the request originated from the same host (CSRF protection)
+fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
+    // Check Origin header first (preferred for CSRF protection)
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            // Origin format is scheme://host[:port]
+            if let Ok(origin_url) = url::Url::parse(origin_str) {
+                if let Some(origin_host) = origin_url.host_str() {
+                    let origin_with_port = if let Some(port) = origin_url.port() {
+                        format!("{}:{}", origin_host, port)
+                    } else {
+                        origin_host.to_string()
+                    };
+                    return origin_with_port == host || origin_host == host;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Fallback to Referer header (less reliable but better than nothing)
+    if let Some(referer) = headers.get(header::REFERER) {
+        if let Ok(referer_str) = referer.to_str() {
+            if let Ok(referer_url) = url::Url::parse(referer_str) {
+                if let Some(referer_host) = referer_url.host_str() {
+                    let referer_with_port = if let Some(port) = referer_url.port() {
+                        format!("{}:{}", referer_host, port)
+                    } else {
+                        referer_host.to_string()
+                    };
+                    return referer_with_port == host || referer_host == host;
+                }
+            }
+        }
+        return false;
+    }
+
+    // No Origin or Referer header - reject for safety
+    // (though browsers should always send one for form submissions)
+    false
+}
+
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
+    Host(host): Host,
+    headers: HeaderMap,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
+    // CSRF protection: verify request came from same origin
+    if !validate_same_origin(&headers, &host) {
+        tracing::warn!("CSRF validation failed for create_recipe request");
+        return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
+    }
+
+    let original_filename = form.filename.clone();
+
     // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
     let recipe_path: String = form
         .filename
@@ -734,21 +806,44 @@ async fn create_recipe(
         .join("/");
 
     if recipe_path.is_empty() {
-        return axum::response::Redirect::to("/new").into_response();
+        return new_page_error("Recipe name cannot be empty", &original_filename);
     }
 
     let file_path = state.base_path.join(format!("{}.cook", recipe_path));
 
-    // Check if file already exists
-    if file_path.exists() {
-        return axum::response::Redirect::to("/new").into_response();
-    }
+    // Security: Verify the resolved path is still within base_path
+    // Use canonicalize on parent (which must exist) to resolve any .. or symlinks
+    let base_canonical = match state.base_path.canonicalize_utf8() {
+        Ok(p) => p,
+        Err(_) => {
+            return new_page_error("Internal error: invalid base path", &original_filename);
+        }
+    };
 
-    // Create parent directories if they don't exist
+    // For the file path, we check the parent directory since file doesn't exist yet
     if let Some(parent) = file_path.parent() {
+        // Create parent directories if they don't exist (needed for canonicalize)
         if !parent.exists() {
-            if std::fs::create_dir_all(parent).is_err() {
-                return axum::response::Redirect::to("/new").into_response();
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                tracing::error!("Failed to create directories: {}", e);
+                return new_page_error("Failed to create directory", &original_filename);
+            }
+        }
+
+        // Now verify the parent is under base_path
+        match parent.canonicalize_utf8() {
+            Ok(parent_canonical) => {
+                if !parent_canonical.starts_with(&base_canonical) {
+                    tracing::warn!(
+                        "Path traversal attempt: {} not under {}",
+                        parent_canonical,
+                        base_canonical
+                    );
+                    return new_page_error("Invalid recipe path", &original_filename);
+                }
+            }
+            Err(_) => {
+                return new_page_error("Invalid recipe path", &original_filename);
             }
         }
     }
@@ -761,10 +856,35 @@ async fn create_recipe(
         .replace('-', " ")
         .replace('_', " ");
 
-    // Create empty recipe file with template
-    let template = format!(">> title: {}\n\n", recipe_name);
-    if std::fs::write(&file_path, template).is_err() {
-        return axum::response::Redirect::to("/new").into_response();
+    // Create recipe with YAML frontmatter
+    let template = format!("---\ntitle: {}\n---\n\n", recipe_name);
+
+    // Use OpenOptions with create_new to atomically check existence and create
+    // This prevents TOCTOU race conditions
+    use tokio::io::AsyncWriteExt;
+    let file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true) // Fails if file exists - atomic check + create
+        .open(&file_path)
+        .await;
+
+    match file {
+        Ok(mut f) => {
+            if let Err(e) = f.write_all(template.as_bytes()).await {
+                tracing::error!("Failed to write recipe: {}", e);
+                return new_page_error("Failed to write recipe file", &original_filename);
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return new_page_error(
+                "A recipe with this name already exists",
+                &original_filename,
+            );
+        }
+        Err(e) => {
+            tracing::error!("Failed to create recipe file: {}", e);
+            return new_page_error("Failed to create recipe file", &original_filename);
+        }
     }
 
     // Redirect to editor

@@ -88,16 +88,19 @@ document.addEventListener('DOMContentLoaded', function() {
             autosaveTimer = setTimeout(() => saveRecipe(), 1000);
         }
 
-        // Send didChange to LSP
+        // Send didChange to LSP with debouncing to avoid overwhelming the server
         if (lspInitialized && documentUri) {
-            documentVersion++;
-            sendLspNotification('textDocument/didChange', {
-                textDocument: {
-                    uri: documentUri,
-                    version: documentVersion
-                },
-                contentChanges: [{ text: newContent }]
-            });
+            if (lspDebounceTimer) clearTimeout(lspDebounceTimer);
+            lspDebounceTimer = setTimeout(() => {
+                documentVersion++;
+                sendLspNotification('textDocument/didChange', {
+                    textDocument: {
+                        uri: documentUri,
+                        version: documentVersion
+                    },
+                    contentChanges: [{ text: newContent }]
+                });
+            }, LSP_DEBOUNCE_MS);
         }
     });
 
@@ -232,6 +235,8 @@ let documentUri = null;
 let documentVersion = 0;
 let lspInitialized = false;
 let pendingCompletions = new Map();
+let lspDebounceTimer = null;
+const LSP_DEBOUNCE_MS = 150;
 
 function connectLsp() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

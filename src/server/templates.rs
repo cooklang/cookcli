@@ -119,6 +119,8 @@ pub struct EditTemplate {
 pub struct NewTemplate {
     pub active: String,
     pub tr: Tr,
+    pub error: Option<String>,
+    pub filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
