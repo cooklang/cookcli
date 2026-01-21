@@ -790,6 +790,11 @@ async fn create_recipe(
 
     let original_filename = form.filename.clone();
 
+    // Validate input before sanitization
+    if form.filename.trim().is_empty() {
+        return new_page_error("Recipe name cannot be empty", &original_filename);
+    }
+
     // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
     let recipe_path: String = form
         .filename
