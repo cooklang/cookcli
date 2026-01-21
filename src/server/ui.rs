@@ -1167,7 +1167,7 @@ async fn pantry_page(
     let mut sections = Vec::new();
 
     if let Some(path) = pantry_path {
-        if let Ok(content) = std::fs::read_to_string(path) {
+        if let Ok(content) = tokio::fs::read_to_string(path).await {
             let result = cooklang::pantry::parse_lenient(&content);
 
             if let Some(pantry_conf) = result.output() {
