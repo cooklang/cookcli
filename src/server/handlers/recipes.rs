@@ -153,7 +153,7 @@ pub async fn recipe_raw(
         }
     };
 
-    std::fs::read_to_string(&file_path).map_err(|e| {
+    tokio::fs::read_to_string(&file_path).await.map_err(|e| {
         tracing::error!("Failed to read recipe file {}: {}", file_path, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })
