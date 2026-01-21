@@ -851,10 +851,9 @@ async fn create_recipe(
     // Get the recipe name (last component of path) for the title
     let recipe_name = recipe_path
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or(&recipe_path)
-        .replace('-', " ")
-        .replace('_', " ");
+        .replace(['-', '_'], " ");
 
     // Create recipe with YAML frontmatter
     let template = format!("---\ntitle: {}\n---\n\n", recipe_name);
