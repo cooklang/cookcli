@@ -675,7 +675,7 @@ async fn edit_page(
     })?;
 
     // Read raw content
-    let content = std::fs::read_to_string(file_path).map_err(|e| {
+    let content = tokio::fs::read_to_string(file_path).await.map_err(|e| {
         tracing::error!("Failed to read recipe file: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
