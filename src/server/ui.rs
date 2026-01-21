@@ -813,9 +813,10 @@ async fn create_recipe(
 
     // Security: Validate path structure before any filesystem operations
     // Check that the constructed path, when normalized, stays within base_path
-    let base_canonical = match state.base_path.canonicalize_utf8() {
-        Ok(p) => p,
-        Err(_) => {
+    let base_path_clone = state.base_path.clone();
+    let base_canonical = match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
+        Ok(Ok(p)) => p,
+        _ => {
             return new_page_error("Internal error: invalid base path", &original_filename);
         }
     };
@@ -839,8 +840,9 @@ async fn create_recipe(
         }
 
         // Now verify the created parent is under base_path
-        match parent.canonicalize_utf8() {
-            Ok(parent_canonical) => {
+        let parent_owned = parent.to_owned();
+        match tokio::task::spawn_blocking(move || parent_owned.canonicalize_utf8()).await {
+            Ok(Ok(parent_canonical)) => {
                 if !parent_canonical.starts_with(&base_canonical) {
                     tracing::warn!(
                         "Path traversal attempt: {} not under {}",
@@ -852,7 +854,7 @@ async fn create_recipe(
                     return new_page_error("Invalid recipe path", &original_filename);
                 }
             }
-            Err(_) => {
+            _ => {
                 return new_page_error("Invalid recipe path", &original_filename);
             }
         }
