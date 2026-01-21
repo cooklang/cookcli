@@ -811,8 +811,8 @@ async fn create_recipe(
 
     let file_path = state.base_path.join(format!("{}.cook", recipe_path));
 
-    // Security: Verify the resolved path is still within base_path
-    // Use canonicalize on parent (which must exist) to resolve any .. or symlinks
+    // Security: Validate path structure before any filesystem operations
+    // Check that the constructed path, when normalized, stays within base_path
     let base_canonical = match state.base_path.canonicalize_utf8() {
         Ok(p) => p,
         Err(_) => {
@@ -820,9 +820,17 @@ async fn create_recipe(
         }
     };
 
-    // For the file path, we check the parent directory since file doesn't exist yet
+    // Validate parent path components don't escape base_path
+    // We do this by checking the joined path doesn't contain .. after normalization
+    let normalized_path = file_path.as_str().replace("\\", "/");
+    if normalized_path.contains("/../") || normalized_path.ends_with("/..") {
+        tracing::warn!("Path traversal attempt detected in: {}", recipe_path);
+        return new_page_error("Invalid recipe path", &original_filename);
+    }
+
+    // For the file path, we check the parent directory
     if let Some(parent) = file_path.parent() {
-        // Create parent directories if they don't exist (needed for canonicalize)
+        // Create parent directories if they don't exist
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
@@ -830,7 +838,7 @@ async fn create_recipe(
             }
         }
 
-        // Now verify the parent is under base_path
+        // Now verify the created parent is under base_path
         match parent.canonicalize_utf8() {
             Ok(parent_canonical) => {
                 if !parent_canonical.starts_with(&base_canonical) {
@@ -839,6 +847,8 @@ async fn create_recipe(
                         parent_canonical,
                         base_canonical
                     );
+                    // Clean up the created directory if it's outside base_path
+                    let _ = tokio::fs::remove_dir_all(parent).await;
                     return new_page_error("Invalid recipe path", &original_filename);
                 }
             }
