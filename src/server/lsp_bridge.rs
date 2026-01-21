@@ -21,6 +21,11 @@ use tracing::{debug, error, info, warn};
 
 use super::AppState;
 
+/// Buffer size for LSP message channel.
+/// 32 messages provides adequate buffering for typical LSP traffic
+/// while preventing unbounded memory growth.
+const LSP_MESSAGE_BUFFER_SIZE: usize = 32;
+
 /// WebSocket upgrade handler for LSP connections
 pub async fn lsp_websocket(
     ws: WebSocketUpgrade,
@@ -79,10 +84,10 @@ async fn run_bridge(
     let mut stdout_reader = BufReader::new(stdout);
 
     // Channel for sending messages from LSP to WebSocket
-    let (tx, mut rx) = mpsc::channel::<String>(32);
+    let (tx, mut rx) = mpsc::channel::<String>(LSP_MESSAGE_BUFFER_SIZE);
 
     // Task: Read from LSP stdout and send to channel
-    let stdout_task = tokio::spawn(async move {
+    let mut stdout_handle = tokio::spawn(async move {
         loop {
             // Read headers until empty line
             let mut content_length: usize = 0;
@@ -143,7 +148,7 @@ async fn run_bridge(
     });
 
     // Task: Read from WebSocket and write to LSP stdin
-    let stdin_task = tokio::spawn(async move {
+    let mut stdin_handle = tokio::spawn(async move {
         while let Some(msg) = ws_receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
@@ -176,7 +181,7 @@ async fn run_bridge(
     });
 
     // Task: Send messages from channel to WebSocket
-    let ws_send_task = tokio::spawn(async move {
+    let mut ws_send_handle = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if let Err(e) = ws_sender.send(Message::Text(msg)).await {
                 error!("Error sending to WebSocket: {}", e);
@@ -185,18 +190,23 @@ async fn run_bridge(
         }
     });
 
-    // Wait for any task to complete
+    // Wait for any task to complete, then abort others
     tokio::select! {
-        _ = stdout_task => {
-            debug!("LSP stdout task completed");
+        result = &mut stdout_handle => {
+            debug!("LSP stdout task completed: {:?}", result);
         }
-        _ = stdin_task => {
-            debug!("WebSocket stdin task completed");
+        result = &mut stdin_handle => {
+            debug!("WebSocket stdin task completed: {:?}", result);
         }
-        _ = ws_send_task => {
-            debug!("WebSocket send task completed");
+        result = &mut ws_send_handle => {
+            debug!("WebSocket send task completed: {:?}", result);
         }
     }
+
+    // Abort remaining tasks to ensure clean shutdown
+    stdout_handle.abort();
+    stdin_handle.abort();
+    ws_send_handle.abort();
 
     // Kill the LSP process
     let _ = lsp_process.kill().await;
