@@ -76,6 +76,12 @@ let editorView = null;
 let autosaveTimer = null;
 let isSaving = false;
 
+// Timing constants
+const AUTOSAVE_DELAY_MS = 1000;
+const LSP_INITIAL_CONNECT_DELAY_MS = 500;
+const LSP_RECONNECT_DELAY_MS = 3000;
+const COMPLETION_TIMEOUT_MS = 2000;
+
 // Initialize CodeMirror editor
 document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('editor-container');
@@ -85,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSaveStatus('modified');
             // Debounced autosave (1 second after last change)
             if (autosaveTimer) clearTimeout(autosaveTimer);
-            autosaveTimer = setTimeout(() => saveRecipe(), 1000);
+            autosaveTimer = setTimeout(() => saveRecipe(), AUTOSAVE_DELAY_MS);
         }
 
         // Send didChange to LSP with debouncing to avoid overwhelming the server
@@ -271,7 +277,7 @@ function connectLsp() {
         console.log('LSP WebSocket closed');
         updateLspStatus('disconnected');
         // Reconnect after delay
-        setTimeout(connectLsp, 3000);
+        setTimeout(connectLsp, LSP_RECONNECT_DELAY_MS);
     };
 
     lspSocket.onerror = function(error) {
@@ -414,7 +420,7 @@ function updateLspStatus(status) {
 }
 
 // Connect to LSP after editor is initialized
-setTimeout(connectLsp, 500);
+setTimeout(connectLsp, LSP_INITIAL_CONNECT_DELAY_MS);
 
 // Set up completion resolver
 window.CooklangEditor.setCompletionResolver(async (line, character) => {
@@ -437,7 +443,7 @@ window.CooklangEditor.setCompletionResolver(async (line, character) => {
                     pendingCompletions.delete(id);
                     resolve([]);
                 }
-            }, 2000);
+            }, COMPLETION_TIMEOUT_MS);
         } else {
             resolve([]);
         }
