@@ -33,7 +33,7 @@ use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
-    extract::Path,
+    extract::{DefaultBodyLimit, Path},
     http::{header, HeaderValue, Method, Response, StatusCode},
     routing::{get, post},
     Router,
@@ -125,6 +125,9 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     println!("Serving recipe files from: {:?}", &state.base_path);
 
+    // Maximum request body size: 1MB (reasonable for recipe files)
+    const MAX_BODY_SIZE: usize = 1024 * 1024;
+
     let app = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
@@ -133,6 +136,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let app = app
         .with_state(state)
+        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(axum::middleware::from_fn(language::language_middleware))
         .layer(
             CorsLayer::new()
