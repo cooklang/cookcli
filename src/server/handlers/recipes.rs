@@ -197,16 +197,22 @@ pub async fn recipe_save(
         tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
         // Fire-and-forget cleanup - spawn so we don't block the error path
         let temp_path_clone = temp_path.clone();
-        tokio::spawn(async move { let _ = tokio::fs::remove_file(&temp_path_clone).await; });
+        tokio::spawn(async move {
+            let _ = tokio::fs::remove_file(&temp_path_clone).await;
+        });
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    tokio::fs::rename(&temp_path, &file_path).await.map_err(|e| {
-        tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
-        let temp_path_clone = temp_path.clone();
-        tokio::spawn(async move { let _ = tokio::fs::remove_file(&temp_path_clone).await; });
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    tokio::fs::rename(&temp_path, &file_path)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
+            let temp_path_clone = temp_path.clone();
+            tokio::spawn(async move {
+                let _ = tokio::fs::remove_file(&temp_path_clone).await;
+            });
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tracing::info!("Saved recipe: {}", file_path);
 

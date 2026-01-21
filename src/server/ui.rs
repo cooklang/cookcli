@@ -819,12 +819,13 @@ async fn create_recipe(
     // Security: Validate path structure before any filesystem operations
     // Check that the constructed path, when normalized, stays within base_path
     let base_path_clone = state.base_path.clone();
-    let base_canonical = match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
-        Ok(Ok(p)) => p,
-        _ => {
-            return new_page_error("Internal error: invalid base path", &original_filename);
-        }
-    };
+    let base_canonical =
+        match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
+            Ok(Ok(p)) => p,
+            _ => {
+                return new_page_error("Internal error: invalid base path", &original_filename);
+            }
+        };
 
     // Validate parent path components don't escape base_path
     // We do this by checking the joined path doesn't contain .. after normalization
