@@ -30,19 +30,20 @@ anstream = "0.6"
 anstyle = "1"
 anstyle-yansi = "2"
 anyhow = "1"
-askama = "0.12"
+askama = { version = "0.12", features = ["serde-json"] }
 askama_axum = "0.4"
-axum = { version = "0.7" }
+axum = { version = "0.7", features = ["ws"] }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 cooklang = { version = "0.17.4", default-features = false, features = ["aisle", "pantry"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.8.7"
-cooklang-language-server = "0.1.0"
+cooklang-language-server = "0.1.2"
 cooklang-reports = { version = "0.2" }
 directories = "6"
 fluent = "0.16"
+futures-util = "0.3"
 fluent-templates = "0.10"
 humantime = "2"
 mime_guess = "2.0"
@@ -66,6 +67,7 @@ tower-lsp = "0.20"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unic-langid = "0.9"
+urlencoding = "2"
 url = "2.5"
 yansi = "1"
 

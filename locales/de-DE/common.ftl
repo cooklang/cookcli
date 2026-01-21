@@ -14,9 +14,11 @@ action-remove = Entfernen
 action-edit = Bearbeiten
 action-save = Speichern
 action-cancel = Abbrechen
+action-back = Zurück
 action-delete = Löschen
 action-clear = Leeren
 action-print = Drucken
+action-preview = Vorschau
 
 # Common Labels
 label-scale = Skalierung
@@ -25,3 +27,28 @@ label-time = Zeit
 label-difficulty = Schwierigkeit
 label-name = Name
 label-description = Beschreibung
+
+# Editor
+editor-unsaved-changes = Ungespeicherte Änderungen
+editor-saved = Gespeichert
+editor-saving = Speichern...
+editor-save-failed = Speichern fehlgeschlagen
+editor-placeholder = Geben Sie hier Ihr Rezept ein...
+
+# LSP Status
+lsp-connected = LSP verbunden
+lsp-disconnected = Getrennt
+lsp-error = LSP-Fehler
+
+# New Recipe
+new-recipe = Neues Rezept
+new-recipe-path = Rezeptpfad
+new-recipe-filename = Rezeptname
+new-recipe-placeholder = Abendessen/Italienisch/Pasta Carbonara
+new-recipe-hint = Format: Ordner/Rezeptname
+new-recipe-create = Rezept erstellen
+
+# Delete Recipe
+delete-recipe = Rezept löschen
+delete-recipe-confirm = Möchten Sie dieses Rezept wirklich löschen?
+delete-recipe-warning = Diese Aktion kann nicht rückgängig gemacht werden.

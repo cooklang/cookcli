@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tr.t("new-recipe") }} - Cook{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-8">{{ tr.t("new-recipe") }}</h1>
+
+    {% if let Some(err) = error %}
+    <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-red-700">{{ err }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form action="/new" method="POST" class="space-y-6">
+        <div>
+            <label for="filename" class="block text-sm font-medium text-gray-700 mb-2">
+                {{ tr.t("new-recipe-path") }}
+            </label>
+            <div class="flex items-center gap-2">
+                <input
+                    type="text"
+                    id="filename"
+                    name="filename"
+                    required
+                    pattern="[a-zA-Z0-9_/ -]+"
+                    placeholder="{{ tr.t("new-recipe-placeholder") }}"
+                    value="{{ filename.as_deref().unwrap_or("") }}"
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none{% if error.is_some() %} border-red-300{% endif %}"
+                >
+                <span class="text-gray-500">.cook</span>
+            </div>
+            <p class="mt-2 text-sm text-gray-500">{{ tr.t("new-recipe-hint") }}</p>
+        </div>
+
+        <div class="flex gap-4">
+            <a href="/" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                {{ tr.t("action-cancel") }}
+            </a>
+            <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md">
+                {{ tr.t("new-recipe-create") }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

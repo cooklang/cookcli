@@ -3,6 +3,7 @@ target/
 releases
 node_modules/
 static/css/output.css
+static/js/editor.bundle.js
 
 # Playwright Test
 test-results/

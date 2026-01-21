@@ -33,7 +33,7 @@ use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
-    extract::Path,
+    extract::{DefaultBodyLimit, Path},
     http::{header, HeaderValue, Method, Response, StatusCode},
     routing::{get, post},
     Router,
@@ -48,6 +48,7 @@ use tracing::{error, info};
 mod handlers;
 mod i18n;
 mod language;
+mod lsp_bridge;
 mod shopping_list_store;
 mod templates;
 mod ui;
@@ -124,6 +125,9 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     println!("Serving recipe files from: {:?}", &state.base_path);
 
+    // Maximum request body size: 1MB (reasonable for recipe files)
+    const MAX_BODY_SIZE: usize = 1024 * 1024;
+
     let app = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
@@ -132,11 +136,12 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let app = app
         .with_state(state)
+        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(axum::middleware::from_fn(language::language_middleware))
         .layer(
             CorsLayer::new()
                 .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST]),
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]),
         );
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
@@ -245,9 +250,16 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             axum::routing::put(handlers::update_pantry_item),
         )
         .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/*path", get(handlers::recipe))
+        .route("/recipes/raw/*path", get(handlers::recipe_raw)) // More specific route must come first
+        .route(
+            "/recipes/*path",
+            get(handlers::recipe)
+                .put(handlers::recipe_save)
+                .delete(handlers::recipe_delete),
+        )
         .route("/search", get(handlers::search))
-        .route("/reload", get(handlers::reload).post(handlers::reload));
+        .route("/reload", get(handlers::reload).post(handlers::reload))
+        .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
 
     Ok(router)
 }

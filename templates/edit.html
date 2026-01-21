@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block title %}Edit: {{ recipe_name }} - Cook{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-12rem)]">
+    <!-- Header bar -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+            <a href="/recipe/{{ recipe_path }}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                {{ tr.t("action-back") }}
+            </a>
+            <h1 class="text-2xl font-bold text-gray-800">{{ recipe_name }}</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="save-status" class="text-sm text-gray-500"></span>
+            <button onclick="showDeleteModal()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                {{ tr.t("action-delete") }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Delete confirmation modal -->
+    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ tr.t("delete-recipe") }}</h2>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-2">{{ tr.t("delete-recipe-confirm") }}</p>
+            <p class="text-sm text-red-600 dark:text-red-400 mb-6">{{ tr.t("delete-recipe-warning") }}</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="hideDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    {{ tr.t("action-cancel") }}
+                </button>
+                <button onclick="deleteRecipe()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                    {{ tr.t("action-delete") }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Editor area -->
+    <div id="editor-container" class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden"></div>
+
+    <!-- Status bar -->
+    <div id="status-bar" class="mt-2 px-4 py-2 bg-gray-100 rounded-lg flex items-center justify-between text-sm">
+        <div class="flex items-center gap-2">
+            <span id="lsp-status" class="flex items-center gap-1">
+                <span id="lsp-indicator" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                <span id="lsp-text">Disconnected</span>
+            </span>
+        </div>
+        <div id="cursor-position" class="text-gray-500">
+            Line 1, Col 1
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/editor.bundle.js"></script>
+<script>
+const recipePath = {{ recipe_path|json|safe }};
+const basePath = {{ base_path|json|safe }};
+let originalContent = {{ content|json|safe }};
+let editorView = null;
+let autosaveTimer = null;
+let isSaving = false;
+
+// Timing constants
+const AUTOSAVE_DELAY_MS = 1000;
+const LSP_INITIAL_CONNECT_DELAY_MS = 500;
+const LSP_RECONNECT_DELAY_MS = 3000;
+const COMPLETION_TIMEOUT_MS = 2000;
+
+// Initialize CodeMirror editor
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('editor-container');
+    editorView = window.CooklangEditor.initEditor(container, originalContent, function(newContent) {
+        // Update save status
+        if (newContent !== originalContent) {
+            updateSaveStatus('modified');
+            // Debounced autosave (1 second after last change)
+            if (autosaveTimer) clearTimeout(autosaveTimer);
+            autosaveTimer = setTimeout(() => saveRecipe(), AUTOSAVE_DELAY_MS);
+        }
+
+        // Send didChange to LSP with debouncing to avoid overwhelming the server
+        if (lspInitialized && documentUri) {
+            if (lspDebounceTimer) clearTimeout(lspDebounceTimer);
+            lspDebounceTimer = setTimeout(() => {
+                documentVersion++;
+                sendLspNotification('textDocument/didChange', {
+                    textDocument: {
+                        uri: documentUri,
+                        version: documentVersion
+                    },
+                    contentChanges: [{ text: newContent }]
+                });
+            }, LSP_DEBOUNCE_MS);
+        }
+    });
+
+    // Set up cursor position tracking (must be after editor init)
+    window.CooklangEditor.setCursorPositionCallback((line, col) => {
+        const posEl = document.getElementById('cursor-position');
+        if (posEl) {
+            posEl.textContent = `Line ${line}, Col ${col}`;
+        }
+    });
+});
+
+function updateSaveStatus(state) {
+    const status = document.getElementById('save-status');
+    switch (state) {
+        case 'modified':
+            status.textContent = 'Modified';
+            status.className = 'text-sm text-orange-500';
+            break;
+        case 'saving':
+            status.textContent = 'Saving...';
+            status.className = 'text-sm text-gray-500';
+            break;
+        case 'saved':
+            status.textContent = 'Saved';
+            status.className = 'text-sm text-green-500';
+            break;
+        case 'error':
+            status.textContent = 'Save failed';
+            status.className = 'text-sm text-red-500';
+            break;
+    }
+}
+
+function showToast(message, type = 'error') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${
+        type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Remove after 5 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 5000);
+}
+
+async function saveRecipe() {
+    if (isSaving) return;
+
+    const content = window.CooklangEditor.getContent(editorView);
+    if (content === originalContent) return;
+
+    isSaving = true;
+    updateSaveStatus('saving');
+
+    try {
+        const response = await fetch(`/api/recipes/${encodeURIComponent(recipePath)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'text/plain',
+            },
+            body: content
+        });
+
+        if (response.ok) {
+            originalContent = content;
+            updateSaveStatus('saved');
+        } else {
+            updateSaveStatus('error');
+            const errorText = await response.text();
+            console.error('Save failed:', errorText);
+            showToast(`Save failed: ${errorText || 'Unknown error'}`);
+        }
+    } catch (error) {
+        updateSaveStatus('error');
+        console.error('Save failed:', error.message);
+        showToast(`Save failed: ${error.message}`);
+    } finally {
+        isSaving = false;
+    }
+}
+
+// Keyboard shortcut: Ctrl+S / Cmd+S - save immediately
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        saveRecipe();
+    }
+});
+
+// Initial status
+updateSaveStatus('saved');
+
+// Delete modal functions
+function showDeleteModal() {
+    const modal = document.getElementById('delete-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function hideDeleteModal() {
+    const modal = document.getElementById('delete-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+async function deleteRecipe() {
+    try {
+        const response = await fetch(`/api/recipes/${encodeURIComponent(recipePath)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Redirect to recipes list after successful deletion
+            window.location.href = '/';
+        } else {
+            const errorText = await response.text();
+            console.error('Delete failed:', errorText);
+            hideDeleteModal();
+            showToast(`Failed to delete recipe: ${errorText || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Delete failed:', error.message);
+        hideDeleteModal();
+        showToast(`Failed to delete recipe: ${error.message}`);
+    }
+}
+
+// Close modal when clicking outside
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        hideDeleteModal();
+    }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideDeleteModal();
+    }
+});
+
+// LSP WebSocket connection
+let lspSocket = null;
+let lspMessageId = 1;
+let documentUri = null;
+let documentVersion = 0;
+let lspInitialized = false;
+let pendingCompletions = new Map();
+let lspDebounceTimer = null;
+const LSP_DEBOUNCE_MS = 150;
+
+function connectLsp() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/lsp`;
+
+    console.log('Connecting to LSP at:', wsUrl);
+    lspSocket = new WebSocket(wsUrl);
+
+    lspSocket.onopen = function() {
+        console.log('LSP WebSocket connected');
+        updateLspStatus('connected');
+        // Send initialize request
+        sendLspRequest('initialize', {
+            processId: null,
+            rootUri: 'file://' + basePath,
+            capabilities: {
+                textDocument: {
+                    completion: {
+                        completionItem: {
+                            snippetSupport: false
+                        }
+                    },
+                    publishDiagnostics: {
+                        relatedInformation: true
+                    }
+                }
+            }
+        });
+    };
+
+    lspSocket.onclose = function() {
+        console.log('LSP WebSocket closed');
+        updateLspStatus('disconnected');
+        // Reconnect after delay
+        setTimeout(connectLsp, LSP_RECONNECT_DELAY_MS);
+    };
+
+    lspSocket.onerror = function(error) {
+        console.error('LSP WebSocket error:', error);
+        updateLspStatus('error');
+    };
+
+    lspSocket.onmessage = function(event) {
+        try {
+            const message = JSON.parse(event.data);
+            handleLspMessage(message);
+        } catch (e) {
+            console.error('Failed to parse LSP message:', e);
+        }
+    };
+}
+
+function sendLspRequest(method, params) {
+    if (!lspSocket || lspSocket.readyState !== WebSocket.OPEN) {
+        return null;
+    }
+    const id = lspMessageId++;
+    const message = {
+        jsonrpc: '2.0',
+        id: id,
+        method: method,
+        params: params
+    };
+    console.log('Sending LSP request:', method);
+    lspSocket.send(JSON.stringify(message));
+    return id;
+}
+
+function sendLspNotification(method, params) {
+    if (!lspSocket || lspSocket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+    const message = {
+        jsonrpc: '2.0',
+        method: method,
+        params: params
+    };
+    lspSocket.send(JSON.stringify(message));
+}
+
+function openDocument() {
+    documentUri = 'file://' + recipePath;
+    documentVersion = 1;
+    sendLspNotification('textDocument/didOpen', {
+        textDocument: {
+            uri: documentUri,
+            languageId: 'cooklang',
+            version: documentVersion,
+            text: window.CooklangEditor.getContent(editorView)
+        }
+    });
+    console.log('Document opened:', documentUri);
+}
+
+function handleDiagnostics(params) {
+    if (!editorView) return;
+
+    const doc = editorView.state.doc;
+    const diagnostics = (params.diagnostics || []).map(d => {
+        // Convert LSP position (0-based line/char) to CodeMirror offset
+        const startLine = Math.min(d.range.start.line + 1, doc.lines);
+        const endLine = Math.min(d.range.end.line + 1, doc.lines);
+
+        const line1 = doc.line(startLine);
+        const line2 = doc.line(endLine);
+
+        const from = line1.from + Math.min(d.range.start.character, line1.length);
+        const to = line2.from + Math.min(d.range.end.character, line2.length);
+
+        return {
+            from: Math.max(0, from),
+            to: Math.max(from, to),
+            severity: d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
+            message: d.message
+        };
+    });
+
+    window.CooklangEditor.setDiagnostics(editorView, diagnostics);
+
+    // Update status bar
+    const errorCount = diagnostics.filter(d => d.severity === 'error').length;
+    const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+    console.log(`Diagnostics: ${errorCount} errors, ${warningCount} warnings`);
+}
+
+function handleLspMessage(message) {
+    if (message.id !== undefined) {
+        // Check for pending completion request
+        if (pendingCompletions.has(message.id)) {
+            const resolve = pendingCompletions.get(message.id);
+            pendingCompletions.delete(message.id);
+            const items = message.result?.items || message.result || [];
+            resolve(items);
+            return;
+        }
+
+        // Handle other responses
+        if (message.result && message.result.capabilities) {
+            sendLspNotification('initialized', {});
+            lspInitialized = true;
+            openDocument();
+            console.log('LSP initialized successfully');
+        }
+    } else if (message.method) {
+        console.log('LSP notification:', message.method);
+        if (message.method === 'textDocument/publishDiagnostics') {
+            handleDiagnostics(message.params);
+        }
+    }
+}
+
+function updateLspStatus(status) {
+    const indicator = document.getElementById('lsp-indicator');
+    const text = document.getElementById('lsp-text');
+
+    if (!indicator || !text) return;
+
+    switch (status) {
+        case 'connected':
+            indicator.className = 'w-2 h-2 rounded-full bg-green-500';
+            text.textContent = 'LSP Connected';
+            text.className = 'text-green-600';
+            break;
+        case 'disconnected':
+            indicator.className = 'w-2 h-2 rounded-full bg-gray-400';
+            text.textContent = 'Disconnected';
+            text.className = 'text-gray-500';
+            break;
+        case 'error':
+            indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+            text.textContent = 'LSP Error';
+            text.className = 'text-red-600';
+            break;
+    }
+}
+
+// Connect to LSP after editor is initialized
+setTimeout(connectLsp, LSP_INITIAL_CONNECT_DELAY_MS);
+
+// Set up completion resolver
+window.CooklangEditor.setCompletionResolver(async (line, character) => {
+    return new Promise((resolve) => {
+        if (!lspInitialized || !documentUri) {
+            resolve([]);
+            return;
+        }
+
+        const id = sendLspRequest('textDocument/completion', {
+            textDocument: { uri: documentUri },
+            position: { line: line, character: character }
+        });
+
+        if (id) {
+            pendingCompletions.set(id, resolve);
+            // Timeout after 2 seconds
+            setTimeout(() => {
+                if (pendingCompletions.has(id)) {
+                    pendingCompletions.delete(id);
+                    resolve([]);
+                }
+            }, COMPLETION_TIMEOUT_MS);
+        } else {
+            resolve([]);
+        }
+    });
+});
+
+</script>
+{% endblock %}

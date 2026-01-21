@@ -9,6 +9,7 @@ use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Deserialize)]
 pub struct RecipeQuery {
@@ -127,6 +128,100 @@ pub async fn recipe(
     Ok(Json(value))
 }
 
+pub async fn recipe_raw(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<String, StatusCode> {
+    check_path(&path)?;
+
+    let recipe_path = state.base_path.join(&path);
+
+    // Try .cook extension first, then .menu
+    let file_path = if recipe_path.exists() {
+        recipe_path
+    } else {
+        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
+        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
+
+        if cook_path.exists() {
+            cook_path
+        } else if menu_path.exists() {
+            menu_path
+        } else {
+            tracing::error!("Recipe file not found: {path}");
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    tokio::fs::read_to_string(&file_path).await.map_err(|e| {
+        tracing::error!("Failed to read recipe file {}: {}", file_path, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+pub async fn recipe_save(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: String,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    check_path(&path)?;
+
+    let recipe_path = state.base_path.join(&path);
+
+    // Determine actual file path (with extension)
+    let file_path = if recipe_path.exists() {
+        recipe_path
+    } else {
+        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
+        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
+
+        if cook_path.exists() {
+            cook_path
+        } else if menu_path.exists() {
+            menu_path
+        } else {
+            // Default to .cook for new files
+            Utf8PathBuf::from(format!("{}.cook", recipe_path))
+        }
+    };
+
+    // Atomic write: write to temp file, then rename
+    let temp_path = file_path.with_extension("tmp");
+
+    let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
+        tracing::error!("Failed to create temp file {}: {}", temp_path, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    temp_file.write_all(body.as_bytes()).await.map_err(|e| {
+        tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
+        // Fire-and-forget cleanup - spawn so we don't block the error path
+        let temp_path_clone = temp_path.clone();
+        tokio::spawn(async move {
+            let _ = tokio::fs::remove_file(&temp_path_clone).await;
+        });
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tokio::fs::rename(&temp_path, &file_path)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
+            let temp_path_clone = temp_path.clone();
+            tokio::spawn(async move {
+                let _ = tokio::fs::remove_file(&temp_path_clone).await;
+            });
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    tracing::info!("Saved recipe: {}", file_path);
+
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "path": path
+    })))
+}
+
 pub async fn reload() -> Result<Json<serde_json::Value>, StatusCode> {
     // Since the server reads from disk on each request, there's no cache to clear.
     // This endpoint just returns success to indicate the reload was processed.
@@ -160,4 +255,43 @@ pub async fn search(
         .collect();
 
     Ok(Json(results))
+}
+
+pub async fn recipe_delete(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    check_path(&path)?;
+
+    let recipe_path = state.base_path.join(&path);
+
+    // Determine actual file path (with extension)
+    let file_path = if recipe_path.exists() {
+        recipe_path
+    } else {
+        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
+        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
+
+        if cook_path.exists() {
+            cook_path
+        } else if menu_path.exists() {
+            menu_path
+        } else {
+            tracing::error!("Recipe file not found for deletion: {path}");
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    // Delete the file
+    tokio::fs::remove_file(&file_path).await.map_err(|e| {
+        tracing::error!("Failed to delete recipe file {}: {}", file_path, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tracing::info!("Deleted recipe: {}", file_path);
+
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "path": path
+    })))
 }

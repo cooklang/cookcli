@@ -1,12 +1,12 @@
 use crate::server::{templates::*, AppState};
 use axum::{
-    extract::{Extension, Path, Query, State},
-    http::StatusCode,
+    extract::{Extension, Host, Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
-    Router,
+    Form, Router,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use fluent_templates::Loader;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -17,6 +17,8 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/", get(recipes_page))
         .route("/directory/*path", get(recipes_directory))
         .route("/recipe/*path", get(recipe_page))
+        .route("/edit/*path", get(edit_page))
+        .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
@@ -642,6 +644,267 @@ async fn recipe_page(
     Ok(template.into_response())
 }
 
+async fn edit_page(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+    tracing::info!("Edit page requested for path: {}", path);
+
+    // Validate path to prevent directory traversal
+    let path_check = Utf8Path::new(&path);
+    if !path_check
+        .components()
+        .all(|c| matches!(c, Utf8Component::Normal(_)))
+    {
+        tracing::error!("Invalid path: {path}");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let recipe_path = Utf8PathBuf::from(&path);
+
+    // Find the actual file
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|_| {
+        tracing::error!("Recipe not found: {path}");
+        StatusCode::NOT_FOUND
+    })?;
+
+    let file_path = entry.path().ok_or_else(|| {
+        tracing::error!("Recipe has no file path: {path}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Read raw content
+    let content = tokio::fs::read_to_string(file_path).await.map_err(|e| {
+        tracing::error!("Failed to read recipe file: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Get recipe name from path
+    let recipe_name = path
+        .split('/')
+        .next_back()
+        .unwrap_or(&path)
+        .replace(".cook", "")
+        .replace(".menu", "");
+
+    let template = crate::server::templates::EditTemplate {
+        active: "recipes".to_string(),
+        recipe_name,
+        recipe_path: path,
+        content,
+        base_path: state.base_path.to_string(),
+        tr: crate::server::templates::Tr::new(lang),
+    };
+
+    Ok(template)
+}
+
+#[derive(Deserialize, Default)]
+struct NewPageQuery {
+    error: Option<String>,
+    filename: Option<String>,
+}
+
+async fn new_page(
+    Extension(lang): Extension<LanguageIdentifier>,
+    Query(query): Query<NewPageQuery>,
+) -> impl askama_axum::IntoResponse {
+    crate::server::templates::NewTemplate {
+        active: "recipes".to_string(),
+        tr: Tr::new(lang),
+        error: query.error,
+        filename: query.filename,
+    }
+}
+
+#[derive(Deserialize)]
+struct NewRecipeForm {
+    filename: String,
+}
+
+/// Helper to build redirect URL with error message
+fn new_page_error(error: &str, filename: &str) -> axum::response::Response {
+    let encoded_error = urlencoding::encode(error);
+    let encoded_filename = urlencoding::encode(filename);
+    axum::response::Redirect::to(&format!(
+        "/new?error={}&filename={}",
+        encoded_error, encoded_filename
+    ))
+    .into_response()
+}
+
+/// Validates that the request originated from the same host (CSRF protection)
+fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
+    // Check Origin header first (preferred for CSRF protection)
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            // Origin format is scheme://host[:port]
+            if let Ok(origin_url) = url::Url::parse(origin_str) {
+                if let Some(origin_host) = origin_url.host_str() {
+                    let origin_with_port = if let Some(port) = origin_url.port() {
+                        format!("{}:{}", origin_host, port)
+                    } else {
+                        origin_host.to_string()
+                    };
+                    return origin_with_port == host || origin_host == host;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Fallback to Referer header (less reliable but better than nothing)
+    if let Some(referer) = headers.get(header::REFERER) {
+        if let Ok(referer_str) = referer.to_str() {
+            if let Ok(referer_url) = url::Url::parse(referer_str) {
+                if let Some(referer_host) = referer_url.host_str() {
+                    let referer_with_port = if let Some(port) = referer_url.port() {
+                        format!("{}:{}", referer_host, port)
+                    } else {
+                        referer_host.to_string()
+                    };
+                    return referer_with_port == host || referer_host == host;
+                }
+            }
+        }
+        return false;
+    }
+
+    // No Origin or Referer header - reject for safety
+    // (though browsers should always send one for form submissions)
+    false
+}
+
+async fn create_recipe(
+    State(state): State<Arc<AppState>>,
+    Host(host): Host,
+    headers: HeaderMap,
+    Form(form): Form<NewRecipeForm>,
+) -> impl IntoResponse {
+    // CSRF protection: verify request came from same origin
+    if !validate_same_origin(&headers, &host) {
+        tracing::warn!("CSRF validation failed for create_recipe request");
+        return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
+    }
+
+    let original_filename = form.filename.clone();
+
+    // Validate input before sanitization
+    if form.filename.trim().is_empty() {
+        return new_page_error("Recipe name cannot be empty", &original_filename);
+    }
+
+    // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
+    let recipe_path: String = form
+        .filename
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_' || *c == '/')
+        .collect();
+
+    // Clean up path: remove leading/trailing slashes, collapse multiple slashes
+    let recipe_path = recipe_path
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+
+    if recipe_path.is_empty() {
+        return new_page_error("Recipe name cannot be empty", &original_filename);
+    }
+
+    let file_path = state.base_path.join(format!("{}.cook", recipe_path));
+
+    // Security: Validate path structure before any filesystem operations
+    // Check that the constructed path, when normalized, stays within base_path
+    let base_path_clone = state.base_path.clone();
+    let base_canonical =
+        match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
+            Ok(Ok(p)) => p,
+            _ => {
+                return new_page_error("Internal error: invalid base path", &original_filename);
+            }
+        };
+
+    // Validate parent path components don't escape base_path
+    // We do this by checking the joined path doesn't contain .. after normalization
+    let normalized_path = file_path.as_str().replace("\\", "/");
+    if normalized_path.contains("/../") || normalized_path.ends_with("/..") {
+        tracing::warn!("Path traversal attempt detected in: {}", recipe_path);
+        return new_page_error("Invalid recipe path", &original_filename);
+    }
+
+    // For the file path, we check the parent directory
+    if let Some(parent) = file_path.parent() {
+        // Create parent directories if they don't exist
+        if !parent.exists() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                tracing::error!("Failed to create directories: {}", e);
+                return new_page_error("Failed to create directory", &original_filename);
+            }
+        }
+
+        // Now verify the created parent is under base_path
+        let parent_owned = parent.to_owned();
+        match tokio::task::spawn_blocking(move || parent_owned.canonicalize_utf8()).await {
+            Ok(Ok(parent_canonical)) => {
+                if !parent_canonical.starts_with(&base_canonical) {
+                    tracing::warn!(
+                        "Path traversal attempt: {} not under {}",
+                        parent_canonical,
+                        base_canonical
+                    );
+                    // Clean up the created directory if it's outside base_path
+                    let _ = tokio::fs::remove_dir_all(parent).await;
+                    return new_page_error("Invalid recipe path", &original_filename);
+                }
+            }
+            _ => {
+                return new_page_error("Invalid recipe path", &original_filename);
+            }
+        }
+    }
+
+    // Get the recipe name (last component of path) for the title
+    let recipe_name = recipe_path
+        .split('/')
+        .next_back()
+        .unwrap_or(&recipe_path)
+        .replace(['-', '_'], " ");
+
+    // Create recipe with YAML frontmatter
+    let template = format!("---\ntitle: {}\n---\n\n", recipe_name);
+
+    // Use OpenOptions with create_new to atomically check existence and create
+    // This prevents TOCTOU race conditions
+    use tokio::io::AsyncWriteExt;
+    let file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true) // Fails if file exists - atomic check + create
+        .open(&file_path)
+        .await;
+
+    match file {
+        Ok(mut f) => {
+            if let Err(e) = f.write_all(template.as_bytes()).await {
+                tracing::error!("Failed to write recipe: {}", e);
+                return new_page_error("Failed to write recipe file", &original_filename);
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return new_page_error("A recipe with this name already exists", &original_filename);
+        }
+        Err(e) => {
+            tracing::error!("Failed to create recipe file: {}", e);
+            return new_page_error("Failed to create recipe file", &original_filename);
+        }
+    }
+
+    // Redirect to editor
+    axum::response::Redirect::to(&format!("/edit/{}.cook", recipe_path)).into_response()
+}
+
 fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {
     tracing::debug!("Recipe image path from entry: {}", img_path);
     // If it's a URL, use it directly
@@ -905,7 +1168,7 @@ async fn pantry_page(
     let mut sections = Vec::new();
 
     if let Some(path) = pantry_path {
-        if let Ok(content) = std::fs::read_to_string(path) {
+        if let Ok(content) = tokio::fs::read_to_string(path).await {
             let result = cooklang::pantry::parse_lenient(&content);
 
             if let Some(pantry_conf) = result.output() {

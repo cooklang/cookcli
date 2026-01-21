@@ -18,9 +18,17 @@
     </nav>
     {% endif %}
 
-    <h1 class="text-3xl font-bold mb-8 bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
-        {{ current_name }}
-    </h1>
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
+            {{ current_name }}
+        </h1>
+        <a href="/new" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            {{ tr.t("new-recipe") }}
+        </a>
+    </div>
 
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
