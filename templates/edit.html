@@ -141,6 +141,21 @@ function updateSaveStatus(state) {
     }
 }
 
+function showToast(message, type = 'error') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${
+        type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Remove after 5 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 5000);
+}
+
 async function saveRecipe() {
     if (isSaving) return;
 
@@ -164,11 +179,14 @@ async function saveRecipe() {
             updateSaveStatus('saved');
         } else {
             updateSaveStatus('error');
-            console.error('Save failed:', await response.text());
+            const errorText = await response.text();
+            console.error('Save failed:', errorText);
+            showToast(`Save failed: ${errorText || 'Unknown error'}`);
         }
     } catch (error) {
         updateSaveStatus('error');
         console.error('Save failed:', error.message);
+        showToast(`Save failed: ${error.message}`);
     } finally {
         isSaving = false;
     }
@@ -209,14 +227,15 @@ async function deleteRecipe() {
             // Redirect to recipes list after successful deletion
             window.location.href = '/';
         } else {
-            console.error('Delete failed:', await response.text());
+            const errorText = await response.text();
+            console.error('Delete failed:', errorText);
             hideDeleteModal();
-            alert('Failed to delete recipe');
+            showToast(`Failed to delete recipe: ${errorText || 'Unknown error'}`);
         }
     } catch (error) {
         console.error('Delete failed:', error.message);
         hideDeleteModal();
-        alert('Failed to delete recipe');
+        showToast(`Failed to delete recipe: ${error.message}`);
     }
 }
 
