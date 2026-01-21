@@ -277,7 +277,7 @@ pub async fn recipe_delete(
     };
 
     // Delete the file
-    std::fs::remove_file(&file_path).map_err(|e| {
+    tokio::fs::remove_file(&file_path).await.map_err(|e| {
         tracing::error!("Failed to delete recipe file {}: {}", file_path, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
