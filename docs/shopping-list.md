@@ -69,7 +69,7 @@ cook shopping-list "Main Course.cook:2" "Side Dish.cook:2" "Dessert.cook:2"
 
 ## Menu Files
 
-Create shopping lists from `.menu` files that organize multiple recipes:
+Create shopping lists from [`.menu` files](/docs/use-cases/meal-planning/) that organize multiple recipes:
 
 ```bash
 # Generate shopping list from weekly menu

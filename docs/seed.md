@@ -119,7 +119,7 @@ cook recipe "Breakfast/Easy Pancakes"
 cook recipe "Neapolitan Pizza:2"
 
 # Check ingredient formatting
-cook recipe "lamb-chops" -f json | jq '.ingredients'
++cook recipe "lamb-chops" -f json | jq '.ingredients'
 ```
 
 ## Practical Uses

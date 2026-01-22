@@ -18,7 +18,7 @@ This displays the recipe in a human-readable format with ingredients, steps, and
 
 ## Menu Files
 
-CookCLI also supports `.menu` files for meal planning. Menu files can reference multiple recipes and organize them by meals or days:
+CookCLI also supports [`.menu` files](/docs/use-cases/meal-planning/) for meal planning. Menu files can reference multiple recipes and organize them by meals or days:
 
 ```bash
 # View a menu file
