@@ -332,9 +332,9 @@ fn ingredients(
             }
         }
 
-        if ingredient.reference.is_some() {
+        if let Some(reference) = &ingredient.reference {
             let sep = std::path::MAIN_SEPARATOR.to_string();
-            let path = ingredient.reference.as_ref().unwrap().components.join(&sep);
+            let path = reference.components.join(&sep);
             write!(
                 w,
                 "[{}]({}{}{})",
