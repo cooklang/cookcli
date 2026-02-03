@@ -110,6 +110,9 @@ jobs:
       - name: Build CSS
         run: npm run build-css
 
+      - name: Build JS
+        run: npm run build-js
+
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -302,6 +305,9 @@ jobs:
 
       - name: Build CSS
         run: npm run build-css
+
+      - name: Build JS
+        run: npm run build-js
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@master

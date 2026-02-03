@@ -43,6 +43,9 @@ jobs:
     - name: Build CSS
       run: npm run build-css
 
+    - name: Build JS
+      run: npm run build-js
+
     - name: Check formatting
       run: cargo fmt -- --check
 
@@ -106,6 +109,7 @@ jobs:
       run: |
         cargo build
         npm run build-css
+        npm run build-js
 
     - name: Cache Playwright browsers
       uses: actions/cache@v4
@@ -170,6 +174,9 @@ jobs:
     - name: Build CSS
       run: npm run build-css
 
+    - name: Build JS
+      run: npm run build-js
+
     - name: Build
       run: cargo build --verbose
 
@@ -218,6 +225,9 @@ jobs:
 
     - name: Build CSS
       run: npm run build-css
+
+    - name: Build JS
+      run: npm run build-js
 
     - name: Generate code coverage
       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml

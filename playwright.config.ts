@@ -100,7 +100,7 @@ export default defineConfig({
   webServer: {
     command: process.env.CI
       ? './target/debug/cook server ./seed --port 9080'  // In CI, use pre-built binary
-      : 'npm run build-css && cargo build && ./target/debug/cook server ./seed --port 9080',  // Local dev
+      : 'npm run build-css && npm run build-js && cargo build && ./target/debug/cook server ./seed --port 9080',  // Local dev
     url: 'http://localhost:9080',
     reuseExistingServer: !process.env.CI,
     timeout: 60 * 1000, // 1 minute should be enough with pre-built binary

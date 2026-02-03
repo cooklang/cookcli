@@ -21,6 +21,10 @@ make build  # Includes CSS compilation
 make css
 npm run build-css
 
+# Build JS only
+make js
+npm run build-js
+
 # Build specific workspace member
 cargo build -p cookcli
 
@@ -61,6 +65,12 @@ npm run build-css
 
 # Watch CSS changes during development
 npm run watch-css
+
+# Build JS for production
+npm run build-js
+
+# Watch JS changes during development
+npm run watch-js
 ```
 
 ### Linting and Formatting
