@@ -235,6 +235,7 @@ pub enum StepItem {
     Cookware(String),
     Timer(String),
     Quantity(String),
+    LineBreak,
 }
 
 #[derive(Debug, Clone, Serialize)]

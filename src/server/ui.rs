@@ -336,7 +336,15 @@ async fn recipe_page(
 
                         match item {
                             Item::Text { value } => {
-                                step_items.push(StepItem::Text(value.to_string()));
+                                let parts: Vec<&str> = value.split('\n').collect();
+                                for (i, part) in parts.iter().enumerate() {
+                                    if i > 0 {
+                                        step_items.push(StepItem::LineBreak);
+                                    }
+                                    if !part.is_empty() {
+                                        step_items.push(StepItem::Text(part.to_string()));
+                                    }
+                                }
                             }
                             Item::Ingredient { index } => {
                                 section_ingredient_indices.insert(*index);
