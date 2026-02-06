@@ -206,9 +206,9 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
             write!(w, r"*{}* ", escape_typst(&entry.quantity.to_string()))?;
         }
 
-        if ingredient.reference.is_some() {
+        if let Some(reference) = &ingredient.reference {
             let sep = std::path::MAIN_SEPARATOR.to_string();
-            let path = ingredient.reference.as_ref().unwrap().components.join(&sep);
+            let path = reference.components.join(&sep);
             write!(
                 w,
                 r#"#ingredient("{}")"#,
