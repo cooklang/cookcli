@@ -416,8 +416,17 @@ fn steps(w: &mut impl io::Write, recipe: &Recipe) -> Result {
             match content {
                 cooklang::Content::Step(step) => {
                     let (step_text, step_ingredients) = step_text(recipe, section, step);
-                    let step_text = format!("{:>2}. {}", step.number, step_text.trim());
-                    print_wrapped_with_options(w, &step_text, |o| o.subsequent_indent("    "))?;
+                    let paragraphs: Vec<&str> = step_text.trim().split('\n').collect();
+                    for (i, paragraph) in paragraphs.iter().enumerate() {
+                        if i == 0 {
+                            let first = format!("{:>2}. {}", step.number, paragraph.trim_start());
+                            print_wrapped_with_options(w, &first, |o| o.subsequent_indent("    "))?;
+                        } else {
+                            print_wrapped_with_options(w, paragraph.trim_start(), |o| {
+                                o.initial_indent("    ").subsequent_indent("    ")
+                            })?;
+                        }
+                    }
                     print_wrapped_with_options(w, &step_ingredients, |o| {
                         let indent = "     "; // 5
                         o.initial_indent(indent)
@@ -440,10 +449,20 @@ fn steps(w: &mut impl io::Write, recipe: &Recipe) -> Result {
                         // Format as a note with a visual indicator
                         let note_style = yansi::Style::new().italic().fg(yansi::Color::Blue);
                         let note_prefix = "📝 Note: ".paint(note_style);
-                        write!(w, "  {note_prefix}")?;
-                        print_wrapped_with_options(w, t.trim(), |o| {
-                            o.initial_indent("").subsequent_indent("           ")
-                        })?;
+                        let note_indent = "           ";
+                        let paragraphs: Vec<&str> = t.trim().split('\n').collect();
+                        for (i, paragraph) in paragraphs.iter().enumerate() {
+                            if i == 0 {
+                                write!(w, "  {note_prefix}")?;
+                                print_wrapped_with_options(w, paragraph.trim(), |o| {
+                                    o.initial_indent("").subsequent_indent(note_indent)
+                                })?;
+                            } else {
+                                print_wrapped_with_options(w, paragraph.trim(), |o| {
+                                    o.initial_indent(note_indent).subsequent_indent(note_indent)
+                                })?;
+                            }
+                        }
                         writeln!(w)?;
                     }
                 }

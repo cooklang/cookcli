@@ -299,7 +299,7 @@
                                                 <div class="text-gray-700 mb-2 leading-8">
                                                 {% for step_item in step.items %}
                                                     {% match step_item %}
-                                                        {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% endmatch %}{% endfor %}
+                                                        {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% when crate::server::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
                                                 </div>
                                                 {% if step.ingredients.len() > 0 %}
                                                 <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
@@ -318,7 +318,7 @@
                                 <li class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-3 border-l-4 border-blue-400">
                                     <div class="flex items-start gap-2">
                                         <span class="text-blue-600">📝</span>
-                                        <p class="text-gray-700 italic">{{ note }}</p>
+                                        <p class="text-gray-700 italic" style="white-space: pre-line">{{ note }}</p>
                                     </div>
                                 </li>
                             {% endmatch %}
