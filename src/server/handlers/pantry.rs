@@ -255,11 +255,29 @@ fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem) {
             writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
         }
         cooklang::pantry::PantryItem::WithAttributes(attrs) => {
-            // Build the value string
-            let value = if let Some(qty) = &attrs.quantity {
+            let has_quantity = attrs.quantity.is_some();
+            let has_other_attrs =
+                attrs.bought.is_some() || attrs.expire.is_some() || attrs.low.is_some();
+
+            let value = if has_quantity && has_other_attrs {
+                // Use inline table when quantity and other attributes are present
+                let mut parts = Vec::new();
+                if let Some(qty) = &attrs.quantity {
+                    parts.push(format!("quantity = \"{}\"", qty.replace('"', "\\\"")));
+                }
+                if let Some(bought) = &attrs.bought {
+                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
+                }
+                if let Some(expire) = &attrs.expire {
+                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
+                }
+                if let Some(low) = &attrs.low {
+                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
+                }
+                format!("{{ {} }}", parts.join(", "))
+            } else if let Some(qty) = &attrs.quantity {
                 format!("\"{}\"", qty.replace('"', "\\\""))
-            } else if attrs.bought.is_some() || attrs.expire.is_some() || attrs.low.is_some() {
-                // If there are other attributes but no quantity, use a table
+            } else if has_other_attrs {
                 let mut parts = Vec::new();
                 if let Some(bought) = &attrs.bought {
                     parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
