@@ -133,15 +133,47 @@ async function generateList() {
     }
 }
 
-// Helper function to extract numeric value from nested structures
-function extractNumericValue(obj) {
-    if (typeof obj === 'number') {
-        return obj;
+// Format a Cooklang Number tagged enum ({type: "regular"|"fraction", value: ...})
+function formatCooklangNumber(num) {
+    if (!num || typeof num !== 'object') return '';
+    switch (num.type) {
+        case 'regular':
+            return formatNumber(num.value);
+        case 'fraction': {
+            const f = num.value;
+            const whole = f.whole || 0;
+            const numerator = f.num || 0;
+            const den = f.den || 1;
+            if (whole > 0 && numerator > 0) {
+                return `${whole} ${numerator}/${den}`;
+            } else if (numerator > 0) {
+                return `${numerator}/${den}`;
+            } else if (whole > 0) {
+                return `${whole}`;
+            }
+            return '0';
+        }
+        default:
+            return '';
     }
-    if (obj && typeof obj === 'object' && 'value' in obj) {
-        return extractNumericValue(obj.value);
+}
+
+// Format a Cooklang Value tagged enum ({type: "number"|"range"|"text", value: ...})
+function formatCooklangValue(value) {
+    if (!value || typeof value !== 'object') return '';
+    switch (value.type) {
+        case 'number':
+            return formatCooklangNumber(value.value);
+        case 'range': {
+            const start = formatCooklangNumber(value.value.start);
+            const end = formatCooklangNumber(value.value.end);
+            return `${start} - ${end}`;
+        }
+        case 'text':
+            return typeof value.value === 'string' ? value.value : '';
+        default:
+            return '';
     }
-    return NaN;
 }
 
 // Format numbers with fractions
@@ -192,8 +224,7 @@ function decimalToFraction(value) {
     for (const [decimal, fractionStr] of commonFractions) {
         if (Math.abs(fract - decimal) < epsilon) {
             if (whole > 0) {
-                // For values > 1, return null to use decimal format
-                return null;
+                return `${whole} ${fractionStr}`;
             } else {
                 return fractionStr;
             }
@@ -287,41 +318,11 @@ function formatQuantities(quantities) {
     return quantities.map(q => {
         let val = '';
 
-        // Extract the numeric value from various nested structures
         if (q.value) {
-            // Handle different nesting levels
-            let numValue = q.value;
-
-            // Keep drilling down if we have nested value properties
-            while (numValue && typeof numValue === 'object' && 'value' in numValue) {
-                numValue = numValue.value;
-            }
-
-            // Handle Range type (has start and end)
-            if (numValue && typeof numValue === 'object' && 'start' in numValue && 'end' in numValue) {
-                // Format range
-                const start = extractNumericValue(numValue.start);
-                const end = extractNumericValue(numValue.end);
-                if (!isNaN(start) && !isNaN(end)) {
-                    val = `${formatNumber(start)} - ${formatNumber(end)}`;
-                }
-            }
-            // Handle Text type
-            else if (typeof numValue === 'string') {
-                val = numValue;
-            }
-            // Handle numeric value
-            else if (typeof numValue === 'number' && !isNaN(numValue)) {
-                val = formatNumber(numValue);
-            }
+            val = formatCooklangValue(q.value);
         }
 
-        // Get unit
         let unit = q.unit || '';
-        if (unit && typeof unit === 'object' && 'value' in unit) {
-            unit = unit.value || '';
-        }
-
         return `${val} ${unit}`.trim();
     }).join(', ');
 }
