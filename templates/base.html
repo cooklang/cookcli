@@ -463,7 +463,7 @@
 <body class="bg-gray-50">
     <div class="viewport">
         <nav class="bg-white shadow-lg rounded-2xl mb-8 relative">
-            <div class="px-6 py-4 relative">
+            <div class="px-3 lg:px-6 py-4 relative">
                 <div class="flex items-center justify-between">
                     <a href="/" class="flex items-center space-x-2">
                         <img src="/static/android-chrome-192x192.png" alt="Cook" class="h-8 w-8" width="32" height="32">
@@ -478,24 +478,24 @@
                         <input type="text"
                                id="search-input"
                                placeholder="{{ tr.t("search-placeholder") }}"
-                               class="w-80 pl-10 pr-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition-all shadow-md hover:shadow-lg">
+                               class="w-48 lg:w-80 pl-10 pr-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition-all shadow-md hover:shadow-lg">
                         <div id="search-results"
                              class="absolute top-full mt-2 w-full bg-white border-2 border-purple-200 rounded-xl shadow-xl hidden max-h-96 overflow-y-auto"
                              style="z-index: 9999;">
                         </div>
                     </div>
 
-                    <div class="flex space-x-2">
-                        <a href="/" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
+                    <div class="flex space-x-1 lg:space-x-2">
+                        <a href="/" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-recipes") }}</span>
                         </a>
-                        <a href="/shopping-list" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "shopping" %}bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 hover:text-purple-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
+                        <a href="/shopping-list" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "shopping" %}bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 hover:text-purple-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-shopping-list") }}</span>
                         </a>
-                        <a href="/pantry" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "pantry" %}bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-green-100 hover:to-teal-100 hover:text-green-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
+                        <a href="/pantry" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "pantry" %}bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-green-100 hover:to-teal-100 hover:text-green-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-pantry") }}</span>
                         </a>
-                        <a href="/preferences" class="px-5 py-2 rounded-full font-medium transition-all duration-300 {% if active == "preferences" %}bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gray-100 hover:text-gray-800 hover:shadow-md hover:-translate-y-0.5{% endif %}">
+                        <a href="/preferences" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "preferences" %}bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gray-100 hover:text-gray-800 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>⚙️</span>
                         </a>
                         <!-- Keyboard shortcuts help button -->
