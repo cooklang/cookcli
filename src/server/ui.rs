@@ -1013,7 +1013,8 @@ async fn menu_page_handler(
                                     if i > 0 {
                                         // Newline encountered - flush current text and line
                                         if !current_text.is_empty() {
-                                            step_items.push(MenuSectionItem::Text(current_text.clone()));
+                                            step_items
+                                                .push(MenuSectionItem::Text(current_text.clone()));
                                             current_text.clear();
                                         }
                                         if !step_items.is_empty() {
