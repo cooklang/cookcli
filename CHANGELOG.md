@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.22.0](https://github.com/cooklang/cookcli/compare/v0.21.0...v0.22.0) (2026-02-10)
+
+
+### Features
+
+* add keyboard shortcuts for web UI ([cb1d99d](https://github.com/cooklang/cookcli/commit/cb1d99dc83d1102026af826c2121c912bfb14a05)), closes [#248](https://github.com/cooklang/cookcli/issues/248)
+* support backslash line breaks for formatting in steps and notes ([40f4987](https://github.com/cooklang/cookcli/commit/40f4987753a07f5d3e8fa8886974d357f00f2625))
+
+
+### Bug Fixes
+
+* allow dirty working directory for cargo publish and format code ([36b0ec0](https://github.com/cooklang/cookcli/commit/36b0ec01ca300eb09bfa72847763992c2539d571))
+* issues with line break ([5edc0ec](https://github.com/cooklang/cookcli/commit/5edc0ec2a93091aa5fb34de4d233e3a19b0feae2))
+* optimize web UI layout for tablet-sized screens ([2e1d1b7](https://github.com/cooklang/cookcli/commit/2e1d1b7005521ac28ef0c1fb72960dfa56a57547))
+* resolve clippy warnings for unnecessary_unwrap ([d38e669](https://github.com/cooklang/cookcli/commit/d38e669401d2ae0571d4484eea41c45eb6bae929))
+* update dependencies to resolve security vulnerabilities ([52ec667](https://github.com/cooklang/cookcli/commit/52ec667f167acdb916216d2ff418c80e39c2baae))
+* use if-let instead of is_some + unwrap for ingredient references ([22440a6](https://github.com/cooklang/cookcli/commit/22440a6f95a29ae6f16261da72e22ad2e3c9fdd7))
+
 ## [0.21.0](https://github.com/cooklang/cookcli/compare/v0.20.0...v0.21.0) (2026-01-21)
 
 
