@@ -240,6 +240,11 @@
             border: 1px solid #374151;
         }
 
+        /* Search result keyboard selection */
+        #search-results a.search-selected {
+            background: linear-gradient(to right, #f3e8ff, #fce7f3) !important;
+        }
+
         /* Search results dark mode */
         .dark #search-results {
             background-color: #1f2937;
@@ -250,8 +255,9 @@
             color: #e5e7eb;
         }
 
-        .dark #search-results a:hover {
-            background-color: #374151;
+        .dark #search-results a:hover,
+        .dark #search-results a.search-selected {
+            background-color: #374151 !important;
         }
 
         .dark #search-results .text-gray-800 {
@@ -542,10 +548,24 @@
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
         let searchTimeout;
+        let selectedIndex = -1;
+
+        function updateSearchSelection() {
+            const items = searchResults.querySelectorAll('a');
+            items.forEach((item, i) => {
+                if (i === selectedIndex) {
+                    item.classList.add('search-selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('search-selected');
+                }
+            });
+        }
 
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const query = this.value.trim();
+            selectedIndex = -1;
 
             if (query.length < 2) {
                 searchResults.classList.add('hidden');
@@ -556,12 +576,13 @@
                 try {
                     const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
                     const results = await response.json();
+                    selectedIndex = -1;
 
                     if (results.length === 0) {
                         searchResults.innerHTML = '<div class="p-4 text-gray-500 text-center">' + translations.noRecipes + '</div>';
                     } else {
                         searchResults.innerHTML = results.map(recipe =>
-                            `<a href="/recipe/${recipe.path}" class="block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">
+                            `<a href="/recipe/${recipe.path}" class="search-result block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">
                                 <div class="font-medium text-gray-800">${recipe.name}</div>
                             </a>`
                         ).join('');
@@ -573,9 +594,34 @@
             }, 300);
         });
 
+        searchInput.addEventListener('keydown', function(e) {
+            const items = searchResults.querySelectorAll('a');
+            if (items.length === 0 || searchResults.classList.contains('hidden')) return;
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                    updateSearchSelection();
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    updateSearchSelection();
+                    break;
+                case 'Enter':
+                    if (selectedIndex >= 0 && selectedIndex < items.length) {
+                        e.preventDefault();
+                        items[selectedIndex].click();
+                    }
+                    break;
+            }
+        });
+
         document.addEventListener('click', function(e) {
             if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 searchResults.classList.add('hidden');
+                selectedIndex = -1;
             }
         });
     </script>

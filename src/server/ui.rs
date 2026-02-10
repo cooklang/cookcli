@@ -1007,7 +1007,24 @@ async fn menu_page_handler(
                                     step_items.clear();
                                 }
                             } else {
-                                current_text.push_str(value);
+                                // Split on newlines to preserve line breaks
+                                let parts: Vec<&str> = value.split('\n').collect();
+                                for (i, part) in parts.iter().enumerate() {
+                                    if i > 0 {
+                                        // Newline encountered - flush current text and line
+                                        if !current_text.is_empty() {
+                                            step_items.push(MenuSectionItem::Text(current_text.clone()));
+                                            current_text.clear();
+                                        }
+                                        if !step_items.is_empty() {
+                                            lines.push(step_items.clone());
+                                            step_items.clear();
+                                        }
+                                    }
+                                    if !part.is_empty() {
+                                        current_text.push_str(part);
+                                    }
+                                }
                             }
                         }
                         Item::Ingredient { index } => {

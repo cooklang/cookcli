@@ -26,14 +26,20 @@
     let pendingKey = null;
     let pendingTimeout = null;
 
-    // Check if user is typing in an input field
+    // Check if user is typing in a text-entry input field
     function isTyping(event) {
         const target = event.target;
         const tagName = target.tagName.toLowerCase();
 
-        // Check for input elements
-        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+        if (tagName === 'textarea' || tagName === 'select') {
             return true;
+        }
+
+        // Only block for text-entry inputs, not checkboxes/radios/etc.
+        if (tagName === 'input') {
+            const type = (target.type || 'text').toLowerCase();
+            const textTypes = ['text', 'password', 'email', 'number', 'search', 'url', 'tel', 'date', 'time', 'datetime-local'];
+            return textTypes.includes(type);
         }
 
         // Check for contenteditable elements
@@ -87,6 +93,10 @@
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-600 dark:text-gray-400">Focus search</span>
                                     <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">/</kbd>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Navigate search results</span>
+                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">&uarr;</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">&darr;</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Enter</kbd></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-600 dark:text-gray-400">Go to recipes</span>

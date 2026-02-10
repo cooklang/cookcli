@@ -4,22 +4,22 @@ servings: 2
 
 ==Day 1==
 
-Breakfast:
-- @./Breakfast/Easy Pancakes{10%servings} with @maple syrup{2%tbsp}
+Breakfast: \
+- @./Breakfast/Easy Pancakes{10%servings} with @maple syrup{2%tbsp} \
 - @coffee{1%cup}
 
-Lunch:
-- @./lamb-chops{}
+Lunch: \
+- @./lamb-chops{} \
 - @bread{2%slices}(toasted) with @butter{1%tbsp}
 
-Dinner:
-- @./Neapolitan Pizza{}
+Dinner: \
+- @./Neapolitan Pizza{} \
 - @soy sauce{1%tbsp}
 
 ==Day 2==
 
-Breakfast:
-- @oats{1} with @milk{1/2%cup} and @sugar{1%tsp}
+Breakfast: \
+- @oats{1} with @milk{1/2%cup} and @sugar{1%tsp} \
 - @orange juice{1%glass}
 
 ...

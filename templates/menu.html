@@ -155,7 +155,6 @@
                         {% when _ %}
                             <!-- Single non-text item -->
                             <div class="pl-6 flex items-baseline gap-x-2">
-                                <span class="text-gray-400">•</span>
                                 {% match line[0] %}
                                 {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                     <span class="inline-flex items-center gap-1">
@@ -192,7 +191,6 @@
                     {% else %}
                     <!-- Multi-item line (meal item with ingredients) -->
                     <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
-                        <span class="text-gray-400">•</span>
                         {% for item in line %}
                             {% match item %}
                             {% when crate::server::templates::MenuSectionItem::Text with (text) %}
