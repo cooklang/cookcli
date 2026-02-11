@@ -25,3 +25,4 @@ shopping-add-recipes-first = Please add some recipes first
 shopping-failed-to-generate = Failed to generate shopping list
 shopping-failed-to-add = Failed to add to shopping list
 shopping-error = Error
+shopping-print = Print

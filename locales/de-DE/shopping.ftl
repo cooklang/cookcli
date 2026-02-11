@@ -25,3 +25,4 @@ shopping-add-recipes-first = Bitte fügen Sie zuerst einige Rezepte hinzu
 shopping-failed-to-generate = Einkaufsliste konnte nicht erstellt werden
 shopping-failed-to-add = Hinzufügen zur Einkaufsliste fehlgeschlagen
 shopping-error = Fehler
+shopping-print = Drucken

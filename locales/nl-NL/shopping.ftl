@@ -25,3 +25,4 @@ shopping-add-recipes-first = Voeg eerst enkele recepten toe
 shopping-failed-to-generate = Boodschappenlijst kon niet worden gegenereerd
 shopping-failed-to-add = Toevoegen aan boodschappenlijst mislukt
 shopping-error = Fout
+shopping-print = Afdrukken
