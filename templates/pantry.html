@@ -2,6 +2,21 @@
 
 {% block content %}
 <div class="px-4 sm:px-8 lg:px-12 xl:px-16">
+    <div id="pantry-error-banner" class="hidden mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 text-red-500">
+                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <p id="pantry-error-message" class="flex-1 text-red-700 text-sm font-mono whitespace-pre-wrap"></p>
+            <button onclick="document.getElementById('pantry-error-banner').classList.add('hidden')" class="text-red-400 hover:text-red-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
     <div class="mt-8 mb-6">
         <div class="flex items-center justify-between">
             <h1 class="text-3xl font-bold text-gray-800">{{ tr.t("pantry-title") }}</h1>
@@ -396,10 +411,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.ok) {
                     window.location.reload();
                 } else {
-                    alert('{{ tr.t("pantry-failed-add") }}');
+                    const data = await response.json().catch(() => ({}));
+                    showPantryError(data.error || '{{ tr.t("pantry-failed-add") }}');
                 }
             } catch (error) {
-                alert('Error adding item: ' + error);
+                showPantryError('Error adding item: ' + error);
             }
         });
     }
@@ -507,10 +523,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Re-check out-of-stock status after update
                     checkOutOfStock();
                 } else {
-                    alert('{{ tr.t("pantry-failed-update") }}');
+                    const data = await response.json().catch(() => ({}));
+                    showPantryError(data.error || '{{ tr.t("pantry-failed-update") }}');
                 }
             } catch (error) {
-                alert('Error updating item: ' + error);
+                showPantryError('Error updating item: ' + error);
             }
         }
 
@@ -558,10 +575,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }, 200);
                         } else {
-                            alert('{{ tr.t("pantry-failed-remove") }}');
+                            const data = await response.json().catch(() => ({}));
+                            showPantryError(data.error || '{{ tr.t("pantry-failed-remove") }}');
                         }
                     } catch (error) {
-                        alert('Error removing item: ' + error);
+                        showPantryError('Error removing item: ' + error);
                     }
                 }
             });
@@ -574,6 +592,13 @@ function closeAddModal() {
     addModal.classList.add('hidden');
     addModal.classList.remove('flex');
     document.getElementById('add-form').reset();
+}
+
+function showPantryError(message) {
+    const banner = document.getElementById('pantry-error-banner');
+    document.getElementById('pantry-error-message').textContent = message;
+    banner.classList.remove('hidden');
+    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 </script>
 {% endblock %}

@@ -30,6 +30,23 @@
 
     <!-- Main content area with shopping list -->
     <div class="flex-1">
+        <div id="error-banner" class="hidden mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 text-red-500">
+                    <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p id="error-message" class="text-red-700 text-sm font-mono whitespace-pre-wrap"></p>
+                </div>
+                <button onclick="hideError()" class="text-red-400 hover:text-red-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
         <div id="shopping-list-results">
             <div id="list-content"></div>
         </div>
@@ -38,6 +55,17 @@
 
 <script>
 let shoppingList = [];
+
+function showError(message) {
+    const banner = document.getElementById('error-banner');
+    const msg = document.getElementById('error-message');
+    msg.textContent = message;
+    banner.classList.remove('hidden');
+}
+
+function hideError() {
+    document.getElementById('error-banner').classList.add('hidden');
+}
 
 async function loadShoppingList() {
     try {
@@ -87,11 +115,15 @@ async function removeRecipe(path) {
         });
 
         if (response.ok) {
+            hideError();
             await loadShoppingList();
-            // Note: loadShoppingList will automatically regenerate if there are items
+        } else {
+            const data = await response.json().catch(() => ({}));
+            showError(data.error || 'Failed to remove recipe');
         }
     } catch (error) {
         console.error('Failed to remove recipe:', error);
+        showError('Failed to remove recipe');
     }
 }
 
@@ -102,17 +134,24 @@ async function clearList() {
         });
 
         if (response.ok) {
+            hideError();
             await loadShoppingList();
             document.getElementById('shopping-list-results').classList.add('hidden');
+        } else {
+            const data = await response.json().catch(() => ({}));
+            showError(data.error || 'Failed to clear list');
         }
     } catch (error) {
         console.error('Failed to clear list:', error);
+        showError('Failed to clear list');
     }
 }
 
 async function generateList() {
+    hideError();
+
     if (shoppingList.length === 0) {
-        alert('{{ tr.t("shopping-add-recipes-first") }}');
+        showError('{{ tr.t("shopping-add-recipes-first") }}');
         return;
     }
 
@@ -129,10 +168,14 @@ async function generateList() {
         });
 
         const data = await response.json();
+        if (!response.ok) {
+            showError(data.error || '{{ tr.t("shopping-failed-to-generate") }}');
+            return;
+        }
         displayShoppingList(data);
     } catch (error) {
         console.error('Failed to generate shopping list:', error);
-        alert('{{ tr.t("shopping-failed-to-generate") }}');
+        showError('{{ tr.t("shopping-failed-to-generate") }}');
     }
 }
 

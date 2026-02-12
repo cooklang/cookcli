@@ -12,6 +12,15 @@ use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
 
+fn error_page(lang: LanguageIdentifier, msg: impl std::fmt::Display) -> axum::response::Response {
+    let template = ErrorTemplate {
+        active: String::new(),
+        error_message: msg.to_string(),
+        tr: Tr::new(lang),
+    };
+    template.into_response()
+}
+
 pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
@@ -27,7 +36,7 @@ pub fn ui() -> Router<Arc<AppState>> {
 async fn recipes_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> axum::response::Response {
     recipes_handler(state, None, lang).await
 }
 
@@ -35,7 +44,7 @@ async fn recipes_directory(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> axum::response::Response {
     recipes_handler(state, Some(path), lang).await
 }
 
@@ -43,7 +52,7 @@ async fn recipes_handler(
     state: Arc<AppState>,
     path: Option<String>,
     lang: LanguageIdentifier,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> axum::response::Response {
     let base = &state.base_path;
     let search_path = if let Some(p) = &path {
         base.join(p)
@@ -51,10 +60,13 @@ async fn recipes_handler(
         base.clone()
     };
 
-    let tree = cooklang_find::build_tree(&search_path).map_err(|e| {
-        tracing::error!("Failed to build recipe tree: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let tree = match cooklang_find::build_tree(&search_path) {
+        Ok(tree) => tree,
+        Err(e) => {
+            tracing::error!("Failed to build recipe tree: {:?}", e);
+            return error_page(lang, &e);
+        }
+    };
 
     let mut items = Vec::new();
 
@@ -151,7 +163,7 @@ async fn recipes_handler(
         tr: Tr::new(lang),
     };
 
-    Ok(template)
+    template.into_response()
 }
 
 fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
@@ -178,7 +190,7 @@ async fn recipe_page(
     Query(query): Query<RecipeQuery>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
-) -> Result<axum::response::Response, StatusCode> {
+) -> axum::response::Response {
     let scale = query.scale.unwrap_or(1.0);
 
     let recipe_path = Utf8PathBuf::from(&path);
@@ -188,10 +200,13 @@ async fn recipe_page(
         recipe_path.extension()
     );
 
-    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|_| {
-        tracing::error!("Recipe not found: {path}");
-        StatusCode::NOT_FOUND
-    })?;
+    let entry = match cooklang_find::get_recipe(vec![&state.base_path], &recipe_path) {
+        Ok(entry) => entry,
+        Err(e) => {
+            tracing::error!("Recipe not found: {path}");
+            return error_page(lang, format!("Recipe not found: {path}: {e}"));
+        }
+    };
 
     // Check if this is a menu file
     let actual_path = entry.path();
@@ -202,14 +217,19 @@ async fn recipe_page(
         entry.is_menu()
     );
     if entry.is_menu() {
-        let template = menu_page_handler(path, scale, entry, state, lang).await?;
-        return Ok(template.into_response());
+        return match menu_page_handler(path, scale, entry, state, lang.clone()).await {
+            Ok(template) => template.into_response(),
+            Err(e) => error_page(lang, &e),
+        };
     }
 
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
-        tracing::error!("Failed to parse recipe: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let recipe = match crate::util::parse_recipe_from_entry(&entry, scale) {
+        Ok(recipe) => recipe,
+        Err(e) => {
+            tracing::error!("Failed to parse recipe: {e}");
+            return error_page(lang, format!("Failed to parse recipe: {e}"));
+        }
+    };
 
     let tags = entry.tags();
 
@@ -649,14 +669,14 @@ async fn recipe_page(
         tr: Tr::new(lang),
     };
 
-    Ok(template.into_response())
+    template.into_response()
 }
 
 async fn edit_page(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> axum::response::Response {
     tracing::info!("Edit page requested for path: {}", path);
 
     // Validate path to prevent directory traversal
@@ -666,27 +686,36 @@ async fn edit_page(
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
         tracing::error!("Invalid path: {path}");
-        return Err(StatusCode::BAD_REQUEST);
+        return error_page(lang, format!("Invalid path: {path}"));
     }
 
     let recipe_path = Utf8PathBuf::from(&path);
 
     // Find the actual file
-    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|_| {
-        tracing::error!("Recipe not found: {path}");
-        StatusCode::NOT_FOUND
-    })?;
+    let entry = match cooklang_find::get_recipe(vec![&state.base_path], &recipe_path) {
+        Ok(entry) => entry,
+        Err(e) => {
+            tracing::error!("Recipe not found: {path}");
+            return error_page(lang, format!("Recipe not found: {path}: {e}"));
+        }
+    };
 
-    let file_path = entry.path().ok_or_else(|| {
-        tracing::error!("Recipe has no file path: {path}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let file_path = match entry.path() {
+        Some(p) => p,
+        None => {
+            tracing::error!("Recipe has no file path: {path}");
+            return error_page(lang, format!("Recipe has no file path: {path}"));
+        }
+    };
 
     // Read raw content
-    let content = tokio::fs::read_to_string(file_path).await.map_err(|e| {
-        tracing::error!("Failed to read recipe file: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let content = match tokio::fs::read_to_string(file_path).await {
+        Ok(content) => content,
+        Err(e) => {
+            tracing::error!("Failed to read recipe file: {e}");
+            return error_page(lang, format!("Failed to read recipe file: {e}"));
+        }
+    };
 
     // Get recipe name from path
     let recipe_name = path
@@ -705,7 +734,7 @@ async fn edit_page(
         tr: crate::server::templates::Tr::new(lang),
     };
 
-    Ok(template)
+    template.into_response()
 }
 
 #[derive(Deserialize, Default)]
@@ -949,10 +978,10 @@ async fn menu_page_handler(
     entry: cooklang_find::RecipeEntry,
     state: Arc<AppState>,
     lang: LanguageIdentifier,
-) -> Result<MenuTemplate, StatusCode> {
+) -> Result<MenuTemplate, String> {
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
         tracing::error!("Failed to parse menu: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
+        format!("Failed to parse menu: {e}")
     })?;
 
     // Get the image path if available

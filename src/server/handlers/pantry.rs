@@ -4,9 +4,14 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::Arc;
 
 use crate::server::AppState;
+
+fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "error": msg.to_string() }))
+}
 
 #[derive(Debug, Deserialize)]
 pub struct AddPantryItem {
@@ -35,12 +40,17 @@ pub struct ApiResponse {
 pub async fn add_item(
     State(state): State<Arc<AppState>>,
     Json(item): Json<AddPantryItem>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let pantry_path = state.pantry_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Pantry configuration not found"))
+    })?;
 
     // Read existing pantry configuration
     let content =
-        std::fs::read_to_string(pantry_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::read_to_string(pantry_path).map_err(|e| {
+            tracing::error!("Failed to read pantry file: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to read pantry file: {e}")))
+        })?;
 
     let result = cooklang::pantry::parse_lenient(&content);
     let mut pantry_conf = result.output().cloned().unwrap_or_default();
@@ -76,7 +86,10 @@ pub async fn add_item(
     let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
-    std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    std::fs::write(pantry_path, new_content).map_err(|e| {
+        tracing::error!("Failed to write pantry file: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to write pantry file: {e}")))
+    })?;
 
     Ok(Json(ApiResponse {
         success: true,
@@ -87,15 +100,22 @@ pub async fn add_item(
 pub async fn remove_item(
     State(state): State<Arc<AppState>>,
     Path((section, name)): Path<(String, String)>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let pantry_path = state.pantry_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Pantry configuration not found"))
+    })?;
 
     // Read existing pantry configuration
     let content =
-        std::fs::read_to_string(pantry_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::read_to_string(pantry_path).map_err(|e| {
+            tracing::error!("Failed to read pantry file: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to read pantry file: {e}")))
+        })?;
 
     let result = cooklang::pantry::parse_lenient(&content);
-    let mut pantry_conf = result.output().cloned().ok_or(StatusCode::NOT_FOUND)?;
+    let mut pantry_conf = result.output().cloned().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Failed to parse pantry configuration"))
+    })?;
 
     // Remove item from the specified section
     if let Some(items) = pantry_conf.sections.get_mut(&section) {
@@ -106,7 +126,7 @@ pub async fn remove_item(
             pantry_conf.sections.remove(&section);
         }
     } else {
-        return Err(StatusCode::NOT_FOUND);
+        return Err((StatusCode::NOT_FOUND, json_error(format!("Section not found: {section}"))));
     }
 
     // Rebuild index
@@ -116,7 +136,10 @@ pub async fn remove_item(
     let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
-    std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    std::fs::write(pantry_path, new_content).map_err(|e| {
+        tracing::error!("Failed to write pantry file: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to write pantry file: {e}")))
+    })?;
 
     Ok(Json(ApiResponse {
         success: true,
@@ -128,15 +151,22 @@ pub async fn update_item(
     State(state): State<Arc<AppState>>,
     Path((section, name)): Path<(String, String)>,
     Json(update): Json<UpdatePantryItem>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let pantry_path = state.pantry_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Pantry configuration not found"))
+    })?;
 
     // Read existing pantry configuration
     let content =
-        std::fs::read_to_string(pantry_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::read_to_string(pantry_path).map_err(|e| {
+            tracing::error!("Failed to read pantry file: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to read pantry file: {e}")))
+        })?;
 
     let result = cooklang::pantry::parse_lenient(&content);
-    let mut pantry_conf = result.output().cloned().ok_or(StatusCode::NOT_FOUND)?;
+    let mut pantry_conf = result.output().cloned().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Failed to parse pantry configuration"))
+    })?;
 
     // Find and update the item
     if let Some(items) = pantry_conf.sections.get_mut(&section) {
@@ -180,7 +210,7 @@ pub async fn update_item(
             }
         }
     } else {
-        return Err(StatusCode::NOT_FOUND);
+        return Err((StatusCode::NOT_FOUND, json_error(format!("Section not found: {section}"))));
     }
 
     // Rebuild index
@@ -190,7 +220,10 @@ pub async fn update_item(
     let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
 
     // Write back to file
-    std::fs::write(pantry_path, new_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    std::fs::write(pantry_path, new_content).map_err(|e| {
+        tracing::error!("Failed to write pantry file: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to write pantry file: {e}")))
+    })?;
 
     Ok(Json(ApiResponse {
         success: true,
@@ -200,15 +233,22 @@ pub async fn update_item(
 
 pub async fn get_pantry(
     State(state): State<Arc<AppState>>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let pantry_path = state.pantry_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Pantry configuration not found"))
+    })?;
 
     // Read existing pantry configuration
     let content =
-        std::fs::read_to_string(pantry_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::read_to_string(pantry_path).map_err(|e| {
+            tracing::error!("Failed to read pantry file: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to read pantry file: {e}")))
+        })?;
 
     let result = cooklang::pantry::parse_lenient(&content);
-    let pantry_conf = result.output().cloned().ok_or(StatusCode::NOT_FOUND)?;
+    let pantry_conf = result.output().cloned().ok_or_else(|| {
+        (StatusCode::NOT_FOUND, json_error("Failed to parse pantry configuration"))
+    })?;
 
     Ok(Json(pantry_conf))
 }

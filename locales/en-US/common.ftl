@@ -52,3 +52,7 @@ new-recipe-create = Create Recipe
 delete-recipe = Delete Recipe
 delete-recipe-confirm = Are you sure you want to delete this recipe?
 delete-recipe-warning = This action cannot be undone.
+
+# Errors
+error-title = Something went wrong
+error-back-home = Back to recipes

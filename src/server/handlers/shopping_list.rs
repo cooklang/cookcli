@@ -19,7 +19,7 @@ pub struct RecipeRequest {
 pub async fn shopping_list(
     State(state): State<Arc<AppState>>,
     axum::extract::Json(payload): axum::extract::Json<Vec<RecipeRequest>>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut list = IngredientList::new();
     let mut seen = BTreeMap::new();
 
@@ -40,7 +40,7 @@ pub async fn shopping_list(
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
-            StatusCode::BAD_REQUEST
+            (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e.to_string() })))
         })?;
     }
 
@@ -166,11 +166,11 @@ pub async fn shopping_list(
 
 pub async fn get_shopping_list_items(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<ShoppingListItem>>, StatusCode> {
+) -> Result<Json<Vec<ShoppingListItem>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
     })?;
     Ok(Json(items))
 }
@@ -185,7 +185,7 @@ pub struct AddItemRequest {
 pub async fn add_to_shopping_list(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AddItemRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let item = ShoppingListItem {
         path: payload.path,
@@ -195,7 +195,7 @@ pub async fn add_to_shopping_list(
 
     store.add(item).map_err(|e| {
         tracing::error!("Failed to add to shopping list: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
     })?;
 
     Ok(StatusCode::OK)
@@ -209,11 +209,11 @@ pub struct RemoveItemRequest {
 pub async fn remove_from_shopping_list(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<RemoveItemRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     store.remove(&payload.path).map_err(|e| {
         tracing::error!("Failed to remove from shopping list: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
     })?;
 
     Ok(StatusCode::OK)
@@ -221,11 +221,11 @@ pub async fn remove_from_shopping_list(
 
 pub async fn clear_shopping_list(
     State(state): State<Arc<AppState>>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     store.clear().map_err(|e| {
         tracing::error!("Failed to clear shopping list: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
     })?;
 
     Ok(StatusCode::OK)

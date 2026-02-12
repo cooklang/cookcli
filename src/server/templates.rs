@@ -37,6 +37,14 @@ mod filters {
 }
 
 #[derive(Template)]
+#[template(path = "error.html")]
+pub struct ErrorTemplate {
+    pub active: String,
+    pub error_message: String,
+    pub tr: Tr,
+}
+
+#[derive(Template)]
 #[template(path = "recipes.html")]
 pub struct RecipesTemplate {
     pub active: String,
