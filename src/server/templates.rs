@@ -70,6 +70,78 @@ pub struct RecipeTemplate {
     pub tr: Tr,
 }
 
+impl RecipeTemplate {
+    /// Build JSON data for the cooking mode feature.
+    /// This is called from the template to embed structured recipe data.
+    pub fn cooking_mode_json(&self) -> String {
+        let sections: Vec<serde_json::Value> = self
+            .sections
+            .iter()
+            .map(|section| {
+                let ingredients: Vec<serde_json::Value> = section
+                    .ingredients
+                    .iter()
+                    .map(|ing| {
+                        serde_json::json!({
+                            "name": ing.name,
+                            "quantity": ing.quantity,
+                            "unit": ing.unit,
+                            "note": ing.note,
+                        })
+                    })
+                    .collect();
+
+                let steps: Vec<serde_json::Value> = section
+                    .items
+                    .iter()
+                    .filter_map(|item| match item {
+                        RecipeSectionItem::Step(step) => {
+                            let step_ingredients: Vec<serde_json::Value> = step
+                                .ingredients
+                                .iter()
+                                .map(|ing| {
+                                    serde_json::json!({
+                                        "name": ing.name,
+                                        "quantity": ing.quantity,
+                                        "unit": ing.unit,
+                                        "note": ing.note,
+                                    })
+                                })
+                                .collect();
+
+                            Some(serde_json::json!({
+                                "type": "step",
+                                "number": step.number,
+                                "globalNumber": section.step_offset + step.number,
+                                "image": step.image_path,
+                                "ingredients": step_ingredients,
+                            }))
+                        }
+                        RecipeSectionItem::Note(_) => None,
+                    })
+                    .collect();
+
+                serde_json::json!({
+                    "name": section.name,
+                    "stepOffset": section.step_offset,
+                    "ingredients": ingredients,
+                    "steps": steps,
+                })
+            })
+            .collect();
+
+        let data = serde_json::json!({
+            "name": self.recipe.name,
+            "scale": self.scale,
+            "image": self.image_path,
+            "sections": sections,
+        });
+
+        // serde_json::to_string produces valid JSON with proper escaping
+        serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
 #[derive(Template)]
 #[template(path = "menu.html")]
 pub struct MenuTemplate {

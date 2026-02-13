@@ -333,6 +333,10 @@
     </div>
 </div>
 
+<script id="cooking-mode-data" type="application/json">
+{{ self.cooking_mode_json()|safe }}
+</script>
+
 <script>
 async function addToShoppingList(event, recipePath) {
     const scale = document.getElementById('scale').value;
