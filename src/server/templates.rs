@@ -137,8 +137,10 @@ impl RecipeTemplate {
             "sections": sections,
         });
 
-        // serde_json::to_string produces valid JSON with proper escaping
-        serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string())
+        // Escape </script> sequences to prevent premature script tag closing
+        serde_json::to_string(&data)
+            .map(|s| s.replace("</", "<\\/"))
+            .unwrap_or_else(|_| "{}".to_string())
     }
 }
 
