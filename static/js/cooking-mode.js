@@ -345,6 +345,22 @@
         }
     }
 
+    // ─── Wheel Handling ─────────────────────────────────────────────
+
+    var wheelTimeout = null;
+
+    function onWheel(e) {
+        if (!state.overlay) return;
+        e.preventDefault();
+        if (wheelTimeout) return; // debounce
+        if (e.deltaY > 0) {
+            navigateTo(state.currentIndex + 1);
+        } else if (e.deltaY < 0) {
+            navigateTo(state.currentIndex - 1);
+        }
+        wheelTimeout = setTimeout(function() { wheelTimeout = null; }, 300);
+    }
+
     // ─── Wake Lock ────────────────────────────────────────────────
 
     function acquireWakeLock() {
@@ -394,6 +410,7 @@
         carousel.addEventListener('touchstart', onTouchStart, { passive: true });
         carousel.addEventListener('touchmove', onTouchMove, { passive: true });
         carousel.addEventListener('touchend', onTouchEnd, { passive: true });
+        carousel.addEventListener('wheel', onWheel, { passive: false });
 
         document.addEventListener('keydown', onKeyDown);
 
