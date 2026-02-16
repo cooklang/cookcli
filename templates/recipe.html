@@ -66,14 +66,6 @@
                     </svg>
                     <span class="hidden lg:inline">{{ tr.t("recipe-add-to-shopping") }}</span>
                 </button>
-                <button onclick="window.print()"
-                        class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap print:hidden"
-                        title="{{ tr.t("recipe-print") }}">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                    </svg>
-                    <span class="hidden lg:inline">{{ tr.t("recipe-print") }}</span>
-                </button>
                 <button id="start-cooking-btn"
                         onclick="startCookingMode()"
                         class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap print:hidden"
