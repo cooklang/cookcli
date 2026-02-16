@@ -193,6 +193,17 @@
             container.appendChild(renderCard(card));
         });
 
+        // Click on prev/next card to navigate
+        container.addEventListener('click', function(e) {
+            var card = e.target.closest('.cooking-card');
+            if (!card) return;
+            if (card.classList.contains('prev')) {
+                navigateTo(state.currentIndex - 1);
+            } else if (card.classList.contains('next')) {
+                navigateTo(state.currentIndex + 1);
+            }
+        });
+
         carousel.appendChild(container);
 
         // Progress bar

@@ -146,14 +146,14 @@
     opacity: 0.25;
     transform: translateY(-75%) scale(0.85);
     z-index: 0;
-    pointer-events: none;
+    cursor: pointer;
 }
 
 .cooking-card.next {
     opacity: 0.25;
     transform: translateY(75%) scale(0.85);
     z-index: 0;
-    pointer-events: none;
+    cursor: pointer;
 }
 
 .cooking-card.hidden-card {
