@@ -77,7 +77,8 @@
                     type: 'step',
                     sectionIndex: sectionIndex,
                     sectionName: sectionName,
-                    number: step.globalNumber,
+                    number: step.number,
+                    totalInSection: section.steps.length,
                     image: step.image,
                     html: stepHTMLs[stepHTMLIndex] || '',
                     ingredients: step.ingredients
@@ -314,7 +315,7 @@
         if (currentCard.type === 'section') {
             message = 'Ingredients for ' + currentCard.name;
         } else if (currentCard.type === 'step') {
-            message = 'Step ' + currentCard.number + ' of ' + state.cards.filter(function(c) { return c.type === 'step'; }).length;
+            message = 'Step ' + currentCard.number + ' of ' + currentCard.totalInSection;
         } else if (currentCard.type === 'done') {
             message = 'Recipe complete. Bon Appetit!';
         }
