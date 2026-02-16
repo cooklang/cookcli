@@ -237,14 +237,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: linear-gradient(135deg, #f97316, #eab308);
     color: #fff;
     font-weight: 700;
-    font-size: 16px;
-    margin-bottom: 16px;
+    font-size: 13px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    vertical-align: middle;
 }
 
 .cooking-step-image {

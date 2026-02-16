@@ -2,14 +2,29 @@
 (function() {
     'use strict';
 
-    let state = {
+    // ─── Constants ───────────────────────────────────────────────
+
+    const WHEEL_DEBOUNCE_MS = 300;
+    const SWIPE_THRESHOLD = 50;
+    const SWIPE_CLAMP_MAX = 150;
+    const SWIPE_SCALE_FACTOR = 0.001;
+
+    // ─── State ───────────────────────────────────────────────────
+
+    const state = {
         cards: [],
+        cardEls: [],
         currentIndex: 0,
         wakeLock: null,
         overlay: null,
         touchStartY: 0,
         touchCurrentY: 0,
-        isSwiping: false
+        isSwiping: false,
+        scrolling: false,
+        canScrollCard: false,
+        startScrollTop: 0,
+        wheelTimeout: null,
+        triggerElement: null
     };
 
     // ─── Data Loading ─────────────────────────────────────────────
@@ -42,11 +57,11 @@
     // ─── Card Building ────────────────────────────────────────────
 
     function buildCards(data, stepHTMLs) {
-        var cards = [];
-        var stepHTMLIndex = 0;
+        const cards = [];
+        let stepHTMLIndex = 0;
 
         data.sections.forEach(function(section, sectionIndex) {
-            var sectionName = section.name || (data.sections.length > 1 ? 'Main' : null);
+            const sectionName = section.name || (data.sections.length > 1 ? 'Main' : null);
 
             if (section.ingredients.length > 0 || sectionName) {
                 cards.push({
@@ -83,22 +98,22 @@
     // ─── Rendering ────────────────────────────────────────────────
 
     function escapeHTML(str) {
-        var div = document.createElement('div');
+        const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
     }
 
     function renderCard(card) {
-        var div = document.createElement('div');
+        const div = document.createElement('div');
         div.className = 'cooking-card hidden-card';
 
         if (card.type === 'section') {
             div.classList.add('cooking-card-section');
-            var ingredientsHTML = '';
+            let ingredientsHTML = '';
             if (card.ingredients.length > 0) {
-                var items = card.ingredients.map(function(ing) {
-                    var qty = [ing.quantity, ing.unit].filter(Boolean).join(' ');
-                    var note = ing.note ? '<span class="cooking-mise-note">(' + escapeHTML(ing.note) + ')</span>' : '';
+                const items = card.ingredients.map(function(ing) {
+                    const qty = [ing.quantity, ing.unit].filter(Boolean).join(' ');
+                    const note = ing.note ? '<span class="cooking-mise-note">(' + escapeHTML(ing.note) + ')</span>' : '';
                     return '<div class="cooking-mise-item">' +
                         '<span class="cooking-mise-name">' + escapeHTML(ing.name) + ' ' + note + '</span>' +
                         (qty ? '<span class="cooking-mise-qty">' + escapeHTML(qty) + '</span>' : '') +
@@ -107,7 +122,6 @@
                 ingredientsHTML = '<div class="cooking-mise-grid">' + items + '</div>';
             }
             div.innerHTML = '<h2>' + escapeHTML(card.name) + '</h2>' + ingredientsHTML;
-            // Toggle crossed-out on tap
             div.querySelectorAll('.cooking-mise-item').forEach(function(item) {
                 item.addEventListener('click', function() {
                     item.classList.toggle('checked');
@@ -116,22 +130,21 @@
         }
         else if (card.type === 'step') {
             div.classList.add('cooking-card-step');
-            var imageHTML = card.image
+            const imageHTML = card.image
                 ? '<img class="cooking-step-image" src="' + escapeHTML(card.image) + '" alt="Step ' + card.number + '" />'
                 : '';
-            var ingredientsHTML = '';
+            let ingredientsHTML = '';
             if (card.ingredients.length > 0) {
                 ingredientsHTML = '<div class="cooking-step-ingredients">' +
                     card.ingredients.map(function(ing) {
-                        var qty = [ing.quantity, ing.unit].filter(Boolean).join(' ');
-                        var note = ing.note ? ' (' + escapeHTML(ing.note) + ')' : '';
+                        const qty = [ing.quantity, ing.unit].filter(Boolean).join(' ');
+                        const note = ing.note ? ' (' + escapeHTML(ing.note) + ')' : '';
                         return '<span>' + escapeHTML(ing.name) + (qty ? ': ' + escapeHTML(qty) : '') + note + '</span>';
                     }).join('') + '</div>';
             }
             div.innerHTML =
-                '<div class="cooking-step-number">' + card.number + '</div>' +
                 imageHTML +
-                '<div class="cooking-step-text">' + card.html + '</div>' +
+                '<div class="cooking-step-text"><span class="cooking-step-number">' + card.number + '</span>' + card.html + '</div>' +
                 ingredientsHTML;
         }
         else if (card.type === 'done') {
@@ -145,24 +158,35 @@
     }
 
     function renderOverlay(data, cards) {
-        var overlay = document.createElement('div');
+        const overlay = document.createElement('div');
         overlay.className = 'cooking-overlay';
         overlay.id = 'cooking-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-label', 'Cooking mode: ' + data.name);
+
+        // ARIA live region for step announcements
+        const liveRegion = document.createElement('div');
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.setAttribute('aria-atomic', 'true');
+        liveRegion.className = 'sr-only';
+        liveRegion.id = 'cooking-status';
+        overlay.appendChild(liveRegion);
 
         // Header
-        var header = document.createElement('div');
+        const header = document.createElement('div');
         header.className = 'cooking-header';
 
-        var title = document.createElement('div');
+        const title = document.createElement('div');
         title.className = 'cooking-header-title';
         title.textContent = data.name;
 
-        var sectionsNav = document.createElement('div');
+        const sectionsNav = document.createElement('div');
         sectionsNav.className = 'cooking-header-sections';
         sectionsNav.id = 'cooking-sections-nav';
 
         data.sections.forEach(function(section, i) {
-            var pill = document.createElement('button');
+            const pill = document.createElement('button');
             pill.className = 'cooking-section-pill';
             pill.textContent = section.name || (data.sections.length > 1 ? 'Main' : 'Steps');
             pill.dataset.sectionIndex = i;
@@ -170,7 +194,7 @@
             sectionsNav.appendChild(pill);
         });
 
-        var closeBtn = document.createElement('button');
+        const closeBtn = document.createElement('button');
         closeBtn.className = 'cooking-close-btn';
         closeBtn.setAttribute('aria-label', 'Close cooking mode');
         closeBtn.innerHTML = '&times;';
@@ -183,11 +207,11 @@
         header.appendChild(closeBtn);
 
         // Carousel
-        var carousel = document.createElement('div');
+        const carousel = document.createElement('div');
         carousel.className = 'cooking-carousel';
         carousel.id = 'cooking-carousel';
 
-        var container = document.createElement('div');
+        const container = document.createElement('div');
         container.className = 'cooking-card-container';
         container.id = 'cooking-card-container';
 
@@ -197,7 +221,7 @@
 
         // Click on prev/next card to navigate
         container.addEventListener('click', function(e) {
-            var card = e.target.closest('.cooking-card');
+            const card = e.target.closest('.cooking-card');
             if (!card) return;
             if (card.classList.contains('prev')) {
                 navigateTo(state.currentIndex - 1);
@@ -209,7 +233,7 @@
         carousel.appendChild(container);
 
         // Progress bar
-        var progress = document.createElement('div');
+        const progress = document.createElement('div');
         progress.className = 'cooking-progress';
         progress.innerHTML = '<div class="cooking-progress-bar" id="cooking-progress-bar"></div>';
 
@@ -217,18 +241,32 @@
         overlay.appendChild(carousel);
         overlay.appendChild(progress);
 
+        // Cache card element references
+        state.cardEls = Array.from(container.querySelectorAll('.cooking-card'));
+
         return overlay;
     }
 
     // ─── Navigation ───────────────────────────────────────────────
 
     function updateCards() {
-        var container = document.getElementById('cooking-card-container');
-        if (!container) return;
-        var cardEls = container.querySelectorAll('.cooking-card');
+        const cardEls = state.cardEls;
+        if (cardEls.length === 0) return;
 
-        for (var i = 0; i < cardEls.length; i++) {
-            var el = cardEls[i];
+        // Only update cards that need changing: previous current +-1 and new current +-1
+        const indicesToUpdate = new Set();
+        for (let i = 0; i < cardEls.length; i++) {
+            const el = cardEls[i];
+            if (el.classList.contains('current') || el.classList.contains('prev') || el.classList.contains('next')) {
+                indicesToUpdate.add(i);
+            }
+        }
+        indicesToUpdate.add(state.currentIndex);
+        if (state.currentIndex > 0) indicesToUpdate.add(state.currentIndex - 1);
+        if (state.currentIndex < cardEls.length - 1) indicesToUpdate.add(state.currentIndex + 1);
+
+        indicesToUpdate.forEach(function(i) {
+            const el = cardEls[i];
             el.classList.remove('current', 'prev', 'next', 'hidden-card', 'swiping');
             el.style.transform = '';
             if (i === state.currentIndex) {
@@ -240,26 +278,48 @@
             } else {
                 el.classList.add('hidden-card');
             }
-        }
+        });
 
         // Update progress bar
-        var progressBar = document.getElementById('cooking-progress-bar');
+        const progressBar = document.getElementById('cooking-progress-bar');
         if (progressBar) {
-            var pct = state.cards.length > 1
+            const pct = state.cards.length > 1
                 ? (state.currentIndex / (state.cards.length - 1)) * 100
                 : 100;
             progressBar.style.width = pct + '%';
         }
 
         // Update section pills
-        var currentCard = state.cards[state.currentIndex];
+        const currentCard = state.cards[state.currentIndex];
         if (currentCard) {
-            var pills = document.querySelectorAll('.cooking-section-pill');
-            for (var j = 0; j < pills.length; j++) {
-                var isActive = parseInt(pills[j].dataset.sectionIndex) === currentCard.sectionIndex;
+            const pills = document.querySelectorAll('.cooking-section-pill');
+            for (let j = 0; j < pills.length; j++) {
+                const isActive = parseInt(pills[j].dataset.sectionIndex) === currentCard.sectionIndex;
                 pills[j].classList.toggle('active', isActive);
             }
         }
+
+        // Update ARIA live region
+        updateAriaStatus();
+    }
+
+    function updateAriaStatus() {
+        const statusEl = document.getElementById('cooking-status');
+        if (!statusEl) return;
+
+        const currentCard = state.cards[state.currentIndex];
+        if (!currentCard) return;
+
+        let message;
+        if (currentCard.type === 'section') {
+            message = 'Ingredients for ' + currentCard.name;
+        } else if (currentCard.type === 'step') {
+            message = 'Step ' + currentCard.number + ' of ' + state.cards.filter(function(c) { return c.type === 'step'; }).length;
+        } else if (currentCard.type === 'done') {
+            message = 'Recipe complete. Bon Appetit!';
+        }
+
+        statusEl.textContent = message;
     }
 
     function navigateTo(index) {
@@ -269,24 +329,18 @@
     }
 
     function navigateToSection(sectionIndex) {
-        var cardIndex = -1;
-        for (var i = 0; i < state.cards.length; i++) {
+        for (let i = 0; i < state.cards.length; i++) {
             if (state.cards[i].sectionIndex === sectionIndex) {
-                cardIndex = i;
-                break;
+                navigateTo(i);
+                return;
             }
-        }
-        if (cardIndex !== -1) {
-            navigateTo(cardIndex);
         }
     }
 
     // ─── Touch Handling ───────────────────────────────────────────
 
     function getCurrentCardEl() {
-        var container = document.getElementById('cooking-card-container');
-        if (!container) return null;
-        return container.querySelectorAll('.cooking-card')[state.currentIndex] || null;
+        return state.cardEls[state.currentIndex] || null;
     }
 
     function isAtScrollTop(el) {
@@ -308,7 +362,7 @@
         state.isSwiping = false;
         state.scrolling = false;
 
-        var currentEl = getCurrentCardEl();
+        const currentEl = getCurrentCardEl();
         if (currentEl) {
             state.startScrollTop = currentEl.scrollTop;
             state.canScrollCard = cardCanScroll(currentEl);
@@ -320,16 +374,16 @@
     function onTouchMove(e) {
         if (e.touches.length !== 1) return;
         state.touchCurrentY = e.touches[0].clientY;
-        var delta = state.touchCurrentY - state.touchStartY;
-        var currentEl = getCurrentCardEl();
+        const delta = state.touchCurrentY - state.touchStartY;
+        const currentEl = getCurrentCardEl();
         if (!currentEl) return;
 
         // If card has scrollable content, let it scroll until at boundary
         if (state.canScrollCard && !state.isSwiping) {
-            var swipingUp = delta < 0;
-            var swipingDown = delta > 0;
-            var atTop = isAtScrollTop(currentEl);
-            var atBottom = isAtScrollBottom(currentEl);
+            const swipingUp = delta < 0;
+            const swipingDown = delta > 0;
+            const atTop = isAtScrollTop(currentEl);
+            const atBottom = isAtScrollBottom(currentEl);
 
             // Allow native scroll if not at boundary, or scrolling into content
             if ((swipingUp && !atBottom) || (swipingDown && !atTop)) {
@@ -350,36 +404,37 @@
         }
 
         if (state.isSwiping) {
-            var swipeDelta = state.touchCurrentY - state.touchStartY;
-            var clampedDelta = Math.max(-150, Math.min(150, swipeDelta));
+            const swipeDelta = state.touchCurrentY - state.touchStartY;
+            const clampedDelta = Math.max(-SWIPE_CLAMP_MAX, Math.min(SWIPE_CLAMP_MAX, swipeDelta));
             currentEl.classList.add('swiping');
-            currentEl.style.transform = 'translateY(' + clampedDelta + 'px) scale(' + (1 - Math.abs(clampedDelta) * 0.001) + ')';
+            currentEl.style.transform = 'translateY(' + clampedDelta + 'px) scale(' + (1 - Math.abs(clampedDelta) * SWIPE_SCALE_FACTOR) + ')';
         }
     }
 
     function onTouchEnd() {
-        var currentEl = getCurrentCardEl();
+        try {
+            const currentEl = getCurrentCardEl();
 
-        if (state.isSwiping) {
-            var delta = state.touchCurrentY - state.touchStartY;
-            var threshold = 50;
+            if (state.isSwiping) {
+                const delta = state.touchCurrentY - state.touchStartY;
 
-            if (currentEl) {
-                currentEl.classList.remove('swiping');
-                currentEl.style.transform = '';
+                if (currentEl) {
+                    currentEl.classList.remove('swiping');
+                    currentEl.style.transform = '';
+                }
+
+                if (delta < -SWIPE_THRESHOLD && state.currentIndex < state.cards.length - 1) {
+                    navigateTo(state.currentIndex + 1);
+                } else if (delta > SWIPE_THRESHOLD && state.currentIndex > 0) {
+                    navigateTo(state.currentIndex - 1);
+                } else {
+                    updateCards();
+                }
             }
-
-            if (delta < -threshold && state.currentIndex < state.cards.length - 1) {
-                navigateTo(state.currentIndex + 1);
-            } else if (delta > threshold && state.currentIndex > 0) {
-                navigateTo(state.currentIndex - 1);
-            } else {
-                updateCards();
-            }
+        } finally {
+            state.isSwiping = false;
+            state.scrolling = false;
         }
-
-        state.isSwiping = false;
-        state.scrolling = false;
     }
 
     // ─── Keyboard Handling ────────────────────────────────────────
@@ -407,18 +462,16 @@
 
     // ─── Wheel Handling ─────────────────────────────────────────────
 
-    var wheelTimeout = null;
-
     function onWheel(e) {
         if (!state.overlay) return;
         e.preventDefault();
-        if (wheelTimeout) return; // debounce
+        if (state.wheelTimeout) return; // debounce
         if (e.deltaY > 0) {
             navigateTo(state.currentIndex + 1);
         } else if (e.deltaY < 0) {
             navigateTo(state.currentIndex - 1);
         }
-        wheelTimeout = setTimeout(function() { wheelTimeout = null; }, 300);
+        state.wheelTimeout = setTimeout(function() { state.wheelTimeout = null; }, WHEEL_DEBOUNCE_MS);
     }
 
     // ─── Wake Lock ────────────────────────────────────────────────
@@ -448,13 +501,20 @@
         }
     }
 
+    function onBeforeUnload() {
+        releaseWakeLock();
+    }
+
     // ─── Open / Close ─────────────────────────────────────────────
 
     function startCookingMode() {
-        var data = loadRecipeData();
+        const data = loadRecipeData();
         if (!data) return;
 
-        var stepHTMLs = captureStepHTML();
+        // Save trigger element for focus restoration
+        state.triggerElement = document.activeElement;
+
+        const stepHTMLs = captureStepHTML();
         state.cards = buildCards(data, stepHTMLs);
         if (state.cards.length === 0) return;
 
@@ -466,31 +526,60 @@
 
         updateCards();
 
-        var carousel = document.getElementById('cooking-carousel');
+        // Add event listeners
+        const carousel = document.getElementById('cooking-carousel');
         carousel.addEventListener('touchstart', onTouchStart, { passive: true });
         carousel.addEventListener('touchmove', onTouchMove, { passive: true });
         carousel.addEventListener('touchend', onTouchEnd, { passive: true });
         carousel.addEventListener('wheel', onWheel, { passive: false });
 
         document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('beforeunload', onBeforeUnload);
 
         acquireWakeLock();
         document.addEventListener('visibilitychange', onVisibilityChange);
+
+        // Move focus to overlay for accessibility
+        state.overlay.setAttribute('tabindex', '-1');
+        state.overlay.focus();
     }
 
     function closeCookingMode() {
         if (!state.overlay) return;
+
+        // Remove carousel event listeners
+        const carousel = document.getElementById('cooking-carousel');
+        if (carousel) {
+            carousel.removeEventListener('touchstart', onTouchStart);
+            carousel.removeEventListener('touchmove', onTouchMove);
+            carousel.removeEventListener('touchend', onTouchEnd);
+            carousel.removeEventListener('wheel', onWheel);
+        }
 
         state.overlay.remove();
         state.overlay = null;
         document.body.style.overflow = '';
 
         document.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('beforeunload', onBeforeUnload);
 
         releaseWakeLock();
         document.removeEventListener('visibilitychange', onVisibilityChange);
 
+        // Clear wheel debounce timeout
+        if (state.wheelTimeout) {
+            clearTimeout(state.wheelTimeout);
+            state.wheelTimeout = null;
+        }
+
+        // Restore focus to trigger element
+        if (state.triggerElement && state.triggerElement.focus) {
+            state.triggerElement.focus();
+            state.triggerElement = null;
+        }
+
         state.cards = [];
+        state.cardEls = [];
         state.currentIndex = 0;
     }
 
