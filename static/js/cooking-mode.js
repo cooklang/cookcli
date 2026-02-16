@@ -107,6 +107,12 @@
                 ingredientsHTML = '<div class="cooking-mise-grid">' + items + '</div>';
             }
             div.innerHTML = '<h2>' + escapeHTML(card.name) + '</h2>' + ingredientsHTML;
+            // Toggle crossed-out on tap
+            div.querySelectorAll('.cooking-mise-item').forEach(function(item) {
+                item.addEventListener('click', function() {
+                    item.classList.toggle('checked');
+                });
+            });
         }
         else if (card.type === 'step') {
             div.classList.add('cooking-card-step');

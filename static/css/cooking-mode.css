@@ -199,6 +199,13 @@
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     gap: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cooking-mise-item.checked {
+    opacity: 0.35;
+    text-decoration: line-through;
 }
 
 .cooking-mise-name {
