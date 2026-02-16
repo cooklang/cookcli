@@ -305,6 +305,23 @@
     color: rgba(255, 255, 255, 0.6);
 }
 
+.cooking-done-close-btn {
+    margin-top: 28px;
+    padding: 12px 40px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cooking-done-close-btn:hover {
+    opacity: 0.85;
+}
+
 /* Progress bar */
 .cooking-progress {
     height: 3px;

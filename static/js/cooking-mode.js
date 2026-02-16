@@ -136,7 +136,9 @@
         }
         else if (card.type === 'done') {
             div.classList.add('cooking-card-done');
-            div.innerHTML = '<h2>Bon Appetit!</h2><p>' + escapeHTML(card.name) + '</p>';
+            div.innerHTML = '<h2>Bon Appetit!</h2><p>' + escapeHTML(card.name) + '</p>' +
+                '<button class="cooking-done-close-btn">Close</button>';
+            div.querySelector('.cooking-done-close-btn').addEventListener('click', closeCookingMode);
         }
 
         return div;
