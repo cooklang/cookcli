@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.23.0](https://github.com/cooklang/cookcli/compare/v0.22.0...v0.23.0) (2026-02-16)
+
+
+### Features
+
+* add print support for shopping list page ([9a0e984](https://github.com/cooklang/cookcli/commit/9a0e984c8a85df89f6a63f8593d3121f90710f83))
+* **cooking-mode:** add 'c' keyboard shortcut for cooking mode ([3542bf0](https://github.com/cooklang/cookcli/commit/3542bf0e5830c6beda6fe13eb7b7859a0e5480fc))
+* **cooking-mode:** add Close button to done card ([b5b6ab1](https://github.com/cooklang/cookcli/commit/b5b6ab1e3bde8a94295ee91d7aea5bd67469122f))
+* **cooking-mode:** add cooking mode JS with carousel, swipe, and wake lock ([a6b0d21](https://github.com/cooklang/cookcli/commit/a6b0d2159987860ee0725fb63342c9dcd8e35b8e))
+* **cooking-mode:** add cooking mode stylesheet ([9fe34f9](https://github.com/cooklang/cookcli/commit/9fe34f95d93f73eebb895c3f6fddf48ee2ab02ba))
+* **cooking-mode:** add scroll wheel navigation between cards ([54bcee2](https://github.com/cooklang/cookcli/commit/54bcee293821899e0fb56905998562585ffad1b0))
+* **cooking-mode:** add Start Cooking button to recipe page ([4ec7aa4](https://github.com/cooklang/cookcli/commit/4ec7aa4a7b1a3871ecdb3837801f340520b7dedf))
+* **cooking-mode:** add tap-to-crossout for mise en place ingredients ([b215e16](https://github.com/cooklang/cookcli/commit/b215e16ed007487e98f983d9ae652011c36a290a))
+* **cooking-mode:** click prev/next cards to navigate ([171f49d](https://github.com/cooklang/cookcli/commit/171f49dacf27cda4e261e3669bfae11a69af0787))
+* **cooking-mode:** embed recipe JSON data in template ([d98b0dd](https://github.com/cooklang/cookcli/commit/d98b0dd71a314a148504d0b8632fd549f7a88fcb))
+* **cooking-mode:** include cooking mode CSS and JS in recipe template ([78816e4](https://github.com/cooklang/cookcli/commit/78816e400b76cd665dd6c756bf6e49bcc528c506))
+* **cooking-mode:** smart swipe — scroll within card, navigate at boundaries ([7478a0c](https://github.com/cooklang/cookcli/commit/7478a0c7f842854f6e098ae71a232b2755e451e7))
+* propagate server error messages to UI ([dec59f1](https://github.com/cooklang/cookcli/commit/dec59f1f944ffe65881caf3f68c5c1c68b04704e))
+* remove print buttons from recipe and shopping list views ([0f31e03](https://github.com/cooklang/cookcli/commit/0f31e03973597442294ba73aa08a114d21ab09a0))
+
+
+### Bug Fixes
+
+* **cooking-mode:** address PR feedback for code quality and accessibility ([d033f8c](https://github.com/cooklang/cookcli/commit/d033f8c4b09437a69162e8ef81e847bfe5a24f7d))
+* **cooking-mode:** escape &lt;/script&gt; sequences in embedded JSON ([5758f0e](https://github.com/cooklang/cookcli/commit/5758f0ec5fec17591573ae221c390866fe5cddf1))
+* **cooking-mode:** remove recipe name from done card ([e728adb](https://github.com/cooklang/cookcli/commit/e728adb8992296f8904cd58ae03c6516827c8118))
+* improve pantry page layout on small screens ([5d65401](https://github.com/cooklang/cookcli/commit/5d65401107043512690d6da62cbacfb0066ef804))
+* preserve all pantry item attributes when quantity is present ([d4e538a](https://github.com/cooklang/cookcli/commit/d4e538a98f773872d3ecfef2c517563b67218b68)), closes [#249](https://github.com/cooklang/cookcli/issues/249)
+* render fractional quantities with units in shopping list ([3766200](https://github.com/cooklang/cookcli/commit/3766200ec4225a06589f8fd7cde1ea6a1a1665fe)), closes [#258](https://github.com/cooklang/cookcli/issues/258)
+* reset step numbers per section in recipe and cooking mode ([acb51f1](https://github.com/cooklang/cookcli/commit/acb51f16cad1b6885d19cf6443fbf303a7749b06))
+
 ## [0.22.0](https://github.com/cooklang/cookcli/compare/v0.21.0...v0.22.0) (2026-02-10)
 
 
