@@ -1,0 +1,369 @@
+/* Cooking Mode Overlay */
+.cooking-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Header bar */
+.cooking-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+    gap: 12px;
+    z-index: 2;
+}
+
+.cooking-header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.cooking-header-sections {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.cooking-header-sections::-webkit-scrollbar {
+    display: none;
+}
+
+.cooking-section-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.2s;
+}
+
+.cooking-section-pill:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cooking-section-pill.active {
+    background: linear-gradient(135deg, #f97316, #eab308);
+    color: #fff;
+    border-color: transparent;
+}
+
+.cooking-close-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.cooking-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Carousel container */
+.cooking-carousel {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Card positioning */
+.cooking-card-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.cooking-card {
+    position: absolute;
+    width: calc(100% - 40px);
+    max-width: 800px;
+    max-height: 70vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 20px;
+    padding: 32px;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+.cooking-card::-webkit-scrollbar {
+    width: 4px;
+}
+
+.cooking-card::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+}
+
+.cooking-card.current {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    z-index: 1;
+    touch-action: pan-y;
+}
+
+.cooking-card.prev {
+    opacity: 0.25;
+    transform: translateY(-75%) scale(0.85);
+    z-index: 0;
+    cursor: pointer;
+}
+
+.cooking-card.next {
+    opacity: 0.25;
+    transform: translateY(75%) scale(0.85);
+    z-index: 0;
+    cursor: pointer;
+}
+
+.cooking-card.hidden-card {
+    opacity: 0;
+    transform: translateY(100%) scale(0.8);
+    pointer-events: none;
+}
+
+/* Swipe animation */
+.cooking-card.swiping {
+    transition: none;
+}
+
+/* Section header card */
+.cooking-card-section {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+.cooking-card-section h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.cooking-mise-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    text-align: left;
+}
+
+.cooking-mise-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    gap: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cooking-mise-item.checked {
+    opacity: 0.35;
+    text-decoration: line-through;
+}
+
+.cooking-mise-name {
+    font-size: 18px;
+    color: #e0e0e0;
+}
+
+.cooking-mise-note {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+.cooking-mise-qty {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f97316;
+    white-space: nowrap;
+}
+
+/* Step card */
+.cooking-card-step {
+    background: linear-gradient(135deg, #1e293b, #162032);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cooking-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.cooking-step-image {
+    width: 100%;
+    max-height: 300px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.cooking-step-text {
+    font-size: 24px;
+    line-height: 1.6;
+    color: #f0f0f0;
+}
+
+/* Override badge styles within cooking mode for readability */
+.cooking-step-text .ingredient-badge {
+    font-size: 22px;
+    padding: 2px 10px;
+}
+
+.cooking-step-text .cookware-badge {
+    font-size: 22px;
+    padding: 2px 10px;
+}
+
+.cooking-step-text .timer-badge {
+    font-size: 22px;
+    padding: 2px 10px;
+}
+
+.cooking-step-ingredients {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.cooking-step-ingredients span {
+    margin-right: 12px;
+}
+
+/* Done card */
+.cooking-card-done {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+.cooking-card-done h2 {
+    font-size: 36px;
+    margin-bottom: 12px;
+}
+
+.cooking-card-done p {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.cooking-done-close-btn {
+    margin-top: 28px;
+    padding: 12px 40px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cooking-done-close-btn:hover {
+    opacity: 0.85;
+}
+
+/* Progress bar */
+.cooking-progress {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.cooking-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #f97316, #eab308);
+    transition: width 0.3s ease-out;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .cooking-card {
+        padding: 24px 20px;
+        max-height: 75vh;
+    }
+
+    .cooking-card-section h2 {
+        font-size: 26px;
+    }
+
+    .cooking-step-text {
+        font-size: 20px;
+    }
+
+    .cooking-mise-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cooking-header-title {
+        font-size: 14px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .cooking-step-text {
+        font-size: 28px;
+    }
+}

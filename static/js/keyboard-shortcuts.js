@@ -12,6 +12,7 @@
  * - t          Toggle theme (dark/light)
  *
  * Recipe page shortcuts:
+ * - c          Start cooking mode
  * - e          Edit recipe
  * - a          Add to shopping list
  * - p          Print recipe
@@ -136,6 +137,10 @@
                         <div>
                             <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Recipe Page</h3>
                             <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Start cooking mode</span>
+                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">c</kbd>
+                                </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-600 dark:text-gray-400">Edit recipe</span>
                                     <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">e</kbd>
@@ -302,6 +307,13 @@
     // Recipe page specific shortcuts
     function handleRecipeShortcuts(event, key) {
         switch (key) {
+            case 'c':
+                event.preventDefault();
+                if (typeof startCookingMode === 'function') {
+                    startCookingMode();
+                }
+                return;
+
             case 'e':
                 event.preventDefault();
                 // Find and click the edit link

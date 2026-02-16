@@ -228,6 +228,17 @@ Uses semantic commit messages for automated releases:
 - `docs:` - Documentation changes
 - `chore:` - Maintenance tasks
 
+## Before Creating a PR
+
+Always run these checks before creating a PR:
+```bash
+cargo fmt         # Fix formatting
+cargo clippy      # Check for lint warnings
+cargo test        # Run tests
+```
+
+All three must pass cleanly with no warnings or errors.
+
 ## Common Development Tasks
 
 ### Adding a New Command

@@ -40,7 +40,10 @@ pub async fn shopping_list(
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
-            (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e.to_string() })))
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
         })?;
     }
 
@@ -170,7 +173,10 @@ pub async fn get_shopping_list_items(
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
     })?;
     Ok(Json(items))
 }
@@ -195,7 +201,10 @@ pub async fn add_to_shopping_list(
 
     store.add(item).map_err(|e| {
         tracing::error!("Failed to add to shopping list: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
     })?;
 
     Ok(StatusCode::OK)
@@ -213,7 +222,10 @@ pub async fn remove_from_shopping_list(
     let store = ShoppingListStore::new(&state.base_path);
     store.remove(&payload.path).map_err(|e| {
         tracing::error!("Failed to remove from shopping list: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
     })?;
 
     Ok(StatusCode::OK)
@@ -225,7 +237,10 @@ pub async fn clear_shopping_list(
     let store = ShoppingListStore::new(&state.base_path);
     store.clear().map_err(|e| {
         tracing::error!("Failed to clear shopping list: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
     })?;
 
     Ok(StatusCode::OK)

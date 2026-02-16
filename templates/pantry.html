@@ -145,11 +145,11 @@
         {% endfor %}
     </div>
     
-    <div class="mt-8 flex justify-between items-center">
+    <div class="mt-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div class="text-sm text-gray-500">
             {{ tr.t("pantry-total-sections") }} {{ sections.len() }}
         </div>
-        <div class="space-x-4">
+        <div class="flex flex-wrap gap-2">
             <button id="add-item-btn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
                 {{ tr.t("pantry-add-item") }}
             </button>

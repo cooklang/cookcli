@@ -32,7 +32,10 @@ fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
         tracing::error!("Invalid path: {p}");
-        return Err((StatusCode::BAD_REQUEST, json_error(format!("Invalid path: {p}"))));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!("Invalid path: {p}")),
+        ));
     }
     Ok(())
 }
@@ -63,7 +66,10 @@ pub async fn recipe(
     let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
         .map_err(|e| {
             tracing::error!("Recipe not found: {path}");
-            (StatusCode::NOT_FOUND, json_error(format!("Recipe not found: {path}: {e}")))
+            (
+                StatusCode::NOT_FOUND,
+                json_error(format!("Recipe not found: {path}: {e}")),
+            )
         })?;
 
     let recipe =
@@ -153,13 +159,19 @@ pub async fn recipe_raw(
             menu_path
         } else {
             tracing::error!("Recipe file not found: {path}");
-            return Err((StatusCode::NOT_FOUND, json_error(format!("Recipe file not found: {path}"))));
+            return Err((
+                StatusCode::NOT_FOUND,
+                json_error(format!("Recipe file not found: {path}")),
+            ));
         }
     };
 
     tokio::fs::read_to_string(&file_path).await.map_err(|e| {
         tracing::error!("Failed to read recipe file {}: {}", file_path, e);
-        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to read recipe file: {e}")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to read recipe file: {e}")),
+        )
     })
 }
 
@@ -194,7 +206,10 @@ pub async fn recipe_save(
 
     let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
         tracing::error!("Failed to create temp file {}: {}", temp_path, e);
-        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to create temp file: {e}")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to create temp file: {e}")),
+        )
     })?;
 
     temp_file.write_all(body.as_bytes()).await.map_err(|e| {
@@ -204,7 +219,10 @@ pub async fn recipe_save(
         tokio::spawn(async move {
             let _ = tokio::fs::remove_file(&temp_path_clone).await;
         });
-        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to write recipe: {e}")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to write recipe: {e}")),
+        )
     })?;
 
     tokio::fs::rename(&temp_path, &file_path)
@@ -215,7 +233,10 @@ pub async fn recipe_save(
             tokio::spawn(async move {
                 let _ = tokio::fs::remove_file(&temp_path_clone).await;
             });
-            (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to save recipe: {e}")))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error(format!("Failed to save recipe: {e}")),
+            )
         })?;
 
     tracing::info!("Saved recipe: {}", file_path);
@@ -282,14 +303,20 @@ pub async fn recipe_delete(
             menu_path
         } else {
             tracing::error!("Recipe file not found for deletion: {path}");
-            return Err((StatusCode::NOT_FOUND, json_error(format!("Recipe file not found: {path}"))));
+            return Err((
+                StatusCode::NOT_FOUND,
+                json_error(format!("Recipe file not found: {path}")),
+            ));
         }
     };
 
     // Delete the file
     tokio::fs::remove_file(&file_path).await.map_err(|e| {
         tracing::error!("Failed to delete recipe file {}: {}", file_path, e);
-        (StatusCode::INTERNAL_SERVER_ERROR, json_error(format!("Failed to delete recipe: {e}")))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to delete recipe: {e}")),
+        )
     })?;
 
     tracing::info!("Deleted recipe: {}", file_path);
