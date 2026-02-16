@@ -283,56 +283,103 @@
 
     // ─── Touch Handling ───────────────────────────────────────────
 
+    function getCurrentCardEl() {
+        var container = document.getElementById('cooking-card-container');
+        if (!container) return null;
+        return container.querySelectorAll('.cooking-card')[state.currentIndex] || null;
+    }
+
+    function isAtScrollTop(el) {
+        return el.scrollTop <= 0;
+    }
+
+    function isAtScrollBottom(el) {
+        return el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    }
+
+    function cardCanScroll(el) {
+        return el.scrollHeight > el.clientHeight + 1;
+    }
+
     function onTouchStart(e) {
         if (e.touches.length !== 1) return;
         state.touchStartY = e.touches[0].clientY;
         state.touchCurrentY = state.touchStartY;
-        state.isSwiping = true;
+        state.isSwiping = false;
+        state.scrolling = false;
 
-        var container = document.getElementById('cooking-card-container');
-        if (!container) return;
-        var currentEl = container.querySelectorAll('.cooking-card')[state.currentIndex];
-        if (currentEl) currentEl.classList.add('swiping');
+        var currentEl = getCurrentCardEl();
+        if (currentEl) {
+            state.startScrollTop = currentEl.scrollTop;
+            state.canScrollCard = cardCanScroll(currentEl);
+        } else {
+            state.canScrollCard = false;
+        }
     }
 
     function onTouchMove(e) {
-        if (!state.isSwiping || e.touches.length !== 1) return;
+        if (e.touches.length !== 1) return;
         state.touchCurrentY = e.touches[0].clientY;
         var delta = state.touchCurrentY - state.touchStartY;
+        var currentEl = getCurrentCardEl();
+        if (!currentEl) return;
 
-        var container = document.getElementById('cooking-card-container');
-        if (!container) return;
-        var currentEl = container.querySelectorAll('.cooking-card')[state.currentIndex];
+        // If card has scrollable content, let it scroll until at boundary
+        if (state.canScrollCard && !state.isSwiping) {
+            var swipingUp = delta < 0;
+            var swipingDown = delta > 0;
+            var atTop = isAtScrollTop(currentEl);
+            var atBottom = isAtScrollBottom(currentEl);
 
-        if (currentEl) {
-            var clampedDelta = Math.max(-150, Math.min(150, delta));
+            // Allow native scroll if not at boundary, or scrolling into content
+            if ((swipingUp && !atBottom) || (swipingDown && !atTop)) {
+                state.scrolling = true;
+                return; // let browser handle scroll
+            }
+
+            // At boundary and swiping away from content — start card swipe
+            if (!state.scrolling) {
+                state.isSwiping = true;
+                state.touchStartY = state.touchCurrentY; // reset start to boundary
+            } else {
+                // Was scrolling, now at boundary — wait for a new gesture
+                return;
+            }
+        } else {
+            state.isSwiping = true;
+        }
+
+        if (state.isSwiping) {
+            var swipeDelta = state.touchCurrentY - state.touchStartY;
+            var clampedDelta = Math.max(-150, Math.min(150, swipeDelta));
+            currentEl.classList.add('swiping');
             currentEl.style.transform = 'translateY(' + clampedDelta + 'px) scale(' + (1 - Math.abs(clampedDelta) * 0.001) + ')';
         }
     }
 
     function onTouchEnd() {
-        if (!state.isSwiping) return;
-        state.isSwiping = false;
+        var currentEl = getCurrentCardEl();
 
-        var delta = state.touchCurrentY - state.touchStartY;
-        var threshold = 50;
+        if (state.isSwiping) {
+            var delta = state.touchCurrentY - state.touchStartY;
+            var threshold = 50;
 
-        var container = document.getElementById('cooking-card-container');
-        if (container) {
-            var currentEl = container.querySelectorAll('.cooking-card')[state.currentIndex];
             if (currentEl) {
                 currentEl.classList.remove('swiping');
                 currentEl.style.transform = '';
             }
+
+            if (delta < -threshold && state.currentIndex < state.cards.length - 1) {
+                navigateTo(state.currentIndex + 1);
+            } else if (delta > threshold && state.currentIndex > 0) {
+                navigateTo(state.currentIndex - 1);
+            } else {
+                updateCards();
+            }
         }
 
-        if (delta < -threshold && state.currentIndex < state.cards.length - 1) {
-            navigateTo(state.currentIndex + 1);
-        } else if (delta > threshold && state.currentIndex > 0) {
-            navigateTo(state.currentIndex - 1);
-        } else {
-            updateCards();
-        }
+        state.isSwiping = false;
+        state.scrolling = false;
     }
 
     // ─── Keyboard Handling ────────────────────────────────────────
