@@ -1,0 +1,16 @@
+target/
+node_modules/
+.git/
+test-results/
+playwright-report/
+playwright/.cache/
+docs/
+tests/
+.DS_Store
+*.tmp
+*.log
+.env
+.env.local
+.vscode/
+.idea/
+playwright.config.ts
