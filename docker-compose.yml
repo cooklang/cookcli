@@ -1,0 +1,6 @@
+services:
+  cookcli:
+    build: .
+    ports:
+      - "9080:9080"
+    restart: unless-stopped
