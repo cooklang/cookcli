@@ -1,32 +1,46 @@
-FROM docker.io/alpine:latest
+FROM rust:latest AS builder
 
-#Set download URL (customize if not using amd64 CPU)
-ARG DOWNLOAD_URL="https://github.com/cooklang/cookcli/releases/latest/download/cook-x86_64-unknown-linux-musl.tar.gz"
+# Install Node.js for Tailwind CSS and esbuild
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apk upgrade --no-cache
+WORKDIR /usr/src/cookcli
 
-#Add data dir (mount volume with your recipes and config dir here)
-RUN mkdir /data --mode=555
-WORKDIR /data
+# Install npm dependencies first (cache layer)
+COPY package.json package-lock.json* ./
+RUN npm install
 
-#Add cookcli binary
-ADD ${DOWNLOAD_URL} .
+# Copy source
+COPY . .
 
-#Untar binary
-RUN tar -xvf cook-*
+# Build CSS and JS assets
+RUN npm run build-css && npm run build-js
 
-#Remove tar
-RUN rm *.tar.gz
+# Build Rust binary without self-update feature
+RUN cargo build --release --no-default-features
 
-#Install binary
-RUN mv cook /bin/cook && chmod 555 /bin/cook && chown root /bin/cook && chgrp root /bin/cook
+# --- Runtime stage ---
+FROM debian:bookworm-slim
 
-#Add non-root user (optional)         
-RUN addgroup -g 1000 cookcli_user
-RUN adduser -u 1000 -G cookcli_user -s /bin/sh -D cookcli_user
-RUN chown -R 1000 /data && chgrp -R 1000 /data
-USER cookcli_user
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-#Run server
+# Create non-root user
+RUN groupadd -r cookcli && useradd -r -g cookcli -d /home/cookcli -s /sbin/nologin cookcli
+
+# Copy binary
+COPY --from=builder /usr/src/cookcli/target/release/cook /usr/local/bin/cook
+
+# Copy seed recipes
+COPY seed/ /recipes/
+
+RUN chown -R cookcli:cookcli /recipes
+
+USER cookcli
+
 EXPOSE 9080
-ENTRYPOINT cook server --host /data
+
+ENTRYPOINT ["cook", "server", "--host", "/recipes"]
