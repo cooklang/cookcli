@@ -40,6 +40,8 @@ UNIX command line and scripting tools. It can also function
 as a webserver for your recipes, making them browsable on
 any device with a web browser.
 
+**Try the web interface live at [demo.cooklang.org](https://demo.cooklang.org)**
+
 ### ✨ Features
 
 * 🔧 **UNIX Philosophy** - Integrate your Cooklang recipes with other tools
