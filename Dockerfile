@@ -19,7 +19,10 @@ COPY . .
 RUN npm run build-css && npm run build-js
 
 # Build Rust binary without self-update feature
-RUN cargo build --release --no-default-features
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/src/cookcli/target \
+    cargo build --release --no-default-features \
+    && cp target/release/cook /usr/local/bin/cook
 
 # --- Runtime stage ---
 FROM debian:bookworm-slim
@@ -32,7 +35,7 @@ RUN apt-get update \
 RUN groupadd -r cookcli && useradd -r -g cookcli -d /home/cookcli -s /sbin/nologin cookcli
 
 # Copy binary
-COPY --from=builder /usr/src/cookcli/target/release/cook /usr/local/bin/cook
+COPY --from=builder /usr/local/bin/cook /usr/local/bin/cook
 
 # Copy seed recipes
 COPY seed/ /recipes/
@@ -43,4 +46,4 @@ USER cookcli
 
 EXPOSE 9080
 
-ENTRYPOINT ["cook", "server", "--host", "/recipes"]
+ENTRYPOINT ["cook", "server", "/recipes", "--host"]
