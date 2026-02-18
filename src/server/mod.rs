@@ -41,7 +41,7 @@ use axum::{
 use camino::Utf8PathBuf;
 use clap::Args;
 use rust_embed::RustEmbed;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
@@ -72,9 +72,11 @@ pub struct ServerArgs {
     ///
     /// By default, the server only accepts connections from localhost
     /// for security. Use this flag to allow access from other devices
-    /// on your network. Be cautious when using this on public networks.
-    #[arg(long)]
-    host: bool,
+    /// on your network. If an IP address is provided the server will
+    /// only listen on that address. Be cautious when using this flag
+    /// on public networks.
+    #[arg(long, num_args = 0..=1, value_name = "ADDRESS")]
+    host: Option<Option<IpAddr>>,
 
     /// Port number for the HTTP server
     ///
@@ -100,18 +102,18 @@ impl ServerArgs {
 
 #[tokio::main]
 pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
-    let addr = if args.host {
-        SocketAddr::from(([0, 0, 0, 0], args.port))
-    } else {
-        SocketAddr::from(([127, 0, 0, 1], args.port))
+    let addr = match args.host {
+        Some(Some(addr)) => addr,
+        Some(None) => "::".parse()?,
+        None => [127, 0, 0, 1].into(),
     };
+    let addr = SocketAddr::from((addr, args.port));
 
     println!("Listening on http://{addr}");
 
     // #[cfg(feature = "ui")]
     if args.open {
-        let port = args.port;
-        let url = format!("http://localhost:{port}");
+        let url = format!("http://{addr}");
         println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
