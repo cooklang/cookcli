@@ -1,4 +1,4 @@
-FROM rust:latest AS builder
+FROM rust:bookworm AS builder
 
 # Install Node.js for Tailwind CSS and esbuild
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
