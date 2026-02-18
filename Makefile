@@ -1,3 +1,6 @@
+# Docker
+IMAGE_NAME := $(shell yq '.services.cookcli.image' docker-compose.yml)
+
 all: build
 
 build: assets
@@ -34,4 +37,12 @@ clean:
 	rm -rf static/css/tailwind.css
 	rm -rf static/js/editor.bundle.js
 
-.PHONY: all build release dev_server test clean css js assets dev_assets
+docker-build:
+	docker build -t $(IMAGE_NAME) .
+
+docker-push:
+	docker push $(IMAGE_NAME)
+
+docker: docker-build docker-push
+
+.PHONY: all build release dev_server test clean css js assets dev_assets docker-build docker-push docker
