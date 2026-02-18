@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.24.0](https://github.com/cooklang/cookcli/compare/v0.23.0...v0.24.0) (2026-02-18)
+
+
+### Features
+
+* add Docker build/push workflow with versioned images on ghcr.io ([feee70c](https://github.com/cooklang/cookcli/commit/feee70c0e0a586f211d0827dc879f71cf7ec0b98))
+* add root docker-compose.yml, remove outdated docker/ directory ([0e5a4cc](https://github.com/cooklang/cookcli/commit/0e5a4cc78bbea70c5cb947428e84da0b33579cd4))
+* allow --host to take an optional IP argument ([a496cf1](https://github.com/cooklang/cookcli/commit/a496cf103209ddaf298075aedd57b90af00dbc94))
+* replace Dockerfile with multi-stage build for demo deployment ([c47ebf8](https://github.com/cooklang/cookcli/commit/c47ebf8697b9bb6a2b9bf92f661a43be3d180ed4))
+
+
+### Bug Fixes
+
+* correct ENTRYPOINT arg order and add Docker build caching ([3631ce1](https://github.com/cooklang/cookcli/commit/3631ce131098504e1b6530401dbac2ac415250a0))
+* pin Docker builder stage to rust:bookworm for GLIBC compatibility ([d58e8bd](https://github.com/cooklang/cookcli/commit/d58e8bda0a6d158a61584d71d891c6ab1638356b))
+
 ## [0.23.0](https://github.com/cooklang/cookcli/compare/v0.22.0...v0.23.0) (2026-02-16)
 
 
