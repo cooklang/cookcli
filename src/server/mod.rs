@@ -41,7 +41,7 @@ use axum::{
 use camino::Utf8PathBuf;
 use clap::Args;
 use rust_embed::RustEmbed;
-use std::{net::IpAddr, net::SocketAddr, sync::Arc};
+use std::{net::IpAddr, net::SocketAddr, sync::Arc, sync::Mutex};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
@@ -126,6 +126,32 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let state = build_state(ctx, args)?;
 
+    // Start sync if already logged in
+    {
+        let session_guard = state.sync_session.lock().unwrap();
+        if let Some(ref session) = *session_guard {
+            let db_path = crate::global_file_path("sync.db")
+                .map(|p: Utf8PathBuf| p.to_string())
+                .unwrap_or_else(|_| ".cook-sync.db".to_string());
+            match sync::start_sync(session, state.base_path.to_string(), db_path) {
+                Ok(handle) => {
+                    let state_clone = state.clone();
+                    tokio::spawn(async move {
+                        *state_clone.sync_handle.lock().await = Some(handle);
+                    });
+                    tracing::info!("Sync started on server boot");
+                }
+                Err(e) => tracing::warn!("Failed to start sync: {e}"),
+            }
+        }
+
+        // Start token refresh task
+        sync::runner::start_token_refresh(
+            Arc::clone(&state.sync_session),
+            state.session_path.clone(),
+        );
+    }
+
     println!("Serving recipe files from: {:?}", &state.base_path);
 
     // Maximum request body size: 1MB (reasonable for recipe files)
@@ -136,6 +162,8 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .merge(ui::ui())
         .route("/static/*file", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
+
+    let state_for_shutdown = state.clone();
 
     let app = app
         .with_state(state)
@@ -165,6 +193,11 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .await
         .context("Server error")?;
 
+    // Stop sync on shutdown
+    if let Some(handle) = state_for_shutdown.sync_handle.lock().await.take() {
+        handle.stop().await;
+    }
+
     info!("Server stopped");
 
     Ok(())
@@ -190,10 +223,27 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
 
+    // Session file path
+    let session_path = crate::global_file_path("session.json")
+        .map(|p: Utf8PathBuf| p.into_std_path_buf())
+        .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
+
+    // Load existing session
+    let session = match sync::SyncSession::load(&session_path) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("Failed to load sync session: {e}");
+            None
+        }
+    };
+
     Ok(Arc::new(AppState {
         base_path: absolute_path,
         aisle_path,
         pantry_path,
+        sync_session: Arc::new(Mutex::new(session)),
+        sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
+        session_path,
     }))
 }
 
@@ -227,6 +277,9 @@ pub struct AppState {
     pub base_path: Utf8PathBuf,
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
+    pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
+    pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
+    pub session_path: std::path::PathBuf,
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {

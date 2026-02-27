@@ -1,5 +1,6 @@
 // Re-export modules for testing
-use camino::Utf8PathBuf;
+use anyhow::{Context as _, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 
 // Commands - make them available as public modules
 pub mod doctor;
@@ -50,4 +51,16 @@ impl Context {
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
+}
+
+const APP_NAME: &str = "cook";
+const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
+
+/// Resolve a global configuration file path (e.g. `~/.config/cook/{name}`).
+pub fn global_file_path(name: &str) -> Result<Utf8PathBuf> {
+    let dirs = directories::ProjectDirs::from("", "", APP_NAME)
+        .context("Could not determine home directory path")?;
+    let config = Utf8Path::from_path(dirs.config_dir()).expect(UTF8_PATH_PANIC);
+    let path = config.join(name);
+    Ok(path)
 }
