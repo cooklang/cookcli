@@ -50,6 +50,7 @@ mod i18n;
 mod language;
 mod lsp_bridge;
 mod shopping_list_store;
+pub mod sync;
 mod templates;
 mod ui;
 
