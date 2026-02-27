@@ -126,17 +126,17 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     let state = build_state(ctx, args)?;
 
-    // Start sync if already logged in
+    // Start sync if already logged in (non-fatal: server starts regardless)
     {
         let session_guard = state.sync_session.lock().unwrap();
         if let Some(ref session) = *session_guard {
             let db_path = sync::sync_db_path();
             match sync::start_sync(session, state.base_path.to_string(), db_path) {
                 Ok(handle) => {
-                    // Store handle directly to avoid race window where status reports syncing=false
-                    // while sync is already running. This is safe because the server isn't
-                    // accepting connections yet.
-                    *state.sync_handle.blocking_lock() = Some(handle);
+                    // Safe to use try_lock here: no contention before the server accepts connections
+                    if let Ok(mut guard) = state.sync_handle.try_lock() {
+                        *guard = Some(handle);
+                    }
                     tracing::info!("Sync started on server boot");
                 }
                 Err(e) => tracing::warn!("Failed to start sync: {e}"),
