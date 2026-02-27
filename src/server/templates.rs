@@ -174,6 +174,8 @@ pub struct PreferencesTemplate {
     pub base_path: String,
     pub version: String,
     pub tr: Tr,
+    pub sync_logged_in: bool,
+    pub sync_email: Option<String>,
 }
 
 #[derive(Template)]

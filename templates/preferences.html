@@ -34,6 +34,36 @@
             </div>
             <p class="text-sm text-purple-700 mt-3">Your language preference will be saved in a cookie.</p>
         </div>
+
+        <!-- CookCloud Sync -->
+        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl border-2 border-blue-200">
+            <h2 class="text-lg font-semibold mb-4 text-blue-900">CookCloud Sync</h2>
+            <div id="sync-section">
+                {% if sync_logged_in %}
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-blue-800">
+                            Signed in as <span class="font-medium">{{ sync_email.as_deref().unwrap_or("Unknown") }}</span>
+                        </p>
+                        <p class="text-xs text-blue-600 mt-1" id="sync-status-text">Syncing recipes...</p>
+                    </div>
+                    <button onclick="syncLogout()"
+                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-white text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400">
+                        Logout
+                    </button>
+                </div>
+                {% else %}
+                <div class="flex items-center justify-between">
+                    <p class="text-sm text-blue-700">Sync your recipes across devices with CookCloud.</p>
+                    <button onclick="syncLogin()"
+                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg hover:scale-105">
+                        Login to CookCloud
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <div class="bg-gray-50 p-4 rounded">
             <h2 class="text-lg font-semibold mb-3">Configuration Files</h2>
             <div class="space-y-2 text-sm">
@@ -116,6 +146,38 @@
 
         // Reload page to apply new language
         window.location.reload();
+    }
+
+    async function syncLogin() {
+        try {
+            const resp = await fetch('/api/sync/login', { method: 'POST' });
+            if (!resp.ok) {
+                const err = await resp.json();
+                alert(err.error || 'Login failed');
+                return;
+            }
+            // Poll for login completion
+            const pollInterval = setInterval(async () => {
+                const status = await fetch('/api/sync/status').then(r => r.json());
+                if (status.logged_in) {
+                    clearInterval(pollInterval);
+                    window.location.reload();
+                }
+            }, 2000);
+            // Stop polling after 5 minutes
+            setTimeout(() => clearInterval(pollInterval), 300000);
+        } catch (e) {
+            alert('Failed to start login: ' + e.message);
+        }
+    }
+
+    async function syncLogout() {
+        try {
+            await fetch('/api/sync/logout', { method: 'POST' });
+            window.location.reload();
+        } catch (e) {
+            alert('Logout failed: ' + e.message);
+        }
     }
 </script>
 {% endblock %}
