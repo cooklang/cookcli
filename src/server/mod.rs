@@ -315,7 +315,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/search", get(handlers::search))
         .route("/reload", get(handlers::reload).post(handlers::reload))
-        .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
+        .route("/ws/lsp", get(lsp_bridge::lsp_websocket))
+        .route("/sync/status", get(handlers::sync_status))
+        .route("/sync/login", post(handlers::sync_login))
+        .route("/sync/logout", post(handlers::sync_logout));
 
     Ok(router)
 }
