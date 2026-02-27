@@ -36,16 +36,16 @@
         </div>
 
         <!-- CookCloud Sync -->
-        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl border-2 border-blue-200">
-            <h2 class="text-lg font-semibold mb-4 text-blue-900">CookCloud Sync</h2>
+        <div class="bg-gray-50 p-4 rounded">
+            <h2 class="text-lg font-semibold mb-3">CookCloud Sync</h2>
             <div id="sync-section">
                 {% if sync_logged_in %}
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-blue-800">
+                        <p class="text-sm">
                             Signed in as <span class="font-medium">{{ sync_email.as_deref().unwrap_or("Unknown") }}</span>
                         </p>
-                        <p class="text-xs text-blue-600 mt-1" id="sync-status-text">{% if sync_syncing %}Syncing recipes...{% else %}Sync idle{% endif %}</p>
+                        <p class="text-xs text-gray-600 mt-1" id="sync-status-text">{% if sync_syncing %}Syncing recipes...{% else %}Sync idle{% endif %}</p>
                     </div>
                     <button onclick="syncLogout()"
                             class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-white text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400">
@@ -54,9 +54,9 @@
                 </div>
                 {% else %}
                 <div class="flex items-center justify-between">
-                    <p class="text-sm text-blue-700">Sync your recipes across devices with CookCloud.</p>
+                    <p class="text-sm text-gray-600">Sync your recipes across devices with CookCloud.</p>
                     <button onclick="syncLogin()"
-                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg hover:scale-105">
+                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-orange-500 text-white border-orange-600 hover:bg-orange-600">
                         Login to CookCloud
                     </button>
                 </div>
