@@ -19,7 +19,20 @@ pub async fn sync_status(State(state): State<Arc<AppState>>) -> Json<SyncStatusR
             session.as_ref().and_then(|s| s.email.clone()),
         )
     };
-    let syncing = state.sync_handle.lock().await.is_some();
+
+    // Check if sync task is actually still running, clean up finished handles
+    let syncing = {
+        let mut guard = state.sync_handle.lock().await;
+        match guard.as_ref() {
+            Some(handle) if handle.is_running() => true,
+            Some(_) => {
+                // Task finished (possibly with error), clean up
+                guard.take();
+                false
+            }
+            None => false,
+        }
+    };
 
     Json(SyncStatusResponse {
         logged_in,

@@ -14,6 +14,11 @@ pub struct SyncHandle {
 }
 
 impl SyncHandle {
+    /// Check if the sync task is still running.
+    pub fn is_running(&self) -> bool {
+        !self.task.is_finished()
+    }
+
     /// Stop the sync task gracefully.
     pub async fn stop(self) {
         self.cancel.cancel();

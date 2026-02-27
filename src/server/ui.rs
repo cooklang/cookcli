@@ -1335,7 +1335,17 @@ async fn preferences_page(
             session.as_ref().and_then(|s| s.email.clone()),
         )
     };
-    let sync_syncing = state.sync_handle.lock().await.is_some();
+    let sync_syncing = {
+        let mut guard = state.sync_handle.lock().await;
+        match guard.as_ref() {
+            Some(handle) if handle.is_running() => true,
+            Some(_) => {
+                guard.take();
+                false
+            }
+            None => false,
+        }
+    };
 
     PreferencesTemplate {
         active: "preferences".to_string(),
