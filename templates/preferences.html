@@ -45,7 +45,7 @@
                         <p class="text-sm text-blue-800">
                             Signed in as <span class="font-medium">{{ sync_email.as_deref().unwrap_or("Unknown") }}</span>
                         </p>
-                        <p class="text-xs text-blue-600 mt-1" id="sync-status-text">Syncing recipes...</p>
+                        <p class="text-xs text-blue-600 mt-1" id="sync-status-text">{% if sync_syncing %}Syncing recipes...{% else %}Sync idle{% endif %}</p>
                     </div>
                     <button onclick="syncLogout()"
                             class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-white text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400">

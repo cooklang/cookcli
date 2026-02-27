@@ -2,7 +2,7 @@ use super::endpoints;
 use super::session::{self, SyncSession};
 use anyhow::Result;
 use cooklang_sync_client::extract_uid_from_jwt;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -66,14 +66,23 @@ pub fn start_sync(
 }
 
 /// Start a background token refresh task. Checks hourly, refreshes if < 1 hour remaining.
+/// Returns a JoinHandle so the caller can cancel via the provided token.
 pub fn start_token_refresh(
     session_state: Arc<std::sync::Mutex<Option<SyncSession>>>,
-    session_path: PathBuf,
-) {
+    session_path: impl AsRef<Path> + Send + 'static,
+    cancel: CancellationToken,
+) -> JoinHandle<()> {
+    let session_path = session_path.as_ref().to_path_buf();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    tracing::info!("Token refresh task stopped");
+                    return;
+                }
+                _ = interval.tick() => {}
+            }
 
             let jwt = {
                 let guard = session_state.lock().unwrap();
@@ -112,7 +121,7 @@ pub fn start_token_refresh(
                 }
             }
         }
-    });
+    })
 }
 
 async fn refresh_token(current_token: &str) -> Result<String> {

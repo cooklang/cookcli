@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncSession {
@@ -40,7 +40,7 @@ impl SyncSession {
     }
 
     /// Load session from the config file, returning None if not found or expired.
-    pub fn load(path: &PathBuf) -> Result<Option<Self>> {
+    pub fn load(path: &Path) -> Result<Option<Self>> {
         if !path.exists() {
             return Ok(None);
         }
@@ -56,17 +56,29 @@ impl SyncSession {
     }
 
     /// Save session to the config file.
-    pub fn save(&self, path: &PathBuf) -> Result<()> {
+    pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, content).context("Failed to write session file")?;
+
+        // Write the file
+        std::fs::write(path, &content).context("Failed to write session file")?;
+
+        // Restrict permissions to owner-only on Unix (JWT is a bearer token)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            std::fs::set_permissions(path, perms)
+                .context("Failed to set session file permissions")?;
+        }
+
         Ok(())
     }
 
     /// Delete session file.
-    pub fn delete(path: &PathBuf) -> Result<()> {
+    pub fn delete(path: &Path) -> Result<()> {
         if path.exists() {
             std::fs::remove_file(path).context("Failed to delete session file")?;
         }
@@ -74,6 +86,9 @@ impl SyncSession {
     }
 }
 
+/// Decode JWT payload without signature verification.
+/// This is intentional: the JWT comes directly from our auth server over HTTPS,
+/// so cryptographic verification is unnecessary for client-side session management.
 fn decode_jwt_claims(jwt: &str) -> Result<JwtClaims> {
     let parts: Vec<&str> = jwt.split('.').collect();
     anyhow::ensure!(parts.len() == 3, "Invalid JWT format");

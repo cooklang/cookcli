@@ -130,27 +130,26 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     {
         let session_guard = state.sync_session.lock().unwrap();
         if let Some(ref session) = *session_guard {
-            let db_path = crate::global_file_path("sync.db")
-                .map(|p: Utf8PathBuf| p.to_string())
-                .unwrap_or_else(|_| ".cook-sync.db".to_string());
+            let db_path = sync::sync_db_path();
             match sync::start_sync(session, state.base_path.to_string(), db_path) {
                 Ok(handle) => {
-                    let state_clone = state.clone();
-                    tokio::spawn(async move {
-                        *state_clone.sync_handle.lock().await = Some(handle);
-                    });
+                    // Store handle directly to avoid race window where status reports syncing=false
+                    // while sync is already running. This is safe because the server isn't
+                    // accepting connections yet.
+                    *state.sync_handle.blocking_lock() = Some(handle);
                     tracing::info!("Sync started on server boot");
                 }
                 Err(e) => tracing::warn!("Failed to start sync: {e}"),
             }
         }
-
-        // Start token refresh task
-        sync::runner::start_token_refresh(
-            Arc::clone(&state.sync_session),
-            state.session_path.clone(),
-        );
     }
+
+    // Start token refresh task (cancelled on shutdown via shutdown_token)
+    sync::runner::start_token_refresh(
+        Arc::clone(&state.sync_session),
+        state.session_path.clone(),
+        state.shutdown_token.child_token(),
+    );
 
     println!("Serving recipe files from: {:?}", &state.base_path);
 
@@ -193,7 +192,8 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .await
         .context("Server error")?;
 
-    // Stop sync on shutdown
+    // Cancel background tasks (token refresh) and stop sync on shutdown
+    state_for_shutdown.shutdown_token.cancel();
     if let Some(handle) = state_for_shutdown.sync_handle.lock().await.take() {
         handle.stop().await;
     }
@@ -244,6 +244,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         sync_session: Arc::new(Mutex::new(session)),
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
         session_path,
+        shutdown_token: tokio_util::sync::CancellationToken::new(),
     }))
 }
 
@@ -280,6 +281,7 @@ pub struct AppState {
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
     pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
     pub session_path: std::path::PathBuf,
+    pub shutdown_token: tokio_util::sync::CancellationToken,
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {

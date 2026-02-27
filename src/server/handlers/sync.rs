@@ -105,9 +105,7 @@ async fn browser_login_flow(state: &Arc<AppState>) -> anyhow::Result<()> {
     *state.sync_session.lock().unwrap() = Some(session.clone());
 
     // Start sync
-    let db_path = crate::global_file_path("sync.db")
-        .map(|p| p.to_string())
-        .unwrap_or_else(|_| ".cook-sync.db".to_string());
+    let db_path = sync::sync_db_path();
 
     match sync::start_sync(&session, state.base_path.to_string(), db_path) {
         Ok(handle) => {
@@ -219,21 +217,19 @@ fn extract_token(request: &str, expected_state: &str) -> Option<String> {
         return None;
     }
     let path = first_line.split(' ').nth(1)?;
-    let query_start = path.find('?')?;
-    let query = &path[query_start + 1..];
+
+    // Use url crate for robust query string parsing (handles %26-encoded values, etc.)
+    let full_url = format!("http://localhost{path}");
+    let parsed = url::Url::parse(&full_url).ok()?;
 
     let mut token = None;
     let mut state = None;
 
-    for param in query.split('&') {
-        if let Some(eq) = param.find('=') {
-            let key = &param[..eq];
-            let value = &param[eq + 1..];
-            match key {
-                "token" => token = Some(urlencoding::decode(value).ok()?.into_owned()),
-                "state" => state = Some(urlencoding::decode(value).ok()?.into_owned()),
-                _ => {}
-            }
+    for (key, value) in parsed.query_pairs() {
+        match key.as_ref() {
+            "token" => token = Some(value.into_owned()),
+            "state" => state = Some(value.into_owned()),
+            _ => {}
         }
     }
 
@@ -254,7 +250,9 @@ pub async fn sync_logout(
 
     // Clear session
     *state.sync_session.lock().unwrap() = None;
-    let _ = SyncSession::delete(&state.session_path);
+    if let Err(e) = SyncSession::delete(&state.session_path) {
+        tracing::warn!("Failed to delete session file: {e}");
+    }
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }

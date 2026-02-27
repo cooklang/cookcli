@@ -1335,6 +1335,7 @@ async fn preferences_page(
             session.as_ref().and_then(|s| s.email.clone()),
         )
     };
+    let sync_syncing = state.sync_handle.lock().await.is_some();
 
     PreferencesTemplate {
         active: "preferences".to_string(),
@@ -1353,5 +1354,6 @@ async fn preferences_page(
         tr: Tr::new(lang),
         sync_logged_in,
         sync_email,
+        sync_syncing,
     }
 }
