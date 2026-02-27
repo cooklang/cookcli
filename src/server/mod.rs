@@ -41,7 +41,9 @@ use axum::{
 use camino::Utf8PathBuf;
 use clap::Args;
 use rust_embed::RustEmbed;
-use std::{net::IpAddr, net::SocketAddr, sync::Arc, sync::Mutex};
+#[cfg(feature = "sync")]
+use std::sync::Mutex;
+use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
@@ -50,6 +52,7 @@ mod i18n;
 mod language;
 mod lsp_bridge;
 mod shopping_list_store;
+#[cfg(feature = "sync")]
 pub mod sync;
 mod templates;
 mod ui;
@@ -127,6 +130,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let state = build_state(ctx, args)?;
 
     // Start sync if already logged in (non-fatal: server starts regardless)
+    #[cfg(feature = "sync")]
     {
         let session_guard = state.sync_session.lock().unwrap();
         if let Some(ref session) = *session_guard {
@@ -142,14 +146,14 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
                 Err(e) => tracing::warn!("Failed to start sync: {e}"),
             }
         }
-    }
 
-    // Start token refresh task (cancelled on shutdown via shutdown_token)
-    sync::runner::start_token_refresh(
-        Arc::clone(&state.sync_session),
-        state.session_path.clone(),
-        state.shutdown_token.child_token(),
-    );
+        // Start token refresh task (cancelled on shutdown via shutdown_token)
+        sync::runner::start_token_refresh(
+            Arc::clone(&state.sync_session),
+            state.session_path.clone(),
+            state.shutdown_token.child_token(),
+        );
+    }
 
     println!("Serving recipe files from: {:?}", &state.base_path);
 
@@ -162,6 +166,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .route("/static/*file", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
 
+    #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
 
     let app = app
@@ -193,9 +198,12 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .context("Server error")?;
 
     // Cancel background tasks (token refresh) and stop sync on shutdown
-    state_for_shutdown.shutdown_token.cancel();
-    if let Some(handle) = state_for_shutdown.sync_handle.lock().await.take() {
-        handle.stop().await;
+    #[cfg(feature = "sync")]
+    {
+        state_for_shutdown.shutdown_token.cancel();
+        if let Some(handle) = state_for_shutdown.sync_handle.lock().await.take() {
+            handle.stop().await;
+        }
     }
 
     info!("Server stopped");
@@ -223,27 +231,32 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
 
-    // Session file path
-    let session_path = crate::global_file_path("session.json")
-        .map(|p: Utf8PathBuf| p.into_std_path_buf())
-        .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
-
-    // Load existing session
-    let session = match sync::SyncSession::load(&session_path) {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!("Failed to load sync session: {e}");
-            None
-        }
+    #[cfg(feature = "sync")]
+    let (session_path, session) = {
+        let path = crate::global_file_path("session.json")
+            .map(|p: Utf8PathBuf| p.into_std_path_buf())
+            .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
+        let session = match sync::SyncSession::load(&path) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("Failed to load sync session: {e}");
+                None
+            }
+        };
+        (path, session)
     };
 
     Ok(Arc::new(AppState {
         base_path: absolute_path,
         aisle_path,
         pantry_path,
+        #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
+        #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
+        #[cfg(feature = "sync")]
         session_path,
+        #[cfg(feature = "sync")]
         shutdown_token: tokio_util::sync::CancellationToken::new(),
     }))
 }
@@ -278,9 +291,13 @@ pub struct AppState {
     pub base_path: Utf8PathBuf,
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
+    #[cfg(feature = "sync")]
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
+    #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
+    #[cfg(feature = "sync")]
     pub session_path: std::path::PathBuf,
+    #[cfg(feature = "sync")]
     pub shutdown_token: tokio_util::sync::CancellationToken,
 }
 
@@ -317,7 +334,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/search", get(handlers::search))
         .route("/reload", get(handlers::reload).post(handlers::reload))
-        .route("/ws/lsp", get(lsp_bridge::lsp_websocket))
+        .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
+
+    #[cfg(feature = "sync")]
+    let router = router
         .route("/sync/status", get(handlers::sync_status))
         .route("/sync/login", post(handlers::sync_login))
         .route("/sync/logout", post(handlers::sync_logout));

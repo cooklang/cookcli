@@ -1328,24 +1328,30 @@ async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
 ) -> impl askama_axum::IntoResponse {
-    let (sync_logged_in, sync_email) = {
-        let session = state.sync_session.lock().unwrap();
-        (
-            session.is_some(),
-            session.as_ref().and_then(|s| s.email.clone()),
-        )
-    };
-    let sync_syncing = {
-        let mut guard = state.sync_handle.lock().await;
-        match guard.as_ref() {
-            Some(handle) if handle.is_running() => true,
-            Some(_) => {
-                guard.take();
-                false
+    #[cfg(feature = "sync")]
+    let (sync_logged_in, sync_email, sync_syncing) = {
+        let (logged_in, email) = {
+            let session = state.sync_session.lock().unwrap();
+            (
+                session.is_some(),
+                session.as_ref().and_then(|s| s.email.clone()),
+            )
+        };
+        let syncing = {
+            let mut guard = state.sync_handle.lock().await;
+            match guard.as_ref() {
+                Some(handle) if handle.is_running() => true,
+                Some(_) => {
+                    guard.take();
+                    false
+                }
+                None => false,
             }
-            None => false,
-        }
+        };
+        (logged_in, email, syncing)
     };
+    #[cfg(not(feature = "sync"))]
+    let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
     PreferencesTemplate {
         active: "preferences".to_string(),
@@ -1362,6 +1368,7 @@ async fn preferences_page(
         base_path: state.base_path.to_string(),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
         tr: Tr::new(lang),
+        sync_enabled: cfg!(feature = "sync"),
         sync_logged_in,
         sync_email,
         sync_syncing,

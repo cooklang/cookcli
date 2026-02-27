@@ -13,6 +13,7 @@ categories = ["command-line-utilities"]
 [features]
 default = ["self-update"]
 self-update = ["dep:self_update"]
+sync = ["dep:cooklang-sync-client", "dep:uuid", "dep:tokio-util", "dep:base64"]
 
 [lib]
 name = "cookcli"
@@ -36,11 +37,11 @@ axum = { version = "0.7", features = ["ws"] }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
-base64 = "0.22"
+base64 = { version = "0.22", optional = true }
 cooklang = { version = "0.18.2", default-features = false, features = ["aisle", "pantry"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.8.7"
-cooklang-sync-client = "0.3.0"
+cooklang-sync-client = { version = "0.3.0", optional = true }
 cooklang-language-server = "0.1.2"
 cooklang-reports = { version = "0.2" }
 directories = "6"
@@ -63,7 +64,7 @@ serde_yaml = "0.9"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
-tokio-util = "0.7"
+tokio-util = { version = "0.7", optional = true }
 toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
@@ -73,7 +74,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unic-langid = "0.9"
 urlencoding = "2"
 url = "2.5"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4"], optional = true }
 yansi = "1"
 
 [dev-dependencies]

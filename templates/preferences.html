@@ -36,6 +36,7 @@
         </div>
 
         <!-- CookCloud Sync -->
+        {% if sync_enabled %}
         <div class="bg-gray-50 p-4 rounded">
             <h2 class="text-lg font-semibold mb-3">CookCloud Sync</h2>
             <div id="sync-section">
@@ -63,6 +64,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
         <div class="bg-gray-50 p-4 rounded">
             <h2 class="text-lg font-semibold mb-3">Configuration Files</h2>
@@ -148,6 +150,7 @@
         window.location.reload();
     }
 
+    {% if sync_enabled %}
     async function syncLogin() {
         try {
             const resp = await fetch('/api/sync/login', { method: 'POST' });
@@ -179,5 +182,6 @@
             alert('Logout failed: ' + e.message);
         }
     }
+    {% endif %}
 </script>
 {% endblock %}

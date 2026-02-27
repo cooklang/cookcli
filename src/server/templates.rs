@@ -174,6 +174,7 @@ pub struct PreferencesTemplate {
     pub base_path: String,
     pub version: String,
     pub tr: Tr,
+    pub sync_enabled: bool,
     pub sync_logged_in: bool,
     pub sync_email: Option<String>,
     pub sync_syncing: bool,
