@@ -11,7 +11,7 @@ keywords = ["cooklang", "recipes", "cli", "cooking"]
 categories = ["command-line-utilities"]
 
 [features]
-default = ["self-update"]
+default = ["self-update", "sync"]
 self-update = ["dep:self_update"]
 sync = ["dep:cooklang-sync-client", "dep:uuid", "dep:tokio-util", "dep:base64"]
 

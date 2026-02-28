@@ -70,9 +70,6 @@ jobs:
     - name: Run tests without default features
       run: cargo test --no-default-features --verbose
 
-    - name: Build with sync feature
-      run: cargo build --release --features sync --verbose
-
     - name: Upload snapshot diffs
       if: failure()
       uses: actions/upload-artifact@v4

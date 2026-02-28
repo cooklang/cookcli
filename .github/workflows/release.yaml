@@ -137,11 +137,11 @@ jobs:
 
       - name: Build | Build [Cargo]
         if: matrix.os != 'ubuntu-latest'
-        run: cargo build --release --locked --features sync --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Build | Build [Cross]
         if: matrix.os == 'ubuntu-latest'
-        run: cross build --release --locked --features sync --target ${{ matrix.target }}
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: Build | Installer [Windows]
         continue-on-error: true
