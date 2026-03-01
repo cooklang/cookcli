@@ -55,9 +55,9 @@
                 </div>
                 {% else %}
                 <div class="flex items-center justify-between">
-                    <p class="text-sm text-gray-600">Sync your recipes across devices with CookCloud.</p>
-                    <button onclick="syncLogin()"
-                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-orange-500 text-white border-orange-600 hover:bg-orange-600">
+                    <p class="text-sm text-gray-600" id="sync-login-message">Sync your recipes across devices with CookCloud.</p>
+                    <button id="sync-login-btn" onclick="syncLogin()"
+                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-orange-700 text-white border-orange-800 hover:bg-orange-800">
                         Login to CookCloud
                     </button>
                 </div>
@@ -152,13 +152,26 @@
 
     {% if sync_enabled %}
     async function syncLogin() {
+        const btn = document.getElementById('sync-login-btn');
+        const msg = document.getElementById('sync-login-message');
         try {
+            btn.disabled = true;
+            btn.textContent = 'Opening browser...';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            msg.textContent = 'Complete login in your browser.';
+
             const resp = await fetch('/api/sync/login', { method: 'POST' });
             if (!resp.ok) {
                 const err = await resp.json();
-                alert(err.error || 'Login failed');
+                btn.disabled = false;
+                btn.textContent = 'Login to CookCloud';
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                msg.textContent = err.error || 'Login failed. Please try again.';
                 return;
             }
+
+            btn.textContent = 'Waiting for login...';
+
             // Poll for login completion
             const pollInterval = setInterval(async () => {
                 const status = await fetch('/api/sync/status').then(r => r.json());
@@ -167,10 +180,19 @@
                     window.location.reload();
                 }
             }, 2000);
-            // Stop polling after 5 minutes
-            setTimeout(() => clearInterval(pollInterval), 300000);
+            // Stop polling after 5 minutes and show timeout message
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                btn.disabled = false;
+                btn.textContent = 'Login to CookCloud';
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                msg.textContent = 'Login timed out. Please try again.';
+            }, 300000);
         } catch (e) {
-            alert('Failed to start login: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = 'Login to CookCloud';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            msg.textContent = 'Failed to start login: ' + e.message;
         }
     }
 

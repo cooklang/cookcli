@@ -1329,27 +1329,7 @@ async fn preferences_page(
     Extension(lang): Extension<LanguageIdentifier>,
 ) -> impl askama_axum::IntoResponse {
     #[cfg(feature = "sync")]
-    let (sync_logged_in, sync_email, sync_syncing) = {
-        let (logged_in, email) = {
-            let session = state.sync_session.lock().unwrap();
-            (
-                session.is_some(),
-                session.as_ref().and_then(|s| s.email.clone()),
-            )
-        };
-        let syncing = {
-            let mut guard = state.sync_handle.lock().await;
-            match guard.as_ref() {
-                Some(handle) if handle.is_running() => true,
-                Some(_) => {
-                    guard.take();
-                    false
-                }
-                None => false,
-            }
-        };
-        (logged_in, email, syncing)
-    };
+    let (sync_logged_in, sync_email, sync_syncing) = state.sync_status().await;
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 

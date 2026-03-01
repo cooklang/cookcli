@@ -42,6 +42,8 @@ use camino::Utf8PathBuf;
 use clap::Args;
 use rust_embed::RustEmbed;
 #[cfg(feature = "sync")]
+use std::sync::atomic::AtomicBool;
+#[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
@@ -255,6 +257,8 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
+        login_in_progress: Arc::new(AtomicBool::new(false)),
+        #[cfg(feature = "sync")]
         session_path,
         #[cfg(feature = "sync")]
         shutdown_token: tokio_util::sync::CancellationToken::new(),
@@ -296,9 +300,38 @@ pub struct AppState {
     #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
     #[cfg(feature = "sync")]
+    pub login_in_progress: Arc<AtomicBool>,
+    #[cfg(feature = "sync")]
     pub session_path: std::path::PathBuf,
     #[cfg(feature = "sync")]
     pub shutdown_token: tokio_util::sync::CancellationToken,
+}
+
+#[cfg(feature = "sync")]
+impl AppState {
+    /// Check sync status: returns (logged_in, email, syncing).
+    /// Cleans up finished sync handles as a side effect.
+    pub async fn sync_status(&self) -> (bool, Option<String>, bool) {
+        let (logged_in, email) = {
+            let session = self.sync_session.lock().unwrap();
+            (
+                session.is_some(),
+                session.as_ref().and_then(|s| s.email.clone()),
+            )
+        };
+        let syncing = {
+            let mut guard = self.sync_handle.lock().await;
+            match guard.as_ref() {
+                Some(handle) if handle.is_running() => true,
+                Some(_) => {
+                    guard.take();
+                    false
+                }
+                None => false,
+            }
+        };
+        (logged_in, email, syncing)
+    }
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {

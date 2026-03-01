@@ -62,16 +62,25 @@ impl SyncSession {
         }
         let content = serde_json::to_string_pretty(self)?;
 
-        // Write the file
-        std::fs::write(path, &content).context("Failed to write session file")?;
-
-        // Restrict permissions to owner-only on Unix (JWT is a bearer token)
+        // Write with restricted permissions from the start (JWT is a bearer token)
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o600);
-            std::fs::set_permissions(path, perms)
-                .context("Failed to set session file permissions")?;
+            use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+                .context("Failed to create session file")?;
+            file.write_all(content.as_bytes())
+                .context("Failed to write session file")?;
+        }
+
+        #[cfg(not(unix))]
+        {
+            std::fs::write(path, &content).context("Failed to write session file")?;
         }
 
         Ok(())

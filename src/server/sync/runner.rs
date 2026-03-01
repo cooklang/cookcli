@@ -78,8 +78,10 @@ pub fn start_token_refresh(
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     let session_path = session_path.as_ref().to_path_buf();
+    let client = reqwest::Client::new();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
+        interval.tick().await; // skip the immediate first tick
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
@@ -100,7 +102,7 @@ pub fn start_token_refresh(
             match session::should_refresh_jwt(&jwt) {
                 Ok(true) => {
                     tracing::info!("JWT needs refresh");
-                    match refresh_token(&jwt).await {
+                    match refresh_token(&client, &jwt).await {
                         Ok(new_jwt) => match SyncSession::from_jwt(new_jwt) {
                             Ok(new_session) => {
                                 if let Err(e) = new_session.save(&session_path) {
@@ -129,9 +131,8 @@ pub fn start_token_refresh(
     })
 }
 
-async fn refresh_token(current_token: &str) -> Result<String> {
+async fn refresh_token(client: &reqwest::Client, current_token: &str) -> Result<String> {
     let url = format!("{}/sessions/renew", endpoints::api_endpoint());
-    let client = reqwest::Client::new();
     let resp = client
         .post(&url)
         .header("Authorization", format!("Bearer {current_token}"))
