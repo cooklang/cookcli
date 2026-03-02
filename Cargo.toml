@@ -41,7 +41,7 @@ base64 = { version = "0.22", optional = true }
 cooklang = { version = "0.18.2", default-features = false, features = ["aisle", "pantry"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.8.7"
-cooklang-sync-client = { version = "0.3.0", optional = true }
+cooklang-sync-client = { version = "0.4.8", optional = true }
 cooklang-language-server = "0.1.2"
 cooklang-reports = { version = "0.2" }
 directories = "6"
