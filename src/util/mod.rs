@@ -43,14 +43,14 @@ use cooklang::{
     ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
 };
 use cooklang_find::RecipeEntry;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
-pub static PARSER: Lazy<CooklangParser> = Lazy::new(|| {
+pub static PARSER: LazyLock<CooklangParser> = LazyLock::new(|| {
     // Use no extensions but with default converter for basic unit support
     CooklangParser::new(Extensions::empty(), Converter::default())
 });
