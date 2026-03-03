@@ -21,3 +21,4 @@ playwright/.cache/
 # Temporary files
 *.tmp
 *.log
+.shopping_list.txt
