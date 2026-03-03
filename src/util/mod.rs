@@ -43,9 +43,9 @@ use cooklang::{
     ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
 };
 use cooklang_find::RecipeEntry;
-use std::sync::LazyLock;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
