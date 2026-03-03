@@ -64,7 +64,7 @@ jobs:
     - name: Build release
       run: cargo build --release --verbose
 
-    - name: Build without self-update feature
+    - name: Build without default features
       run: cargo build --release --no-default-features --verbose
 
     - name: Run tests without default features

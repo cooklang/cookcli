@@ -48,8 +48,8 @@ ingredients:
       value:
         type: regular
         value: 2.0
-    unit: cups
-    scalable: true
+    unit: c
+    scalable: false
   note: null
   reference: null
   relation:
@@ -68,7 +68,7 @@ ingredients:
         type: regular
         value: 1.0
     unit: tsp
-    scalable: true
+    scalable: false
   note: null
   reference: null
   relation:
@@ -87,7 +87,7 @@ ingredients:
         type: regular
         value: 200.0
     unit: g
-    scalable: true
+    scalable: false
   note: null
   reference: null
   relation:

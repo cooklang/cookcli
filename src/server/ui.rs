@@ -1328,6 +1328,11 @@ async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
 ) -> impl askama_axum::IntoResponse {
+    #[cfg(feature = "sync")]
+    let (sync_logged_in, sync_email, sync_syncing) = state.sync_status().await;
+    #[cfg(not(feature = "sync"))]
+    let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
+
     PreferencesTemplate {
         active: "preferences".to_string(),
         aisle_path: state
@@ -1343,5 +1348,9 @@ async fn preferences_page(
         base_path: state.base_path.to_string(),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
         tr: Tr::new(lang),
+        sync_enabled: cfg!(feature = "sync"),
+        sync_logged_in,
+        sync_email,
+        sync_syncing,
     }
 }
