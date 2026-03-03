@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.24.0](https://github.com/cooklang/cookcli/compare/v0.23.0...v0.24.0) (2026-03-03)
+
+
+### Features
+
+* add cookcloud sync dependencies ([9187785](https://github.com/cooklang/cookcli/commit/91877855367febef2113ea9a852da011ca0a17bc))
+* add CookCloud Sync section to Preferences page ([fc6453f](https://github.com/cooklang/cookcli/commit/fc6453f42d2bdf15f4d4a565aae7dec01398d7af))
+* add CookCloud sync to CLI server ([fd294d2](https://github.com/cooklang/cookcli/commit/fd294d24398cbdf13046df9c8d247ac98e434bdd))
+* add cooking_mode_ingredients field to RecipeSection ([8093673](https://github.com/cooklang/cookcli/commit/8093673d8437a8c90a7ebbc116cb96a9483d8f5d))
+* add Docker build/push workflow with versioned images on ghcr.io ([feee70c](https://github.com/cooklang/cookcli/commit/feee70c0e0a586f211d0827dc879f71cf7ec0b98))
+* add root docker-compose.yml, remove outdated docker/ directory ([0e5a4cc](https://github.com/cooklang/cookcli/commit/0e5a4cc78bbea70c5cb947428e84da0b33579cd4))
+* add sync API endpoints (status, login, logout) ([8f879f9](https://github.com/cooklang/cookcli/commit/8f879f94becf1d265c5e5db867b3d89cfdf48af1))
+* add sync session and endpoint modules ([dc4f652](https://github.com/cooklang/cookcli/commit/dc4f652eb47dbf36282ba842d716c8769b3b597f))
+* allow --host to take an optional IP argument ([a496cf1](https://github.com/cooklang/cookcli/commit/a496cf103209ddaf298075aedd57b90af00dbc94))
+* make sync a default feature, exclude from Docker demo image ([ffe74b6](https://github.com/cooklang/cookcli/commit/ffe74b6e088c845eeb0d093482cfb3fec780d5b1))
+* make sync an optional feature flag ([01d0744](https://github.com/cooklang/cookcli/commit/01d07443f6ae6fdf9fb00160fc88c3d06164ff5a))
+* populate cooking mode with uncombined aisle-sorted ingredients ([b278636](https://github.com/cooklang/cookcli/commit/b2786364f199bb13cd57f529a99478da2e4a710d))
+* replace Dockerfile with multi-stage build for demo deployment ([c47ebf8](https://github.com/cooklang/cookcli/commit/c47ebf8697b9bb6a2b9bf92f661a43be3d180ed4))
+* start sync on server boot with graceful shutdown ([37d90c5](https://github.com/cooklang/cookcli/commit/37d90c50eaf7d4a2700c9ff781124d34312b8194))
+
+
+### Bug Fixes
+
+* add warning log on aisle file read failure in recipe handler ([0675c86](https://github.com/cooklang/cookcli/commit/0675c8672e3f45a1a4367b244a26518e0871cdfe))
+* address PR review feedback for sync implementation ([151500d](https://github.com/cooklang/cookcli/commit/151500d118f5d074b954ae3f037e59a4d945af3c))
+* address review feedback for sync security, correctness, and UX ([33334ff](https://github.com/cooklang/cookcli/commit/33334ff53d663da603a395f054b4b1fe1407a440))
+* align dev-dependency reqwest version with main dependency ([02eee0c](https://github.com/cooklang/cookcli/commit/02eee0c6677200bba9465d14fa4e8cfb69528d97))
+* correct ENTRYPOINT arg order and add Docker build caching ([3631ce1](https://github.com/cooklang/cookcli/commit/3631ce131098504e1b6530401dbac2ac415250a0))
+* detect finished sync task and reflect accurate status in UI ([4b3449d](https://github.com/cooklang/cookcli/commit/4b3449d21f11826ed2383e7c9e9676fd534c0e51))
+* pin Docker builder stage to rust:bookworm for GLIBC compatibility ([d58e8bd](https://github.com/cooklang/cookcli/commit/d58e8bda0a6d158a61584d71d891c6ab1638356b))
+* sync bugs and code quality improvements ([9fc2fd8](https://github.com/cooklang/cookcli/commit/9fc2fd893ca50127124f77b5acd96992337654e6))
+* updated sync ([bc86889](https://github.com/cooklang/cookcli/commit/bc86889b0c6064d9b902e1e835fadda197750a1e))
+* use plain styling for CookCloud Sync section on preferences page ([9a0aefe](https://github.com/cooklang/cookcli/commit/9a0aefe27ed5e9aaee71df3f3e26433526c53f32))
+* use published cooklang 0.18.2 and async aisle file read ([b1bd463](https://github.com/cooklang/cookcli/commit/b1bd463161965c5cbcfac47b4262760b4b031fdd))
+* use try_lock for sync handle to avoid blocking_lock panic ([9313be8](https://github.com/cooklang/cookcli/commit/9313be8e2e1eb7d918089ddf99952c4659854a96))
+
 ## [0.23.0](https://github.com/cooklang/cookcli/compare/v0.22.0...v0.23.0) (2026-02-16)
 
 
