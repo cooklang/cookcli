@@ -177,17 +177,25 @@
                 const status = await fetch('/api/sync/status').then(r => r.json());
                 if (status.logged_in) {
                     clearInterval(pollInterval);
+                    window.removeEventListener('beforeunload', cleanupPolling);
                     window.location.reload();
                 }
             }, 2000);
             // Stop polling after 5 minutes and show timeout message
-            setTimeout(() => {
+            const timeoutId = setTimeout(() => {
                 clearInterval(pollInterval);
+                window.removeEventListener('beforeunload', cleanupPolling);
                 btn.disabled = false;
                 btn.textContent = 'Login to CookCloud';
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
                 msg.textContent = 'Login timed out. Please try again.';
             }, 300000);
+            // Clean up timers if user navigates away
+            function cleanupPolling() {
+                clearInterval(pollInterval);
+                clearTimeout(timeoutId);
+            }
+            window.addEventListener('beforeunload', cleanupPolling);
         } catch (e) {
             btn.disabled = false;
             btn.textContent = 'Login to CookCloud';

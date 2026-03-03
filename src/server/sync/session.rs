@@ -113,9 +113,11 @@ fn is_jwt_expired(jwt: &str) -> Result<bool> {
     Ok(claims.exp <= chrono::Utc::now().timestamp())
 }
 
-/// Check if a JWT should be refreshed (less than 1 hour remaining).
+/// Check if a JWT should be refreshed (less than 2 hours remaining).
+/// The threshold must be larger than the refresh interval (1 hour) to ensure
+/// the token is always refreshed before it expires.
 pub fn should_refresh_jwt(jwt: &str) -> Result<bool> {
     let claims = decode_jwt_claims(jwt)?;
     let remaining = claims.exp - chrono::Utc::now().timestamp();
-    Ok(remaining < 3600)
+    Ok(remaining < 7200)
 }

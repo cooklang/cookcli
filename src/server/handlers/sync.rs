@@ -117,7 +117,7 @@ async fn browser_login_flow(state: &Arc<AppState>) -> anyhow::Result<()> {
     *state.sync_session.lock().unwrap() = Some(session.clone());
 
     // Start sync
-    let db_path = sync::sync_db_path();
+    let db_path = sync::sync_db_path()?;
 
     match sync::start_sync(&session, state.base_path.to_string(), db_path) {
         Ok(handle) => {
@@ -164,7 +164,13 @@ async fn wait_for_callback(
                 handle_get_callback(&mut socket, &req, expected_state).await
             }
             _ => {
-                let (mut new_socket, _) = listener.accept().await?;
+                // Use a 30s timeout so the user gets feedback sooner than the outer 5-min deadline
+                let (mut new_socket, _) = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    listener.accept(),
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timed out waiting for login callback. Please try again."))??;
                 let mut buffer = [0u8; 4096];
                 let n = new_socket.read(&mut buffer).await?;
                 let req = String::from_utf8_lossy(&buffer[..n]).to_string();

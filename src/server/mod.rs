@@ -136,16 +136,20 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     {
         let session_guard = state.sync_session.lock().unwrap();
         if let Some(ref session) = *session_guard {
-            let db_path = sync::sync_db_path();
-            match sync::start_sync(session, state.base_path.to_string(), db_path) {
-                Ok(handle) => {
-                    // Safe to use try_lock here: no contention before the server accepts connections
-                    if let Ok(mut guard) = state.sync_handle.try_lock() {
-                        *guard = Some(handle);
+            match sync::sync_db_path() {
+                Ok(db_path) => {
+                    match sync::start_sync(session, state.base_path.to_string(), db_path) {
+                        Ok(handle) => {
+                            // Safe to use try_lock here: no contention before the server accepts connections
+                            if let Ok(mut guard) = state.sync_handle.try_lock() {
+                                *guard = Some(handle);
+                            }
+                            tracing::info!("Sync started on server boot");
+                        }
+                        Err(e) => tracing::warn!("Failed to start sync: {e}"),
                     }
-                    tracing::info!("Sync started on server boot");
                 }
-                Err(e) => tracing::warn!("Failed to start sync: {e}"),
+                Err(e) => tracing::warn!("Failed to resolve sync DB path: {e}"),
             }
         }
 

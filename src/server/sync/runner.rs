@@ -1,7 +1,6 @@
 use super::endpoints;
 use super::session::{self, SyncSession};
-use anyhow::Result;
-use cooklang_sync_client::extract_uid_from_jwt;
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -40,7 +39,10 @@ pub fn start_sync(
     let token = CancellationToken::new();
     let child_token = token.child_token();
     let jwt = session.jwt.clone();
-    let namespace_id = extract_uid_from_jwt(&jwt);
+    let namespace_id: i32 = session
+        .user_id
+        .parse()
+        .context("user_id is not a valid i32")?;
     let sync_ep = endpoints::sync_endpoint();
 
     tracing::info!("Starting sync for directory: {recipes_dir}");
@@ -136,7 +138,6 @@ async fn refresh_token(client: &reqwest::Client, current_token: &str) -> Result<
     let resp = client
         .post(&url)
         .header("Authorization", format!("Bearer {current_token}"))
-        .json(&serde_json::json!({ "token": current_token }))
         .send()
         .await?;
 
