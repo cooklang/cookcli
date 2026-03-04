@@ -10,10 +10,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, LazyLock};
 
-static DATE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
-static TIME_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
+static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
+static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
 static MEAL_HEADER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s*\(\d{2}:\d{2}\)\s*").unwrap());
 
