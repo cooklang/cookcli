@@ -1,6 +1,7 @@
 pub mod pantry;
 pub mod recipes;
 pub mod shopping_list;
+pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
 
@@ -13,5 +14,6 @@ pub use shopping_list::{
     add_to_shopping_list, clear_shopping_list, get_shopping_list_items, remove_from_shopping_list,
     shopping_list,
 };
+pub use stats::stats;
 #[cfg(feature = "sync")]
 pub use sync::{sync_login, sync_logout, sync_status};
