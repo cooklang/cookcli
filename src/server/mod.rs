@@ -369,6 +369,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
         )
+        .route("/menus/*path", get(handlers::get_menu))
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
         .route("/menus", get(handlers::list_menus))
