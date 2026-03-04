@@ -371,6 +371,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
+        .route("/menus", get(handlers::list_menus))
         .route("/reload", get(handlers::reload).post(handlers::reload))
         .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
 

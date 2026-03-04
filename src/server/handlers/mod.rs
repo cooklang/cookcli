@@ -1,3 +1,4 @@
+pub mod menus;
 pub mod pantry;
 pub mod recipes;
 pub mod shopping_list;
@@ -5,6 +6,7 @@ pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
 
+pub use menus::list_menus;
 pub use pantry::{
     add_item as add_pantry_item, get_pantry, remove_item as remove_pantry_item,
     update_item as update_pantry_item,
