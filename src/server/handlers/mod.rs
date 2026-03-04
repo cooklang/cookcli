@@ -8,8 +8,8 @@ pub mod sync;
 
 pub use menus::{get_menu, list_menus};
 pub use pantry::{
-    add_item as add_pantry_item, get_pantry, remove_item as remove_pantry_item,
-    update_item as update_pantry_item,
+    add_item as add_pantry_item, get_depleted, get_expiring, get_pantry,
+    remove_item as remove_pantry_item, update_item as update_pantry_item,
 };
 pub use recipes::{all_recipes, recipe, recipe_delete, recipe_raw, recipe_save, reload, search};
 pub use shopping_list::{

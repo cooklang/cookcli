@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
@@ -295,6 +296,141 @@ pub async fn get_pantry(
     })?;
 
     Ok(Json(pantry_conf))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExpiringQuery {
+    pub days: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExpiringItemResponse {
+    pub section: String,
+    pub name: String,
+    pub expire: String,
+    pub days_remaining: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DepletedItemResponse {
+    pub section: String,
+    pub name: String,
+    pub low: Option<String>,
+}
+
+pub async fn get_expiring(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ExpiringQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            json_error("Pantry configuration not found"),
+        )
+    })?;
+
+    let content = std::fs::read_to_string(pantry_path).map_err(|e| {
+        tracing::error!("Failed to read pantry file: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to read pantry file: {e}")),
+        )
+    })?;
+
+    let result = cooklang::pantry::parse_lenient(&content);
+    let pantry_conf = result.output().cloned().ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            json_error("Failed to parse pantry configuration"),
+        )
+    })?;
+
+    let days = query.days.unwrap_or(7);
+    let today = Local::now().date_naive();
+    let threshold = today + chrono::Duration::days(days);
+
+    let mut items = Vec::new();
+
+    for (section, section_items) in &pantry_conf.sections {
+        for item in section_items {
+            if let Some(expire_str) = item.expire() {
+                if let Some(date) = parse_date(expire_str) {
+                    if date <= threshold {
+                        let days_remaining = (date - today).num_days();
+                        items.push(ExpiringItemResponse {
+                            section: section.clone(),
+                            name: item.name().to_string(),
+                            expire: date.format("%Y-%m-%d").to_string(),
+                            days_remaining,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by days_remaining so most urgent items come first
+    items.sort_by_key(|item| item.days_remaining);
+
+    Ok(Json(items))
+}
+
+pub async fn get_depleted(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let pantry_path = state.pantry_path.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            json_error("Pantry configuration not found"),
+        )
+    })?;
+
+    let content = std::fs::read_to_string(pantry_path).map_err(|e| {
+        tracing::error!("Failed to read pantry file: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json_error(format!("Failed to read pantry file: {e}")),
+        )
+    })?;
+
+    let result = cooklang::pantry::parse_lenient(&content);
+    let pantry_conf = result.output().cloned().ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            json_error("Failed to parse pantry configuration"),
+        )
+    })?;
+
+    let mut items = Vec::new();
+
+    for (section, section_items) in &pantry_conf.sections {
+        for item in section_items {
+            if item.is_low() {
+                items.push(DepletedItemResponse {
+                    section: section.clone(),
+                    name: item.name().to_string(),
+                    low: item.low().map(|l| l.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(Json(items))
+}
+
+/// Parse a date string supporting multiple formats
+fn parse_date(date_str: &str) -> Option<NaiveDate> {
+    let formats = [
+        "%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y.%m.%d", "%d-%m-%Y",
+    ];
+
+    for format in &formats {
+        if let Ok(date) = NaiveDate::parse_from_str(date_str, format) {
+            return Some(date);
+        }
+    }
+
+    None
 }
 
 /// Serialize PantryConf to regular TOML format (not array format)
