@@ -8,7 +8,14 @@ use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use cooklang_find::RecipeTree;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+static DATE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
+static TIME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
+static MEAL_HEADER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s*\(\d{2}:\d{2}\)\s*").unwrap());
 
 #[derive(Serialize)]
 pub struct MenuListItem {
@@ -120,15 +127,13 @@ fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
 /// Extract a date in YYYY-MM-DD format from a section name.
 /// Matches patterns like "Day 1 (2026-03-04)".
 fn extract_date(name: &str) -> Option<String> {
-    let re = Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap();
-    re.captures(name).map(|caps| caps[1].to_string())
+    DATE_RE.captures(name).map(|caps| caps[1].to_string())
 }
 
 /// Extract a time in HH:MM format from a meal type header.
 /// Matches patterns like "Breakfast (08:30):".
 fn extract_time(header: &str) -> Option<String> {
-    let re = Regex::new(r"\((\d{2}:\d{2})\)").unwrap();
-    re.captures(header).map(|caps| caps[1].to_string())
+    TIME_RE.captures(header).map(|caps| caps[1].to_string())
 }
 
 /// Extract the meal type name from a header string.
@@ -139,8 +144,7 @@ fn extract_meal_type(header: &str) -> String {
     // Remove trailing colon (and whitespace around it)
     let stripped = header.trim().trim_end_matches(':').trim();
     // Remove time in parentheses
-    let re = Regex::new(r"\s*\(\d{2}:\d{2}\)\s*").unwrap();
-    re.replace_all(stripped, "").trim().to_string()
+    MEAL_HEADER_RE.replace_all(stripped, "").trim().to_string()
 }
 
 /// Check if a text line is a meal type header (ends with ":" possibly with whitespace).
