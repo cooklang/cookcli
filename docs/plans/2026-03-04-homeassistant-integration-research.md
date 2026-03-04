@@ -101,14 +101,14 @@ servings: 2
 
 ==Day 1==
 
-Breakfast:
+Breakfast: \
 - @./Breakfast/Easy Pancakes{10%servings} with @maple syrup{2%tbsp}
 
-Lunch:
-- @./Sicilian-style Scottadito Lamb Chops{}
+Lunch: \
+- @./Sicilian-style Scottadito Lamb Chops{} \
 - @bread{2%slices}(toasted) with @butter{1%tbsp}
 
-Dinner:
+Dinner: \
 - @./Neapolitan Pizza{}
 ```
 

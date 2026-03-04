@@ -284,17 +284,17 @@ servings: 2
 ---
 
 == Day 1 (2026-03-04) ==
-Breakfast (08:30):
+Breakfast (08:30): \
 - @./Breakfast/Easy Pancakes{10%servings}
 
-Dinner:
+Dinner: \
 - @./Neapolitan Pizza{}
 
 == Day 3 (2026-03-06) ==
-Lunch (12:30):
+Lunch (12:30): \
 - @./Sicilian-style Scottadito Lamb Chops{}
 
-Snack:
+Snack: \
 - @crackers{1%box} with @hummus{1%cup}
 
 == Extras ==
