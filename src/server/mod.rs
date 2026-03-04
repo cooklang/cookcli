@@ -353,6 +353,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
+        .route("/pantry/expiring", get(handlers::get_expiring))
+        .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
             "/pantry/:section/:name",
             axum::routing::delete(handlers::remove_pantry_item),
