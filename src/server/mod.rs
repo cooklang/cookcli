@@ -370,6 +370,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
                 .delete(handlers::recipe_delete),
         )
         .route("/search", get(handlers::search))
+        .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))
         .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
 
