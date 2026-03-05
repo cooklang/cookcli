@@ -353,6 +353,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
+        .route("/pantry/expiring", get(handlers::get_expiring))
+        .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
             "/pantry/:section/:name",
             axum::routing::delete(handlers::remove_pantry_item),
@@ -369,7 +371,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
         )
+        .route("/menus", get(handlers::list_menus))
+        .route("/menus/*path", get(handlers::get_menu))
         .route("/search", get(handlers::search))
+        .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))
         .route("/ws/lsp", get(lsp_bridge::lsp_websocket));
 
