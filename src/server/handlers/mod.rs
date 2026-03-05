@@ -1,3 +1,4 @@
+mod common;
 pub mod menus;
 pub mod pantry;
 pub mod recipes;

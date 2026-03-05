@@ -1,10 +1,11 @@
+use super::common::{check_path, json_error};
 use crate::server::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use cooklang_find::RecipeTree;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -19,10 +20,6 @@ static MEAL_HEADER_RE: LazyLock<Regex> =
 pub struct MenuListItem {
     pub name: String,
     pub path: String,
-}
-
-fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "error": msg.to_string() }))
 }
 
 fn collect_menus(tree: &RecipeTree, base_path: &camino::Utf8Path, result: &mut Vec<MenuListItem>) {
@@ -105,21 +102,6 @@ pub enum MenuMealItem {
         quantity: Option<String>,
         unit: Option<String>,
     },
-}
-
-fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
-    let path = Utf8Path::new(p);
-    if !path
-        .components()
-        .all(|c| matches!(c, Utf8Component::Normal(_)))
-    {
-        tracing::error!("Invalid path: {p}");
-        return Err((
-            StatusCode::BAD_REQUEST,
-            json_error(format!("Invalid path: {p}")),
-        ));
-    }
-    Ok(())
 }
 
 /// Extract a date in YYYY-MM-DD format from a section name.
@@ -371,8 +353,10 @@ pub async fn get_menu(
             for item in line {
                 match item {
                     LineItem::Text(_) => {
-                        // Plain text lines in menus are typically just whitespace or
-                        // decorative; skip them to keep the API output clean.
+                        // Intentionally excluded: plain text in menu items (e.g. "with",
+                        // connectors, whitespace) is decorative. The API returns only
+                        // structured recipe references and ingredients; consumers that
+                        // need the raw text should read the .menu file directly.
                     }
                     LineItem::RecipeRef { name, path, scale } => {
                         current_items.push(MenuMealItem::RecipeReference {
