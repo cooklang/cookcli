@@ -1191,6 +1191,11 @@ async fn menu_page_handler(
             }
         }
 
+        // Filter out empty lines (lines that are only whitespace text)
+        lines.retain(|line| {
+            !line.iter().all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
+        });
+
         if !lines.is_empty() {
             sections.push(MenuSection {
                 name: section_name,

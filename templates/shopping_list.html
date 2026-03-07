@@ -91,7 +91,7 @@ function renderSelectedRecipes() {
     container.innerHTML = shoppingList.map((item, index) => `
         <div class="flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
             <div>
-                <span class="font-medium text-gray-800">${item.name}</span>
+                <a href="/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${item.name}</a>
                 <span class="text-purple-600 ml-2 text-sm">(×${item.scale})</span>
             </div>
             <button onclick="removeRecipe('${item.path}')" class="text-red-500 hover:text-red-700 font-medium text-sm">
