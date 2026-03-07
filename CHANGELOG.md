@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.25.0](https://github.com/cooklang/cookcli/compare/v0.24.0...v0.25.0) (2026-03-07)
+
+
+### Features
+
+* add GET /api/menus endpoint for listing menu files ([08d4f93](https://github.com/cooklang/cookcli/commit/08d4f93ddc051c9b758f913144083d0fef042fc4))
+* add GET /api/menus/*path endpoint for parsed menu data ([07374ae](https://github.com/cooklang/cookcli/commit/07374ae91021ef9dce0ca33596fd2e1246d1103b))
+* add GET /api/stats endpoint for recipe and menu counts ([5bfdb04](https://github.com/cooklang/cookcli/commit/5bfdb040a7ea4c3d8d3496e016081d6c1f94febb))
+* add pantry expiring and depleted API endpoints ([92b8de0](https://github.com/cooklang/cookcli/commit/92b8de00ab6ca366d91540ea2599caba38262649))
+
+
+### Bug Fixes
+
+* compile regexes once with LazyLock in menus handler ([bbfc0a8](https://github.com/cooklang/cookcli/commit/bbfc0a893cac6df49ad701ff34ed4b553198fd0c))
+* make menu print view compact while keeping comfortable screen layout ([260d56b](https://github.com/cooklang/cookcli/commit/260d56b972fde69871a3e6f5afe12ba91ed5f707))
+* show ingredient quantities in shopping list print view ([8827e2e](https://github.com/cooklang/cookcli/commit/8827e2ecbc90e08fc7a2bf61302ae716df0d034c))
+
 ## [0.24.0](https://github.com/cooklang/cookcli/compare/v0.23.0...v0.24.0) (2026-03-03)
 
 
