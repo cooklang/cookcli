@@ -30,6 +30,36 @@
         </a>
     </div>
 
+    {% match todays_menu %}
+    {% when Some with (menu) %}
+    <div class="mb-8 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex-1">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl">📋</span>
+                    <h2 class="text-xl font-bold">{{ tr.t("todays-menu-title") }}</h2>
+                    <span class="text-sm opacity-80">{{ menu.date_display }}</span>
+                </div>
+                <p class="text-sm opacity-90 mb-3">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
+                {% if !menu.meals.is_empty() %}
+                <div class="flex flex-wrap gap-2">
+                    {% for meal in menu.meals %}
+                    <span class="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">{{ meal }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <a href="/recipe/{{ menu.menu_path }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center">
+                {{ tr.t("todays-menu-view") }}
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+        </div>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}

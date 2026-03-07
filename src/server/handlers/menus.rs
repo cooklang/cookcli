@@ -10,10 +10,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, LazyLock};
 
-static DATE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
-static TIME_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
+static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
+static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
 static MEAL_HEADER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s*\(\d{2}:\d{2}\)\s*").unwrap());
 
@@ -27,7 +25,11 @@ fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
     Json(serde_json::json!({ "error": msg.to_string() }))
 }
 
-fn collect_menus(tree: &RecipeTree, base_path: &camino::Utf8Path, result: &mut Vec<MenuListItem>) {
+pub fn collect_menus(
+    tree: &RecipeTree,
+    base_path: &camino::Utf8Path,
+    result: &mut Vec<MenuListItem>,
+) {
     if let Some(ref entry) = tree.recipe {
         if entry.is_menu() {
             if let Some(full_path) = entry.path() {
@@ -126,7 +128,7 @@ fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
 
 /// Extract a date in YYYY-MM-DD format from a section name.
 /// Matches patterns like "Day 1 (2026-03-04)".
-fn extract_date(name: &str) -> Option<String> {
+pub fn extract_date(name: &str) -> Option<String> {
     DATE_RE.captures(name).map(|caps| caps[1].to_string())
 }
 
@@ -140,7 +142,7 @@ fn extract_time(header: &str) -> Option<String> {
 /// Strips the trailing colon and any time in parentheses.
 /// "Breakfast (08:30):" -> "Breakfast"
 /// "Dinner:" -> "Dinner"
-fn extract_meal_type(header: &str) -> String {
+pub fn extract_meal_type(header: &str) -> String {
     // Remove trailing colon (and whitespace around it)
     let stripped = header.trim().trim_end_matches(':').trim();
     // Remove time in parentheses
@@ -148,7 +150,7 @@ fn extract_meal_type(header: &str) -> String {
 }
 
 /// Check if a text line is a meal type header (ends with ":" possibly with whitespace).
-fn is_meal_header(text: &str) -> bool {
+pub fn is_meal_header(text: &str) -> bool {
     let trimmed = text.trim();
     // Must end with ':'
     if !trimmed.ends_with(':') {
@@ -420,6 +422,65 @@ pub async fn get_menu(
         metadata,
         sections,
     }))
+}
+
+/// Scan all menus for a section whose date matches today.
+/// Returns the first match with menu name, path, formatted date, and meal types.
+pub fn find_todays_menu(
+    base_path: &camino::Utf8Path,
+    tree: &RecipeTree,
+) -> Option<crate::server::templates::TodaysMenu> {
+    let now = chrono::Local::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    let today_display = now.format("%A, %B %-d").to_string();
+
+    let mut menus = Vec::new();
+    collect_menus(tree, base_path, &mut menus);
+
+    for menu_item in &menus {
+        let recipe_path = camino::Utf8PathBuf::from(&menu_item.path);
+        let entry = match cooklang_find::get_recipe(vec![base_path], &recipe_path) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let recipe = match crate::util::parse_recipe_from_entry(&entry, 1.0) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        for section in &recipe.sections {
+            let date = section.name.as_deref().and_then(extract_date);
+            if date.as_deref() == Some(today.as_str()) {
+                // Found today's section — extract meal types
+                let mut meals = Vec::new();
+                for content in &section.content {
+                    use cooklang::Content;
+                    if let Content::Step(step) = content {
+                        for item in &step.items {
+                            use cooklang::Item;
+                            if let Item::Text { value } = item {
+                                for line in value.lines() {
+                                    if is_meal_header(line) {
+                                        meals.push(extract_meal_type(line));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return Some(crate::server::templates::TodaysMenu {
+                    menu_name: menu_item.name.clone(),
+                    menu_path: menu_item.path.clone(),
+                    date_display: today_display,
+                    meals,
+                });
+            }
+        }
+    }
+
+    None
 }
 
 /// Internal representation of a line item while parsing.
