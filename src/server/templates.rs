@@ -44,6 +44,12 @@ pub struct ErrorTemplate {
     pub tr: Tr,
 }
 
+pub struct TodaysMenu {
+    pub menu_name: String,
+    pub menu_path: String,
+    pub date_display: String,
+}
+
 #[derive(Template)]
 #[template(path = "recipes.html")]
 pub struct RecipesTemplate {
@@ -51,6 +57,7 @@ pub struct RecipesTemplate {
     pub current_name: String,
     pub breadcrumbs: Vec<Breadcrumb>,
     pub items: Vec<RecipeItem>,
+    pub todays_menu: Option<TodaysMenu>,
     pub tr: Tr,
 }
 
