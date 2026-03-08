@@ -132,6 +132,12 @@ async fn recipes_handler(
         _ => a.name.cmp(&b.name),
     });
 
+    let todays_menu = if path.is_none() {
+        crate::server::handlers::find_todays_menu(base, &tree)
+    } else {
+        None
+    };
+
     let breadcrumbs = if let Some(p) = &path {
         p.split('/')
             .scan(String::new(), |acc, segment| {
@@ -160,6 +166,7 @@ async fn recipes_handler(
         current_name,
         breadcrumbs,
         items,
+        todays_menu,
         tr: Tr::new(lang),
     };
 
@@ -1193,7 +1200,9 @@ async fn menu_page_handler(
 
         // Filter out empty lines (lines that are only whitespace text)
         lines.retain(|line| {
-            !line.iter().all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
+            !line
+                .iter()
+                .all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
         });
 
         if !lines.is_empty() {

@@ -39,3 +39,8 @@ meta-description = Description
 
 # Recipe Types
 recipe-type-menu = Menu
+
+# Today's Menu Banner
+todays-menu-title = Today's Menu
+todays-menu-from = From
+todays-menu-view = View Menu

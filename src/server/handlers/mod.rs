@@ -6,7 +6,7 @@ pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
 
-pub use menus::{get_menu, list_menus};
+pub use menus::{find_todays_menu, get_menu, list_menus};
 pub use pantry::{
     add_item as add_pantry_item, get_depleted, get_expiring, get_pantry,
     remove_item as remove_pantry_item, update_item as update_pantry_item,
