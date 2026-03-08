@@ -425,7 +425,7 @@ pub async fn get_menu(
 }
 
 /// Scan all menus for a section whose date matches today.
-/// Returns the first match with menu name, path, formatted date, and meal types.
+/// Returns the first match with menu name, path, and formatted date.
 pub fn find_todays_menu(
     base_path: &camino::Utf8Path,
     tree: &RecipeTree,
@@ -452,29 +452,10 @@ pub fn find_todays_menu(
         for section in &recipe.sections {
             let date = section.name.as_deref().and_then(extract_date);
             if date.as_deref() == Some(today.as_str()) {
-                // Found today's section — extract meal types
-                let mut meals = Vec::new();
-                for content in &section.content {
-                    use cooklang::Content;
-                    if let Content::Step(step) = content {
-                        for item in &step.items {
-                            use cooklang::Item;
-                            if let Item::Text { value } = item {
-                                for line in value.lines() {
-                                    if is_meal_header(line) {
-                                        meals.push(extract_meal_type(line));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 return Some(crate::server::templates::TodaysMenu {
                     menu_name: menu_item.name.clone(),
                     menu_path: menu_item.path.clone(),
                     date_display: today_display,
-                    meals,
                 });
             }
         }

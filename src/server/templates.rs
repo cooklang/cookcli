@@ -48,7 +48,6 @@ pub struct TodaysMenu {
     pub menu_name: String,
     pub menu_path: String,
     pub date_display: String,
-    pub meals: Vec<String>,
 }
 
 #[derive(Template)]

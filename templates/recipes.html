@@ -40,16 +40,9 @@
                     <h2 class="text-xl font-bold">{{ tr.t("todays-menu-title") }}</h2>
                     <span class="text-sm opacity-80">{{ menu.date_display }}</span>
                 </div>
-                <p class="text-sm opacity-90 mb-3">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
-                {% if !menu.meals.is_empty() %}
-                <div class="flex flex-wrap gap-2">
-                    {% for meal in menu.meals %}
-                    <span class="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">{{ meal }}</span>
-                    {% endfor %}
-                </div>
-                {% endif %}
+                <p class="text-sm opacity-90">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="/recipe/{{ menu.menu_path }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center">
+            <a href="/recipe/{{ menu.menu_path }}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
                 {{ tr.t("todays-menu-view") }}
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
