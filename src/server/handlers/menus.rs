@@ -22,7 +22,11 @@ pub struct MenuListItem {
     pub path: String,
 }
 
-fn collect_menus(tree: &RecipeTree, base_path: &camino::Utf8Path, result: &mut Vec<MenuListItem>) {
+pub fn collect_menus(
+    tree: &RecipeTree,
+    base_path: &camino::Utf8Path,
+    result: &mut Vec<MenuListItem>,
+) {
     if let Some(ref entry) = tree.recipe {
         if entry.is_menu() {
             if let Some(full_path) = entry.path() {
@@ -106,7 +110,7 @@ pub enum MenuMealItem {
 
 /// Extract a date in YYYY-MM-DD format from a section name.
 /// Matches patterns like "Day 1 (2026-03-04)".
-fn extract_date(name: &str) -> Option<String> {
+pub fn extract_date(name: &str) -> Option<String> {
     DATE_RE.captures(name).map(|caps| caps[1].to_string())
 }
 
@@ -120,7 +124,7 @@ fn extract_time(header: &str) -> Option<String> {
 /// Strips the trailing colon and any time in parentheses.
 /// "Breakfast (08:30):" -> "Breakfast"
 /// "Dinner:" -> "Dinner"
-fn extract_meal_type(header: &str) -> String {
+pub fn extract_meal_type(header: &str) -> String {
     // Remove trailing colon (and whitespace around it)
     let stripped = header.trim().trim_end_matches(':').trim();
     // Remove time in parentheses
@@ -128,7 +132,7 @@ fn extract_meal_type(header: &str) -> String {
 }
 
 /// Check if a text line is a meal type header (ends with ":" possibly with whitespace).
-fn is_meal_header(text: &str) -> bool {
+pub fn is_meal_header(text: &str) -> bool {
     let trimmed = text.trim();
     // Must end with ':'
     if !trimmed.ends_with(':') {
@@ -402,6 +406,46 @@ pub async fn get_menu(
         metadata,
         sections,
     }))
+}
+
+/// Scan all menus for a section whose date matches today.
+/// Returns the first match with menu name, path, and formatted date.
+pub fn find_todays_menu(
+    base_path: &camino::Utf8Path,
+    tree: &RecipeTree,
+) -> Option<crate::server::templates::TodaysMenu> {
+    let now = chrono::Local::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    let today_display = now.format("%A, %B %-d").to_string();
+
+    let mut menus = Vec::new();
+    collect_menus(tree, base_path, &mut menus);
+
+    for menu_item in &menus {
+        let recipe_path = camino::Utf8PathBuf::from(&menu_item.path);
+        let entry = match cooklang_find::get_recipe(vec![base_path], &recipe_path) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let recipe = match crate::util::parse_recipe_from_entry(&entry, 1.0) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        for section in &recipe.sections {
+            let date = section.name.as_deref().and_then(extract_date);
+            if date.as_deref() == Some(today.as_str()) {
+                return Some(crate::server::templates::TodaysMenu {
+                    menu_name: menu_item.name.clone(),
+                    menu_path: menu_item.path.clone(),
+                    date_display: today_display,
+                });
+            }
+        }
+    }
+
+    None
 }
 
 /// Internal representation of a line item while parsing.

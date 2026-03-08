@@ -3,8 +3,8 @@
 {% block title %}{{ name }} - Cook{% endblock %}
 
 {% block content %}
-<div>
-    <nav class="mb-4">
+<div id="menu-content">
+    <nav class="mb-4 print:hidden">
         <ol class="flex items-center space-x-2 text-sm text-gray-600">
             <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
@@ -20,11 +20,11 @@
         </ol>
     </nav>
 
-    <div class="mb-8">
+    <div class="mb-4">
         <!-- Menu image if available -->
         {% match image_path %}
         {% when Some with (img) %}
-        <div class="mb-6 max-w-4xl mx-auto">
+        <div class="mb-4 max-w-4xl mx-auto print:hidden">
             <div class="rounded-xl overflow-hidden shadow-lg bg-gray-50">
                 <img src="{{ img }}" alt="{{ name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
             </div>
@@ -33,12 +33,12 @@
         {% endmatch %}
 
         <!-- Title bar with scale and shopping list button -->
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 print:mb-1">
             <div class="flex items-center gap-3">
-                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">{{ name }}</h1>
-                <span class="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-full text-sm font-semibold">{{ tr.t("recipe-type-menu") }}</span>
+                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent print:text-2xl">{{ name }}</h1>
+                <span class="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-full text-sm font-semibold print:hidden">{{ tr.t("recipe-type-menu") }}</span>
             </div>
-            <div class="flex flex-wrap items-center gap-2 lg:gap-3">
+            <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 <div class="flex items-center">
                     <label for="scale" class="text-sm font-medium text-gray-700 mr-2">{{ tr.t("recipe-scale-label") }}:</label>
                     <input type="number"
@@ -70,7 +70,7 @@
         </div>
 
         <!-- Menu info section -->
-        <div class="space-y-4">
+        <div class="space-y-2 print:hidden">
             {% match metadata %}
             {% when Some with (metadata) %}
 
@@ -127,18 +127,18 @@
     </div>
 
     <!-- Menu sections -->
-    <div class="space-y-8">
+    <div class="space-y-6">
             {% for section in sections %}
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="menu-section bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 {% match section.name %}
                 {% when Some with (name) %}
-                <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3">
+                <div class="menu-section-header bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3">
                     <h2 class="text-xl font-semibold">{{ name }}</h2>
                 </div>
                 {% when None %}
                 {% endmatch %}
 
-                <div class="p-6 space-y-4">
+                <div class="menu-section-body p-6 space-y-2">
                     {% for line in section.lines %}
                     {% if line.len() == 1 %}
                         {% match line[0] %}
