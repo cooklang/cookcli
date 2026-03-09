@@ -267,7 +267,7 @@
 
             {% if cookware.len() > 0 %}
             <h2 class="text-xl font-bold mt-6 mb-4 text-green-600">🍳 {{ tr.t("recipe-cookware") }}</h2>
-            <ul class="space-y-2">
+            <ul class="cookware-list space-y-2">
                 {% for item in cookware %}
                 <li class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg px-3 py-2">
                     <span class="font-medium">{{ item.name }}</span>

@@ -21,7 +21,7 @@ test.describe('Navigation', () => {
 
   test('should navigate to recipe details', async ({ page }) => {
     // Find recipes that are not directories
-    const recipeCards = page.locator('a[href^="/recipe/"]');
+    const recipeCards = page.locator('a.recipe-card[href^="/recipe/"]');
     const count = await recipeCards.count();
 
     if (count > 0) {
