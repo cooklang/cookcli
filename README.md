@@ -97,6 +97,38 @@ Create a shopping list from multiple recipes:
 $ cook -v shopping-list "Neapolitan Pizza.cook" "./Breakfast/Easy Pancakes.cook""
 ```
 
+Plan your meals with a menu file (`Weekly Plan.menu`):
+
+```
+---
+servings: 2
+---
+
+==Saturday==
+
+Breakfast: \
+- @oats{1%cup} with @milk{1/2%cup} and @honey{1%tbsp}
+
+Lunch: \
+- @./lamb-chops{}
+
+Dinner: \
+- @./Neapolitan Pizza{}
+
+==Sunday==
+
+Breakfast: \
+- @./Breakfast/Easy Pancakes{} with @maple syrup{2%tbsp}
+
+Lunch: \
+- @./Salads/Caprese{}
+
+Dinner: \
+- @./Risotto{}
+```
+
+Menu files let you reference recipes and inline ingredients, plan by day and meal, and generate a combined shopping list for the whole plan.
+
 Or start the web server to browse your recipes:
 
 ```bash
@@ -108,6 +140,7 @@ Serving recipe files from: "/Users/chefalexey/recipes"
 
 <img width="600" alt="recipes" src="docs/screenshots/recipe-list.png" />
 <img width="600" alt="recipe" src="docs/screenshots/recipe-detail.png" />
+<img width="600" alt="menu" src="docs/screenshots/menu.png" />
 <img width="600" alt="shopping list" src="docs/screenshots/shopping-list.png" />
 <img width="600" alt="pantry" src="docs/screenshots/pantry.png" />
 
