@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.25.1](https://github.com/cooklang/cookcli/compare/v0.25.0...v0.25.1) (2026-03-09)
+
+
+### Features
+
+* consolidate aisle.conf ingredients with synonyms ([584c3f9](https://github.com/cooklang/cookcli/commit/584c3f975b5e01cebed8925138765a6997f21f1b))
+* group related ingredients in seed aisle.conf ([198ac19](https://github.com/cooklang/cookcli/commit/198ac198c3c73f30a7780bcac233acd463a3ae56))
+* redesign seed folder to showcase Cooklang spec features ([fb5ec1c](https://github.com/cooklang/cookcli/commit/fb5ec1c5cda5d8dbe45b5c0757c7febdfab7d5d2))
+
+
+### Miscellaneous Chores
+
+* release 0.25.1 ([e9cb96a](https://github.com/cooklang/cookcli/commit/e9cb96abf949eae440919bc2491e3248872cc769))
+
 ## [0.25.0](https://github.com/cooklang/cookcli/compare/v0.24.0...v0.25.0) (2026-03-08)
 
 
