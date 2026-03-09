@@ -138,11 +138,11 @@ Serving Web UI on http://localhost:9080
 Serving recipe files from: "/Users/chefalexey/recipes"
 ```
 
-<img width="600" alt="recipes" src="docs/screenshots/recipe-list.png" />
-<img width="600" alt="recipe" src="docs/screenshots/recipe-detail.png" />
-<img width="600" alt="menu" src="docs/screenshots/menu.png" />
-<img width="600" alt="shopping list" src="docs/screenshots/shopping-list.png" />
-<img width="600" alt="pantry" src="docs/screenshots/pantry.png" />
+<img width="600" alt="recipes" src="docs/screenshots/recipe-list.png?v=2" />
+<img width="600" alt="recipe" src="docs/screenshots/recipe-detail.png?v=2" />
+<img width="600" alt="menu" src="docs/screenshots/menu.png?v=2" />
+<img width="600" alt="shopping list" src="docs/screenshots/shopping-list.png?v=2" />
+<img width="600" alt="pantry" src="docs/screenshots/pantry.png?v=2" />
 
 
 ## 📦 Installation
