@@ -1,6 +1,6 @@
 services:
   cookcli:
-    image: ghcr.io/cooklang/cookcli:0.23.0
+    image: ghcr.io/cooklang/cookcli:0.25.1
     ports:
       - "9080:9080"
     restart: unless-stopped
