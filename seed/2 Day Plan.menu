@@ -19,7 +19,13 @@ Dinner: \
 ==Day 2==
 
 Breakfast: \
-- @oats{1} with @milk{1/2%cup} and @sugar{1%tsp} \
+- @oats{1%cup} with @milk{1/2%cup} and @sugar{1%tsp} \
 - @orange juice{1%glass}
 
-...
+Lunch: \
+- @./Salads/Caprese{} \
+- @bread{2%slices}
+
+Dinner: \
+- @./Risotto{} \
+- @green salad{1%bowl}

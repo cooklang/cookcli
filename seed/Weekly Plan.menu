@@ -5,10 +5,40 @@ servings: 2
 ==Saturday (2026-03-07)==
 
 Breakfast: \
-- @oats{1%cup} with @milk{1/2%cup}
+- @oats{1%cup} with @milk{1/2%cup} and @honey{1%tbsp}
 
 Lunch: \
 - @./lamb-chops{}
 
+-- save leftover lamb for sandwiches
+
 Dinner: \
 - @./Neapolitan Pizza{}
+
+==Sunday (2026-03-08)==
+
+Breakfast: \
+- @./Breakfast/Easy Pancakes{} with @maple syrup{2%tbsp}
+
+Lunch: \
+- @./Salads/Caprese{}
+
+Dinner: \
+- @./Risotto{}
+
+==Monday (2026-03-09)==
+
+Breakfast: \
+- @./Breakfast/Chocolate Toast Delight{}
+
+Lunch: \
+- @./Breakfast/Mexican Style Burrito{}
+
+-- use up the remaining guacamole
+
+Dinner: \
+- @./Thai Green Curry{}
+
+Snacks: \
+- @almonds{50%g} \
+- @dark chocolate{30%g}
