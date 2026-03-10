@@ -8,6 +8,123 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{util::parse_recipe_from_entry, Context as AppContext};
 
+// ---------------------------------------------------------------------------
+// TOML serialization helpers (shared with CRUD operations)
+// ---------------------------------------------------------------------------
+
+fn serialize_pantry_to_toml(pantry_conf: &cooklang::pantry::PantryConf) -> String {
+    use std::fmt::Write;
+    let mut output = String::new();
+
+    if let Some(general_items) = pantry_conf.sections.get("general") {
+        for item in general_items {
+            write_pantry_item(&mut output, item);
+        }
+        if !general_items.is_empty() {
+            writeln!(&mut output).unwrap();
+        }
+    }
+
+    for (section_name, items) in &pantry_conf.sections {
+        if section_name == "general" {
+            continue;
+        }
+        writeln!(&mut output, "[{section_name}]").unwrap();
+        for item in items {
+            write_pantry_item(&mut output, item);
+        }
+        writeln!(&mut output).unwrap();
+    }
+
+    output
+}
+
+fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem) {
+    use std::fmt::Write;
+    match item {
+        cooklang::pantry::PantryItem::Simple(name) => {
+            writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
+        }
+        cooklang::pantry::PantryItem::WithAttributes(attrs) => {
+            let has_quantity = attrs.quantity.is_some();
+            let has_other = attrs.bought.is_some() || attrs.expire.is_some() || attrs.low.is_some();
+
+            let value = if has_quantity && has_other {
+                let mut parts = Vec::new();
+                if let Some(qty) = &attrs.quantity {
+                    parts.push(format!("quantity = \"{}\"", qty.replace('"', "\\\"")));
+                }
+                if let Some(bought) = &attrs.bought {
+                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
+                }
+                if let Some(expire) = &attrs.expire {
+                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
+                }
+                if let Some(low) = &attrs.low {
+                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
+                }
+                format!("{{ {} }}", parts.join(", "))
+            } else if let Some(qty) = &attrs.quantity {
+                format!("\"{}\"", qty.replace('"', "\\\""))
+            } else if has_other {
+                let mut parts = Vec::new();
+                if let Some(bought) = &attrs.bought {
+                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
+                }
+                if let Some(expire) = &attrs.expire {
+                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
+                }
+                if let Some(low) = &attrs.low {
+                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
+                }
+                format!("{{ {} }}", parts.join(", "))
+            } else {
+                "true".to_string()
+            };
+
+            writeln!(output, "{} = {}", toml_escape_key(&attrs.name), value).unwrap();
+        }
+    }
+}
+
+fn toml_escape_key(key: &str) -> String {
+    if key.contains(' ') || key.contains('.') || key.contains('[') || key.contains(']') {
+        format!("\"{}\"", key.replace('"', "\\\""))
+    } else {
+        key.to_string()
+    }
+}
+
+fn load_pantry_conf(path: &camino::Utf8PathBuf) -> Result<cooklang::pantry::PantryConf> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read pantry file at {path}"))?;
+    let result = cooklang::pantry::parse_lenient(&content);
+    result.output().cloned().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to parse pantry configuration: {:?}",
+            result.report()
+        )
+    })
+}
+
+fn write_pantry_conf(
+    path: &camino::Utf8PathBuf,
+    conf: &cooklang::pantry::PantryConf,
+) -> Result<()> {
+    let content = serialize_pantry_to_toml(conf);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory {parent}"))?;
+    }
+    std::fs::write(path, content).with_context(|| format!("Failed to write pantry file at {path}"))
+}
+
+/// Return the pantry path, or a sensible default for creating a new file.
+fn pantry_path_or_default(ctx: &AppContext) -> camino::Utf8PathBuf {
+    ctx.pantry()
+        .unwrap_or_else(|| ctx.base_path().join("config").join("pantry.conf"))
+}
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
     /// Human-readable output (default)
@@ -49,6 +166,52 @@ pub enum PantryCommand {
     /// Analyze ingredient usage across recipes to help plan pantry items
     #[command(alias = "pl")]
     Plan(PlanArgs),
+
+    /// List all items in the pantry
+    ///
+    /// Displays all pantry items organized by section, showing quantities,
+    /// expiry dates, and low-stock thresholds.
+    ///
+    /// Examples:
+    ///   cook pantry list                     # List all items in human format
+    ///   cook pantry list -f json             # Output as JSON
+    ///   cook pantry list --section dairy     # Show only the dairy section
+    #[command(alias = "ls")]
+    List(ListArgs),
+
+    /// Add an item to the pantry
+    ///
+    /// Adds a new ingredient to the specified section of your pantry
+    /// configuration. Creates the pantry file and section if they do not
+    /// exist yet.
+    ///
+    /// Examples:
+    ///   cook pantry add pantry flour                                # Simple item
+    ///   cook pantry add dairy milk --quantity "2%l"                 # With quantity
+    ///   cook pantry add dairy yogurt --quantity "500%g" --low "200%g" --expire 2025-06-01
+    #[command(alias = "a")]
+    Add(AddArgs),
+
+    /// Remove an item from the pantry
+    ///
+    /// Removes an ingredient from the specified section. If the section
+    /// becomes empty after removal it is also deleted from the file.
+    ///
+    /// Examples:
+    ///   cook pantry remove dairy milk        # Remove milk from the dairy section
+    #[command(alias = "rm")]
+    Remove(RemoveArgs),
+
+    /// Update an item already in the pantry
+    ///
+    /// Updates one or more attributes of an existing pantry item.
+    /// Only the flags you provide are changed; everything else is kept.
+    ///
+    /// Examples:
+    ///   cook pantry update dairy milk --quantity "1%l"
+    ///   cook pantry update dairy milk --expire 2025-06-15 --low "500%ml"
+    #[command(alias = "up")]
+    Update(UpdateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -95,7 +258,93 @@ pub struct PlanArgs {
     pub allow_missing: usize,
 }
 
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Only show items from this section
+    #[arg(long)]
+    pub section: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AddArgs {
+    /// Section to add the item into (e.g. dairy, produce, pantry)
+    pub section: String,
+
+    /// Name of the ingredient to add
+    pub name: String,
+
+    /// Quantity on hand (e.g. "2%kg", "500%ml", "12")
+    #[arg(long)]
+    pub quantity: Option<String>,
+
+    /// Date the item was bought (e.g. 2025-01-01)
+    #[arg(long)]
+    pub bought: Option<String>,
+
+    /// Expiry date (e.g. 2025-06-01)
+    #[arg(long)]
+    pub expire: Option<String>,
+
+    /// Quantity considered "low" (e.g. "200%g")
+    #[arg(long)]
+    pub low: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct RemoveArgs {
+    /// Section containing the item
+    pub section: String,
+
+    /// Name of the ingredient to remove
+    pub name: String,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    /// Section containing the item
+    pub section: String,
+
+    /// Name of the ingredient to update
+    pub name: String,
+
+    /// New quantity value (e.g. "2%kg")
+    #[arg(long)]
+    pub quantity: Option<String>,
+
+    /// New bought date
+    #[arg(long)]
+    pub bought: Option<String>,
+
+    /// New expiry date
+    #[arg(long)]
+    pub expire: Option<String>,
+
+    /// New low-stock threshold
+    #[arg(long)]
+    pub low: Option<String>,
+}
+
 // Output structures for JSON/YAML formats
+#[derive(Debug, Serialize)]
+struct ListSection {
+    name: String,
+    items: Vec<ListItem>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListItem {
+    name: String,
+    quantity: Option<String>,
+    bought: Option<String>,
+    expire: Option<String>,
+    low: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListOutput {
+    sections: Vec<ListSection>,
+}
+
 #[derive(Debug, Serialize)]
 struct DepletedOutput {
     items: Vec<DepletedItem>,
@@ -170,6 +419,10 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
         PantryCommand::Expiring(expiring_args) => run_expiring(ctx, expiring_args, format),
         PantryCommand::Recipes(recipes_args) => run_recipes(ctx, recipes_args, format),
         PantryCommand::Plan(plan_args) => run_plan(ctx, plan_args, format),
+        PantryCommand::List(list_args) => run_list(ctx, list_args, format),
+        PantryCommand::Add(add_args) => run_add(ctx, add_args),
+        PantryCommand::Remove(remove_args) => run_remove(ctx, remove_args),
+        PantryCommand::Update(update_args) => run_update(ctx, update_args),
     }
 }
 
@@ -804,6 +1057,234 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// CRUD run functions
+// ---------------------------------------------------------------------------
+
+fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()> {
+    let pantry_path = ctx
+        .pantry()
+        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
+    let pantry_conf = load_pantry_conf(&pantry_path)?;
+
+    // Build filtered list of sections
+    let sections: Vec<ListSection> = pantry_conf
+        .sections
+        .iter()
+        .filter(|(name, _)| {
+            args.section
+                .as_ref()
+                .map(|s| s.eq_ignore_ascii_case(name))
+                .unwrap_or(true)
+        })
+        .map(|(name, items)| ListSection {
+            name: name.clone(),
+            items: items
+                .iter()
+                .map(|item| ListItem {
+                    name: item.name().to_string(),
+                    quantity: item.quantity().map(|q| q.to_string()),
+                    bought: item.bought().map(|b| b.to_string()),
+                    expire: item.expire().map(|e| e.to_string()),
+                    low: item.low().map(|l| l.to_string()),
+                })
+                .collect(),
+        })
+        .collect();
+
+    if let Some(ref filter) = args.section {
+        if sections.is_empty() {
+            anyhow::bail!("Section '{}' not found in pantry", filter);
+        }
+    }
+
+    match format {
+        OutputFormat::Human => {
+            if sections.is_empty() {
+                println!("Pantry is empty.");
+                return Ok(());
+            }
+            println!("Pantry Items:");
+            println!("=============");
+            for section in &sections {
+                println!("\n{}:", section.name.to_uppercase());
+                for item in &section.items {
+                    print!("  • {}", item.name);
+                    if let Some(ref qty) = item.quantity {
+                        print!(" - {qty}");
+                    }
+                    let mut extras = Vec::new();
+                    if let Some(ref expire) = item.expire {
+                        extras.push(format!("expires: {expire}"));
+                    }
+                    if let Some(ref low) = item.low {
+                        extras.push(format!("low: {low}"));
+                    }
+                    if let Some(ref bought) = item.bought {
+                        extras.push(format!("bought: {bought}"));
+                    }
+                    if !extras.is_empty() {
+                        print!(" ({})", extras.join(", "));
+                    }
+                    println!();
+                }
+            }
+        }
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&ListOutput { sections })?
+            );
+        }
+        OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&ListOutput { sections })?);
+        }
+    }
+
+    Ok(())
+}
+
+fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
+    let pantry_path = pantry_path_or_default(ctx);
+
+    // Load existing pantry or start fresh
+    let mut pantry_conf = if pantry_path.exists() {
+        load_pantry_conf(&pantry_path)?
+    } else {
+        cooklang::pantry::PantryConf::default()
+    };
+
+    // Build the new item
+    let new_item = if args.quantity.is_some()
+        || args.bought.is_some()
+        || args.expire.is_some()
+        || args.low.is_some()
+    {
+        PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+            name: args.name.clone(),
+            quantity: args.quantity,
+            bought: args.bought,
+            expire: args.expire,
+            low: args.low,
+        })
+    } else {
+        PantryItem::Simple(args.name.clone())
+    };
+
+    // Check for duplicates in the target section
+    let section_items = pantry_conf
+        .sections
+        .entry(args.section.clone())
+        .or_default();
+    if section_items.iter().any(|i| i.name() == args.name) {
+        anyhow::bail!(
+            "Item '{}' already exists in section '{}'. Use `pantry update` to change it.",
+            args.name,
+            args.section
+        );
+    }
+    section_items.push(new_item);
+
+    pantry_conf.rebuild_index();
+    write_pantry_conf(&pantry_path, &pantry_conf)?;
+    println!("Added '{}' to section '{}'.", args.name, args.section);
+    Ok(())
+}
+
+fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
+    let pantry_path = ctx
+        .pantry()
+        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
+    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+
+    let items = pantry_conf
+        .sections
+        .get_mut(&args.section)
+        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
+
+    let before = items.len();
+    items.retain(|i| i.name() != args.name);
+    if items.len() == before {
+        anyhow::bail!(
+            "Item '{}' not found in section '{}'",
+            args.name,
+            args.section
+        );
+    }
+
+    if items.is_empty() {
+        pantry_conf.sections.remove(&args.section);
+    }
+
+    pantry_conf.rebuild_index();
+    write_pantry_conf(&pantry_path, &pantry_conf)?;
+    println!("Removed '{}' from section '{}'.", args.name, args.section);
+    Ok(())
+}
+
+fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
+    if args.quantity.is_none()
+        && args.bought.is_none()
+        && args.expire.is_none()
+        && args.low.is_none()
+    {
+        anyhow::bail!("No attributes specified. Provide at least one of --quantity, --bought, --expire, --low.");
+    }
+
+    let pantry_path = ctx
+        .pantry()
+        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
+    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+
+    let items = pantry_conf
+        .sections
+        .get_mut(&args.section)
+        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
+
+    let item = items
+        .iter_mut()
+        .find(|i| i.name() == args.name)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Item '{}' not found in section '{}'",
+                args.name,
+                args.section
+            )
+        })?;
+
+    // Merge new values over existing attributes
+    let updated = match item {
+        PantryItem::Simple(name) => {
+            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+                name: name.clone(),
+                quantity: args.quantity,
+                bought: args.bought,
+                expire: args.expire,
+                low: args.low,
+            })
+        }
+        PantryItem::WithAttributes(attrs) => {
+            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+                name: attrs.name.clone(),
+                quantity: args.quantity.or_else(|| attrs.quantity.clone()),
+                bought: args.bought.or_else(|| attrs.bought.clone()),
+                expire: args.expire.or_else(|| attrs.expire.clone()),
+                low: args.low.or_else(|| attrs.low.clone()),
+            })
+        }
+    };
+    *item = updated;
+
+    pantry_conf.rebuild_index();
+    write_pantry_conf(&pantry_path, &pantry_conf)?;
+    println!("Updated '{}' in section '{}'.", args.name, args.section);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
 
 /// Check if two quantity strings have matching units
 fn units_match(quantity: &str, low_threshold: &str) -> bool {

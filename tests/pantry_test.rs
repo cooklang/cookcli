@@ -4,6 +4,7 @@ mod common;
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::Value;
+use std::fs;
 
 #[test]
 fn test_pantry_depleted_human_format() {
@@ -437,4 +438,453 @@ fn test_pantry_depleted_respects_explicit_threshold() {
         stdout_all.contains("item_above_threshold"),
         "Item above threshold should appear with --all flag"
     );
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: list
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pantry_list_human_format() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pantry Items"))
+        .stdout(predicate::str::contains("DAIRY"))
+        .stdout(predicate::str::contains("milk"))
+        .stdout(predicate::str::contains("eggs"));
+}
+
+#[test]
+fn test_pantry_list_section_filter() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list", "--section", "dairy"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DAIRY"))
+        .stdout(predicate::str::contains("milk"))
+        // section heading for "pantry" section should not appear
+        .stdout(predicate::str::contains("PANTRY:").not());
+}
+
+#[test]
+fn test_pantry_list_section_filter_not_found() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list", "--section", "nonexistent"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn test_pantry_list_json_format() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    let output = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "-f", "json", "list"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: Value = serde_json::from_slice(&output).expect("valid JSON");
+    let sections = json.get("sections").unwrap().as_array().unwrap();
+    assert!(!sections.is_empty());
+    // Each section has a name and items array
+    assert!(sections[0].get("name").is_some());
+    assert!(sections[0].get("items").is_some());
+}
+
+#[test]
+fn test_pantry_list_yaml_format() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "-f", "yaml", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sections:"))
+        .stdout(predicate::str::contains("name:"));
+}
+
+#[test]
+fn test_pantry_list_no_pantry_error() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No pantry configuration found"));
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: add
+// ---------------------------------------------------------------------------
+
+fn make_minimal_pantry() -> tempfile::TempDir {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    fs::create_dir(&config_dir).unwrap();
+    fs::write(
+        config_dir.join("pantry.conf"),
+        "[pantry]\nflour = { quantity = \"1%kg\", low = \"200%g\" }\n",
+    )
+    .unwrap();
+    temp_dir
+}
+
+#[test]
+fn test_pantry_add_simple_item() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "pantry", "sugar"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added 'sugar'"));
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("sugar"));
+}
+
+#[test]
+fn test_pantry_add_with_attributes() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args([
+            "pantry",
+            "add",
+            "dairy",
+            "milk",
+            "--quantity",
+            "2%l",
+            "--low",
+            "500%ml",
+            "--expire",
+            "2025-12-01",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added 'milk'"));
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("[dairy]"));
+    assert!(content.contains("milk"));
+    assert!(content.contains("2%l"));
+    assert!(content.contains("500%ml"));
+    assert!(content.contains("2025-12-01"));
+}
+
+#[test]
+fn test_pantry_add_creates_new_section() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "spices", "cumin", "--quantity", "50%g"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("[spices]"));
+    assert!(content.contains("cumin"));
+}
+
+#[test]
+fn test_pantry_add_creates_pantry_file_when_missing() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "produce", "apples", "--quantity", "6"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added 'apples'"));
+
+    assert!(temp_dir.path().join("config/pantry.conf").exists());
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("apples"));
+}
+
+#[test]
+fn test_pantry_add_duplicate_errors() {
+    let temp_dir = make_minimal_pantry();
+
+    // First add succeeds
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "pantry", "flour"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: remove
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pantry_remove_item() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "remove", "pantry", "flour"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Removed 'flour'"));
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(!content.contains("flour"));
+}
+
+#[test]
+fn test_pantry_remove_empty_section_deleted() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "remove", "pantry", "flour"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    // Section should be removed when it becomes empty
+    assert!(!content.contains("[pantry]"));
+}
+
+#[test]
+fn test_pantry_remove_nonexistent_item_errors() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "remove", "pantry", "nonexistent"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn test_pantry_remove_nonexistent_section_errors() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "remove", "nosuchsection", "flour"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn test_pantry_remove_no_pantry_error() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "remove", "pantry", "flour"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No pantry configuration found"));
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: update
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pantry_update_quantity() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "update", "pantry", "flour", "--quantity", "2%kg"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated 'flour'"));
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("2%kg"));
+    // Original low threshold should be preserved
+    assert!(content.contains("200%g"));
+}
+
+#[test]
+fn test_pantry_update_adds_expire() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args([
+            "pantry",
+            "update",
+            "pantry",
+            "flour",
+            "--expire",
+            "2025-12-31",
+        ])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(content.contains("2025-12-31"));
+    // Original attributes should be preserved
+    assert!(content.contains("1%kg"));
+    assert!(content.contains("200%g"));
+}
+
+#[test]
+fn test_pantry_update_nonexistent_item_errors() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args([
+            "pantry",
+            "update",
+            "pantry",
+            "nonexistent",
+            "--quantity",
+            "1%kg",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn test_pantry_update_no_attributes_errors() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "update", "pantry", "flour"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No attributes specified"));
+}
+
+#[test]
+fn test_pantry_update_no_pantry_error() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "update", "pantry", "flour", "--quantity", "1%kg"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No pantry configuration found"));
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: command aliases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pantry_list_alias() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "ls"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pantry Items"));
+}
+
+#[test]
+fn test_pantry_add_alias() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "a", "pantry", "rice"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added 'rice'"));
+}
+
+#[test]
+fn test_pantry_remove_alias() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "rm", "pantry", "flour"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Removed 'flour'"));
+}
+
+#[test]
+fn test_pantry_update_alias() {
+    let temp_dir = make_minimal_pantry();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "up", "pantry", "flour", "--quantity", "3%kg"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated 'flour'"));
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: help text
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pantry_help_shows_crud_commands() {
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args(["pantry", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("list"))
+        .stdout(predicate::str::contains("add"))
+        .stdout(predicate::str::contains("remove"))
+        .stdout(predicate::str::contains("update"));
 }
