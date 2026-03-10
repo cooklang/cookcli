@@ -34,8 +34,6 @@ brew install cookcli
 
 ### Install with Cargo
 
-> not working at the moment, re: https://github.com/cooklang/cookcli/issues/155#issuecomment-3239646168
-
 If you have Rust installed:
 
 ```bash
