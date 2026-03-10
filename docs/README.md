@@ -20,16 +20,26 @@ A command-line interface for managing and working with Cooklang recipes.
 
 ## Installation
 
-### macOS (Homebrew)
+### Download Binary
+
+Download the latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add it to your PATH.
+
+### macOS/Linux
+
+Using Homebrew:
+
 ```bash
-brew install cooklang/tap/cookcli
+brew install cookcli
 ```
 
-### Build from Source
+### Install with Cargo
+
+> not working at the moment, re: https://github.com/cooklang/cookcli/issues/155#issuecomment-3239646168
+
+If you have Rust installed:
+
 ```bash
-git clone https://github.com/cooklang/cookcli.git
-cd cookcli
-cargo build --release
+cargo install cookcli
 ```
 
 ## Global Options

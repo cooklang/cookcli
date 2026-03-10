@@ -151,7 +151,7 @@ Serving recipe files from: "/Users/chefalexey/recipes"
 
 Download the latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add it to your PATH.
 
-### macOS
+### macOS/Linux
 
 Using Homebrew:
 
