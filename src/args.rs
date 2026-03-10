@@ -180,16 +180,20 @@ pub enum Command {
 
     /// Manage and analyze your pantry inventory
     ///
-    /// Track pantry items, check for expiring products, find depleted items,
-    /// and discover recipes you can make with available ingredients.
+    /// Add, remove, and update pantry items, check for expiring or depleted
+    /// products, and discover recipes you can make with available ingredients.
     ///
     /// Examples:
+    ///   cook pantry list                # Show all pantry items
+    ///   cook pantry add dairy milk --quantity "2%l"
+    ///   cook pantry update dairy milk --quantity "1%l"
+    ///   cook pantry remove dairy milk
     ///   cook pantry depleted            # Show out-of-stock items
     ///   cook pantry expiring            # Show items expiring soon
     ///   cook pantry recipes             # Find recipes you can make
     #[command(
         alias = "p",
-        long_about = "Manage pantry inventory and find recipes based on available ingredients"
+        long_about = "Manage pantry inventory with full CRUD support and recipe-based analysis"
     )]
     Pantry(pantry::PantryArgs),
 
