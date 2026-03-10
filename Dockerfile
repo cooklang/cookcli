@@ -37,13 +37,14 @@ RUN groupadd -r cookcli && useradd -r -g cookcli -d /home/cookcli -s /sbin/nolog
 # Copy binary
 COPY --from=builder /usr/local/bin/cook /usr/local/bin/cook
 
-# Copy seed recipes
+# Copy seed recipes as defaults (override by mounting your own recipes at /recipes)
 COPY seed/ /recipes/
 
 RUN chown -R cookcli:cookcli /recipes
 
 USER cookcli
 
+VOLUME /recipes
 EXPOSE 9080
 
 ENTRYPOINT ["cook", "server", "/recipes", "--host"]

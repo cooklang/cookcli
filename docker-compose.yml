@@ -1,6 +1,8 @@
 services:
   cookcli:
-    image: ghcr.io/cooklang/cookcli:0.25.1
+    image: ghcr.io/cooklang/cookcli:latest
     ports:
       - "9080:9080"
+    volumes:
+      - ./recipes:/recipes
     restart: unless-stopped
