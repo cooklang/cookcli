@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.26.0](https://github.com/cooklang/cookcli/compare/v0.25.1...v0.26.0) (2026-03-10)
+
+
+### Features
+
+* add CRUD subcommands to pantry CLI ([e97ca56](https://github.com/cooklang/cookcli/commit/e97ca56a29e36af11d769b88d576aa5974942d7c))
+* make Docker setup reusable and add automated image publishing ([c971bec](https://github.com/cooklang/cookcli/commit/c971bec9670dc567984230e5c263ef77a695b2ee))
+
+
+### Bug Fixes
+
+* improve cook mode scroll, dark mode logo contrast, and print styles ([#264](https://github.com/cooklang/cookcli/issues/264), [#267](https://github.com/cooklang/cookcli/issues/267), [#268](https://github.com/cooklang/cookcli/issues/268)) ([64bd968](https://github.com/cooklang/cookcli/commit/64bd968f8464c588e5f6a94bb2519de3983c2d32))
+* resolve two failing UI tests in CI ([7e55b67](https://github.com/cooklang/cookcli/commit/7e55b673a548c1b65233ecf7c4c0e941aa74119e))
+
 ## [0.25.1](https://github.com/cooklang/cookcli/compare/v0.25.0...v0.25.1) (2026-03-09)
 
 
