@@ -123,6 +123,11 @@
         box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
     }
 
+    /* Step images in recipes */
+    .image-step {
+        @apply w-full max-h-80 object-contain rounded-xl;
+    }
+
     /* Recipe image placeholder with gradient */
     .recipe-image-placeholder {
         background: linear-gradient(135deg, #ff6b35, #fbbf24);

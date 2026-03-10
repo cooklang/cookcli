@@ -326,6 +326,95 @@
         }
 
         @media print {
+            /* Force light mode for printing */
+            .dark body,
+            .dark .bg-gray-50,
+            .dark .bg-white,
+            .dark .bg-gray-100 {
+                background-color: white !important;
+            }
+
+            .dark .text-gray-900, .dark h1, .dark h2, .dark h3 {
+                color: #111827 !important;
+            }
+
+            .dark .text-gray-800 {
+                color: #1f2937 !important;
+            }
+
+            .dark .text-gray-700,
+            .dark .text-gray-600 {
+                color: #374151 !important;
+            }
+
+            .dark .text-orange-600, .dark .text-orange-700 {
+                color: #c2410c !important;
+            }
+
+            .dark .text-green-600 {
+                color: #16a34a !important;
+            }
+
+            .dark .text-purple-600 {
+                color: #9333ea !important;
+            }
+
+            .dark .text-red-500 {
+                color: #ef4444 !important;
+            }
+
+            .dark .border-gray-200, .dark .border-gray-300 {
+                border-color: #e5e7eb !important;
+            }
+
+            .dark .shadow-lg, .dark .shadow-md, .dark .shadow-xl {
+                box-shadow: none !important;
+            }
+
+            .dark .bg-gradient-to-r {
+                background: transparent !important;
+                border-color: #e5e7eb !important;
+            }
+
+            .dark .recipe-card {
+                background-color: white !important;
+                border-color: #e5e7eb !important;
+            }
+
+            /* Dark mode badges must be readable when printed */
+            .dark .ingredient-badge {
+                background: #fef3c7 !important;
+                color: #9a3412 !important;
+                border-color: #fb923c !important;
+            }
+
+            .dark .cookware-badge {
+                background: #dcfce7 !important;
+                color: #14532d !important;
+                border-color: #4ade80 !important;
+            }
+
+            .dark .timer-badge {
+                background: #fee2e2 !important;
+                color: #7f1d1d !important;
+                border-color: #f87171 !important;
+            }
+
+            .dark .step-number {
+                background: #f97316 !important;
+                color: white !important;
+            }
+
+            .dark .tag {
+                background: linear-gradient(135deg, #fbbf24, #fb923c) !important;
+                color: white !important;
+            }
+
+            .dark .metadata-pill {
+                background: white !important;
+                color: #374151 !important;
+            }
+
             /* Global print styles */
             * {
                 print-color-adjust: exact;
@@ -397,7 +486,11 @@
             .bg-gradient-to-r.from-orange-50,
             .bg-gradient-to-r.from-green-50,
             .bg-gradient-to-r.from-gray-50,
-            .bg-gradient-to-r.from-blue-50 {
+            .bg-gradient-to-r.from-blue-50,
+            .dark .bg-gradient-to-r.from-orange-50,
+            .dark .bg-gradient-to-r.from-green-50,
+            .dark .bg-gradient-to-r.from-gray-50,
+            .dark .bg-gradient-to-r.from-blue-50 {
                 background: #f9f9f9 !important;
                 border: 1px solid #ddd !important;
             }
@@ -411,6 +504,9 @@
             /* Images */
             img {
                 max-height: 300px !important;
+                max-width: 100% !important;
+                height: auto !important;
+                object-fit: contain !important;
                 page-break-inside: avoid;
                 page-break-after: avoid;
             }
@@ -621,7 +717,7 @@
             <div class="px-3 lg:px-6 py-4 relative">
                 <div class="flex items-center justify-between flex-wrap gap-y-3">
                     <a href="/" class="order-1 hidden md:flex items-center space-x-2">
-                        <img src="/static/android-chrome-192x192.png" alt="Cook" class="h-8 w-8" width="32" height="32">
+                        <img src="/static/android-chrome-192x192.png" alt="Cook" class="h-8 w-8 rounded-md dark:bg-gray-200 dark:p-0.5" width="32" height="32">
                     </a>
 
                     <div class="relative z-50 order-2 flex-1 md:ml-2 md:mr-4" id="search-container">

@@ -4,7 +4,8 @@
 
     // ─── Constants ───────────────────────────────────────────────
 
-    const WHEEL_DEBOUNCE_MS = 300;
+    const WHEEL_THRESHOLD = 80;
+    const WHEEL_RESET_MS = 200;
     const SWIPE_THRESHOLD = 50;
     const SWIPE_CLAMP_MAX = 150;
     const SWIPE_SCALE_FACTOR = 0.001;
@@ -23,7 +24,8 @@
         scrolling: false,
         canScrollCard: false,
         startScrollTop: 0,
-        wheelTimeout: null,
+        wheelAccumulator: 0,
+        wheelResetTimeout: null,
         triggerElement: null
     };
 
@@ -466,13 +468,25 @@
     function onWheel(e) {
         if (!state.overlay) return;
         e.preventDefault();
-        if (state.wheelTimeout) return; // debounce
-        if (e.deltaY > 0) {
+
+        // Accumulate wheel delta (trackpads send many small events)
+        state.wheelAccumulator += e.deltaY;
+
+        // Reset accumulator after a pause in scrolling
+        if (state.wheelResetTimeout) clearTimeout(state.wheelResetTimeout);
+        state.wheelResetTimeout = setTimeout(function() {
+            state.wheelAccumulator = 0;
+            state.wheelResetTimeout = null;
+        }, WHEEL_RESET_MS);
+
+        // Navigate only when accumulated delta exceeds threshold
+        if (state.wheelAccumulator >= WHEEL_THRESHOLD) {
             navigateTo(state.currentIndex + 1);
-        } else if (e.deltaY < 0) {
+            state.wheelAccumulator = 0;
+        } else if (state.wheelAccumulator <= -WHEEL_THRESHOLD) {
             navigateTo(state.currentIndex - 1);
+            state.wheelAccumulator = 0;
         }
-        state.wheelTimeout = setTimeout(function() { state.wheelTimeout = null; }, WHEEL_DEBOUNCE_MS);
     }
 
     // ─── Wake Lock ────────────────────────────────────────────────
@@ -567,11 +581,12 @@
         releaseWakeLock();
         document.removeEventListener('visibilitychange', onVisibilityChange);
 
-        // Clear wheel debounce timeout
-        if (state.wheelTimeout) {
-            clearTimeout(state.wheelTimeout);
-            state.wheelTimeout = null;
+        // Clear wheel state
+        if (state.wheelResetTimeout) {
+            clearTimeout(state.wheelResetTimeout);
+            state.wheelResetTimeout = null;
         }
+        state.wheelAccumulator = 0;
 
         // Restore focus to trigger element
         if (state.triggerElement && state.triggerElement.focus) {
