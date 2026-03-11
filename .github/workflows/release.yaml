@@ -326,19 +326,23 @@ jobs:
 
   # Build and push Docker image to GHCR
   docker_publish:
-    name: Publish Docker image
+    name: Build Docker image (${{ matrix.platform }})
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
 
       - name: Setup | Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Setup | QEMU (for multi-arch)
-        uses: docker/setup-qemu-action@v3
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -357,11 +361,36 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ghcr.io/cooklang/cookcli:${{ steps.version.outputs.version }}
-            ghcr.io/cooklang/cookcli:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/cooklang/cookcli:build-${{ strategy.job-index }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+
+  docker_merge:
+    name: Create multi-arch manifest
+    needs: [release_please, docker_publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ needs.release_please.outputs.tag_name }}
+
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/cooklang/cookcli:${{ steps.version.outputs.version }} \
+            -t ghcr.io/cooklang/cookcli:latest \
+            ghcr.io/cooklang/cookcli:build-0 \
+            ghcr.io/cooklang/cookcli:build-1
+
 
