@@ -1,6 +1,6 @@
 # CookCLI
 
-A command-line interface for managing and working with Cooklang recipes.
+CookCLI is a free, open-source command-line tool for working with [Cooklang](https://cooklang.org/docs/spec/) recipe files. It parses `.cook` files, generates combined shopping lists from multiple recipes, runs a local web server to browse your collection, imports recipes from websites, and scales servings — all from the terminal.
 
 ## Commands
 

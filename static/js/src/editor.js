@@ -40,7 +40,8 @@ async function cooklangCompletions(context) {
     const textBefore = line.text.slice(0, pos - line.from);
 
     // Check for trigger characters (@, #, ~)
-    const match = textBefore.match(/[@#~]([a-zA-Z0-9_]*)$/);
+    // Include . / - in character class so @./path file references trigger completion
+    const match = textBefore.match(/[@#~]([a-zA-Z0-9_./\-]*)$/);
     if (!match) return null;
 
     const prefix = match[1];
@@ -53,9 +54,14 @@ async function cooklangCompletions(context) {
 
         return {
             from: from,
+            // Keep completion open while user types path chars; CodeMirror's
+            // built-in FuzzyMatcher handles client-side narrowing.
+            validFor: /^[a-zA-Z0-9_./\-]*$/,
             options: items.map(item => {
-                const type = item.kind === 6 ? 'variable' : item.kind === 14 ? 'keyword' : 'text';
-                const text = item.insertText || item.label;
+                const type = item.kind === 17 ? 'file' : item.kind === 6 ? 'variable' : item.kind === 14 ? 'keyword' : 'text';
+                // Prefer textEdit.newText (used by recipe references with explicit ranges),
+                // then insertText, then label
+                const text = item.textEdit?.newText || item.insertText || item.label;
 
                 // Check if LSP sent a snippet (insertTextFormat === 2)
                 if (item.insertTextFormat === 2 && text.includes('$')) {
