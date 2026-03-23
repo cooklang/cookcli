@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.27.0](https://github.com/cooklang/cookcli/compare/v0.26.0...v0.27.0) (2026-03-23)
+
+
+### Features
+
+* add fuzzy file reference autocomplete in editor ([5a46e6f](https://github.com/cooklang/cookcli/commit/5a46e6f6ffae4181dee46d41ada752f4518ca3c5))
+
+
+### Bug Fixes
+
+* simplify regex patterns in editor completion ([5b8f35e](https://github.com/cooklang/cookcli/commit/5b8f35ebb4a635308160982b42c70da8e70c5346))
+
 ## [0.26.0](https://github.com/cooklang/cookcli/compare/v0.25.1...v0.26.0) (2026-03-10)
 
 
