@@ -719,9 +719,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-language-server"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9392d694ca71d1a931dc200be7a061d13f46e688c07e48cf4575569e2a9f6886"
+checksum = "7f4f0ec7cf3dba205edeacb9868413fb43dda06d9c3bfd5d7b74d71273a04ebb"
 dependencies = [
  "anyhow",
  "cooklang",
