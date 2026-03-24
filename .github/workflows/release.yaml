@@ -271,6 +271,8 @@ jobs:
     steps:
       - name: Setup | Artifacts
         uses: actions/download-artifact@v4
+        with:
+          pattern: cook-*
 
       - name: Setup | Checksums
         run: for file in cook-*/cook-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
