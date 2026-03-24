@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.1](https://github.com/cooklang/cookcli/compare/v0.27.0...v0.27.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* filter artifact download in release pipeline ([ce89c4c](https://github.com/cooklang/cookcli/commit/ce89c4cb8c0cb07a90b62afab6744e50dcc26b39))
+* filter artifact download to skip docker build cache in release pipeline ([3afa5d9](https://github.com/cooklang/cookcli/commit/3afa5d9c7dc074a7791854c41c0ea4a805a9fea2))
+
 ## [0.27.0](https://github.com/cooklang/cookcli/compare/v0.26.0...v0.27.0) (2026-03-23)
 
 
