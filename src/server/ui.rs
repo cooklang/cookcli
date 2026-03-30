@@ -950,8 +950,8 @@ async fn create_recipe(
         // Create parent directories if they don't exist
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
-                tracing::error!("Failed to create directories: {}", e);
-                return new_page_error("Failed to create directory", &original_filename);
+                tracing::error!("Failed to create directories: {}. If running in Docker, ensure the mounted volume is writable by the container user. Set `user: \"YOUR_UID:YOUR_GID\"` in docker-compose.yml.", e);
+                return new_page_error("Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
             }
         }
 
