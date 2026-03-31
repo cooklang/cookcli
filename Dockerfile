@@ -54,5 +54,5 @@ USER cookcli
 VOLUME /recipes
 EXPOSE 9080
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["cook", "server", "/recipes", "--host"]

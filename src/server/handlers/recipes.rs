@@ -205,10 +205,12 @@ pub async fn recipe_save(
     let temp_path = file_path.with_extension("tmp");
 
     let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
-        tracing::error!("Failed to create temp file {}: {}. If running in Docker, ensure the mounted volume is writable by the container user.", temp_path, e);
+        tracing::error!("Failed to create temp file {}: {}", temp_path, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to save recipe: {e}. Check that the recipes folder has write permissions.")),
+            json_error(format!(
+                "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
+            )),
         )
     })?;
 

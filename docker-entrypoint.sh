@@ -1,6 +1,18 @@
 #!/bin/sh
 set -e
 
+# Check if /recipes directory exists
+if [ ! -d /recipes ]; then
+    echo "ERROR: /recipes directory does not exist."
+    echo ""
+    echo "Mount your recipes directory in docker-compose.yml:"
+    echo ""
+    echo "  volumes:"
+    echo "    - ./recipes:/recipes"
+    echo ""
+    exit 1
+fi
+
 # Check if /recipes directory is writable
 if [ ! -w /recipes ]; then
     echo "ERROR: /recipes directory is not writable by user $(id -u):$(id -g)."
