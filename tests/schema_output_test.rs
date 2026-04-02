@@ -249,6 +249,19 @@ fn test_schema_unknown_timer_unit_skipped() {
 }
 
 #[test]
+fn test_schema_text_value_timer_skipped() {
+    // The parser treats "10-20" as a text value, not a numeric range.
+    // Text-value timers should not contribute to timeRequired.
+    let json = schema_output("Cook for ~{10-20%minutes}.");
+
+    let step = &json["recipeInstructions"][0];
+    assert!(
+        step.get("timeRequired").is_none(),
+        "Text-value timers should not produce timeRequired"
+    );
+}
+
+#[test]
 fn test_schema_hours_and_minutes_formatting() {
     // 90 minutes should be PT1H30M, not PT90M
     let json = schema_output("Bake for ~{90%minutes}.");

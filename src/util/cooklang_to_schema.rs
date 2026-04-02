@@ -352,7 +352,8 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
                 if let Some(quantity) = &t.quantity {
                     step_text.push_str(&quantity.to_string());
 
-                    // Accumulate timer duration for timeRequired
+                    // Accumulate timer duration for timeRequired.
+                    // Range values are averaged (e.g. 15-30 min → 22.5 min).
                     let seconds = match quantity.value() {
                         cooklang::quantity::Value::Number(n) => Some(n.value()),
                         cooklang::quantity::Value::Range { start, end } => {
@@ -365,6 +366,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
                         {
                             Some("s" | "sec" | "second" | "seconds") => Some(1.0),
                             Some("h" | "hr" | "hour" | "hours") => Some(3600.0),
+                            // Cooklang timers without an explicit unit default to minutes
                             Some("min" | "minute" | "minutes") | None => Some(60.0),
                             Some(_) => None, // unknown unit — skip rather than guess
                         };
@@ -388,9 +390,9 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
         "text": step_text.trim()
     });
 
-    // Add timeRequired if the step has timers
-    if has_timers {
-        let total_secs = total_seconds.round() as i64;
+    // Add timeRequired if the step has timers with a positive total duration
+    let total_secs = total_seconds.round() as i64;
+    if has_timers && total_secs > 0 {
         let hours = total_secs / 3600;
         let mins = (total_secs % 3600) / 60;
         let secs = total_secs % 60;
@@ -402,7 +404,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
         if mins > 0 {
             dur.push_str(&format!("{mins}M"));
         }
-        if secs > 0 || (hours == 0 && mins == 0) {
+        if secs > 0 {
             dur.push_str(&format!("{secs}S"));
         }
         instruction["timeRequired"] = json!(dur);
@@ -418,17 +420,13 @@ fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
     let mut step_number = 0;
 
     for section in &recipe.sections {
-        let section_steps: Vec<Value> = section
-            .content
-            .iter()
-            .filter_map(|content| match content {
-                cooklang::Content::Step(step) => {
-                    step_number += 1;
-                    Some(build_step(recipe, step, step_number))
-                }
-                cooklang::Content::Text(_) => None,
-            })
-            .collect();
+        let mut section_steps = Vec::new();
+        for content in &section.content {
+            if let cooklang::Content::Step(step) = content {
+                step_number += 1;
+                section_steps.push(build_step(recipe, step, step_number));
+            }
+        }
 
         if section_steps.is_empty() {
             continue;
