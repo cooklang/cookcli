@@ -390,7 +390,9 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
         "text": step_text.trim()
     });
 
-    // Add timeRequired if the step has timers with a positive total duration
+    // Add timeRequired if the step has timers with a positive total duration.
+    // The total_secs > 0 guard also prevents emitting a bare "PT" string
+    // when all timers round to zero (e.g. ~{0%minutes}).
     let total_secs = total_seconds.round() as i64;
     if has_timers && total_secs > 0 {
         let hours = total_secs / 3600;

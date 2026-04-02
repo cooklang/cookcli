@@ -1,6 +1,3 @@
-#[path = "common/mod.rs"]
-mod common;
-
 use assert_cmd::Command;
 use serde_json::Value as JsonValue;
 use std::fs;
@@ -258,6 +255,18 @@ fn test_schema_text_value_timer_skipped() {
     assert!(
         step.get("timeRequired").is_none(),
         "Text-value timers should not produce timeRequired"
+    );
+}
+
+#[test]
+fn test_schema_zero_duration_timer_skipped() {
+    // A zero-value timer should not produce timeRequired (avoids bare "PT" string)
+    let json = schema_output("Start the ~{0%minutes} timer.");
+
+    let step = &json["recipeInstructions"][0];
+    assert!(
+        step.get("timeRequired").is_none(),
+        "Zero-duration timers should not produce timeRequired"
     );
 }
 
