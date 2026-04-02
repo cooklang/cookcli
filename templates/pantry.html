@@ -170,11 +170,17 @@
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-label") }}</label>
                 <select id="add-section" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required>
                     <option value="">{{ tr.t("pantry-section-select") }}</option>
+                    {% if sections.is_empty() %}
                     <option value="freezer">{{ tr.t("pantry-section-freezer") }}</option>
                     <option value="fridge">{{ tr.t("pantry-section-fridge") }}</option>
                     <option value="pantry">{{ tr.t("pantry-section-pantry") }}</option>
                     <option value="spices">{{ tr.t("pantry-section-spices") }}</option>
                     <option value="other">{{ tr.t("pantry-section-other") }}</option>
+                    {% else %}
+                    {% for section in sections %}
+                    <option value="{{ section.name }}">{{ section.name }}</option>
+                    {% endfor %}
+                    {% endif %}
                 </select>
             </div>
             <div class="mb-4">
