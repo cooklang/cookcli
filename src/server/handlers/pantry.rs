@@ -377,7 +377,7 @@ fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) 
             continue; // Already handled
         }
 
-        writeln!(&mut output, "[{section_name}]").unwrap();
+        writeln!(&mut output, "[{}]", toml_escape_key(section_name)).unwrap();
 
         for item in items {
             write_pantry_item(&mut output, item);
