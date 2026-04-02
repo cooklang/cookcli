@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.27.2](https://github.com/cooklang/cookcli/compare/v0.27.1...v0.27.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* add "m" unit abbreviation, text-only timer test ([bc8fe3d](https://github.com/cooklang/cookcli/commit/bc8fe3d29548651bc88c110b071b5e28c7b12c74))
+* address review feedback on Docker permission fix ([3da96e4](https://github.com/cooklang/cookcli/commit/3da96e4ccf20757f4759e7d104758ff8ee872970))
+* address review feedback on JSON-LD schema output ([f288294](https://github.com/cooklang/cookcli/commit/f288294769cd48c2f724765378d00a8a31da5e1b))
+* address second round of review feedback ([5ee1262](https://github.com/cooklang/cookcli/commit/5ee126263f9c94cddf92010c06ad3e0744d0ff0e))
+* improve JSON-LD schema.org output for HowToStep ([8ef2b11](https://github.com/cooklang/cookcli/commit/8ef2b11c32eeb85ae8260f64eb7889874551280b))
+* quote pantry section names containing spaces in TOML output ([7eb7c0c](https://github.com/cooklang/cookcli/commit/7eb7c0cb6b2d51d05447a605960b576fbece1e58))
+* quote pantry section names containing spaces in TOML output ([818f785](https://github.com/cooklang/cookcli/commit/818f785a747893a6ab21e56b1c4b84888c0b3cae)), closes [#292](https://github.com/cooklang/cookcli/issues/292)
+* quote section name with space in seed pantry.conf ([af7623f](https://github.com/cooklang/cookcli/commit/af7623f9d01b499c0a9b95a1659df0dc31cf399f))
+* remove unused import, add zero-duration timer guard test ([ac3e11a](https://github.com/cooklang/cookcli/commit/ac3e11af7075999a56373976aaf7758f2f1c4eb1))
+* resolve Docker volume permission issues when creating recipes ([7363ca7](https://github.com/cooklang/cookcli/commit/7363ca7a326549d775d1f1d8ff2c50795d3560db))
+* resolve Docker volume permission issues when creating recipes ([af5a1ee](https://github.com/cooklang/cookcli/commit/af5a1eecda3bf8ae42fef4d284f3397792b9801e)), closes [#287](https://github.com/cooklang/cookcli/issues/287)
+* use existing sections in pantry Add Item form ([4ad0e51](https://github.com/cooklang/cookcli/commit/4ad0e51d956994b22c4b7103b60b9141c55e85e5))
+* use existing sections in pantry Add Item form ([08233b7](https://github.com/cooklang/cookcli/commit/08233b766edfbd61bb38a6218bd4c58a8f0bb3b3)), closes [#293](https://github.com/cooklang/cookcli/issues/293)
+
 ## [0.27.1](https://github.com/cooklang/cookcli/compare/v0.27.0...v0.27.1) (2026-03-24)
 
 
