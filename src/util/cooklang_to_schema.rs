@@ -326,57 +326,121 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<Strin
     Ok(tools)
 }
 
+fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize) -> Value {
+    let mut step_text = String::new();
+    let mut total_seconds: f64 = 0.0;
+    let mut has_timers = false;
+
+    for item in &step.items {
+        match item {
+            Item::Text { value } => {
+                step_text.push_str(value);
+            }
+            &Item::Ingredient { index } => {
+                let igr = &recipe.ingredients[index];
+                step_text.push_str(&igr.display_name());
+            }
+            &Item::Cookware { index } => {
+                let cw = &recipe.cookware[index];
+                step_text.push_str(&cw.name);
+            }
+            &Item::Timer { index } => {
+                let t = &recipe.timers[index];
+                if let Some(name) = &t.name {
+                    step_text.push_str(&format!("{name} for "));
+                }
+                if let Some(quantity) = &t.quantity {
+                    step_text.push_str(&quantity.to_string());
+
+                    // Accumulate timer duration for timeRequired
+                    let seconds = match quantity.value() {
+                        cooklang::quantity::Value::Number(n) => Some(n.value()),
+                        cooklang::quantity::Value::Range { start, end } => {
+                            Some((start.value() + end.value()) / 2.0)
+                        }
+                        cooklang::quantity::Value::Text(_) => None,
+                    };
+                    if let Some(secs) = seconds {
+                        let multiplier =
+                            match quantity.unit().map(|u| u.to_lowercase()).as_deref() {
+                                Some("s" | "sec" | "second" | "seconds") => 1.0,
+                                Some("h" | "hr" | "hour" | "hours") => 3600.0,
+                                _ => 60.0, // default to minutes
+                            };
+                        total_seconds += secs * multiplier;
+                        has_timers = true;
+                    }
+                }
+            }
+            &Item::InlineQuantity { index } => {
+                let q = &recipe.inline_quantities[index];
+                step_text.push_str(&q.to_string());
+            }
+        }
+    }
+
+    let mut instruction = json!({
+        "@type": "HowToStep",
+        "position": step_number,
+        "text": step_text.trim()
+    });
+
+    // Add timeRequired if the step has timers
+    if has_timers {
+        let total_minutes = (total_seconds / 60.0).round() as i64;
+        if total_minutes > 0 {
+            instruction["timeRequired"] = json!(format!("PT{}M", total_minutes));
+        } else {
+            let secs = total_seconds.round() as i64;
+            instruction["timeRequired"] = json!(format!("PT{}S", secs));
+        }
+    }
+
+    instruction
+}
+
 fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
     let mut instructions = Vec::new();
     let mut step_number = 0;
 
+    let has_named_sections = recipe.sections.iter().any(|s| s.name.is_some());
+
     for section in &recipe.sections {
-        for content in &section.content {
-            match content {
-                cooklang::Content::Step(step) => {
-                    step_number += 1;
+        if has_named_sections {
+            // Use HowToSection to group steps when sections are present
+            let mut section_steps = Vec::new();
 
-                    let mut step_text = String::new();
-
-                    for item in &step.items {
-                        match item {
-                            Item::Text { value } => {
-                                step_text.push_str(value);
-                            }
-                            &Item::Ingredient { index } => {
-                                let igr = &recipe.ingredients[index];
-                                step_text.push_str(&igr.display_name());
-                            }
-                            &Item::Cookware { index } => {
-                                let cw = &recipe.cookware[index];
-                                step_text.push_str(&cw.name);
-                            }
-                            &Item::Timer { index } => {
-                                let t = &recipe.timers[index];
-                                if let Some(name) = &t.name {
-                                    step_text.push_str(&format!("{name} for "));
-                                }
-                                if let Some(quantity) = &t.quantity {
-                                    step_text.push_str(&quantity.to_string());
-                                }
-                            }
-                            &Item::InlineQuantity { index } => {
-                                let q = &recipe.inline_quantities[index];
-                                step_text.push_str(&q.to_string());
-                            }
-                        }
+            for content in &section.content {
+                match content {
+                    cooklang::Content::Step(step) => {
+                        step_number += 1;
+                        section_steps.push(build_step(recipe, step, step_number));
                     }
-
-                    let instruction = json!({
-                        "@type": "HowToStep",
-                        "name": format!("Step {}", step_number),
-                        "text": step_text.trim()
-                    });
-
-                    instructions.push(instruction);
+                    cooklang::Content::Text(_) => {}
                 }
-                cooklang::Content::Text(_) => {
-                    // Skip text content between steps
+            }
+
+            if !section_steps.is_empty() {
+                let mut section_obj = json!({
+                    "@type": "HowToSection",
+                    "itemListElement": section_steps
+                });
+
+                if let Some(name) = &section.name {
+                    section_obj["name"] = json!(name);
+                }
+
+                instructions.push(section_obj);
+            }
+        } else {
+            // Flat list when there are no named sections
+            for content in &section.content {
+                match content {
+                    cooklang::Content::Step(step) => {
+                        step_number += 1;
+                        instructions.push(build_step(recipe, step, step_number));
+                    }
+                    cooklang::Content::Text(_) => {}
                 }
             }
         }
