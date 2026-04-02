@@ -354,6 +354,8 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
 
                     // Accumulate timer duration for timeRequired.
                     // Range values are averaged (e.g. 15-30 min → 22.5 min).
+                    // Note: the parser produces Range only from scaling operations,
+                    // not from syntax like ~{15-30%min} (which parses as Text).
                     let seconds = match quantity.value() {
                         cooklang::quantity::Value::Number(n) => Some(n.value()),
                         cooklang::quantity::Value::Range { start, end } => {
@@ -367,7 +369,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
                             Some("s" | "sec" | "second" | "seconds") => Some(1.0),
                             Some("h" | "hr" | "hour" | "hours") => Some(3600.0),
                             // Cooklang timers without an explicit unit default to minutes
-                            Some("min" | "minute" | "minutes") | None => Some(60.0),
+                            Some("m" | "min" | "minute" | "minutes") | None => Some(60.0),
                             Some(_) => None, // unknown unit — skip rather than guess
                         };
                         if let Some(m) = multiplier {

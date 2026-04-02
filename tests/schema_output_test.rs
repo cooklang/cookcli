@@ -97,6 +97,24 @@ fn test_schema_step_no_timer_no_time_required() {
 }
 
 #[test]
+fn test_schema_text_only_timer_no_time_required() {
+    // A timer with only a text name and no numeric quantity should not
+    // produce timeRequired, but should still appear in step text.
+    let json = schema_output("Wait until ~{golden brown}.");
+
+    let step = &json["recipeInstructions"][0];
+    assert!(
+        step.get("timeRequired").is_none(),
+        "Text-only timers should not produce timeRequired"
+    );
+    let text = step["text"].as_str().unwrap();
+    assert!(
+        text.contains("golden brown"),
+        "Timer name should appear in step text"
+    );
+}
+
+#[test]
 fn test_schema_sections_produce_how_to_section() {
     let json = schema_output(
         "\
