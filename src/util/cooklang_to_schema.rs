@@ -326,59 +326,127 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<Strin
     Ok(tools)
 }
 
+fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize) -> Value {
+    let mut step_text = String::new();
+    let mut total_seconds: f64 = 0.0;
+    let mut has_timers = false;
+
+    for item in &step.items {
+        match item {
+            Item::Text { value } => {
+                step_text.push_str(value);
+            }
+            &Item::Ingredient { index } => {
+                let igr = &recipe.ingredients[index];
+                step_text.push_str(&igr.display_name());
+            }
+            &Item::Cookware { index } => {
+                let cw = &recipe.cookware[index];
+                step_text.push_str(&cw.name);
+            }
+            &Item::Timer { index } => {
+                let t = &recipe.timers[index];
+                if let Some(name) = &t.name {
+                    step_text.push_str(&format!("{name} for "));
+                }
+                if let Some(quantity) = &t.quantity {
+                    step_text.push_str(&quantity.to_string());
+
+                    // Accumulate timer duration for timeRequired.
+                    // Range values are averaged (e.g. 15-30 min → 22.5 min).
+                    // Note: the parser produces Range only from scaling operations,
+                    // not from syntax like ~{15-30%min} (which parses as Text).
+                    let seconds = match quantity.value() {
+                        cooklang::quantity::Value::Number(n) => Some(n.value()),
+                        cooklang::quantity::Value::Range { start, end } => {
+                            Some((start.value() + end.value()) / 2.0)
+                        }
+                        cooklang::quantity::Value::Text(_) => None,
+                    };
+                    if let Some(val) = seconds {
+                        let multiplier = match quantity.unit().map(|u| u.to_lowercase()).as_deref()
+                        {
+                            Some("s" | "sec" | "second" | "seconds") => Some(1.0),
+                            Some("h" | "hr" | "hour" | "hours") => Some(3600.0),
+                            // Cooklang timers without an explicit unit default to minutes
+                            Some("m" | "min" | "minute" | "minutes") | None => Some(60.0),
+                            Some(_) => None, // unknown unit — skip rather than guess
+                        };
+                        if let Some(m) = multiplier {
+                            total_seconds += val * m;
+                            has_timers = true;
+                        }
+                    }
+                }
+            }
+            &Item::InlineQuantity { index } => {
+                let q = &recipe.inline_quantities[index];
+                step_text.push_str(&q.to_string());
+            }
+        }
+    }
+
+    let mut instruction = json!({
+        "@type": "HowToStep",
+        "position": step_number,
+        "text": step_text.trim()
+    });
+
+    // Add timeRequired if the step has timers with a positive total duration.
+    // The total_secs > 0 guard also prevents emitting a bare "PT" string
+    // when all timers round to zero (e.g. ~{0%minutes}).
+    let total_secs = total_seconds.round() as i64;
+    if has_timers && total_secs > 0 {
+        let hours = total_secs / 3600;
+        let mins = (total_secs % 3600) / 60;
+        let secs = total_secs % 60;
+
+        let mut dur = "PT".to_string();
+        if hours > 0 {
+            dur.push_str(&format!("{hours}H"));
+        }
+        if mins > 0 {
+            dur.push_str(&format!("{mins}M"));
+        }
+        if secs > 0 {
+            dur.push_str(&format!("{secs}S"));
+        }
+        instruction["timeRequired"] = json!(dur);
+    }
+
+    instruction
+}
+
 fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
     let mut instructions = Vec::new();
+    // Step position is global across all sections, consistent with Google's
+    // structured data examples for Recipe.
     let mut step_number = 0;
 
     for section in &recipe.sections {
+        let mut section_steps = Vec::new();
         for content in &section.content {
-            match content {
-                cooklang::Content::Step(step) => {
-                    step_number += 1;
-
-                    let mut step_text = String::new();
-
-                    for item in &step.items {
-                        match item {
-                            Item::Text { value } => {
-                                step_text.push_str(value);
-                            }
-                            &Item::Ingredient { index } => {
-                                let igr = &recipe.ingredients[index];
-                                step_text.push_str(&igr.display_name());
-                            }
-                            &Item::Cookware { index } => {
-                                let cw = &recipe.cookware[index];
-                                step_text.push_str(&cw.name);
-                            }
-                            &Item::Timer { index } => {
-                                let t = &recipe.timers[index];
-                                if let Some(name) = &t.name {
-                                    step_text.push_str(&format!("{name} for "));
-                                }
-                                if let Some(quantity) = &t.quantity {
-                                    step_text.push_str(&quantity.to_string());
-                                }
-                            }
-                            &Item::InlineQuantity { index } => {
-                                let q = &recipe.inline_quantities[index];
-                                step_text.push_str(&q.to_string());
-                            }
-                        }
-                    }
-
-                    let instruction = json!({
-                        "@type": "HowToStep",
-                        "name": format!("Step {}", step_number),
-                        "text": step_text.trim()
-                    });
-
-                    instructions.push(instruction);
-                }
-                cooklang::Content::Text(_) => {
-                    // Skip text content between steps
-                }
+            if let cooklang::Content::Step(step) = content {
+                step_number += 1;
+                section_steps.push(build_step(recipe, step, step_number));
             }
+        }
+
+        if section_steps.is_empty() {
+            continue;
+        }
+
+        if let Some(name) = &section.name {
+            // Wrap in HowToSection only for named sections
+            let section_obj = json!({
+                "@type": "HowToSection",
+                "name": name,
+                "itemListElement": section_steps
+            });
+            instructions.push(section_obj);
+        } else {
+            // Unnamed sections emit steps flat
+            instructions.extend(section_steps);
         }
     }
 
