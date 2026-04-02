@@ -361,12 +361,12 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
                         cooklang::quantity::Value::Text(_) => None,
                     };
                     if let Some(secs) = seconds {
-                        let multiplier =
-                            match quantity.unit().map(|u| u.to_lowercase()).as_deref() {
-                                Some("s" | "sec" | "second" | "seconds") => 1.0,
-                                Some("h" | "hr" | "hour" | "hours") => 3600.0,
-                                _ => 60.0, // default to minutes
-                            };
+                        let multiplier = match quantity.unit().map(|u| u.to_lowercase()).as_deref()
+                        {
+                            Some("s" | "sec" | "second" | "seconds") => 1.0,
+                            Some("h" | "hr" | "hour" | "hours") => 3600.0,
+                            _ => 60.0, // default to minutes
+                        };
                         total_seconds += secs * multiplier;
                         has_timers = true;
                     }
