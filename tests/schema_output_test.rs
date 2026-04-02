@@ -69,7 +69,7 @@ fn test_schema_step_time_required_hours() {
     let json = schema_output("Slow cook for ~{2%hours}.");
 
     let step = &json["recipeInstructions"][0];
-    assert_eq!(step["timeRequired"], "PT120M");
+    assert_eq!(step["timeRequired"], "PT2H");
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn test_schema_step_time_required_seconds() {
     let json = schema_output("Microwave for ~{30%seconds}.");
 
     let step = &json["recipeInstructions"][0];
-    assert_eq!(step["timeRequired"], "PT1M");
+    assert_eq!(step["timeRequired"], "PT30S");
 }
 
 #[test]
@@ -203,4 +203,56 @@ Roast at 220°C, stirring halfway through, until golden brown and tender, ~{40%m
     // Timer on cooking step
     let cooking_steps = instructions[1]["itemListElement"].as_array().unwrap();
     assert_eq!(cooking_steps[0]["timeRequired"], "PT40M");
+}
+
+#[test]
+fn test_schema_mixed_named_unnamed_sections() {
+    // Leading unnamed section followed by a named section
+    let json = schema_output(
+        "\
+Boil @water{2%cups}.
+
+== Sauce ==
+
+Simmer @tomatoes{3} for ~{20%minutes}.
+",
+    );
+
+    let instructions = json["recipeInstructions"].as_array().unwrap();
+    // Unnamed section steps should be flat HowToStep, named section wrapped
+    assert_eq!(instructions.len(), 2);
+    assert_eq!(instructions[0]["@type"], "HowToStep");
+    assert_eq!(instructions[0]["position"], 1);
+    assert_eq!(instructions[1]["@type"], "HowToSection");
+    assert_eq!(instructions[1]["name"], "Sauce");
+}
+
+#[test]
+fn test_schema_multi_unit_timers_summed() {
+    // 1 hour + 30 minutes = PT1H30M
+    let json = schema_output("Cook for ~{1%hour} then rest ~{30%minutes}.");
+
+    let step = &json["recipeInstructions"][0];
+    assert_eq!(step["timeRequired"], "PT1H30M");
+}
+
+#[test]
+fn test_schema_unknown_timer_unit_skipped() {
+    // Unknown unit "days" should not contribute to timeRequired
+    let json = schema_output("Marinate for ~{2%days}.");
+
+    let step = &json["recipeInstructions"][0];
+    assert!(
+        step.get("timeRequired").is_none(),
+        "Unknown timer units should not produce timeRequired"
+    );
+}
+
+#[test]
+fn test_schema_hours_and_minutes_formatting() {
+    // 90 minutes should be PT1H30M, not PT90M
+    let json = schema_output("Bake for ~{90%minutes}.");
+
+    let step = &json["recipeInstructions"][0];
+    assert_eq!(step["timeRequired"], "PT1H30M");
 }
