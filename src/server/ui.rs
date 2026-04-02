@@ -951,7 +951,7 @@ async fn create_recipe(
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
-                return new_page_error("Failed to create directory", &original_filename);
+                return new_page_error("Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
             }
         }
 

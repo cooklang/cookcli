@@ -31,14 +31,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r cookcli && useradd -r -g cookcli -d /home/cookcli -s /sbin/nologin cookcli
+# Create non-root user with well-known UID/GID (1000:1000)
+# This matches the default first user on most Linux systems,
+# reducing permission issues with mounted volumes.
+# Override in docker-compose.yml with `user: "YOUR_UID:YOUR_GID"` if needed.
+RUN groupadd -g 1000 cookcli && useradd -u 1000 -g cookcli -d /home/cookcli -s /sbin/nologin cookcli
 
 # Copy binary
 COPY --from=builder /usr/local/bin/cook /usr/local/bin/cook
 
 # Copy seed recipes as defaults (override by mounting your own recipes at /recipes)
 COPY seed/ /recipes/
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN chown -R cookcli:cookcli /recipes
 
@@ -47,4 +54,5 @@ USER cookcli
 VOLUME /recipes
 EXPOSE 9080
 
-ENTRYPOINT ["cook", "server", "/recipes", "--host"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["cook", "server", "/recipes", "--host"]

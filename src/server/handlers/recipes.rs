@@ -208,7 +208,9 @@ pub async fn recipe_save(
         tracing::error!("Failed to create temp file {}: {}", temp_path, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to create temp file: {e}")),
+            json_error(format!(
+                "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
+            )),
         )
     })?;
 

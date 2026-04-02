@@ -1,6 +1,9 @@
 services:
   cookcli:
     image: ghcr.io/cooklang/cookcli:latest
+    # Uncomment and set to your host UID:GID to avoid permission issues with mounted volumes.
+    # Find your IDs with: id -u && id -g (default container user is 1000:1000)
+    # user: "1000:1000"
     ports:
       - "9080:9080"
     volumes:
