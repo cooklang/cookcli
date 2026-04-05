@@ -119,6 +119,7 @@
     max-width: 800px;
     max-height: 70vh;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     border-radius: 20px;
     padding: 32px;
@@ -340,25 +341,84 @@
 
 /* Responsive */
 @media (max-width: 640px) {
-    .cooking-card {
-        padding: 24px 20px;
-        max-height: 75vh;
+    .cooking-header {
+        padding: 10px 12px;
+        gap: 8px;
     }
 
-    .cooking-card-section h2 {
-        font-size: 26px;
+    .cooking-header-sections {
+        flex-shrink: 1;
+        min-width: 0;
     }
 
-    .cooking-step-text {
-        font-size: 20px;
-    }
-
-    .cooking-mise-grid {
-        grid-template-columns: 1fr;
+    .cooking-section-pill {
+        padding: 4px 10px;
+        font-size: 12px;
     }
 
     .cooking-header-title {
         font-size: 14px;
+    }
+
+    .cooking-card {
+        width: calc(100% - 24px);
+        padding: 20px 16px;
+        max-height: 75vh;
+        border-radius: 16px;
+    }
+
+    .cooking-card-section h2 {
+        font-size: 24px;
+        margin-bottom: 16px;
+    }
+
+    .cooking-step-text {
+        font-size: 18px;
+        line-height: 1.5;
+    }
+
+    .cooking-step-text .ingredient-badge,
+    .cooking-step-text .cookware-badge,
+    .cooking-step-text .timer-badge {
+        font-size: 16px;
+        padding: 1px 8px;
+        white-space: normal;
+    }
+
+    .cooking-step-ingredients {
+        font-size: 13px;
+    }
+
+    .cooking-mise-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .cooking-mise-name {
+        font-size: 15px;
+    }
+
+    .cooking-mise-qty {
+        font-size: 14px;
+    }
+
+    .cooking-mise-item {
+        padding: 6px 10px;
+    }
+
+    .cooking-card-done h2 {
+        font-size: 28px;
+    }
+
+    .cooking-done-close-btn {
+        padding: 10px 32px;
+        font-size: 16px;
+    }
+
+    .cooking-close-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
     }
 }
 
