@@ -41,7 +41,7 @@
             </svg>
             <h3 class="text-lg font-medium text-gray-900 mb-2">{{ tr.t("pantry-no-config") }}</h3>
             <p class="text-gray-500">{{ tr.t("pantry-create-config") }}</p>
-            <a href="/preferences" class="mt-4 inline-block text-orange-600 hover:text-orange-700">
+            <a href="{{ prefix }}/preferences" class="mt-4 inline-block text-orange-600 hover:text-orange-700">
                 {{ tr.t("pantry-configure") }}
             </a>
         </div>
@@ -153,7 +153,7 @@
             <button id="add-item-btn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
                 {{ tr.t("pantry-add-item") }}
             </button>
-            <a href="/preferences" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-block">
+            <a href="{{ prefix }}/preferences" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-block">
                 {{ tr.t("pantry-edit-config") }}
             </a>
         </div>
@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             try {
-                const response = await fetch('/api/pantry/add', {
+                const response = await fetch('{{ prefix }}/api/pantry/add', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -498,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             try {
-                const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -564,7 +564,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (confirm('{{ tr.t("pantry-confirm-remove-template") }}'.replace('%s', name).replace('%s', section))) {
                     try {
-                        const response = await fetch(`/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                        const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
                         });
 

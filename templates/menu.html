@@ -6,14 +6,14 @@
 <div id="menu-content">
     <nav class="mb-4 print:hidden">
         <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+            <li><a href="{{ prefix }}/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
                 <span class="mx-2 text-gray-400">/</span>
                 {% if loop.last %}
                     <span class="text-gray-900">{{ crumb }}</span>
                 {% else %}
-                    <a href="/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}" class="hover:text-gray-900">{{ crumb }}</a>
+                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}" class="hover:text-gray-900">{{ crumb }}</a>
                 {% endif %}
             </li>
             {% endfor %}
@@ -48,9 +48,9 @@
                            max="200"
                            step="0.5"
                            class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
-                           onchange="window.location.href = `/recipe/{{ recipe_path }}?scale=${this.value}`">
+                           onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
                 </div>
-                <a href="/edit/{{ recipe_path }}"
+                <a href="{{ prefix }}/edit/{{ recipe_path }}"
                    class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
                    title="{{ tr.t("action-edit") }}">
                     <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +158,7 @@
                                 {% match line[0] %}
                                 {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                     <span class="inline-flex items-center gap-1">
-                                        <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
+                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
                                            class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
                                             {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                         </a>
@@ -198,7 +198,7 @@
 
                             {% when crate::server::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                 <span class="inline-flex items-center gap-1">
-                                    <a href="/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
+                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}.cook"
                                        class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
                                         {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                     </a>
@@ -244,7 +244,7 @@ async function addToShoppingList(event, recipePath) {
 
     try {
         const scale = document.getElementById('scale')?.value || 1;
-        const response = await fetch('/api/shopping_list/add', {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

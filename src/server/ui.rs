@@ -12,11 +12,16 @@ use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
 
-fn error_page(lang: LanguageIdentifier, msg: impl std::fmt::Display) -> axum::response::Response {
+fn error_page(
+    lang: LanguageIdentifier,
+    prefix: &str,
+    msg: impl std::fmt::Display,
+) -> axum::response::Response {
     let template = ErrorTemplate {
         active: String::new(),
         error_message: msg.to_string(),
         tr: Tr::new(lang),
+        prefix: prefix.to_string(),
     };
     template.into_response()
 }
@@ -64,7 +69,7 @@ async fn recipes_handler(
         Ok(tree) => tree,
         Err(e) => {
             tracing::error!("Failed to build recipe tree: {:?}", e);
-            return error_page(lang, &e);
+            return error_page(lang, &state.url_prefix, &e);
         }
     };
 
@@ -88,6 +93,7 @@ async fn recipes_handler(
         // Extract tags, image, and is_menu if this is a recipe
         let (tags, image_path, is_menu) = if let Some(ref recipe) = child.recipe {
             // Get image path similar to how we do it in recipe_page
+            let prefix = &state.url_prefix;
             let img_path = recipe.title_image().clone().and_then(|img| {
                 if img.starts_with("http://") || img.starts_with("https://") {
                     Some(img)
@@ -95,13 +101,13 @@ async fn recipes_handler(
                     // Make path relative to base and accessible via /api/static
                     let img_path = camino::Utf8Path::new(&img);
                     if let Ok(relative) = img_path.strip_prefix(base) {
-                        Some(format!("/api/static/{relative}"))
+                        Some(format!("{prefix}/api/static/{relative}"))
                     } else if !img_path.is_absolute() {
-                        Some(format!("/api/static/{img_path}"))
+                        Some(format!("{prefix}/api/static/{img_path}"))
                     } else {
                         img_path
                             .file_name()
-                            .map(|name| format!("/api/static/{name}"))
+                            .map(|name| format!("{prefix}/api/static/{name}"))
                     }
                 }
             });
@@ -168,6 +174,7 @@ async fn recipes_handler(
         items,
         todays_menu,
         tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     };
 
     template.into_response()
@@ -211,7 +218,11 @@ async fn recipe_page(
         Ok(entry) => entry,
         Err(e) => {
             tracing::error!("Recipe not found: {path}");
-            return error_page(lang, format!("Recipe not found: {path}: {e}"));
+            return error_page(
+                lang,
+                &state.url_prefix,
+                format!("Recipe not found: {path}: {e}"),
+            );
         }
     };
 
@@ -224,9 +235,10 @@ async fn recipe_page(
         entry.is_menu()
     );
     if entry.is_menu() {
+        let prefix = state.url_prefix.clone();
         return match menu_page_handler(path, scale, entry, state, lang.clone()).await {
             Ok(template) => template.into_response(),
-            Err(e) => error_page(lang, &e),
+            Err(e) => error_page(lang, &prefix, &e),
         };
     }
 
@@ -234,7 +246,11 @@ async fn recipe_page(
         Ok(recipe) => recipe,
         Err(e) => {
             tracing::error!("Failed to parse recipe: {e}");
-            return error_page(lang, format!("Failed to parse recipe: {e}"));
+            return error_page(
+                lang,
+                &state.url_prefix,
+                format!("Failed to parse recipe: {e}"),
+            );
         }
     };
 
@@ -260,7 +276,7 @@ async fn recipe_page(
     let image_path = entry
         .title_image()
         .clone()
-        .and_then(|img_path| get_image_path(&state.base_path, img_path));
+        .and_then(|img_path| get_image_path(&state.base_path, &state.url_prefix, img_path));
 
     let mut ingredients = Vec::new();
     let mut cookware = Vec::new();
@@ -475,7 +491,11 @@ async fn recipe_page(
                         .step_images()
                         .get(0, total_steps + step_count + 1)
                         .and_then(|img_path| {
-                            get_image_path(&state.base_path, img_path.to_string())
+                            get_image_path(
+                                &state.base_path,
+                                &state.url_prefix,
+                                img_path.to_string(),
+                            )
                         });
 
                     section_items.push(RecipeSectionItem::Step(StepData {
@@ -740,6 +760,7 @@ async fn recipe_page(
         sections,
         image_path,
         tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     };
 
     template.into_response()
@@ -759,7 +780,7 @@ async fn edit_page(
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
         tracing::error!("Invalid path: {path}");
-        return error_page(lang, format!("Invalid path: {path}"));
+        return error_page(lang, &state.url_prefix, format!("Invalid path: {path}"));
     }
 
     let recipe_path = Utf8PathBuf::from(&path);
@@ -769,7 +790,11 @@ async fn edit_page(
         Ok(entry) => entry,
         Err(e) => {
             tracing::error!("Recipe not found: {path}");
-            return error_page(lang, format!("Recipe not found: {path}: {e}"));
+            return error_page(
+                lang,
+                &state.url_prefix,
+                format!("Recipe not found: {path}: {e}"),
+            );
         }
     };
 
@@ -777,7 +802,11 @@ async fn edit_page(
         Some(p) => p,
         None => {
             tracing::error!("Recipe has no file path: {path}");
-            return error_page(lang, format!("Recipe has no file path: {path}"));
+            return error_page(
+                lang,
+                &state.url_prefix,
+                format!("Recipe has no file path: {path}"),
+            );
         }
     };
 
@@ -786,7 +815,11 @@ async fn edit_page(
         Ok(content) => content,
         Err(e) => {
             tracing::error!("Failed to read recipe file: {e}");
-            return error_page(lang, format!("Failed to read recipe file: {e}"));
+            return error_page(
+                lang,
+                &state.url_prefix,
+                format!("Failed to read recipe file: {e}"),
+            );
         }
     };
 
@@ -805,6 +838,7 @@ async fn edit_page(
         content,
         base_path: state.base_path.to_string(),
         tr: crate::server::templates::Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     };
 
     template.into_response()
@@ -817,6 +851,7 @@ struct NewPageQuery {
 }
 
 async fn new_page(
+    State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Query(query): Query<NewPageQuery>,
 ) -> impl askama_axum::IntoResponse {
@@ -825,6 +860,7 @@ async fn new_page(
         tr: Tr::new(lang),
         error: query.error,
         filename: query.filename,
+        prefix: state.url_prefix.clone(),
     }
 }
 
@@ -834,11 +870,11 @@ struct NewRecipeForm {
 }
 
 /// Helper to build redirect URL with error message
-fn new_page_error(error: &str, filename: &str) -> axum::response::Response {
+fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::Response {
     let encoded_error = urlencoding::encode(error);
     let encoded_filename = urlencoding::encode(filename);
     axum::response::Redirect::to(&format!(
-        "/new?error={}&filename={}",
+        "{prefix}/new?error={}&filename={}",
         encoded_error, encoded_filename
     ))
     .into_response()
@@ -902,7 +938,11 @@ async fn create_recipe(
 
     // Validate input before sanitization
     if form.filename.trim().is_empty() {
-        return new_page_error("Recipe name cannot be empty", &original_filename);
+        return new_page_error(
+            &state.url_prefix,
+            "Recipe name cannot be empty",
+            &original_filename,
+        );
     }
 
     // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
@@ -921,7 +961,11 @@ async fn create_recipe(
         .join("/");
 
     if recipe_path.is_empty() {
-        return new_page_error("Recipe name cannot be empty", &original_filename);
+        return new_page_error(
+            &state.url_prefix,
+            "Recipe name cannot be empty",
+            &original_filename,
+        );
     }
 
     let file_path = state.base_path.join(format!("{}.cook", recipe_path));
@@ -933,7 +977,11 @@ async fn create_recipe(
         match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
             Ok(Ok(p)) => p,
             _ => {
-                return new_page_error("Internal error: invalid base path", &original_filename);
+                return new_page_error(
+                    &state.url_prefix,
+                    "Internal error: invalid base path",
+                    &original_filename,
+                );
             }
         };
 
@@ -942,7 +990,7 @@ async fn create_recipe(
     let normalized_path = file_path.as_str().replace("\\", "/");
     if normalized_path.contains("/../") || normalized_path.ends_with("/..") {
         tracing::warn!("Path traversal attempt detected in: {}", recipe_path);
-        return new_page_error("Invalid recipe path", &original_filename);
+        return new_page_error(&state.url_prefix, "Invalid recipe path", &original_filename);
     }
 
     // For the file path, we check the parent directory
@@ -951,7 +999,7 @@ async fn create_recipe(
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
-                return new_page_error("Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
+                return new_page_error(&state.url_prefix, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
             }
         }
 
@@ -967,11 +1015,19 @@ async fn create_recipe(
                     );
                     // Clean up the created directory if it's outside base_path
                     let _ = tokio::fs::remove_dir_all(parent).await;
-                    return new_page_error("Invalid recipe path", &original_filename);
+                    return new_page_error(
+                        &state.url_prefix,
+                        "Invalid recipe path",
+                        &original_filename,
+                    );
                 }
             }
             _ => {
-                return new_page_error("Invalid recipe path", &original_filename);
+                return new_page_error(
+                    &state.url_prefix,
+                    "Invalid recipe path",
+                    &original_filename,
+                );
             }
         }
     }
@@ -999,23 +1055,36 @@ async fn create_recipe(
         Ok(mut f) => {
             if let Err(e) = f.write_all(template.as_bytes()).await {
                 tracing::error!("Failed to write recipe: {}", e);
-                return new_page_error("Failed to write recipe file", &original_filename);
+                return new_page_error(
+                    &state.url_prefix,
+                    "Failed to write recipe file",
+                    &original_filename,
+                );
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return new_page_error("A recipe with this name already exists", &original_filename);
+            return new_page_error(
+                &state.url_prefix,
+                "A recipe with this name already exists",
+                &original_filename,
+            );
         }
         Err(e) => {
             tracing::error!("Failed to create recipe file: {}", e);
-            return new_page_error("Failed to create recipe file", &original_filename);
+            return new_page_error(
+                &state.url_prefix,
+                "Failed to create recipe file",
+                &original_filename,
+            );
         }
     }
 
     // Redirect to editor
-    axum::response::Redirect::to(&format!("/edit/{}.cook", recipe_path)).into_response()
+    axum::response::Redirect::to(&format!("{}/edit/{}.cook", state.url_prefix, recipe_path))
+        .into_response()
 }
 
-fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {
+fn get_image_path(base_path: &Utf8PathBuf, prefix: &str, img_path: String) -> Option<String> {
     tracing::debug!("Recipe image path from entry: {}", img_path);
     // If it's a URL, use it directly
     if img_path.starts_with("http://") || img_path.starts_with("https://") {
@@ -1026,21 +1095,15 @@ fn get_image_path(base_path: &Utf8PathBuf, img_path: String) -> Option<String> {
 
         // Try to strip the base_path prefix to get a relative path
         if let Ok(relative) = img_path.strip_prefix(base_path) {
-            let result = format!("/api/static/{relative}");
+            let result = format!("{prefix}/api/static/{relative}");
             tracing::debug!("Image path relative to base: {}", result);
             Some(result)
+        } else if !img_path.is_absolute() {
+            Some(format!("{prefix}/api/static/{img_path}"))
         } else {
-            // If the path doesn't start with base_path, it might already be relative
-            // or it might be an absolute path to a file within base_path
-            // Let's check if it's a file name or relative path
-            if !img_path.is_absolute() {
-                Some(format!("/api/static/{img_path}"))
-            } else {
-                // Last resort: try to get just the filename
-                img_path
-                    .file_name()
-                    .map(|name| format!("/api/static/{name}"))
-            }
+            img_path
+                .file_name()
+                .map(|name| format!("{prefix}/api/static/{name}"))
         }
     }
 }
@@ -1063,14 +1126,15 @@ async fn menu_page_handler(
             Some(img_path)
         } else {
             let img_path = camino::Utf8Path::new(&img_path);
+            let prefix = &state.url_prefix;
             if let Ok(relative) = img_path.strip_prefix(&state.base_path) {
-                Some(format!("/api/static/{relative}"))
+                Some(format!("{prefix}/api/static/{relative}"))
             } else if !img_path.is_absolute() {
-                Some(format!("/api/static/{img_path}"))
+                Some(format!("{prefix}/api/static/{img_path}"))
             } else {
                 img_path
                     .file_name()
-                    .map(|name| format!("/api/static/{name}"))
+                    .map(|name| format!("{prefix}/api/static/{name}"))
             }
         }
     });
@@ -1279,17 +1343,20 @@ async fn menu_page_handler(
         sections,
         image_path,
         tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     };
 
     Ok(template)
 }
 
 async fn shopping_list_page(
+    State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
 ) -> impl askama_axum::IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
         tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     }
 }
 
@@ -1335,6 +1402,7 @@ async fn pantry_page(
         configured: pantry_path.is_some(),
         sections,
         tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
     })
 }
 
@@ -1366,5 +1434,6 @@ async fn preferences_page(
         sync_logged_in,
         sync_email,
         sync_syncing,
+        prefix: state.url_prefix.clone(),
     }
 }
