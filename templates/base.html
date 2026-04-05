@@ -557,7 +557,15 @@
             .bg-white {
                 background: white !important;
                 border: none !important;
-                padding: 0 !important;
+            }
+
+            /* Remove truncation in print so text is fully visible */
+            .truncate {
+                overflow: visible !important;
+                text-overflow: unset !important;
+                white-space: normal !important;
+                max-width: none !important;
+                display: inline !important;
             }
 
             /* Shopping list print styles */
@@ -565,7 +573,9 @@
                 display: none !important;
             }
 
-            .flex-1 {
+            /* Only apply flex override to top-level shopping list layout */
+            #shopping-list-results ~ .flex-1,
+            .flex.min-h-screen > .flex-1 {
                 width: 100% !important;
                 flex: none !important;
             }
