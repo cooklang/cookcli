@@ -899,7 +899,7 @@
     </script>
 
     <!-- URL prefix for JavaScript -->
-    <script>window.__PREFIX__ = "{{ prefix }}";</script>
+    <script>window.__PREFIX__ = {{ prefix|json|safe }};</script>
 
     <!-- Keyboard shortcuts -->
     <script src="{{ prefix }}/static/js/keyboard-shortcuts.js"></script>

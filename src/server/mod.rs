@@ -262,6 +262,12 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
             if !prefix.starts_with('/') {
                 bail!("URL prefix must start with '/', got: {prefix}");
             }
+            if !prefix
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+            {
+                bail!("URL prefix contains invalid characters: {prefix}");
+            }
             prefix
         }
         None => String::new(),
