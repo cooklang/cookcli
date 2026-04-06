@@ -7,7 +7,7 @@
     <!-- Header bar -->
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-4">
-            <a href="/recipe/{{ recipe_path }}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
+            <a href="{{ prefix }}/recipe/{{ recipe_path }}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
@@ -67,7 +67,7 @@
     </div>
 </div>
 
-<script src="/static/js/editor.bundle.js"></script>
+<script src="{{ prefix }}/static/js/editor.bundle.js"></script>
 <script>
 const recipePath = {{ recipe_path|json|safe }};
 const basePath = {{ base_path|json|safe }};
@@ -166,7 +166,7 @@ async function saveRecipe() {
     updateSaveStatus('saving');
 
     try {
-        const response = await fetch(`/api/recipes/${encodeURIComponent(recipePath)}`, {
+        const response = await fetch(`{{ prefix }}/api/recipes/${encodeURIComponent(recipePath)}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'text/plain',
@@ -219,13 +219,13 @@ function hideDeleteModal() {
 
 async function deleteRecipe() {
     try {
-        const response = await fetch(`/api/recipes/${encodeURIComponent(recipePath)}`, {
+        const response = await fetch(`{{ prefix }}/api/recipes/${encodeURIComponent(recipePath)}`, {
             method: 'DELETE'
         });
 
         if (response.ok) {
             // Redirect to recipes list after successful deletion
-            window.location.href = '/';
+            window.location.href = '{{ prefix }}/';
         } else {
             const errorText = await response.text();
             console.error('Delete failed:', errorText);
@@ -265,7 +265,7 @@ const LSP_DEBOUNCE_MS = 150;
 
 function connectLsp() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/lsp`;
+    const wsUrl = `${protocol}//${window.location.host}{{ prefix }}/api/ws/lsp`;
 
     console.log('Connecting to LSP at:', wsUrl);
     lspSocket = new WebSocket(wsUrl);

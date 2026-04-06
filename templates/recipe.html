@@ -6,14 +6,14 @@
 <div>
     <nav class="mb-4 breadcrumb print:hidden">
         <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+            <li><a href="{{ prefix }}/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
                 <span class="mx-2 text-gray-400">/</span>
                 {% if loop.last %}
                     <span class="text-gray-900">{{ crumb }}</span>
                 {% else %}
-                    <a href="/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}" class="hover:text-gray-900">{{ crumb }}</a>
+                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}" class="hover:text-gray-900">{{ crumb }}</a>
                 {% endif %}
             </li>
             {% endfor %}
@@ -48,9 +48,9 @@
                            max="200"
                            step="0.5"
                            class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
-                           onchange="window.location.href = `/recipe/{{ recipe_path }}?scale=${this.value}`">
+                           onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
                 </div>
-                <a href="/edit/{{ recipe_path }}"
+                <a href="{{ prefix }}/edit/{{ recipe_path }}"
                    class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
                    title="{{ tr.t("action-edit") }}">
                     <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +205,7 @@
                                 <div class="flex-1">
                                     {% match ingredient.reference_path %}
                                     {% when Some with (path) %}
-                                        <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                        <a href="{{ prefix }}/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                             </svg>
@@ -239,7 +239,7 @@
                         <div class="flex-1">
                             {% match ingredient.reference_path %}
                             {% when Some with (path) %}
-                                <a href="/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                <a href="{{ prefix }}/recipe/{{ path }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                     </svg>
@@ -304,7 +304,7 @@
                                                 <div class="text-gray-700 mb-2 leading-8">
                                                 {% for step_item in step.items %}
                                                     {% match step_item %}
-                                                        {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% when crate::server::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
+                                                        {% when crate::server::templates::StepItem::Text with (text) %}{{ text }}{% when crate::server::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="{{ prefix }}/recipe/{{ path }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::server::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::server::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::server::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% when crate::server::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
                                                 </div>
                                                 {% if step.ingredients.len() > 0 %}
                                                 <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
@@ -347,7 +347,7 @@ async function addToShoppingList(event, recipePath) {
     if (existingError) existingError.remove();
 
     try {
-        const response = await fetch('/api/shopping_list/add', {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -418,6 +418,6 @@ function showRecipeError(message) {
 {% endblock %}
 
 {% block scripts %}
-<link rel="stylesheet" href="/static/css/cooking-mode.css">
-<script src="/static/js/cooking-mode.js"></script>
+<link rel="stylesheet" href="{{ prefix }}/static/css/cooking-mode.css">
+<script src="{{ prefix }}/static/js/cooking-mode.js"></script>
 {% endblock %}

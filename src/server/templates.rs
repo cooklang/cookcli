@@ -42,6 +42,7 @@ pub struct ErrorTemplate {
     pub active: String,
     pub error_message: String,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 pub struct TodaysMenu {
@@ -59,6 +60,7 @@ pub struct RecipesTemplate {
     pub items: Vec<RecipeItem>,
     pub todays_menu: Option<TodaysMenu>,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -75,6 +77,7 @@ pub struct RecipeTemplate {
     pub sections: Vec<RecipeSection>,
     pub image_path: Option<String>,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 impl RecipeTemplate {
@@ -163,6 +166,7 @@ pub struct MenuTemplate {
     pub sections: Vec<MenuSection>,
     pub image_path: Option<String>,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -170,6 +174,7 @@ pub struct MenuTemplate {
 pub struct ShoppingListTemplate {
     pub active: String,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -185,6 +190,7 @@ pub struct PreferencesTemplate {
     pub sync_logged_in: bool,
     pub sync_email: Option<String>,
     pub sync_syncing: bool,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -194,6 +200,7 @@ pub struct PantryTemplate {
     pub configured: bool,
     pub sections: Vec<PantrySection>,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -205,6 +212,7 @@ pub struct EditTemplate {
     pub content: String,
     pub base_path: String,
     pub tr: Tr,
+    pub prefix: String,
 }
 
 #[derive(Template)]
@@ -214,6 +222,7 @@ pub struct NewTemplate {
     pub tr: Tr,
     pub error: Option<String>,
     pub filename: Option<String>,
+    pub prefix: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

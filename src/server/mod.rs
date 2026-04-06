@@ -91,6 +91,15 @@ pub struct ServerArgs {
     #[arg(short = 'p', long, default_value_t = 9080)]
     port: u16,
 
+    /// URL prefix for running behind a reverse proxy at a subpath
+    ///
+    /// When set, all routes will be served under this prefix. For example,
+    /// --url-prefix "/cook" will make the server available at /cook/ instead
+    /// of /. This is useful when running behind a reverse proxy like nginx
+    /// that maps a subpath to this server. The prefix must start with "/".
+    #[arg(long)]
+    url_prefix: Option<String>,
+
     /// Automatically open the web interface in your default browser
     ///
     /// When enabled, the server will launch your default web browser
@@ -114,12 +123,19 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         None => [127, 0, 0, 1].into(),
     };
     let addr = SocketAddr::from((addr, args.port));
+    let open = args.open;
 
-    println!("Listening on http://{addr}");
+    let state = build_state(ctx, args)?;
+
+    if state.url_prefix.is_empty() {
+        println!("Listening on http://{addr}");
+    } else {
+        println!("Listening on http://{addr}{}", state.url_prefix);
+    }
 
     // #[cfg(feature = "ui")]
-    if args.open {
-        let url = format!("http://{addr}");
+    if open {
+        let url = format!("http://{addr}{}", state.url_prefix);
         println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -128,8 +144,6 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
             }
         });
     }
-
-    let state = build_state(ctx, args)?;
 
     // Start sync if already logged in (non-fatal: server starts regardless)
     #[cfg(feature = "sync")]
@@ -166,11 +180,17 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     // Maximum request body size: 1MB (reasonable for recipe files)
     const MAX_BODY_SIZE: usize = 1024 * 1024;
 
-    let app = Router::new()
+    let inner = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
         .route("/static/*file", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
+
+    let app = if state.url_prefix.is_empty() {
+        inner
+    } else {
+        Router::new().nest(&state.url_prefix, inner)
+    };
 
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
@@ -198,10 +218,16 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         }
     };
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("Server error")?;
+    // NormalizePath trims trailing slashes so /cook/ matches /cook
+    let app = tower_http::normalize_path::NormalizePath::trim_trailing_slash(app);
+
+    axum::serve(
+        listener,
+        axum::ServiceExt::<axum::extract::Request>::into_make_service(app),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("Server error")?;
 
     // Cancel background tasks (token refresh) and stop sync on shutdown
     #[cfg(feature = "sync")]
@@ -228,6 +254,24 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     }
 
     tracing::info!("Using absolute base path: {:?}", absolute_path);
+
+    // Normalize URL prefix: strip trailing slashes, ensure leading slash
+    let url_prefix = match args.url_prefix {
+        Some(prefix) => {
+            let prefix = prefix.trim_end_matches('/').to_string();
+            if !prefix.starts_with('/') {
+                bail!("URL prefix must start with '/', got: {prefix}");
+            }
+            if !prefix
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+            {
+                bail!("URL prefix contains invalid characters: {prefix}");
+            }
+            prefix
+        }
+        None => String::new(),
+    };
 
     // Create a new Context with the actual base path to properly search for config files
     let server_ctx = Context::new(absolute_path.clone());
@@ -256,6 +300,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         base_path: absolute_path,
         aisle_path,
         pantry_path,
+        url_prefix,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
@@ -299,6 +344,7 @@ pub struct AppState {
     pub base_path: Utf8PathBuf,
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
+    pub url_prefix: String,
     #[cfg(feature = "sync")]
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
     #[cfg(feature = "sync")]

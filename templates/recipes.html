@@ -7,11 +7,11 @@
     {% if !breadcrumbs.is_empty() %}
     <nav class="mb-4">
         <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+            <li><a href="{{ prefix }}/" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
                 <span class="mx-2 text-gray-400">/</span>
-                <a href="/directory/{{ crumb.path }}" class="hover:text-gray-900">{{ crumb.name }}</a>
+                <a href="{{ prefix }}/directory/{{ crumb.path }}" class="hover:text-gray-900">{{ crumb.name }}</a>
             </li>
             {% endfor %}
         </ol>
@@ -22,7 +22,7 @@
         <h1 class="text-3xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
             {{ current_name }}
         </h1>
-        <a href="/new" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md flex items-center gap-2">
+        <a href="{{ prefix }}/new" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md flex items-center gap-2">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -42,7 +42,7 @@
                 </div>
                 <p class="text-sm opacity-90">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="/recipe/{{ menu.menu_path }}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
+            <a href="{{ prefix }}/recipe/{{ menu.menu_path }}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
                 {{ tr.t("todays-menu-view") }}
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -56,7 +56,7 @@
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}
-        <a href="/directory/{{ item.path }}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/directory/{{ item.path }}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
             <div class="p-6 flex-1">
                 <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-4">
                     <span class="text-2xl">📁</span>
@@ -70,7 +70,7 @@
             </div>
         </a>
         {% else %}
-        <a href="/recipe/{{ item.path }}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/recipe/{{ item.path }}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
             {% match item.image_path %}
             {% when Some with (img) %}
             <div class="h-48 bg-gray-100 overflow-hidden">
