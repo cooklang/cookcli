@@ -219,23 +219,24 @@
         // Handle pending key sequences (like "g h")
         if (pendingKey === 'g') {
             clearPendingKey();
+            const pfx = window.__PREFIX__ || '';
             switch (key) {
                 case 'h':
                 case 'r':
                     event.preventDefault();
-                    window.location.href = '/';
+                    window.location.href = pfx + '/';
                     return;
                 case 's':
                     event.preventDefault();
-                    window.location.href = '/shopping-list';
+                    window.location.href = pfx + '/shopping-list';
                     return;
                 case 'p':
                     event.preventDefault();
-                    window.location.href = '/pantry';
+                    window.location.href = pfx + '/pantry';
                     return;
                 case 'x':
                     event.preventDefault();
-                    window.location.href = '/preferences';
+                    window.location.href = pfx + '/preferences';
                     return;
             }
             // If no valid second key, fall through to handle as new key
@@ -293,13 +294,14 @@
 
         // Page-specific shortcuts
         const path = window.location.pathname;
+        const pfx2 = window.__PREFIX__ || '';
 
         // Recipe page shortcuts
-        if (path.startsWith('/recipe/')) {
+        if (path.startsWith(pfx2 + '/recipe/')) {
             handleRecipeShortcuts(event, key);
         }
         // Shopping list page shortcuts
-        else if (path === '/shopping-list') {
+        else if (path === pfx2 + '/shopping-list') {
             handleShoppingListShortcuts(event, key);
         }
     }
@@ -317,7 +319,8 @@
             case 'e':
                 event.preventDefault();
                 // Find and click the edit link
-                const editLink = document.querySelector('a[href^="/edit/"]');
+                const editPfx = (window.__PREFIX__ || '') + '/edit/';
+                const editLink = document.querySelector(`a[href^="${editPfx}"]`);
                 if (editLink) {
                     editLink.click();
                 }

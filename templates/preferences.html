@@ -148,7 +148,7 @@
     function setLanguage(lang) {
         // Set cookie for 1 year
         const maxAge = 365 * 24 * 60 * 60;
-        document.cookie = `lang=${lang}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `lang=${lang}; path={{ prefix }}/; max-age=${maxAge}; SameSite=Lax`;
 
         // Reload page to apply new language
         window.location.reload();
@@ -164,7 +164,7 @@
             btn.classList.add('opacity-50', 'cursor-not-allowed');
             msg.textContent = 'Complete login in your browser.';
 
-            const resp = await fetch('/api/sync/login', { method: 'POST' });
+            const resp = await fetch('{{ prefix }}/api/sync/login', { method: 'POST' });
             if (!resp.ok) {
                 const err = await resp.json();
                 btn.disabled = false;
@@ -178,7 +178,7 @@
 
             // Poll for login completion
             const pollInterval = setInterval(async () => {
-                const status = await fetch('/api/sync/status').then(r => r.json());
+                const status = await fetch('{{ prefix }}/api/sync/status').then(r => r.json());
                 if (status.logged_in) {
                     clearInterval(pollInterval);
                     window.removeEventListener('beforeunload', cleanupPolling);
@@ -210,7 +210,7 @@
 
     async function syncLogout() {
         try {
-            await fetch('/api/sync/logout', { method: 'POST' });
+            await fetch('{{ prefix }}/api/sync/logout', { method: 'POST' });
             window.location.reload();
         } catch (e) {
             alert('Logout failed: ' + e.message);

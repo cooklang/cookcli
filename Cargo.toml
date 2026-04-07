@@ -65,7 +65,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", optional = true }
 toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors", "normalize-path"] }
 tower-lsp = "0.20"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
