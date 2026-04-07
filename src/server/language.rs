@@ -14,8 +14,9 @@ pub const NL_NL: LanguageIdentifier = langid!("nl-NL");
 pub const FR_FR: LanguageIdentifier = langid!("fr-FR");
 pub const ES_ES: LanguageIdentifier = langid!("es-ES");
 pub const EU_ES: LanguageIdentifier = langid!("eu-ES");
+pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
 
-const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES];
+const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE];
 
 /// Get the preferred language from headers
 /// 1. Check for 'lang' cookie
