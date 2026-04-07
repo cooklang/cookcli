@@ -888,3 +888,175 @@ fn test_pantry_help_shows_crud_commands() {
         .stdout(predicate::str::contains("remove"))
         .stdout(predicate::str::contains("update"));
 }
+
+// ---------------------------------------------------------------------------
+// Serialization: general items, ordering, non-ASCII
+// ---------------------------------------------------------------------------
+
+/// General (top-level) items must stay at the top level after a round-trip
+/// through add (which re-serializes the whole file).
+#[test]
+fn test_pantry_general_items_stay_top_level() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    fs::create_dir(&config_dir).unwrap();
+    // Top-level `key = "string"` items are parsed as "general" section items.
+    // Inline tables at the top level are treated as sections by the parser.
+    fs::write(
+        config_dir.join("pantry.conf"),
+        "salt = \"1%kg\"\npepper = \"50%g\"\n\n[dairy]\nmilk = { quantity = \"2%l\" }\n",
+    )
+    .unwrap();
+
+    // Add a new item to the dairy section, triggering a full re-serialize
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "dairy", "cheese"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(config_dir.join("pantry.conf")).unwrap();
+
+    // General items must appear before any [section] header
+    let first_section = content.find('[').expect("should have a section header");
+    let salt_pos = content.find("salt").expect("salt should be present");
+    let pepper_pos = content.find("pepper").expect("pepper should be present");
+    assert!(
+        salt_pos < first_section,
+        "general item 'salt' should appear before the first section header\n{content}"
+    );
+    assert!(
+        pepper_pos < first_section,
+        "general item 'pepper' should appear before the first section header\n{content}"
+    );
+
+    // Must NOT have a [general] section header
+    assert!(
+        !content.contains("[general]"),
+        "general items should not be wrapped in a [general] section\n{content}"
+    );
+
+    // The file must still be parseable and list everything
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("salt"))
+        .stdout(predicate::str::contains("pepper"))
+        .stdout(predicate::str::contains("milk"))
+        .stdout(predicate::str::contains("cheese"));
+}
+
+/// Item order within a section must be preserved after a round-trip.
+#[test]
+fn test_pantry_item_order_preserved() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    fs::create_dir(&config_dir).unwrap();
+    fs::write(
+        config_dir.join("pantry.conf"),
+        "[pantry]\nzucchini = { quantity = \"2\" }\napple = { quantity = \"5\" }\nmango = { quantity = \"3\" }\n",
+    )
+    .unwrap();
+
+    // Add triggers a re-serialize of the entire file
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "pantry", "banana"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(config_dir.join("pantry.conf")).unwrap();
+
+    let pos_z = content.find("zucchini").expect("zucchini present");
+    let pos_a = content.find("apple").expect("apple present");
+    let pos_m = content.find("mango").expect("mango present");
+    let pos_b = content.find("banana").expect("banana present");
+
+    assert!(
+        pos_z < pos_a && pos_a < pos_m && pos_m < pos_b,
+        "items should keep their original order with new item appended\n{content}"
+    );
+}
+
+/// Section order must be preserved after a round-trip.
+#[test]
+fn test_pantry_section_order_preserved() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    fs::create_dir(&config_dir).unwrap();
+    fs::write(
+        config_dir.join("pantry.conf"),
+        "[dairy]\nmilk = { quantity = \"1%l\" }\n\n[produce]\napple = { quantity = \"5\" }\n\n[bakery]\nbread = { quantity = \"1 loaf\" }\n",
+    )
+    .unwrap();
+
+    // Update triggers a re-serialize of the entire file
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "update", "dairy", "milk", "--quantity", "2%l"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(config_dir.join("pantry.conf")).unwrap();
+
+    let pos_dairy = content.find("[dairy]").expect("[dairy] present");
+    let pos_produce = content.find("[produce]").expect("[produce] present");
+    let pos_bakery = content.find("[bakery]").expect("[bakery] present");
+
+    assert!(
+        pos_dairy < pos_produce && pos_produce < pos_bakery,
+        "sections should keep their original order\n{content}"
+    );
+}
+
+/// Non-ASCII characters (e.g. Swedish å ä ö) must round-trip correctly.
+#[test]
+fn test_pantry_non_ascii_round_trip() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    // Add an item with non-ASCII characters
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "mejeri", "smörgås"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp_dir.path().join("config/pantry.conf")).unwrap();
+    assert!(
+        content.contains("smörgås"),
+        "non-ASCII item name should appear in the file\n{content}"
+    );
+
+    // The file must parse successfully and show the item
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("smörgås"));
+
+    // Add a second item to trigger a full re-serialize, then verify again
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "add", "mejeri", "äpple", "--quantity", "3"])
+        .assert()
+        .success();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("smörgås"))
+        .stdout(predicate::str::contains("äpple"));
+}

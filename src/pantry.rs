@@ -8,93 +8,6 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{util::parse_recipe_from_entry, Context as AppContext};
 
-// ---------------------------------------------------------------------------
-// TOML serialization helpers (shared with CRUD operations)
-// ---------------------------------------------------------------------------
-
-fn serialize_pantry_to_toml(pantry_conf: &cooklang::pantry::PantryConf) -> String {
-    use std::fmt::Write;
-    let mut output = String::new();
-
-    if let Some(general_items) = pantry_conf.sections.get("general") {
-        for item in general_items {
-            write_pantry_item(&mut output, item);
-        }
-        if !general_items.is_empty() {
-            writeln!(&mut output).unwrap();
-        }
-    }
-
-    for (section_name, items) in &pantry_conf.sections {
-        if section_name == "general" {
-            continue;
-        }
-        writeln!(&mut output, "[{}]", toml_escape_key(section_name)).unwrap();
-        for item in items {
-            write_pantry_item(&mut output, item);
-        }
-        writeln!(&mut output).unwrap();
-    }
-
-    output
-}
-
-fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem) {
-    use std::fmt::Write;
-    match item {
-        cooklang::pantry::PantryItem::Simple(name) => {
-            writeln!(output, "{} = true", toml_escape_key(name)).unwrap();
-        }
-        cooklang::pantry::PantryItem::WithAttributes(attrs) => {
-            let has_quantity = attrs.quantity.is_some();
-            let has_other = attrs.bought.is_some() || attrs.expire.is_some() || attrs.low.is_some();
-
-            let value = if has_quantity && has_other {
-                let mut parts = Vec::new();
-                if let Some(qty) = &attrs.quantity {
-                    parts.push(format!("quantity = \"{}\"", qty.replace('"', "\\\"")));
-                }
-                if let Some(bought) = &attrs.bought {
-                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
-                }
-                if let Some(expire) = &attrs.expire {
-                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
-                }
-                if let Some(low) = &attrs.low {
-                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
-                }
-                format!("{{ {} }}", parts.join(", "))
-            } else if let Some(qty) = &attrs.quantity {
-                format!("\"{}\"", qty.replace('"', "\\\""))
-            } else if has_other {
-                let mut parts = Vec::new();
-                if let Some(bought) = &attrs.bought {
-                    parts.push(format!("bought = \"{}\"", bought.replace('"', "\\\"")));
-                }
-                if let Some(expire) = &attrs.expire {
-                    parts.push(format!("expire = \"{}\"", expire.replace('"', "\\\"")));
-                }
-                if let Some(low) = &attrs.low {
-                    parts.push(format!("low = \"{}\"", low.replace('"', "\\\"")));
-                }
-                format!("{{ {} }}", parts.join(", "))
-            } else {
-                "true".to_string()
-            };
-
-            writeln!(output, "{} = {}", toml_escape_key(&attrs.name), value).unwrap();
-        }
-    }
-}
-
-fn toml_escape_key(key: &str) -> String {
-    if key.contains(' ') || key.contains('.') || key.contains('[') || key.contains(']') {
-        format!("\"{}\"", key.replace('"', "\\\""))
-    } else {
-        key.to_string()
-    }
-}
-
 fn load_pantry_conf(path: &camino::Utf8PathBuf) -> Result<cooklang::pantry::PantryConf> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read pantry file at {path}"))?;
@@ -111,7 +24,7 @@ fn write_pantry_conf(
     path: &camino::Utf8PathBuf,
     conf: &cooklang::pantry::PantryConf,
 ) -> Result<()> {
-    let content = serialize_pantry_to_toml(conf);
+    let content = cooklang::pantry::to_toml_string(conf);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directory {parent}"))?;
@@ -1214,7 +1127,7 @@ fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
     }
 
     if items.is_empty() {
-        pantry_conf.sections.remove(&args.section);
+        pantry_conf.sections.shift_remove(&args.section);
     }
 
     pantry_conf.rebuild_index();
