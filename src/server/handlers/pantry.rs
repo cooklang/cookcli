@@ -442,7 +442,12 @@ fn write_pantry_item(output: &mut String, item: &cooklang::pantry::PantryItem) {
 
 fn toml_escape_key(key: &str) -> String {
     // If the key contains special characters or spaces, quote it
-    if key.contains(' ') || key.contains('.') || key.contains('[') || key.contains(']') {
+    if key.contains(' ')
+        || key.contains('.')
+        || key.contains('[')
+        || key.contains(']')
+        || !key.is_ascii()
+    {
         format!("\"{}\"", key.replace('"', "\\\""))
     } else {
         key.to_string()
