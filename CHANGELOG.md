@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.28.0](https://github.com/cooklang/cookcli/compare/v0.27.2...v0.28.0) (2026-04-08)
+
+
+### Features
+
+* add --url-prefix flag for reverse proxy subpath support ([#309](https://github.com/cooklang/cookcli/issues/309)) ([bdf4d32](https://github.com/cooklang/cookcli/commit/bdf4d32f23d57fa57bd6f1eac69c4f4640d3bee7))
+* add Swedish to language switcher ([a5bb53f](https://github.com/cooklang/cookcli/commit/a5bb53fb20036266bd9afc7683329834777430e1))
+* Added swedish translation ([#310](https://github.com/cooklang/cookcli/issues/310)) ([949109c](https://github.com/cooklang/cookcli/commit/949109c599435775d90e061c8ba0552bfc7a6bc1))
+* update cooklang-import to 0.9.3 ([8d77122](https://github.com/cooklang/cookcli/commit/8d7712247b0b33470722de1f6859a8ceba0eef6e))
+
+
+### Bug Fixes
+
+* handle non-ASCII characters in pantry TOML keys ([#311](https://github.com/cooklang/cookcli/issues/311)) ([#313](https://github.com/cooklang/cookcli/issues/313)) ([1d3d4e5](https://github.com/cooklang/cookcli/commit/1d3d4e5824922de436f046c3f36543f5a5b697ba))
+* improve cooking mode responsiveness on smartphones ([#306](https://github.com/cooklang/cookcli/issues/306)) ([515ec2f](https://github.com/cooklang/cookcli/commit/515ec2f7e25be5183e3712bea618d099ca5626ac))
+* prevent print layout from truncating recipe content ([#307](https://github.com/cooklang/cookcli/issues/307)) ([67dd125](https://github.com/cooklang/cookcli/commit/67dd1252da0dfc5545e7698de87bf35f6dde2de3)), closes [#304](https://github.com/cooklang/cookcli/issues/304)
+
 ## [0.27.2](https://github.com/cooklang/cookcli/compare/v0.27.1...v0.27.2) (2026-04-02)
 
 
