@@ -33,5 +33,10 @@
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0"
+  },
+  "overrides": {
+    "picomatch": ">=2.3.2",
+    "minimatch": ">=9.0.7",
+    "yaml": ">=2.8.3"
   }
 }
