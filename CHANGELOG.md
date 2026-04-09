@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.1](https://github.com/cooklang/cookcli/compare/v0.28.0...v0.28.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* remove openssl dependency to fix Linux release builds ([#317](https://github.com/cooklang/cookcli/issues/317)) ([f1d4d56](https://github.com/cooklang/cookcli/commit/f1d4d5648d2f45fbd6a12b3ab1eb275b561d5daa))
+* resolve npm dependency security vulnerabilities ([e5d14f6](https://github.com/cooklang/cookcli/commit/e5d14f62279195ce1535b7b8f45bbd756345c7fc))
+
 ## [0.28.0](https://github.com/cooklang/cookcli/compare/v0.27.2...v0.28.0) (2026-04-08)
 
 
