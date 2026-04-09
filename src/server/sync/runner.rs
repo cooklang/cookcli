@@ -1,6 +1,7 @@
 use super::endpoints;
 use super::session::{self, SyncSession};
 use anyhow::{Context, Result};
+use cooklang_sync_client::SyncContext;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -8,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 /// Holds the running sync task handle and cancellation token.
 pub struct SyncHandle {
-    cancel: CancellationToken,
+    context: Arc<SyncContext>,
     task: JoinHandle<()>,
 }
 
@@ -20,7 +21,7 @@ impl SyncHandle {
 
     /// Stop the sync task gracefully.
     pub async fn stop(self) {
-        self.cancel.cancel();
+        self.context.cancel();
         let timeout = tokio::time::Duration::from_secs(2);
         match tokio::time::timeout(timeout, self.task).await {
             Ok(Ok(())) => tracing::info!("Sync task stopped"),
@@ -36,8 +37,7 @@ pub fn start_sync(
     recipes_dir: String,
     db_path: String,
 ) -> Result<SyncHandle> {
-    let token = CancellationToken::new();
-    let child_token = token.child_token();
+    let context = SyncContext::new();
     let jwt = session.jwt.clone();
     let namespace_id: i32 = session
         .user_id
@@ -47,10 +47,10 @@ pub fn start_sync(
 
     tracing::info!("Starting sync for directory: {recipes_dir}");
 
+    let ctx = context.clone();
     let task = tokio::spawn(async move {
         let result = cooklang_sync_client::run_async(
-            child_token,
-            None,
+            ctx,
             &recipes_dir,
             &db_path,
             &sync_ep,
@@ -66,10 +66,7 @@ pub fn start_sync(
         }
     });
 
-    Ok(SyncHandle {
-        cancel: token,
-        task,
-    })
+    Ok(SyncHandle { context, task })
 }
 
 /// Start a background token refresh task. Checks hourly, refreshes if < 1 hour remaining.
