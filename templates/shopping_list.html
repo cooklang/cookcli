@@ -283,6 +283,9 @@ function displayShoppingList(data) {
     const pantrySection = document.getElementById('pantry-section');
     const pantryItems = document.getElementById('pantry-items');
 
+    // Populate checked set from server response
+    checkedItems = new Set((data.checked || []).map(n => n.toLowerCase()));
+
     let html = '';
 
     // Display items to buy (organized by aisle)
@@ -370,65 +373,61 @@ function formatQuantities(quantities) {
     }).join(', ');
 }
 
-// Store for checked items - using ingredient names as keys
+// Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
 
-function toggleItem(itemId, checked, ingredientName) {
-    // Use ingredient name for storage instead of itemId
+async function toggleItem(itemId, checked, ingredientName) {
     const storageKey = ingredientName || itemId;
+    const endpoint = checked ? 'check' : 'uncheck';
 
-    if (checked) {
-        checkedItems.add(storageKey);
-        // Add strikethrough effect
-        const element = document.querySelector(`#${CSS.escape(itemId)}`);
-        if (element) {
-            element.parentElement.querySelector('.item-name').style.textDecoration = 'line-through';
-            element.parentElement.querySelector('.item-name').style.opacity = '0.6';
+    try {
+        const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: storageKey })
+        });
+
+        if (!response.ok) {
+            console.error(`Failed to ${endpoint} item:`, await response.text());
+            return;
         }
-    } else {
-        checkedItems.delete(storageKey);
-        // Remove strikethrough effect
-        const element = document.querySelector(`#${CSS.escape(itemId)}`);
-        if (element) {
-            element.parentElement.querySelector('.item-name').style.textDecoration = 'none';
-            element.parentElement.querySelector('.item-name').style.opacity = '1';
-        }
+    } catch (error) {
+        console.error(`Failed to ${endpoint} item:`, error);
+        return;
     }
 
-    // Save to localStorage using ingredient names
-    localStorage.setItem('checkedShoppingItems', JSON.stringify(Array.from(checkedItems)));
+    if (checked) {
+        checkedItems.add(storageKey.toLowerCase());
+    } else {
+        checkedItems.delete(storageKey.toLowerCase());
+    }
+
+    applyCheckedStyle(itemId, checked);
+}
+
+function applyCheckedStyle(itemId, checked) {
+    const element = document.querySelector(`#${CSS.escape(itemId)}`);
+    if (!element) return;
+    const nameEl = element.parentElement.querySelector('.item-name');
+    if (nameEl) {
+        nameEl.style.textDecoration = checked ? 'line-through' : 'none';
+        nameEl.style.opacity = checked ? '0.6' : '1';
+    }
 }
 
 function loadCheckedStates() {
-    // Load from localStorage
-    const saved = localStorage.getItem('checkedShoppingItems');
-    if (saved) {
-        checkedItems = new Set(JSON.parse(saved));
-
-        // Apply checked states to checkboxes by matching ingredient names
-        document.querySelectorAll('.item-name').forEach(nameElement => {
-            const ingredientName = nameElement.textContent.trim();
-            if (checkedItems.has(ingredientName)) {
-                const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    checkbox.checked = true;
-                    // Apply strikethrough effect
-                    nameElement.style.textDecoration = 'line-through';
-                    nameElement.style.opacity = '0.6';
-                }
+    // Apply checked states from the set populated by displayShoppingList
+    document.querySelectorAll('.item-name').forEach(nameElement => {
+        const ingredientName = nameElement.textContent.trim();
+        if (checkedItems.has(ingredientName.toLowerCase())) {
+            const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = true;
+                nameElement.style.textDecoration = 'line-through';
+                nameElement.style.opacity = '0.6';
             }
-        });
-    }
-}
-
-// Clear checked items when clearing the list
-const originalClearList = clearList;
-clearList = async function() {
-    await originalClearList();
-    checkedItems.clear();
-    localStorage.removeItem('checkedShoppingItems');
-    // Clear the shopping list display
-    document.getElementById('list-content').innerHTML = '<p class="text-gray-500">{{ tr.t("shopping-no-items") }}</p>';
+        }
+    });
 }
 
 loadShoppingList();

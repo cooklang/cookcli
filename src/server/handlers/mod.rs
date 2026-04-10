@@ -14,8 +14,9 @@ pub use pantry::{
 };
 pub use recipes::{all_recipes, recipe, recipe_delete, recipe_raw, recipe_save, reload, search};
 pub use shopping_list::{
-    add_to_shopping_list, clear_shopping_list, get_shopping_list_items, remove_from_shopping_list,
-    shopping_list,
+    add_to_shopping_list, check_shopping_item, clear_shopping_list, compact_checked,
+    get_checked_items, get_shopping_list_items, remove_from_shopping_list, shopping_list,
+    uncheck_shopping_item,
 };
 pub use stats::stats;
 #[cfg(feature = "sync")]

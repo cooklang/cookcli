@@ -1,5 +1,5 @@
 use crate::server::{
-    shopping_list_store::{ShoppingListItem, ShoppingListStore},
+    shopping_list_store::{ShoppingListApiItem, ShoppingListStore},
     AppState,
 };
 use crate::util::{extract_ingredients, PARSER};
@@ -160,16 +160,21 @@ pub async fn shopping_list(
         }
     }
 
+    // Load checked state
+    let store = ShoppingListStore::new(&state.base_path);
+    let checked = store.checked_set().unwrap_or_default();
+
     let json_value = serde_json::json!({
         "categories": shopping_categories,
-        "pantry_items": pantry_items
+        "pantry_items": pantry_items,
+        "checked": checked.into_iter().collect::<Vec<_>>()
     });
     Ok(Json(json_value))
 }
 
 pub async fn get_shopping_list_items(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<ShoppingListItem>>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Vec<ShoppingListApiItem>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
@@ -193,7 +198,7 @@ pub async fn add_to_shopping_list(
     Json(payload): Json<AddItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
-    let item = ShoppingListItem {
+    let item = ShoppingListApiItem {
         path: payload.path,
         name: payload.name,
         scale: payload.scale,
@@ -243,5 +248,70 @@ pub async fn clear_shopping_list(
         )
     })?;
 
+    Ok(StatusCode::OK)
+}
+
+// -- Check/uncheck endpoints --
+
+#[derive(Debug, Deserialize)]
+pub struct CheckItemRequest {
+    pub name: String,
+}
+
+pub async fn check_shopping_item(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CheckItemRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    store.check(&payload.name).map_err(|e| {
+        tracing::error!("Failed to check item: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+pub async fn uncheck_shopping_item(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CheckItemRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    store.uncheck(&payload.name).map_err(|e| {
+        tracing::error!("Failed to uncheck item: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+pub async fn get_checked_items(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<String>>, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let checked = store.checked_set().map_err(|e| {
+        tracing::error!("Failed to get checked items: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(Json(checked.into_iter().collect()))
+}
+
+pub async fn compact_checked(
+    State(state): State<Arc<AppState>>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    store.compact().map_err(|e| {
+        tracing::error!("Failed to compact checked list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
     Ok(StatusCode::OK)
 }

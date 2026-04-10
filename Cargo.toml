@@ -38,7 +38,7 @@ camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 base64 = { version = "0.22", optional = true }
-cooklang = { version = "0.18.4", default-features = false, features = ["aisle", "pantry"] }
+cooklang = { path = "../cooklang-rs", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.9.3"
 cooklang-sync-client = { version = "0.4.11", optional = true }
