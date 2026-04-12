@@ -46,7 +46,6 @@ libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = "0.2.1"
 cooklang-reports = { version = "0.2.2" }
 directories = "6"
-fs2 = "0.4"
 fluent = "0.16"
 futures-util = "0.3"
 fluent-templates = "0.10"

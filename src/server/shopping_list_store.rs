@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use cooklang::shopping_list::{self, CheckEntry, RecipeItem, ShoppingList, ShoppingListItem};
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -279,19 +278,20 @@ impl ShoppingListStore {
         self.append_check_entry(&CheckEntry::Unchecked(name.to_string()))
     }
 
+    /// Append a `+ name` / `- name` entry to the checked log.
+    ///
+    /// Mutual exclusion against a concurrent `compact()` is the caller's
+    /// responsibility — in the server this is the process-wide
+    /// `AppState::checked_log_lock`. File-level `flock` would not help: it
+    /// doesn't serialize callers in the same process (the kernel treats them
+    /// as one lock owner), which is the case that actually matters here.
     fn append_check_entry(&self, entry: &CheckEntry) -> Result<()> {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.checked_path)
             .context("opening .shopping-checked for append")?;
-        // Advisory lock so a concurrent compact() cannot truncate/overwrite
-        // the file between our write and flush.
-        file.lock_exclusive()
-            .context("locking .shopping-checked for append")?;
-        let result = shopping_list::write_check_entry(entry, &mut file);
-        let _ = file.unlock();
-        result?;
+        shopping_list::write_check_entry(entry, &mut file)?;
         Ok(())
     }
 
@@ -302,11 +302,13 @@ impl ShoppingListStore {
     /// ingredient names (by parsing the referenced recipes) and pass them
     /// here — otherwise every checked entry would be treated as stale.
     ///
-    /// The rewrite is atomic: we lock the original file for the read phase,
-    /// stage the compacted output to a sibling temp file, then `rename` it
-    /// into place. A crash between truncate and write can't leave a
-    /// zero-length `.shopping-checked`, and the exclusive lock blocks any
-    /// racing `check()`/`uncheck()` append during the read.
+    /// Mutual exclusion against concurrent `check()`/`uncheck()`/`compact()`
+    /// is the caller's responsibility (see `append_check_entry` for context).
+    ///
+    /// The rewrite is atomic: we stage the compacted output to a sibling
+    /// temp file, fsync it, then `rename` it into place. `rename` is atomic
+    /// on POSIX, so a crash between truncate and write can't leave a
+    /// zero-length `.shopping-checked`.
     pub fn compact<I, S>(&self, current_ingredients: I) -> Result<()>
     where
         I: IntoIterator<Item = S>,
@@ -317,23 +319,7 @@ impl ShoppingListStore {
             .map(|s| s.as_ref().to_string())
             .collect();
 
-        // Open for read-only + lock; holding the lock here serializes us
-        // against any concurrent append in `append_check_entry`.
-        let file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(&self.checked_path)
-            .context("opening .shopping-checked for compact")?;
-        file.lock_exclusive()
-            .context("locking .shopping-checked for compact")?;
-
-        let mut content = String::new();
-        use std::io::Read as _;
-        (&file)
-            .read_to_string(&mut content)
-            .context("reading .shopping-checked")?;
+        let content = self.read_checked_raw()?;
         let entries = shopping_list::parse_checked(&content);
         let compacted = shopping_list::compact_checked(&entries, names.iter().map(String::as_str));
 
@@ -343,10 +329,9 @@ impl ShoppingListStore {
         }
 
         // Stage the new content in a sibling temp file, fsync it, and rename
-        // into place. Rename is atomic on POSIX; if we crash partway the
-        // original file is untouched. Temp path is scoped to base_path so
-        // it ends up on the same filesystem — otherwise rename would fall
-        // back to copy+delete and lose atomicity.
+        // into place. Temp path is scoped to base_path so it ends up on the
+        // same filesystem — otherwise rename would fall back to copy+delete
+        // and lose atomicity.
         let tmp_path = self.checked_path.with_file_name(".shopping-checked.tmp");
         {
             use std::io::Write as _;
@@ -362,7 +347,6 @@ impl ShoppingListStore {
         fs::rename(&tmp_path, &self.checked_path)
             .context("renaming compacted temp file into place")?;
 
-        let _ = file.unlock();
         Ok(())
     }
 }

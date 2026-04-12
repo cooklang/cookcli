@@ -301,6 +301,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
+        checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
@@ -345,6 +346,12 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
+    /// Serializes access to `.shopping-checked` within this process.
+    /// File-level `flock` doesn't prevent two tasks in the *same* process
+    /// from racing on the file (the kernel treats them as one lock owner),
+    /// so we need an in-process mutex on top. All check / uncheck / compact
+    /// handlers acquire this before touching the checked log.
+    pub checked_log_lock: Arc<tokio::sync::Mutex<()>>,
     #[cfg(feature = "sync")]
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
     #[cfg(feature = "sync")]

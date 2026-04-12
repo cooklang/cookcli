@@ -246,6 +246,8 @@ pub async fn remove_from_shopping_list(
     // Compact the checked log now that one recipe is gone: stale checks
     // (ingredients no longer referenced by any remaining recipe) can drop.
     // Best-effort — a failure here must not break the remove itself.
+    // Serialize against concurrent check/uncheck/compact.
+    let _guard = state.checked_log_lock.lock().await;
     match aggregate_current_ingredient_names(&state) {
         Ok(names) => {
             if let Err(e) = store.compact(names) {
@@ -287,6 +289,7 @@ pub async fn check_shopping_item(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
     store.check(&payload.name).map_err(|e| {
         tracing::error!("Failed to check item: {:?}", e);
@@ -302,6 +305,7 @@ pub async fn uncheck_shopping_item(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
     store.uncheck(&payload.name).map_err(|e| {
         tracing::error!("Failed to uncheck item: {:?}", e);
@@ -330,6 +334,7 @@ pub async fn get_checked_items(
 pub async fn compact_checked(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
     let names = aggregate_current_ingredient_names(&state).map_err(|e| {
         tracing::error!("Failed to aggregate ingredients for compact: {:?}", e);
