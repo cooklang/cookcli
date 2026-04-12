@@ -600,7 +600,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
- "cooklang 0.18.5",
+ "cooklang",
  "cooklang-find",
  "cooklang-import",
  "cooklang-language-server",
@@ -645,9 +645,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.18.4"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23fdd7e11c6ee9ce0e855980a8a0cbe6a73e410d2723c2d03d98ec59f06db202"
+checksum = "a5900e2274c89075e1564b32a201273a02b47053d4fd41897a28d994874c024c"
 dependencies = [
  "bitflags 2.11.0",
  "codesnake",
@@ -662,29 +662,6 @@ dependencies = [
  "smallvec",
  "strum",
  "syn",
- "thiserror 2.0.18",
- "toml 0.8.23",
- "toml_edit",
- "tracing",
- "unicase",
- "unicode-width 0.2.2",
- "yansi",
-]
-
-[[package]]
-name = "cooklang"
-version = "0.18.5"
-source = "git+https://github.com/cooklang/cooklang-rs.git?branch=main#c7e55b4563467dce2a8363eb2d0baae9748c92b7"
-dependencies = [
- "bitflags 2.11.0",
- "codesnake",
- "enum-map",
- "finl_unicode",
- "indexmap",
- "serde",
- "serde_yaml",
- "smallvec",
- "strum",
  "thiserror 2.0.18",
  "toml 0.8.23",
  "toml_edit",
@@ -736,7 +713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4f0ec7cf3dba205edeacb9868413fb43dda06d9c3bfd5d7b74d71273a04ebb"
 dependencies = [
  "anyhow",
- "cooklang 0.18.4",
+ "cooklang",
  "dashmap 6.1.0",
  "nohash-hasher",
  "ropey",
@@ -757,7 +734,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c2955407200f45ab9680fa94c603a19c5d37e564f9fe172946ae36b9e3d62"
 dependencies = [
  "anyhow",
- "cooklang 0.18.4",
+ "cooklang",
  "cooklang-find",
  "minijinja",
  "serde",
