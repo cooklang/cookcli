@@ -157,6 +157,8 @@ pub fn extract_ingredients(
     base_path: &Utf8PathBuf,
     converter: &Converter,
     ignore_references: bool,
+    // `None` = include all references; `Some(&[..])` = include only these.
+    included_references: Option<&[String]>,
 ) -> Result<()> {
     if seen.contains_key(entry) {
         return Err(anyhow::anyhow!(
@@ -197,6 +199,32 @@ pub fn extract_ingredients(
         for ref_index in ref_indices {
             let ingredient = &recipe.ingredients[ref_index];
             let reference = ingredient.reference.as_ref().unwrap();
+
+            // Build the display-style path (matches what the template shows)
+            let ref_display_path = if reference.components.is_empty() {
+                reference.name.clone()
+            } else {
+                format!("{}/{}", reference.components.join("/"), reference.name)
+            };
+
+            // If the caller specified which references to include, skip others.
+            // Normalize by stripping "./" prefix so paths from the shopping list
+            // file (without "./") match display paths (which may have "./").
+            if let Some(included) = included_references {
+                fn strip_dot_slash(s: &str) -> &str {
+                    s.strip_prefix("./").unwrap_or(s)
+                }
+                if !included
+                    .iter()
+                    .any(|r| strip_dot_slash(r) == strip_dot_slash(&ref_display_path))
+                {
+                    tracing::debug!(
+                        "Skipping reference '{}' — not in included_references",
+                        ref_display_path
+                    );
+                    continue;
+                }
+            }
 
             let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
 

@@ -22,3 +22,6 @@ playwright/.cache/
 *.tmp
 *.log
 .shopping_list.txt
+.shopping_list.txt.bak
+.shopping-list
+.shopping-checked

@@ -304,6 +304,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             &base_path,
             PARSER.converter(),
             ignore_references,
+            None, // CLI always includes all references
         )?;
     }
 

@@ -1,20 +1,30 @@
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use cooklang::shopping_list::{
-    self, CheckEntry, RecipeItem, ShoppingList, ShoppingListItem,
-};
+use cooklang::shopping_list::{self, CheckEntry, RecipeItem, ShoppingList, ShoppingListItem};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 
-/// An item exposed to the API layer — a recipe reference with path, name, and
-/// scale factor. This preserves backward compatibility with existing API
-/// consumers.
+/// An item exposed to the API layer — a recipe reference with path, name,
+/// scale factor, and optionally which sub-recipe references to include.
+///
+/// `included_references`:
+///   - `None`  → include ALL references (default, backward-compat, menus)
+///   - `Some([..])` → include only the listed reference paths
+///
+/// `recipes`:
+///   - `None`  → this is a regular recipe entry
+///   - `Some([..])` → this is a plan/menu entry with nested recipe items
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShoppingListApiItem {
     pub path: String,
     pub name: String,
     pub scale: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub included_references: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipes: Option<Vec<ShoppingListApiItem>>,
 }
 
 pub struct ShoppingListStore {
@@ -47,8 +57,8 @@ impl ShoppingListStore {
             self.legacy_path
         );
 
-        let content = fs::read_to_string(&self.legacy_path)
-            .context("reading legacy shopping list")?;
+        let content =
+            fs::read_to_string(&self.legacy_path).context("reading legacy shopping list")?;
 
         let mut items = Vec::new();
         for line in content.lines() {
@@ -125,23 +135,108 @@ impl ShoppingListStore {
     }
 
     /// Add a recipe to the shopping list.
+    ///
+    /// If `included_references` is `Some`, the listed reference paths are stored
+    /// as child recipe entries so the shopping list generator knows which
+    /// sub-recipes to expand.
     pub fn add(&self, item: ShoppingListApiItem) -> Result<()> {
+        // Ensure we migrate before the first mutation — otherwise a write
+        // here would create an empty `.shopping-list` and make the legacy
+        // file invisible to future migration.
+        self.migrate_if_needed()?;
         let mut list = self.load_list()?;
         let multiplier = if (item.scale - 1.0).abs() < f64::EPSILON {
             None
         } else {
             Some(item.scale)
         };
+
+        // Store included references as child recipe entries.
+        // Strip leading "./" from reference paths — the format writer adds it back.
+        let children = match item.included_references {
+            Some(refs) => refs
+                .into_iter()
+                .map(|path| {
+                    let path = path.strip_prefix("./").unwrap_or(&path).to_string();
+                    ShoppingListItem::Recipe(RecipeItem {
+                        path,
+                        multiplier: None,
+                        children: Vec::new(),
+                    })
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+
         list.items.push(ShoppingListItem::Recipe(RecipeItem {
             path: item.path,
             multiplier,
-            children: Vec::new(),
+            children,
+        }));
+        self.save_list(&list)
+    }
+
+    /// Add a menu/plan to the shopping list as a single entry with nested recipes.
+    ///
+    /// Each recipe in `recipes` becomes a child of the menu entry. Each recipe's
+    /// `included_references` become grandchildren (sub-recipe references).
+    pub fn add_menu(
+        &self,
+        menu_path: String,
+        menu_scale: f64,
+        recipes: Vec<ShoppingListApiItem>,
+    ) -> Result<()> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let multiplier = if (menu_scale - 1.0).abs() < f64::EPSILON {
+            None
+        } else {
+            Some(menu_scale)
+        };
+
+        let children: Vec<ShoppingListItem> = recipes
+            .into_iter()
+            .map(|recipe| {
+                let recipe_multiplier = if (recipe.scale - 1.0).abs() < f64::EPSILON {
+                    None
+                } else {
+                    Some(recipe.scale)
+                };
+
+                let sub_children = match recipe.included_references {
+                    Some(refs) => refs
+                        .into_iter()
+                        .map(|path| {
+                            let path = path.strip_prefix("./").unwrap_or(&path).to_string();
+                            ShoppingListItem::Recipe(RecipeItem {
+                                path,
+                                multiplier: None,
+                                children: Vec::new(),
+                            })
+                        })
+                        .collect(),
+                    None => Vec::new(),
+                };
+
+                ShoppingListItem::Recipe(RecipeItem {
+                    path: recipe.path,
+                    multiplier: recipe_multiplier,
+                    children: sub_children,
+                })
+            })
+            .collect();
+
+        list.items.push(ShoppingListItem::Recipe(RecipeItem {
+            path: menu_path,
+            multiplier,
+            children,
         }));
         self.save_list(&list)
     }
 
     /// Remove the first recipe matching `path` and compact the checked log.
     pub fn remove(&self, path: &str) -> Result<()> {
+        self.migrate_if_needed()?;
         let mut list = self.load_list()?;
         if let Some(pos) = list.items.iter().position(|i| match i {
             ShoppingListItem::Recipe(r) => r.path == path,
@@ -177,30 +272,52 @@ impl ShoppingListStore {
 
     /// Check an ingredient (append `+ name`).
     pub fn check(&self, name: &str) -> Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.checked_path)
-            .context("opening .shopping-checked for append")?;
-        shopping_list::write_check_entry(&CheckEntry::Checked(name.to_string()), &mut file)?;
-        Ok(())
+        self.append_check_entry(&CheckEntry::Checked(name.to_string()))
     }
 
     /// Uncheck an ingredient (append `- name`).
     pub fn uncheck(&self, name: &str) -> Result<()> {
+        self.append_check_entry(&CheckEntry::Unchecked(name.to_string()))
+    }
+
+    fn append_check_entry(&self, entry: &CheckEntry) -> Result<()> {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.checked_path)
             .context("opening .shopping-checked for append")?;
-        shopping_list::write_check_entry(&CheckEntry::Unchecked(name.to_string()), &mut file)?;
+        // Advisory lock so a concurrent compact() cannot truncate/overwrite
+        // the file between our write and flush.
+        file.lock_exclusive()
+            .context("locking .shopping-checked for append")?;
+        let result = shopping_list::write_check_entry(entry, &mut file);
+        let _ = file.unlock();
+        result?;
         Ok(())
     }
 
     /// Compact the checked file against the current shopping list.
+    ///
+    /// Holds an exclusive advisory lock for the whole read-modify-write so
+    /// concurrent `check()`/`uncheck()` appends can't be lost.
     pub fn compact(&self) -> Result<()> {
         let list = self.load_list()?;
-        let content = self.read_checked_raw()?;
+
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&self.checked_path)
+            .context("opening .shopping-checked for compact")?;
+        file.lock_exclusive()
+            .context("locking .shopping-checked for compact")?;
+
+        let mut content = String::new();
+        use std::io::Read as _;
+        (&file)
+            .read_to_string(&mut content)
+            .context("reading .shopping-checked")?;
         let entries = shopping_list::parse_checked(&content);
         let compacted = shopping_list::compact_checked(&entries, &list);
 
@@ -208,7 +325,17 @@ impl ShoppingListStore {
         for entry in &compacted {
             shopping_list::write_check_entry(entry, &mut buf)?;
         }
-        fs::write(&self.checked_path, buf).context("writing compacted .shopping-checked")
+
+        // Rewrite the file in place while holding the lock.
+        use std::io::{Seek, SeekFrom, Write as _};
+        file.set_len(0).context("truncating .shopping-checked")?;
+        file.seek(SeekFrom::Start(0))
+            .context("seeking .shopping-checked")?;
+        file.write_all(&buf)
+            .context("writing compacted .shopping-checked")?;
+
+        let _ = file.unlock();
+        Ok(())
     }
 }
 
@@ -218,21 +345,67 @@ fn api_items_from_list(list: &ShoppingList) -> Vec<ShoppingListApiItem> {
     let mut items = Vec::new();
     for item in &list.items {
         if let ShoppingListItem::Recipe(r) = item {
-            items.push(ShoppingListApiItem {
-                path: r.path.clone(),
-                name: recipe_display_name(&r.path),
-                scale: r.multiplier.unwrap_or(1.0),
-            });
+            if r.path.ends_with(".menu") {
+                // Plan/menu entry — children are recipes, grandchildren are sub-references.
+                let recipes: Vec<ShoppingListApiItem> = r
+                    .children
+                    .iter()
+                    .filter_map(|c| match c {
+                        ShoppingListItem::Recipe(cr) => {
+                            let refs: Vec<String> = cr
+                                .children
+                                .iter()
+                                .filter_map(|gc| match gc {
+                                    ShoppingListItem::Recipe(gcr) => Some(gcr.path.clone()),
+                                    _ => None,
+                                })
+                                .collect();
+                            Some(ShoppingListApiItem {
+                                path: cr.path.clone(),
+                                name: recipe_display_name(&cr.path),
+                                scale: cr.multiplier.unwrap_or(1.0),
+                                included_references: Some(refs),
+                                recipes: None,
+                            })
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                items.push(ShoppingListApiItem {
+                    path: r.path.clone(),
+                    name: recipe_display_name(&r.path),
+                    scale: r.multiplier.unwrap_or(1.0),
+                    included_references: None,
+                    recipes: Some(recipes),
+                });
+            } else {
+                // Regular recipe entry — children are sub-references.
+                let refs: Vec<String> = r
+                    .children
+                    .iter()
+                    .filter_map(|c| match c {
+                        ShoppingListItem::Recipe(cr) => Some(cr.path.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                items.push(ShoppingListApiItem {
+                    path: r.path.clone(),
+                    name: recipe_display_name(&r.path),
+                    scale: r.multiplier.unwrap_or(1.0),
+                    included_references: Some(refs),
+                    recipes: None,
+                });
+            }
         }
     }
     items
 }
 
 /// Derive a human-readable display name from a recipe path.
-/// E.g. "Breakfast/Easy Pancakes" → "Easy Pancakes"
-fn recipe_display_name(path: &str) -> String {
-    path.rsplit('/')
-        .next()
-        .unwrap_or(path)
-        .to_string()
+/// E.g. "Breakfast/Easy Pancakes.cook" → "Easy Pancakes"
+/// E.g. "Meal Plans/Week 1.menu" → "Week 1"
+pub fn recipe_display_name(path: &str) -> String {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let name = name.strip_suffix(".cook").unwrap_or(name);
+    name.strip_suffix(".menu").unwrap_or(name).to_string()
 }

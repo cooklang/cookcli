@@ -1,9 +1,10 @@
 use crate::server::{
-    shopping_list_store::{ShoppingListApiItem, ShoppingListStore},
+    shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
     AppState,
 };
 use crate::util::{extract_ingredients, PARSER};
 use axum::{extract::State, http::StatusCode, Json};
+use camino::Utf8PathBuf;
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
 use serde_json;
@@ -14,6 +15,8 @@ use std::sync::Arc;
 pub struct RecipeRequest {
     recipe: String,
     scale: Option<f64>,
+    /// Which sub-recipe references to include. `None` = all.
+    included_references: Option<Vec<String>>,
 }
 
 pub async fn shopping_list(
@@ -37,6 +40,7 @@ pub async fn shopping_list(
             &state.base_path,
             PARSER.converter(),
             false,
+            entry.included_references.as_deref(),
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
@@ -189,8 +193,9 @@ pub async fn get_shopping_list_items(
 #[derive(Debug, Deserialize)]
 pub struct AddItemRequest {
     pub path: String,
-    pub name: String,
     pub scale: f64,
+    /// Which sub-recipe references to include. `None` = all (menus, backward compat).
+    pub included_references: Option<Vec<String>>,
 }
 
 pub async fn add_to_shopping_list(
@@ -198,10 +203,14 @@ pub async fn add_to_shopping_list(
     Json(payload): Json<AddItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
+    // `name` is derived from `path` on load — any client-supplied display
+    // name would be silently discarded, so it's not accepted here.
     let item = ShoppingListApiItem {
+        name: recipe_display_name(&payload.path),
         path: payload.path,
-        name: payload.name,
         scale: payload.scale,
+        included_references: payload.included_references,
+        recipes: None,
     };
 
     store.add(item).map_err(|e| {
@@ -313,5 +322,127 @@ pub async fn compact_checked(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    Ok(StatusCode::OK)
+}
+
+// -- Add menu (bulk) endpoint --
+
+#[derive(Debug, Deserialize)]
+pub struct AddMenuRequest {
+    pub path: String,
+    pub scale: f64,
+}
+
+/// Resolve the sub-recipe reference paths for a given recipe.
+fn resolve_recipe_references(
+    base_path: &Utf8PathBuf,
+    recipe_path: &str,
+) -> anyhow::Result<Vec<String>> {
+    let entry = crate::util::get_recipe(base_path, recipe_path)?;
+    let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
+
+    let mut refs = Vec::new();
+    for ingredient in &recipe.ingredients {
+        if let Some(ref recipe_ref) = ingredient.reference {
+            let path = if recipe_ref.components.is_empty() {
+                recipe_ref.name.clone()
+            } else {
+                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
+            };
+            refs.push(path);
+        }
+    }
+    Ok(refs)
+}
+
+/// Add all recipe references from a menu to the shopping list as a single
+/// plan entry with recipes nested inside.
+pub async fn add_menu_to_shopping_list(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AddMenuRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let menu_scale = payload.scale;
+
+    let recipe_path = Utf8PathBuf::from(&payload.path);
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|e| {
+        tracing::error!("Menu not found: {}", payload.path);
+        (
+            StatusCode::NOT_FOUND,
+            Json(
+                serde_json::json!({ "error": format!("Menu not found: {}: {}", payload.path, e) }),
+            ),
+        )
+    })?;
+
+    // Parse at scale 1.0 to get raw quantities for recipe references
+    let menu = crate::util::parse_recipe_from_entry(&entry, 1.0).map_err(|e| {
+        tracing::error!("Failed to parse menu: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
+        )
+    })?;
+
+    let mut recipes = Vec::new();
+
+    for ingredient in &menu.ingredients {
+        if let Some(ref recipe_ref) = ingredient.reference {
+            // Build display path from reference components
+            let ref_display = if recipe_ref.components.is_empty() {
+                recipe_ref.name.clone()
+            } else {
+                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
+            };
+
+            // Recipe's own quantity × menu global scale
+            let recipe_quantity = ingredient.quantity.as_ref().and_then(|q| match q.value() {
+                cooklang::quantity::Value::Number(n) => Some(n.value()),
+                _ => None,
+            });
+            let final_scale = recipe_quantity
+                .map(|q| q * menu_scale)
+                .unwrap_or(menu_scale);
+
+            // Resolve this recipe's sub-recipe references
+            let ref_path_for_find = recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+            let sub_refs = match resolve_recipe_references(&state.base_path, &ref_path_for_find) {
+                Ok(refs) => refs,
+                Err(e) => {
+                    tracing::warn!(
+                        "Could not resolve sub-references for '{}': {}",
+                        ref_display,
+                        e
+                    );
+                    Vec::new()
+                }
+            };
+
+            // Strip ./ prefix for storage (the format writer adds it back)
+            let path = ref_display
+                .strip_prefix("./")
+                .unwrap_or(&ref_display)
+                .to_string();
+
+            recipes.push(ShoppingListApiItem {
+                name: recipe_display_name(&path),
+                path,
+                scale: final_scale,
+                included_references: Some(sub_refs),
+                recipes: None,
+            });
+        }
+    }
+
+    store
+        .add_menu(payload.path, menu_scale, recipes)
+        .map_err(|e| {
+            tracing::error!("Failed to add menu to shopping list: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
+
     Ok(StatusCode::OK)
 }

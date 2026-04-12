@@ -38,6 +38,7 @@ camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 base64 = { version = "0.22", optional = true }
+# TODO: swap back to a crates.io version once cooklang/cooklang-rs#93 is released.
 cooklang = { path = "../cooklang-rs", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.5.0" }
 cooklang-import = "0.9.3"
@@ -46,6 +47,7 @@ libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = "0.2.1"
 cooklang-reports = { version = "0.2.2" }
 directories = "6"
+fs2 = "0.4"
 fluent = "0.16"
 futures-util = "0.3"
 fluent-templates = "0.10"
