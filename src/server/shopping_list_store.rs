@@ -36,6 +36,18 @@ pub struct ShoppingListStore {
     legacy_path: Utf8PathBuf,
 }
 
+/// Convert a UI-supplied scale factor to the format's `multiplier` field.
+/// 1.0 (or anything indistinguishable from 1.0 in f64) serializes as no
+/// multiplier at all — the `.shopping-list` format treats a bare path as
+/// `×1` implicitly.
+fn to_multiplier(scale: f64) -> Option<f64> {
+    if (scale - 1.0).abs() < f64::EPSILON {
+        None
+    } else {
+        Some(scale)
+    }
+}
+
 impl ShoppingListStore {
     pub fn new(base_path: &Utf8PathBuf) -> Self {
         Self {
@@ -145,11 +157,6 @@ impl ShoppingListStore {
         // file invisible to future migration.
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
-        let multiplier = if (item.scale - 1.0).abs() < f64::EPSILON {
-            None
-        } else {
-            Some(item.scale)
-        };
 
         // Store included references as child recipe entries.
         // Strip leading "./" from reference paths — the format writer adds it back.
@@ -170,7 +177,7 @@ impl ShoppingListStore {
 
         list.items.push(ShoppingListItem::Recipe(RecipeItem {
             path: item.path,
-            multiplier,
+            multiplier: to_multiplier(item.scale),
             children,
         }));
         self.save_list(&list)
@@ -188,20 +195,11 @@ impl ShoppingListStore {
     ) -> Result<()> {
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
-        let multiplier = if (menu_scale - 1.0).abs() < f64::EPSILON {
-            None
-        } else {
-            Some(menu_scale)
-        };
 
         let children: Vec<ShoppingListItem> = recipes
             .into_iter()
             .map(|recipe| {
-                let recipe_multiplier = if (recipe.scale - 1.0).abs() < f64::EPSILON {
-                    None
-                } else {
-                    Some(recipe.scale)
-                };
+                let recipe_multiplier = to_multiplier(recipe.scale);
 
                 let sub_children = match recipe.included_references {
                     Some(refs) => refs
@@ -228,7 +226,7 @@ impl ShoppingListStore {
 
         list.items.push(ShoppingListItem::Recipe(RecipeItem {
             path: menu_path,
-            multiplier,
+            multiplier: to_multiplier(menu_scale),
             children,
         }));
         self.save_list(&list)
@@ -236,12 +234,11 @@ impl ShoppingListStore {
 
     /// Remove the first recipe matching `path`.
     ///
-    /// The checked log is intentionally left alone. `compact_checked` in
-    /// cooklang-rs filters by `Ingredient` items in the shopping list, but
-    /// this store only persists `Recipe` references (aggregation happens at
-    /// render time), so running compact here would wipe every checked entry.
-    /// Stale entries are harmless — they simply don't match any rendered
-    /// ingredient.
+    /// Compaction of the checked log (which drops entries for ingredients
+    /// no longer in any remaining recipe) is the caller's responsibility.
+    /// The store has no parser context to expand recipe references into
+    /// ingredient names, so if we invoked `compact()` here with an empty
+    /// ingredient list it would wipe every check.
     pub fn remove(&self, path: &str) -> Result<()> {
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
@@ -305,8 +302,11 @@ impl ShoppingListStore {
     /// ingredient names (by parsing the referenced recipes) and pass them
     /// here — otherwise every checked entry would be treated as stale.
     ///
-    /// Holds an exclusive advisory lock for the whole read-modify-write so
-    /// concurrent `check()`/`uncheck()` appends can't be lost.
+    /// The rewrite is atomic: we lock the original file for the read phase,
+    /// stage the compacted output to a sibling temp file, then `rename` it
+    /// into place. A crash between truncate and write can't leave a
+    /// zero-length `.shopping-checked`, and the exclusive lock blocks any
+    /// racing `check()`/`uncheck()` append during the read.
     pub fn compact<I, S>(&self, current_ingredients: I) -> Result<()>
     where
         I: IntoIterator<Item = S>,
@@ -317,7 +317,9 @@ impl ShoppingListStore {
             .map(|s| s.as_ref().to_string())
             .collect();
 
-        let mut file = fs::OpenOptions::new()
+        // Open for read-only + lock; holding the lock here serializes us
+        // against any concurrent append in `append_check_entry`.
+        let file = fs::OpenOptions::new()
             .create(true)
             .truncate(false)
             .read(true)
@@ -340,13 +342,25 @@ impl ShoppingListStore {
             shopping_list::write_check_entry(entry, &mut buf)?;
         }
 
-        // Rewrite the file in place while holding the lock.
-        use std::io::{Seek, SeekFrom, Write as _};
-        file.set_len(0).context("truncating .shopping-checked")?;
-        file.seek(SeekFrom::Start(0))
-            .context("seeking .shopping-checked")?;
-        file.write_all(&buf)
-            .context("writing compacted .shopping-checked")?;
+        // Stage the new content in a sibling temp file, fsync it, and rename
+        // into place. Rename is atomic on POSIX; if we crash partway the
+        // original file is untouched. Temp path is scoped to base_path so
+        // it ends up on the same filesystem — otherwise rename would fall
+        // back to copy+delete and lose atomicity.
+        let tmp_path = self.checked_path.with_file_name(".shopping-checked.tmp");
+        {
+            use std::io::Write as _;
+            let mut tmp = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&tmp_path)
+                .context("opening .shopping-checked temp file")?;
+            tmp.write_all(&buf).context("writing compacted temp file")?;
+            tmp.sync_all().context("fsync-ing compacted temp file")?;
+        }
+        fs::rename(&tmp_path, &self.checked_path)
+            .context("renaming compacted temp file into place")?;
 
         let _ = file.unlock();
         Ok(())

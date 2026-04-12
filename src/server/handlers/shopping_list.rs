@@ -3,6 +3,7 @@ use crate::server::{
     AppState,
 };
 use crate::util::{extract_ingredients, PARSER};
+use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
 use camino::Utf8PathBuf;
 use cooklang::ingredient_list::IngredientList;
@@ -251,7 +252,10 @@ pub async fn remove_from_shopping_list(
                 tracing::warn!("Failed to compact checked log after remove: {:?}", e);
             }
         }
-        Err(e) => tracing::warn!("Skipping compact after remove — aggregation failed: {:?}", e),
+        Err(e) => tracing::warn!(
+            "Skipping compact after remove — aggregation failed: {:?}",
+            e
+        ),
     }
 
     Ok(StatusCode::OK)
@@ -351,6 +355,11 @@ pub async fn compact_checked(
 ///
 /// Returns names in their raw (non-common) form — `compact_checked` does a
 /// case-insensitive comparison so that's fine for the stale-check step.
+///
+/// Returns `Err(..)` if any recipe fails to parse. The caller should refuse
+/// to compact in that case — a partial ingredient set would mark otherwise-
+/// valid checks as stale and wipe them, which is how the original bug this
+/// module was fixing manifested.
 fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<String>> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load()?;
@@ -362,7 +371,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
             // Menu/plan entry — expand each nested recipe.
             for recipe in recipes {
                 let scaled = format!("{}:{}", recipe.path, recipe.scale);
-                let _ = extract_ingredients(
+                extract_ingredients(
                     &scaled,
                     &mut list,
                     &mut seen,
@@ -370,11 +379,12 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                     PARSER.converter(),
                     false,
                     recipe.included_references.as_deref(),
-                );
+                )
+                .with_context(|| format!("aggregating ingredients for {scaled}"))?;
             }
         } else {
             let scaled = format!("{}:{}", item.path, item.scale);
-            let _ = extract_ingredients(
+            extract_ingredients(
                 &scaled,
                 &mut list,
                 &mut seen,
@@ -382,7 +392,8 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 PARSER.converter(),
                 false,
                 item.included_references.as_deref(),
-            );
+            )
+            .with_context(|| format!("aggregating ingredients for {scaled}"))?;
         }
     }
 

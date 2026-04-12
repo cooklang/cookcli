@@ -53,6 +53,19 @@
 <script>
 let shoppingList = [];
 
+// Escape a string for safe interpolation into HTML text or a double-quoted
+// attribute value. Recipe names/paths come from filenames — a recipe called
+// `<img src=x onerror=alert(1)>.cook` is a legal filename on most systems,
+// so every untrusted interpolation must flow through this.
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function showError(message) {
     const banner = document.getElementById('error-banner');
     const msg = document.getElementById('error-message');
@@ -101,7 +114,7 @@ function renderSelectedRecipes() {
                                 <svg class="w-3 h-3 text-blue-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                 </svg>
-                                <a href="{{ prefix }}/recipe/${encodeURI(ref)}" class="hover:text-orange-600 transition-colors">${refName}</a>
+                                <a href="{{ prefix }}/recipe/${encodeURI(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
                             </li>`;
                         }).join('')}
                     </ul>` : '';
@@ -110,8 +123,8 @@ function renderSelectedRecipes() {
                         <svg class="w-3 h-3 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeURI(recipe.path)}" class="hover:text-orange-600 transition-colors">${recipe.name}</a>
-                        <span class="text-purple-400 text-xs">(×${recipe.scale})</span>
+                        <a href="{{ prefix }}/recipe/${encodeURI(recipe.path)}" class="hover:text-orange-600 transition-colors">${escHtml(recipe.name)}</a>
+                        <span class="text-purple-400 text-xs">(×${escHtml(recipe.scale)})</span>
                     </div>
                     ${refsHtml}
                 </li>`;
@@ -121,10 +134,10 @@ function renderSelectedRecipes() {
             <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
                 <div class="flex items-center justify-between">
                     <div>
-                        <a href="{{ prefix }}/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${item.name}</a>
+                        <a href="{{ prefix }}/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
                         <span class="text-indigo-600 ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
-                    <button onclick="removeRecipe('${item.path}')" class="text-red-500 hover:text-red-700 font-medium text-sm">
+                    <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
                         {{ tr.t("shopping-remove") }}
                     </button>
                 </div>
@@ -142,7 +155,7 @@ function renderSelectedRecipes() {
                         <svg class="w-3 h-3 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeURI(ref)}" class="hover:text-orange-600 transition-colors">${refName}</a>
+                        <a href="{{ prefix }}/recipe/${encodeURI(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
                     </li>`;
                 }).join('')}
             </ul>` : '';
@@ -151,10 +164,10 @@ function renderSelectedRecipes() {
         <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
             <div class="flex items-center justify-between">
                 <div>
-                    <a href="{{ prefix }}/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${item.name}</a>
-                    <span class="text-purple-600 ml-2 text-sm">(×${item.scale})</span>
+                    <a href="{{ prefix }}/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
+                    <span class="text-purple-600 ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
-                <button onclick="removeRecipe('${item.path}')" class="text-red-500 hover:text-red-700 font-medium text-sm">
+                <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
                     {{ tr.t("shopping-remove") }}
                 </button>
             </div>
@@ -162,6 +175,24 @@ function renderSelectedRecipes() {
         </div>`;
     }).join('');
 }
+
+// Event delegation for dynamically-rendered remove buttons: avoids inline
+// `onclick="removeRecipe('${path}')"` which would execute any single-quote
+// break in a recipe path. `data-path` is HTML-escaped, then read as a string.
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action="remove-recipe"]');
+    if (!btn) return;
+    removeRecipe(btn.dataset.path);
+});
+
+// Same delegation trick for ingredient checkboxes — inline `onchange` with
+// unescaped ingredient names would execute script if a name contained a
+// single quote. Values are read from data-* which are plain strings.
+document.addEventListener('change', (event) => {
+    const input = event.target.closest('[data-action="toggle-item"]');
+    if (!input) return;
+    toggleItem(input.dataset.itemId, input.checked, input.dataset.ingredientName);
+});
 
 async function removeRecipe(path) {
     try {
@@ -369,7 +400,7 @@ function displayShoppingList(data) {
         html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">{{ tr.t("shopping-title") }}</h2>';
         html += data.categories.map(category => `
             <div class="mb-6 bg-white rounded-lg p-4 shadow-sm">
-                <h3 class="font-semibold text-lg mb-3 text-orange-600">${category.category}</h3>
+                <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
                 <ul class="space-y-2">
                     ${category.items.map((item, idx) => {
                         // Use ingredient name as the unique ID for localStorage
@@ -378,15 +409,17 @@ function displayShoppingList(data) {
                         <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition-colors">
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
-                                    id="${itemId}"
+                                    id="${escHtml(itemId)}"
                                     class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 mr-3"
-                                    onchange="toggleItem('${itemId}', this.checked, '${item.name}')">
-                                <label for="${itemId}" class="cursor-pointer flex-1">
-                                    <span class="item-name">${item.name}</span>
+                                    data-action="toggle-item"
+                                    data-item-id="${escHtml(itemId)}"
+                                    data-ingredient-name="${escHtml(item.name)}">
+                                <label for="${escHtml(itemId)}" class="cursor-pointer flex-1">
+                                    <span class="item-name">${escHtml(item.name)}</span>
                                 </label>
                             </div>
                             <span class="text-gray-600 ml-4">
-                                ${formatQuantities(item.quantities)}
+                                ${escHtml(formatQuantities(item.quantities))}
                             </span>
                         </li>
                     `}).join('')}
@@ -410,10 +443,10 @@ function displayShoppingList(data) {
                             <svg class="w-4 h-4 text-green-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                             </svg>
-                            <span class="text-green-800">${itemName}</span>
+                            <span class="text-green-800">${escHtml(itemName)}</span>
                         </div>
                         <span class="text-green-700 text-xs ml-2">
-                            ${itemQuantities ? formatQuantities(itemQuantities) : ''}
+                            ${itemQuantities ? escHtml(formatQuantities(itemQuantities)) : ''}
                         </span>
                     </li>
                 `}).join('')}

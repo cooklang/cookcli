@@ -600,7 +600,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
- "cooklang 0.18.4 (git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support)",
+ "cooklang 0.18.5",
  "cooklang-find",
  "cooklang-import",
  "cooklang-language-server",
@@ -673,8 +673,8 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.18.4"
-source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support#a158fb78c5c0dc3ff10b04434e63c6f70ccf6293"
+version = "0.18.5"
+source = "git+https://github.com/cooklang/cooklang-rs.git?branch=main#c7e55b4563467dce2a8363eb2d0baae9748c92b7"
 dependencies = [
  "bitflags 2.11.0",
  "codesnake",
@@ -736,7 +736,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4f0ec7cf3dba205edeacb9868413fb43dda06d9c3bfd5d7b74d71273a04ebb"
 dependencies = [
  "anyhow",
- "cooklang 0.18.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cooklang 0.18.4",
  "dashmap 6.1.0",
  "nohash-hasher",
  "ropey",
@@ -757,7 +757,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c2955407200f45ab9680fa94c603a19c5d37e564f9fe172946ae36b9e3d62"
 dependencies = [
  "anyhow",
- "cooklang 0.18.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cooklang 0.18.4",
  "cooklang-find",
  "minijinja",
  "serde",
