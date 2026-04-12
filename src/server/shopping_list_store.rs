@@ -331,9 +331,10 @@ impl ShoppingListStore {
         // Stage the new content in a sibling temp file, fsync it, and rename
         // into place. Temp path is scoped to base_path so it ends up on the
         // same filesystem — otherwise rename would fall back to copy+delete
-        // and lose atomicity.
+        // and lose atomicity. If any step fails we remove the partial temp
+        // file so it doesn't linger on disk.
         let tmp_path = self.checked_path.with_file_name(".shopping-checked.tmp");
-        {
+        let write_result = (|| -> Result<()> {
             use std::io::Write as _;
             let mut tmp = fs::OpenOptions::new()
                 .create(true)
@@ -343,9 +344,18 @@ impl ShoppingListStore {
                 .context("opening .shopping-checked temp file")?;
             tmp.write_all(&buf).context("writing compacted temp file")?;
             tmp.sync_all().context("fsync-ing compacted temp file")?;
+            Ok(())
+        })();
+        if let Err(e) = write_result {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e);
         }
-        fs::rename(&tmp_path, &self.checked_path)
-            .context("renaming compacted temp file into place")?;
+        if let Err(e) = fs::rename(&tmp_path, &self.checked_path)
+            .context("renaming compacted temp file into place")
+        {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e);
+        }
 
         Ok(())
     }

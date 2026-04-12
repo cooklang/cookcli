@@ -266,6 +266,10 @@ pub async fn remove_from_shopping_list(
 pub async fn clear_shopping_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    // Acquire the checked-log lock so a concurrent check/uncheck can't
+    // recreate `.shopping-checked` between our remove_file and the caller's
+    // view of a cleared list.
+    let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
     store.clear().map_err(|e| {
         tracing::error!("Failed to clear shopping list: {:?}", e);
@@ -369,12 +373,18 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load()?;
     let mut list = IngredientList::new();
-    let mut seen = BTreeMap::new();
 
+    // `extract_ingredients` uses `seen` to detect circular references
+    // *within a single recipe tree*. The shopping list may legitimately
+    // contain the same recipe multiple times (e.g. duplicate entries from
+    // the legacy format), so we reset `seen` per top-level entry —
+    // otherwise the second occurrence is misreported as a cycle and we'd
+    // skip the compact, leaving stale checks in place.
     for item in &items {
         if let Some(recipes) = &item.recipes {
             // Menu/plan entry — expand each nested recipe.
             for recipe in recipes {
+                let mut seen = BTreeMap::new();
                 let scaled = format!("{}:{}", recipe.path, recipe.scale);
                 extract_ingredients(
                     &scaled,
@@ -388,6 +398,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 .with_context(|| format!("aggregating ingredients for {scaled}"))?;
             }
         } else {
+            let mut seen = BTreeMap::new();
             let scaled = format!("{}:{}", item.path, item.scale);
             extract_ingredients(
                 &scaled,
