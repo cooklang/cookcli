@@ -94,7 +94,7 @@ function renderSelectedRecipes() {
             const recipesHtml = item.recipes.map(recipe => {
                 const refs = recipe.included_references || [];
                 const refsHtml = refs.length > 0 ? `
-                    <ul class="mt-1 ml-5 space-y-0.5">
+                    <ul class="mt-1 ml-8 pl-2 border-l border-indigo-200 space-y-0.5">
                         ${refs.map(ref => {
                             const refName = ref.split('/').pop();
                             return `<li class="text-xs text-gray-400 flex items-center gap-1">
@@ -135,7 +135,7 @@ function renderSelectedRecipes() {
         // Regular recipe entry
         const refs = item.included_references || [];
         const refsHtml = refs.length > 0 ? `
-            <ul class="mt-1 ml-5 space-y-0.5">
+            <ul class="mt-1 ml-8 pl-2 border-l border-purple-200 space-y-0.5">
                 ${refs.map(ref => {
                     const refName = ref.split('/').pop();
                     return `<li class="text-sm text-gray-500 flex items-center gap-1">

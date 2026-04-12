@@ -234,7 +234,14 @@ impl ShoppingListStore {
         self.save_list(&list)
     }
 
-    /// Remove the first recipe matching `path` and compact the checked log.
+    /// Remove the first recipe matching `path`.
+    ///
+    /// The checked log is intentionally left alone. `compact_checked` in
+    /// cooklang-rs filters by `Ingredient` items in the shopping list, but
+    /// this store only persists `Recipe` references (aggregation happens at
+    /// render time), so running compact here would wipe every checked entry.
+    /// Stale entries are harmless — they simply don't match any rendered
+    /// ingredient.
     pub fn remove(&self, path: &str) -> Result<()> {
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
@@ -244,12 +251,7 @@ impl ShoppingListStore {
         }) {
             list.items.remove(pos);
         }
-        self.save_list(&list)?;
-        // Compact checked log — entries for removed ingredients become stale
-        if self.checked_path.exists() {
-            self.compact()?;
-        }
-        Ok(())
+        self.save_list(&list)
     }
 
     /// Clear the shopping list and checked state.
@@ -296,12 +298,24 @@ impl ShoppingListStore {
         Ok(())
     }
 
-    /// Compact the checked file against the current shopping list.
+    /// Compact the checked file against the user-visible ingredient names.
+    ///
+    /// The on-disk `.shopping-list` persists only recipe references, not
+    /// expanded ingredients. Callers must first aggregate the actual
+    /// ingredient names (by parsing the referenced recipes) and pass them
+    /// here — otherwise every checked entry would be treated as stale.
     ///
     /// Holds an exclusive advisory lock for the whole read-modify-write so
     /// concurrent `check()`/`uncheck()` appends can't be lost.
-    pub fn compact(&self) -> Result<()> {
-        let list = self.load_list()?;
+    pub fn compact<I, S>(&self, current_ingredients: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let names: Vec<String> = current_ingredients
+            .into_iter()
+            .map(|s| s.as_ref().to_string())
+            .collect();
 
         let mut file = fs::OpenOptions::new()
             .create(true)
@@ -319,7 +333,7 @@ impl ShoppingListStore {
             .read_to_string(&mut content)
             .context("reading .shopping-checked")?;
         let entries = shopping_list::parse_checked(&content);
-        let compacted = shopping_list::compact_checked(&entries, &list);
+        let compacted = shopping_list::compact_checked(&entries, names.iter().map(String::as_str));
 
         let mut buf = Vec::new();
         for entry in &compacted {

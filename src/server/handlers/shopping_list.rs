@@ -242,6 +242,18 @@ pub async fn remove_from_shopping_list(
         )
     })?;
 
+    // Compact the checked log now that one recipe is gone: stale checks
+    // (ingredients no longer referenced by any remaining recipe) can drop.
+    // Best-effort — a failure here must not break the remove itself.
+    match aggregate_current_ingredient_names(&state) {
+        Ok(names) => {
+            if let Err(e) = store.compact(names) {
+                tracing::warn!("Failed to compact checked log after remove: {:?}", e);
+            }
+        }
+        Err(e) => tracing::warn!("Skipping compact after remove — aggregation failed: {:?}", e),
+    }
+
     Ok(StatusCode::OK)
 }
 
@@ -315,7 +327,14 @@ pub async fn compact_checked(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
-    store.compact().map_err(|e| {
+    let names = aggregate_current_ingredient_names(&state).map_err(|e| {
+        tracing::error!("Failed to aggregate ingredients for compact: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    store.compact(names).map_err(|e| {
         tracing::error!("Failed to compact checked list: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -323,6 +342,51 @@ pub async fn compact_checked(
         )
     })?;
     Ok(StatusCode::OK)
+}
+
+/// Aggregate the ingredient names a user would see for the currently-stored
+/// shopping list. Walks every recipe reference persisted in `.shopping-list`
+/// and expands it through `extract_ingredients`, honoring any
+/// `included_references` and recipe scale factors.
+///
+/// Returns names in their raw (non-common) form — `compact_checked` does a
+/// case-insensitive comparison so that's fine for the stale-check step.
+fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<String>> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let items = store.load()?;
+    let mut list = IngredientList::new();
+    let mut seen = BTreeMap::new();
+
+    for item in &items {
+        if let Some(recipes) = &item.recipes {
+            // Menu/plan entry — expand each nested recipe.
+            for recipe in recipes {
+                let scaled = format!("{}:{}", recipe.path, recipe.scale);
+                let _ = extract_ingredients(
+                    &scaled,
+                    &mut list,
+                    &mut seen,
+                    &state.base_path,
+                    PARSER.converter(),
+                    false,
+                    recipe.included_references.as_deref(),
+                );
+            }
+        } else {
+            let scaled = format!("{}:{}", item.path, item.scale);
+            let _ = extract_ingredients(
+                &scaled,
+                &mut list,
+                &mut seen,
+                &state.base_path,
+                PARSER.converter(),
+                false,
+                item.included_references.as_deref(),
+            );
+        }
+    }
+
+    Ok(list.iter().map(|(name, _)| name.clone()).collect())
 }
 
 // -- Add menu (bulk) endpoint --

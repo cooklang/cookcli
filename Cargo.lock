@@ -674,7 +674,7 @@ dependencies = [
 [[package]]
 name = "cooklang"
 version = "0.18.4"
-source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support#21ea32c0186570eabeaa411df74c92e785247348"
+source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support#a158fb78c5c0dc3ff10b04434e63c6f70ccf6293"
 dependencies = [
  "bitflags 2.11.0",
  "codesnake",
