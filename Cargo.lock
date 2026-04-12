@@ -600,7 +600,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
- "cooklang 0.18.4",
+ "cooklang 0.18.4 (git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support)",
  "cooklang-find",
  "cooklang-import",
  "cooklang-language-server",
@@ -646,28 +646,6 @@ dependencies = [
 [[package]]
 name = "cooklang"
 version = "0.18.4"
-dependencies = [
- "bitflags 2.11.0",
- "codesnake",
- "enum-map",
- "finl_unicode",
- "indexmap",
- "serde",
- "serde_yaml",
- "smallvec",
- "strum",
- "thiserror 2.0.18",
- "toml 0.8.23",
- "toml_edit",
- "tracing",
- "unicase",
- "unicode-width 0.2.2",
- "yansi",
-]
-
-[[package]]
-name = "cooklang"
-version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23fdd7e11c6ee9ce0e855980a8a0cbe6a73e410d2723c2d03d98ec59f06db202"
 dependencies = [
@@ -684,6 +662,29 @@ dependencies = [
  "smallvec",
  "strum",
  "syn",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
+ "toml_edit",
+ "tracing",
+ "unicase",
+ "unicode-width 0.2.2",
+ "yansi",
+]
+
+[[package]]
+name = "cooklang"
+version = "0.18.4"
+source = "git+https://github.com/cooklang/cooklang-rs.git?branch=feat%2Fshopping-list-checked-support#21ea32c0186570eabeaa411df74c92e785247348"
+dependencies = [
+ "bitflags 2.11.0",
+ "codesnake",
+ "enum-map",
+ "finl_unicode",
+ "indexmap",
+ "serde",
+ "serde_yaml",
+ "smallvec",
+ "strum",
  "thiserror 2.0.18",
  "toml 0.8.23",
  "toml_edit",
