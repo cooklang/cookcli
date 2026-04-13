@@ -326,6 +326,20 @@
         }
 
         @media print {
+            /* Reset color-scheme so browser default text color is dark, not
+               light. Without this, elements without an explicit text color
+               (e.g. ingredient/cookware names) inherit the dark-mode default
+               white text and become invisible on the forced white background. */
+            html, html.dark {
+                color-scheme: light !important;
+            }
+
+            /* Default text color for dark mode when printing */
+            .dark,
+            .dark body {
+                color: #111827 !important;
+            }
+
             /* Force light mode for printing */
             .dark body,
             .dark .bg-gray-50,
