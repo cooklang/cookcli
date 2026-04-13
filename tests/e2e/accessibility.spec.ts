@@ -44,7 +44,7 @@ test.describe('Accessibility', () => {
   test.skip('should have no accessibility violations on shopping list', async ({ page }) => {
     // Skip - removed due to persistent failures
     // Fixed - Changed text-orange-600 to text-orange-700 for better contrast
-    await helpers.navigateTo('/shopping-list');
+    await helpers.goToShoppingList();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
@@ -176,7 +176,7 @@ test.describe('Accessibility', () => {
   });
 
   test('should announce dynamic content changes', async ({ page }) => {
-    await helpers.navigateTo('/shopping-list');
+    await helpers.goToShoppingList();
 
     // Check for ARIA live regions
     const liveRegions = page.locator('[aria-live]');

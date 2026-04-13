@@ -51,6 +51,8 @@ futures-util = "0.3"
 fluent-templates = "0.10"
 humantime = "2"
 mime_guess = "2.0"
+notify = "8"
+notify-debouncer-full = "0.7"
 open = "5.3"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -62,6 +64,7 @@ serde_yaml = "0.9"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7", optional = true }
 toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }

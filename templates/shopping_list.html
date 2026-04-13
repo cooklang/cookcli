@@ -559,5 +559,37 @@ function loadCheckedStates() {
 }
 
 loadShoppingList();
+
+// Subscribe to server-pushed change events so sync pulls, other-tab edits,
+// or direct `.shopping-list` edits refresh the UI without reload.
+// EventSource auto-reconnects on disconnect; we just close it on unload.
+let shoppingListEvents = null;
+let reloadTimer = null;
+function subscribeToShoppingListEvents() {
+    try {
+        shoppingListEvents = new EventSource('{{ prefix }}/api/shopping_list/events');
+        shoppingListEvents.addEventListener('change', () => {
+            // Coalesce bursts (e.g. .shopping-list and .shopping-checked
+            // changing together) into one fetch. Without this, two
+            // concurrent loadShoppingList() calls race on the module-level
+            // `shoppingList` variable.
+            clearTimeout(reloadTimer);
+            reloadTimer = setTimeout(() => loadShoppingList(), 100);
+        });
+        shoppingListEvents.addEventListener('error', () => {
+            // Browser will auto-reconnect. Nothing to do.
+        });
+    } catch (e) {
+        console.error('Failed to subscribe to shopping list events:', e);
+    }
+}
+subscribeToShoppingListEvents();
+
+window.addEventListener('beforeunload', () => {
+    if (shoppingListEvents) {
+        shoppingListEvents.close();
+        shoppingListEvents = null;
+    }
+});
 </script>
 {% endblock %}
