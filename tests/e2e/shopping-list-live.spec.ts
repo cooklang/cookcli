@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { TestHelpers } from '../fixtures/test-helpers';
 
 // Seed directory used by the dev server started by Playwright's `webServer`.
 // Kept in sync with `playwright.config.ts`'s `cwd`/command.
@@ -16,11 +17,8 @@ test.describe('Shopping list live updates', () => {
       : null;
     // Start from an empty list so assertions are deterministic.
     fs.writeFileSync(LIST_FILE, '');
-    // Use 'domcontentloaded' instead of 'networkidle' because the SSE
-    // connection (/api/shopping_list/events) keeps the network permanently
-    // busy and networkidle never resolves.
-    await page.goto('/shopping-list');
-    await page.waitForLoadState('domcontentloaded');
+    const helpers = new TestHelpers(page);
+    await helpers.goToShoppingList();
   });
 
   test.afterEach(async () => {
