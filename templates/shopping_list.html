@@ -556,14 +556,17 @@ loadShoppingList();
 // or direct `.shopping-list` edits refresh the UI without reload.
 // EventSource auto-reconnects on disconnect; we just close it on unload.
 let shoppingListEvents = null;
+let reloadTimer = null;
 function subscribeToShoppingListEvents() {
     try {
         shoppingListEvents = new EventSource('{{ prefix }}/api/shopping_list/events');
         shoppingListEvents.addEventListener('change', () => {
-            // Re-run the same path as initial page load. `loadShoppingList`
-            // triggers `generateList` when the list is non-empty, so both
-            // the sidebar and the categorized view refresh.
-            loadShoppingList();
+            // Coalesce bursts (e.g. .shopping-list and .shopping-checked
+            // changing together) into one fetch. Without this, two
+            // concurrent loadShoppingList() calls race on the module-level
+            // `shoppingList` variable.
+            clearTimeout(reloadTimer);
+            reloadTimer = setTimeout(() => loadShoppingList(), 100);
         });
         shoppingListEvents.addEventListener('error', () => {
             // Browser will auto-reconnect. Nothing to do.
