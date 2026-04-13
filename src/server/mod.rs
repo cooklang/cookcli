@@ -282,6 +282,16 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
 
+    let shopping_list_events = match shopping_list_watcher::spawn(absolute_path.clone()) {
+        Ok(tx) => Some(tx),
+        Err(e) => {
+            tracing::warn!(
+                "Failed to start shopping list watcher; live updates disabled: {e:#}"
+            );
+            None
+        }
+    };
+
     #[cfg(feature = "sync")]
     let (session_path, session) = {
         let path = crate::global_file_path("session.json")
@@ -303,6 +313,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         pantry_path,
         url_prefix,
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
+        shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
@@ -353,6 +364,10 @@ pub struct AppState {
     /// so we need an in-process mutex on top. All check / uncheck / compact
     /// handlers acquire this before touching the checked log.
     pub checked_log_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Broadcasts filesystem changes to `.shopping-list` / `.shopping-checked`
+    /// to every open SSE subscriber. `None` means watcher init failed; SSE
+    /// clients can still connect but will never receive events.
+    pub shopping_list_events: Option<shopping_list_watcher::ChangeSender>,
     #[cfg(feature = "sync")]
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
     #[cfg(feature = "sync")]
