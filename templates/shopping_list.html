@@ -551,5 +551,34 @@ function loadCheckedStates() {
 }
 
 loadShoppingList();
+
+// Subscribe to server-pushed change events so sync pulls, other-tab edits,
+// or direct `.shopping-list` edits refresh the UI without reload.
+// EventSource auto-reconnects on disconnect; we just close it on unload.
+let shoppingListEvents = null;
+function subscribeToShoppingListEvents() {
+    try {
+        shoppingListEvents = new EventSource('{{ prefix }}/api/shopping_list/events');
+        shoppingListEvents.addEventListener('change', () => {
+            // Re-run the same path as initial page load. `loadShoppingList`
+            // triggers `generateList` when the list is non-empty, so both
+            // the sidebar and the categorized view refresh.
+            loadShoppingList();
+        });
+        shoppingListEvents.addEventListener('error', () => {
+            // Browser will auto-reconnect. Nothing to do.
+        });
+    } catch (e) {
+        console.error('Failed to subscribe to shopping list events:', e);
+    }
+}
+subscribeToShoppingListEvents();
+
+window.addEventListener('beforeunload', () => {
+    if (shoppingListEvents) {
+        shoppingListEvents.close();
+        shoppingListEvents = null;
+    }
+});
 </script>
 {% endblock %}
