@@ -53,6 +53,30 @@
 <script>
 let shoppingList = [];
 
+// Escape a string for safe interpolation into HTML text or a double-quoted
+// attribute value. Recipe names/paths come from filenames — a recipe called
+// `<img src=x onerror=alert(1)>.cook` is a legal filename on most systems,
+// so every untrusted interpolation must flow through this.
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Encode each path segment so special chars like `#`, `?`, `&`, `=` don't
+// break the URL. `encodeURI` intentionally leaves those alone (they're
+// valid URI delimiters), which is wrong here — a recipe filename can
+// legitimately contain any of them.
+function encodeRecipePath(path) {
+    return String(path == null ? '' : path)
+        .split('/')
+        .map(encodeURIComponent)
+        .join('/');
+}
+
 function showError(message) {
     const banner = document.getElementById('error-banner');
     const msg = document.getElementById('error-message');
@@ -88,18 +112,98 @@ function renderSelectedRecipes() {
         return;
     }
 
-    container.innerHTML = shoppingList.map((item, index) => `
-        <div class="flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
-            <div>
-                <a href="{{ prefix }}/recipe/${encodeURI(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${item.name}</a>
-                <span class="text-purple-600 ml-2 text-sm">(×${item.scale})</span>
+    container.innerHTML = shoppingList.map((item, index) => {
+        // Plan/menu entry — show nested recipes
+        if (item.recipes) {
+            const recipesHtml = item.recipes.map(recipe => {
+                const refs = recipe.included_references || [];
+                const refsHtml = refs.length > 0 ? `
+                    <ul class="mt-1 ml-8 pl-2 border-l border-indigo-200 space-y-0.5">
+                        ${refs.map(ref => {
+                            const refName = ref.split('/').pop();
+                            return `<li class="text-xs text-gray-400 flex items-center gap-1">
+                                <svg class="w-3 h-3 text-blue-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                                <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
+                            </li>`;
+                        }).join('')}
+                    </ul>` : '';
+                return `<li class="text-sm text-gray-600 flex flex-col">
+                    <div class="flex items-center gap-1">
+                        <svg class="w-3 h-3 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}" class="hover:text-orange-600 transition-colors">${escHtml(recipe.name)}</a>
+                        <span class="text-purple-400 text-xs">(×${escHtml(recipe.scale)})</span>
+                    </div>
+                    ${refsHtml}
+                </li>`;
+            }).join('');
+
+            return `
+            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
+                        <span class="text-indigo-600 ml-2 text-xs font-semibold uppercase">plan</span>
+                    </div>
+                    <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
+                        {{ tr.t("shopping-remove") }}
+                    </button>
+                </div>
+                <ul class="mt-2 ml-4 space-y-1">${recipesHtml}</ul>
+            </div>`;
+        }
+
+        // Regular recipe entry
+        const refs = item.included_references || [];
+        const refsHtml = refs.length > 0 ? `
+            <ul class="mt-1 ml-8 pl-2 border-l border-purple-200 space-y-0.5">
+                ${refs.map(ref => {
+                    const refName = ref.split('/').pop();
+                    return `<li class="text-sm text-gray-500 flex items-center gap-1">
+                        <svg class="w-3 h-3 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
+                    </li>`;
+                }).join('')}
+            </ul>` : '';
+
+        return `
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
+                    <span class="text-purple-600 ml-2 text-sm">(×${escHtml(item.scale)})</span>
+                </div>
+                <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
+                    {{ tr.t("shopping-remove") }}
+                </button>
             </div>
-            <button onclick="removeRecipe('${item.path}')" class="text-red-500 hover:text-red-700 font-medium text-sm">
-                {{ tr.t("shopping-remove") }}
-            </button>
-        </div>
-    `).join('');
+            ${refsHtml}
+        </div>`;
+    }).join('');
 }
+
+// Event delegation for dynamically-rendered remove buttons: avoids inline
+// `onclick="removeRecipe('${path}')"` which would execute any single-quote
+// break in a recipe path. `data-path` is HTML-escaped, then read as a string.
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action="remove-recipe"]');
+    if (!btn) return;
+    removeRecipe(btn.dataset.path);
+});
+
+// Same delegation trick for ingredient checkboxes — inline `onchange` with
+// unescaped ingredient names would execute script if a name contained a
+// single quote. Values are read from data-* which are plain strings.
+document.addEventListener('change', (event) => {
+    const input = event.target.closest('[data-action="toggle-item"]');
+    if (!input) return;
+    toggleItem(input.dataset.itemId, input.checked, input.dataset.ingredientName);
+});
 
 async function removeRecipe(path) {
     try {
@@ -158,10 +262,24 @@ async function generateList() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(shoppingList.map(item => ({
-                recipe: item.path,
-                scale: item.scale
-            })))
+            body: JSON.stringify(shoppingList.flatMap(item => {
+                // Plan/menu entry — expand into individual recipe requests
+                if (item.recipes) {
+                    return item.recipes.map(recipe => {
+                        const req = { recipe: recipe.path, scale: recipe.scale };
+                        if (recipe.included_references) {
+                            req.included_references = recipe.included_references;
+                        }
+                        return req;
+                    });
+                }
+                // Regular recipe entry
+                const req = { recipe: item.path, scale: item.scale };
+                if (item.included_references) {
+                    req.included_references = item.included_references;
+                }
+                return [req];
+            }))
         });
 
         const data = await response.json();
@@ -283,6 +401,9 @@ function displayShoppingList(data) {
     const pantrySection = document.getElementById('pantry-section');
     const pantryItems = document.getElementById('pantry-items');
 
+    // Populate checked set from server response
+    checkedItems = new Set((data.checked || []).map(n => n.toLowerCase()));
+
     let html = '';
 
     // Display items to buy (organized by aisle)
@@ -290,7 +411,7 @@ function displayShoppingList(data) {
         html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">{{ tr.t("shopping-title") }}</h2>';
         html += data.categories.map(category => `
             <div class="mb-6 bg-white rounded-lg p-4 shadow-sm">
-                <h3 class="font-semibold text-lg mb-3 text-orange-600">${category.category}</h3>
+                <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
                 <ul class="space-y-2">
                     ${category.items.map((item, idx) => {
                         // Use ingredient name as the unique ID for localStorage
@@ -299,15 +420,17 @@ function displayShoppingList(data) {
                         <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition-colors">
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
-                                    id="${itemId}"
+                                    id="${escHtml(itemId)}"
                                     class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 mr-3"
-                                    onchange="toggleItem('${itemId}', this.checked, '${item.name}')">
-                                <label for="${itemId}" class="cursor-pointer flex-1">
-                                    <span class="item-name">${item.name}</span>
+                                    data-action="toggle-item"
+                                    data-item-id="${escHtml(itemId)}"
+                                    data-ingredient-name="${escHtml(item.name)}">
+                                <label for="${escHtml(itemId)}" class="cursor-pointer flex-1">
+                                    <span class="item-name">${escHtml(item.name)}</span>
                                 </label>
                             </div>
                             <span class="text-gray-600 ml-4">
-                                ${formatQuantities(item.quantities)}
+                                ${escHtml(formatQuantities(item.quantities))}
                             </span>
                         </li>
                     `}).join('')}
@@ -331,10 +454,10 @@ function displayShoppingList(data) {
                             <svg class="w-4 h-4 text-green-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                             </svg>
-                            <span class="text-green-800">${itemName}</span>
+                            <span class="text-green-800">${escHtml(itemName)}</span>
                         </div>
                         <span class="text-green-700 text-xs ml-2">
-                            ${itemQuantities ? formatQuantities(itemQuantities) : ''}
+                            ${itemQuantities ? escHtml(formatQuantities(itemQuantities)) : ''}
                         </span>
                     </li>
                 `}).join('')}
@@ -370,65 +493,61 @@ function formatQuantities(quantities) {
     }).join(', ');
 }
 
-// Store for checked items - using ingredient names as keys
+// Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
 
-function toggleItem(itemId, checked, ingredientName) {
-    // Use ingredient name for storage instead of itemId
+async function toggleItem(itemId, checked, ingredientName) {
     const storageKey = ingredientName || itemId;
+    const endpoint = checked ? 'check' : 'uncheck';
 
-    if (checked) {
-        checkedItems.add(storageKey);
-        // Add strikethrough effect
-        const element = document.querySelector(`#${CSS.escape(itemId)}`);
-        if (element) {
-            element.parentElement.querySelector('.item-name').style.textDecoration = 'line-through';
-            element.parentElement.querySelector('.item-name').style.opacity = '0.6';
+    try {
+        const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: storageKey })
+        });
+
+        if (!response.ok) {
+            console.error(`Failed to ${endpoint} item:`, await response.text());
+            return;
         }
-    } else {
-        checkedItems.delete(storageKey);
-        // Remove strikethrough effect
-        const element = document.querySelector(`#${CSS.escape(itemId)}`);
-        if (element) {
-            element.parentElement.querySelector('.item-name').style.textDecoration = 'none';
-            element.parentElement.querySelector('.item-name').style.opacity = '1';
-        }
+    } catch (error) {
+        console.error(`Failed to ${endpoint} item:`, error);
+        return;
     }
 
-    // Save to localStorage using ingredient names
-    localStorage.setItem('checkedShoppingItems', JSON.stringify(Array.from(checkedItems)));
+    if (checked) {
+        checkedItems.add(storageKey.toLowerCase());
+    } else {
+        checkedItems.delete(storageKey.toLowerCase());
+    }
+
+    applyCheckedStyle(itemId, checked);
+}
+
+function applyCheckedStyle(itemId, checked) {
+    const element = document.querySelector(`#${CSS.escape(itemId)}`);
+    if (!element) return;
+    const nameEl = element.parentElement.querySelector('.item-name');
+    if (nameEl) {
+        nameEl.style.textDecoration = checked ? 'line-through' : 'none';
+        nameEl.style.opacity = checked ? '0.6' : '1';
+    }
 }
 
 function loadCheckedStates() {
-    // Load from localStorage
-    const saved = localStorage.getItem('checkedShoppingItems');
-    if (saved) {
-        checkedItems = new Set(JSON.parse(saved));
-
-        // Apply checked states to checkboxes by matching ingredient names
-        document.querySelectorAll('.item-name').forEach(nameElement => {
-            const ingredientName = nameElement.textContent.trim();
-            if (checkedItems.has(ingredientName)) {
-                const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    checkbox.checked = true;
-                    // Apply strikethrough effect
-                    nameElement.style.textDecoration = 'line-through';
-                    nameElement.style.opacity = '0.6';
-                }
+    // Apply checked states from the set populated by displayShoppingList
+    document.querySelectorAll('.item-name').forEach(nameElement => {
+        const ingredientName = nameElement.textContent.trim();
+        if (checkedItems.has(ingredientName.toLowerCase())) {
+            const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = true;
+                nameElement.style.textDecoration = 'line-through';
+                nameElement.style.opacity = '0.6';
             }
-        });
-    }
-}
-
-// Clear checked items when clearing the list
-const originalClearList = clearList;
-clearList = async function() {
-    await originalClearList();
-    checkedItems.clear();
-    localStorage.removeItem('checkedShoppingItems');
-    // Clear the shopping list display
-    document.getElementById('list-content').innerHTML = '<p class="text-gray-500">{{ tr.t("shopping-no-items") }}</p>';
+        }
+    });
 }
 
 loadShoppingList();

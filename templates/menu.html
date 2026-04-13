@@ -244,14 +244,13 @@ async function addToShoppingList(event, recipePath) {
 
     try {
         const scale = document.getElementById('scale')?.value || 1;
-        const response = await fetch('{{ prefix }}/api/shopping_list/add', {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 path: recipePath,
-                name: recipePath.split('/').pop().replace('.menu', ''),
                 scale: parseFloat(scale)
             })
         });

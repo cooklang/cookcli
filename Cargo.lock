@@ -644,9 +644,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.18.4"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23fdd7e11c6ee9ce0e855980a8a0cbe6a73e410d2723c2d03d98ec59f06db202"
+checksum = "a5900e2274c89075e1564b32a201273a02b47053d4fd41897a28d994874c024c"
 dependencies = [
  "bitflags 2.11.0",
  "codesnake",

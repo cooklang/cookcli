@@ -301,6 +301,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
+        checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
@@ -345,6 +346,12 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
+    /// Serializes access to `.shopping-checked` within this process.
+    /// File-level `flock` doesn't prevent two tasks in the *same* process
+    /// from racing on the file (the kernel treats them as one lock owner),
+    /// so we need an in-process mutex on top. All check / uncheck / compact
+    /// handlers acquire this before touching the checked log.
+    pub checked_log_lock: Arc<tokio::sync::Mutex<()>>,
     #[cfg(feature = "sync")]
     pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
     #[cfg(feature = "sync")]
@@ -393,10 +400,21 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/shopping_list/add", post(handlers::add_to_shopping_list))
         .route(
+            "/shopping_list/add_menu",
+            post(handlers::add_menu_to_shopping_list),
+        )
+        .route(
             "/shopping_list/remove",
             post(handlers::remove_from_shopping_list),
         )
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
+        .route("/shopping_list/check", post(handlers::check_shopping_item))
+        .route(
+            "/shopping_list/uncheck",
+            post(handlers::uncheck_shopping_item),
+        )
+        .route("/shopping_list/checked", get(handlers::get_checked_items))
+        .route("/shopping_list/compact", post(handlers::compact_checked))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
         .route("/pantry/expiring", get(handlers::get_expiring))

@@ -1,9 +1,11 @@
 use crate::server::{
-    shopping_list_store::{ShoppingListItem, ShoppingListStore},
+    shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
     AppState,
 };
 use crate::util::{extract_ingredients, PARSER};
+use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
+use camino::Utf8PathBuf;
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
 use serde_json;
@@ -14,6 +16,8 @@ use std::sync::Arc;
 pub struct RecipeRequest {
     recipe: String,
     scale: Option<f64>,
+    /// Which sub-recipe references to include. `None` = all.
+    included_references: Option<Vec<String>>,
 }
 
 pub async fn shopping_list(
@@ -37,6 +41,7 @@ pub async fn shopping_list(
             &state.base_path,
             PARSER.converter(),
             false,
+            entry.included_references.as_deref(),
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
@@ -160,16 +165,21 @@ pub async fn shopping_list(
         }
     }
 
+    // Load checked state
+    let store = ShoppingListStore::new(&state.base_path);
+    let checked = store.checked_set().unwrap_or_default();
+
     let json_value = serde_json::json!({
         "categories": shopping_categories,
-        "pantry_items": pantry_items
+        "pantry_items": pantry_items,
+        "checked": checked.into_iter().collect::<Vec<_>>()
     });
     Ok(Json(json_value))
 }
 
 pub async fn get_shopping_list_items(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<ShoppingListItem>>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Vec<ShoppingListApiItem>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
@@ -184,8 +194,9 @@ pub async fn get_shopping_list_items(
 #[derive(Debug, Deserialize)]
 pub struct AddItemRequest {
     pub path: String,
-    pub name: String,
     pub scale: f64,
+    /// Which sub-recipe references to include. `None` = all (menus, backward compat).
+    pub included_references: Option<Vec<String>>,
 }
 
 pub async fn add_to_shopping_list(
@@ -193,10 +204,14 @@ pub async fn add_to_shopping_list(
     Json(payload): Json<AddItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
-    let item = ShoppingListItem {
+    // `name` is derived from `path` on load — any client-supplied display
+    // name would be silently discarded, so it's not accepted here.
+    let item = ShoppingListApiItem {
+        name: recipe_display_name(&payload.path),
         path: payload.path,
-        name: payload.name,
         scale: payload.scale,
+        included_references: payload.included_references,
+        recipes: None,
     };
 
     store.add(item).map_err(|e| {
@@ -228,12 +243,33 @@ pub async fn remove_from_shopping_list(
         )
     })?;
 
+    // Compact the checked log now that one recipe is gone: stale checks
+    // (ingredients no longer referenced by any remaining recipe) can drop.
+    // Best-effort — a failure here must not break the remove itself.
+    // Serialize against concurrent check/uncheck/compact.
+    let _guard = state.checked_log_lock.lock().await;
+    match aggregate_current_ingredient_names(&state) {
+        Ok(names) => {
+            if let Err(e) = store.compact(names) {
+                tracing::warn!("Failed to compact checked log after remove: {:?}", e);
+            }
+        }
+        Err(e) => tracing::warn!(
+            "Skipping compact after remove — aggregation failed: {:?}",
+            e
+        ),
+    }
+
     Ok(StatusCode::OK)
 }
 
 pub async fn clear_shopping_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    // Acquire the checked-log lock so a concurrent check/uncheck can't
+    // recreate `.shopping-checked` between our remove_file and the caller's
+    // view of a cleared list.
+    let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
     store.clear().map_err(|e| {
         tracing::error!("Failed to clear shopping list: {:?}", e);
@@ -242,6 +278,262 @@ pub async fn clear_shopping_list(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+
+    Ok(StatusCode::OK)
+}
+
+// -- Check/uncheck endpoints --
+
+#[derive(Debug, Deserialize)]
+pub struct CheckItemRequest {
+    pub name: String,
+}
+
+pub async fn check_shopping_item(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CheckItemRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
+    let store = ShoppingListStore::new(&state.base_path);
+    store.check(&payload.name).map_err(|e| {
+        tracing::error!("Failed to check item: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+pub async fn uncheck_shopping_item(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CheckItemRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
+    let store = ShoppingListStore::new(&state.base_path);
+    store.uncheck(&payload.name).map_err(|e| {
+        tracing::error!("Failed to uncheck item: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+pub async fn get_checked_items(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<String>>, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let checked = store.checked_set().map_err(|e| {
+        tracing::error!("Failed to get checked items: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(Json(checked.into_iter().collect()))
+}
+
+pub async fn compact_checked(
+    State(state): State<Arc<AppState>>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let _guard = state.checked_log_lock.lock().await;
+    let store = ShoppingListStore::new(&state.base_path);
+    let names = aggregate_current_ingredient_names(&state).map_err(|e| {
+        tracing::error!("Failed to aggregate ingredients for compact: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    store.compact(names).map_err(|e| {
+        tracing::error!("Failed to compact checked list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+/// Aggregate the ingredient names a user would see for the currently-stored
+/// shopping list. Walks every recipe reference persisted in `.shopping-list`
+/// and expands it through `extract_ingredients`, honoring any
+/// `included_references` and recipe scale factors.
+///
+/// Returns names in their raw (non-common) form — `compact_checked` does a
+/// case-insensitive comparison so that's fine for the stale-check step.
+///
+/// Returns `Err(..)` if any recipe fails to parse. The caller should refuse
+/// to compact in that case — a partial ingredient set would mark otherwise-
+/// valid checks as stale and wipe them, which is how the original bug this
+/// module was fixing manifested.
+fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<String>> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let items = store.load()?;
+    let mut list = IngredientList::new();
+
+    // `extract_ingredients` uses `seen` to detect circular references
+    // *within a single recipe tree*. The shopping list may legitimately
+    // contain the same recipe multiple times (e.g. duplicate entries from
+    // the legacy format), so we reset `seen` per top-level entry —
+    // otherwise the second occurrence is misreported as a cycle and we'd
+    // skip the compact, leaving stale checks in place.
+    for item in &items {
+        if let Some(recipes) = &item.recipes {
+            // Menu/plan entry — expand each nested recipe.
+            for recipe in recipes {
+                let mut seen = BTreeMap::new();
+                let scaled = format!("{}:{}", recipe.path, recipe.scale);
+                extract_ingredients(
+                    &scaled,
+                    &mut list,
+                    &mut seen,
+                    &state.base_path,
+                    PARSER.converter(),
+                    false,
+                    recipe.included_references.as_deref(),
+                )
+                .with_context(|| format!("aggregating ingredients for {scaled}"))?;
+            }
+        } else {
+            let mut seen = BTreeMap::new();
+            let scaled = format!("{}:{}", item.path, item.scale);
+            extract_ingredients(
+                &scaled,
+                &mut list,
+                &mut seen,
+                &state.base_path,
+                PARSER.converter(),
+                false,
+                item.included_references.as_deref(),
+            )
+            .with_context(|| format!("aggregating ingredients for {scaled}"))?;
+        }
+    }
+
+    Ok(list.iter().map(|(name, _)| name.clone()).collect())
+}
+
+// -- Add menu (bulk) endpoint --
+
+#[derive(Debug, Deserialize)]
+pub struct AddMenuRequest {
+    pub path: String,
+    pub scale: f64,
+}
+
+/// Resolve the sub-recipe reference paths for a given recipe.
+fn resolve_recipe_references(
+    base_path: &Utf8PathBuf,
+    recipe_path: &str,
+) -> anyhow::Result<Vec<String>> {
+    let entry = crate::util::get_recipe(base_path, recipe_path)?;
+    let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
+
+    let mut refs = Vec::new();
+    for ingredient in &recipe.ingredients {
+        if let Some(ref recipe_ref) = ingredient.reference {
+            let path = if recipe_ref.components.is_empty() {
+                recipe_ref.name.clone()
+            } else {
+                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
+            };
+            refs.push(path);
+        }
+    }
+    Ok(refs)
+}
+
+/// Add all recipe references from a menu to the shopping list as a single
+/// plan entry with recipes nested inside.
+pub async fn add_menu_to_shopping_list(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AddMenuRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let menu_scale = payload.scale;
+
+    let recipe_path = Utf8PathBuf::from(&payload.path);
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &recipe_path).map_err(|e| {
+        tracing::error!("Menu not found: {}", payload.path);
+        (
+            StatusCode::NOT_FOUND,
+            Json(
+                serde_json::json!({ "error": format!("Menu not found: {}: {}", payload.path, e) }),
+            ),
+        )
+    })?;
+
+    // Parse at scale 1.0 to get raw quantities for recipe references
+    let menu = crate::util::parse_recipe_from_entry(&entry, 1.0).map_err(|e| {
+        tracing::error!("Failed to parse menu: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
+        )
+    })?;
+
+    let mut recipes = Vec::new();
+
+    for ingredient in &menu.ingredients {
+        if let Some(ref recipe_ref) = ingredient.reference {
+            // Build display path from reference components
+            let ref_display = if recipe_ref.components.is_empty() {
+                recipe_ref.name.clone()
+            } else {
+                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
+            };
+
+            // Recipe's own quantity × menu global scale
+            let recipe_quantity = ingredient.quantity.as_ref().and_then(|q| match q.value() {
+                cooklang::quantity::Value::Number(n) => Some(n.value()),
+                _ => None,
+            });
+            let final_scale = recipe_quantity
+                .map(|q| q * menu_scale)
+                .unwrap_or(menu_scale);
+
+            // Resolve this recipe's sub-recipe references
+            let ref_path_for_find = recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+            let sub_refs = match resolve_recipe_references(&state.base_path, &ref_path_for_find) {
+                Ok(refs) => refs,
+                Err(e) => {
+                    tracing::warn!(
+                        "Could not resolve sub-references for '{}': {}",
+                        ref_display,
+                        e
+                    );
+                    Vec::new()
+                }
+            };
+
+            // Strip ./ prefix for storage (the format writer adds it back)
+            let path = ref_display
+                .strip_prefix("./")
+                .unwrap_or(&ref_display)
+                .to_string();
+
+            recipes.push(ShoppingListApiItem {
+                name: recipe_display_name(&path),
+                path,
+                scale: final_scale,
+                included_references: Some(sub_refs),
+                recipes: None,
+            });
+        }
+    }
+
+    store
+        .add_menu(payload.path, menu_scale, recipes)
+        .map_err(|e| {
+            tracing::error!("Failed to add menu to shopping list: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
 
     Ok(StatusCode::OK)
 }
