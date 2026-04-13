@@ -54,6 +54,7 @@ mod i18n;
 mod language;
 mod lsp_bridge;
 mod shopping_list_store;
+mod shopping_list_watcher;
 #[cfg(feature = "sync")]
 pub mod sync;
 mod templates;
