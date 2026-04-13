@@ -51,6 +51,8 @@ futures-util = "0.3"
 fluent-templates = "0.10"
 humantime = "2"
 mime_guess = "2.0"
+notify = "6"
+notify-debouncer-full = "0.3"
 open = "5.3"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
