@@ -3,6 +3,7 @@ pub mod menus;
 pub mod pantry;
 pub mod recipes;
 pub mod shopping_list;
+pub mod shopping_list_events;
 pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
@@ -18,6 +19,7 @@ pub use shopping_list::{
     compact_checked, get_checked_items, get_shopping_list_items, remove_from_shopping_list,
     shopping_list, uncheck_shopping_item,
 };
+pub use shopping_list_events::shopping_list_events;
 pub use stats::stats;
 #[cfg(feature = "sync")]
 pub use sync::{sync_login, sync_logout, sync_status};
