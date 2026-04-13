@@ -47,7 +47,7 @@ pub fn classify_path(base_path: &Utf8Path, path: &Path) -> Option<WatchedFile> {
 }
 
 use anyhow::{Context, Result};
-use notify::{RecursiveMode, Watcher};
+use notify::RecursiveMode;
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -58,6 +58,11 @@ pub type ChangeSender = broadcast::Sender<ShoppingListChangeEvent>;
 /// Channel capacity: small buffer of most-recent events. Slow subscribers
 /// get `Lagged` rather than stalling the watcher.
 const CHANNEL_CAPACITY: usize = 16;
+
+/// Bridge channel capacity (notify thread → tokio task). With 200 ms
+/// debouncing this should never fill in normal use; bounding it caps
+/// memory if a runaway producer touches files in a tight loop.
+const BRIDGE_CAPACITY: usize = 32;
 
 /// Debounce window. Collapses the create+modify burst produced by
 /// `shopping_list_store::compact()`'s atomic rename.
@@ -75,17 +80,20 @@ pub fn spawn(base_path: camino::Utf8PathBuf) -> Result<ChangeSender> {
 
     // Channel for decoupling the notify thread (sync) from tokio. The
     // debouncer callback runs on notify's own thread; we forward batches
-    // to an async task which fans them out to `tx`.
-    let (evt_tx, mut evt_rx) = tokio::sync::mpsc::unbounded_channel::<DebounceEventResult>();
+    // to an async task which fans them out to `tx`. Bounded so a runaway
+    // producer can't grow memory; on overflow we drop the batch (the next
+    // change will trigger a re-fetch anyway).
+    let (evt_tx, mut evt_rx) = tokio::sync::mpsc::channel::<DebounceEventResult>(BRIDGE_CAPACITY);
 
     let mut debouncer = new_debouncer(DEBOUNCE, None, move |res: DebounceEventResult| {
-        // If the async side has shut down, silently drop.
-        let _ = evt_tx.send(res);
+        // If the async side is shut down or backlogged, drop the batch.
+        if let Err(e) = evt_tx.try_send(res) {
+            tracing::debug!("shopping list watcher: dropping batch ({e})");
+        }
     })
     .context("initializing filesystem debouncer")?;
 
     debouncer
-        .watcher()
         .watch(base_path.as_std_path(), RecursiveMode::NonRecursive)
         .with_context(|| format!("watching {base_path}"))?;
 
