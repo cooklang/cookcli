@@ -46,6 +46,98 @@ pub fn classify_path(base_path: &Utf8Path, path: &Path) -> Option<WatchedFile> {
     }
 }
 
+use anyhow::{Context, Result};
+use notify::{RecursiveMode, Watcher};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult};
+use std::time::Duration;
+use tokio::sync::broadcast;
+
+/// Broadcast channel used to fan out change events to every open SSE stream.
+pub type ChangeSender = broadcast::Sender<ShoppingListChangeEvent>;
+
+/// Channel capacity: small buffer of most-recent events. Slow subscribers
+/// get `Lagged` rather than stalling the watcher.
+const CHANNEL_CAPACITY: usize = 16;
+
+/// Debounce window. Collapses the create+modify burst produced by
+/// `shopping_list_store::compact()`'s atomic rename.
+const DEBOUNCE: Duration = Duration::from_millis(200);
+
+/// Construct a broadcast sender and spawn a background task that watches
+/// `base_path` for `.shopping-list` / `.shopping-checked` changes.
+///
+/// Returns only the sender — the task is detached. The watcher lives as
+/// long as the process. On init failure, returns `Err`; the caller should
+/// log and continue without live updates.
+pub fn spawn(base_path: camino::Utf8PathBuf) -> Result<ChangeSender> {
+    let (tx, _rx) = broadcast::channel::<ShoppingListChangeEvent>(CHANNEL_CAPACITY);
+    let tx_for_task = tx.clone();
+
+    // Channel for decoupling the notify thread (sync) from tokio. The
+    // debouncer callback runs on notify's own thread; we forward batches
+    // to an async task which fans them out to `tx`.
+    let (evt_tx, mut evt_rx) = tokio::sync::mpsc::unbounded_channel::<DebounceEventResult>();
+
+    let mut debouncer = new_debouncer(DEBOUNCE, None, move |res: DebounceEventResult| {
+        // If the async side has shut down, silently drop.
+        let _ = evt_tx.send(res);
+    })
+    .context("initializing filesystem debouncer")?;
+
+    debouncer
+        .watcher()
+        .watch(base_path.as_std_path(), RecursiveMode::NonRecursive)
+        .with_context(|| format!("watching {base_path}"))?;
+
+    let base_for_task = base_path.clone();
+    tokio::spawn(async move {
+        // Hold the debouncer for the lifetime of the task so the watcher
+        // thread isn't dropped.
+        let _debouncer = debouncer;
+
+        while let Some(result) = evt_rx.recv().await {
+            match result {
+                Ok(events) => {
+                    // Collapse the batch: at most one event per file.
+                    let mut fired_list = false;
+                    let mut fired_checked = false;
+                    for event in events {
+                        for path in &event.paths {
+                            match classify_path(&base_for_task, path) {
+                                Some(WatchedFile::List) if !fired_list => {
+                                    fired_list = true;
+                                }
+                                Some(WatchedFile::Checked) if !fired_checked => {
+                                    fired_checked = true;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    if fired_list {
+                        // Send returns Err when there are no receivers — fine.
+                        let _ = tx_for_task.send(ShoppingListChangeEvent {
+                            file: WatchedFile::List,
+                        });
+                    }
+                    if fired_checked {
+                        let _ = tx_for_task.send(ShoppingListChangeEvent {
+                            file: WatchedFile::Checked,
+                        });
+                    }
+                }
+                Err(errors) => {
+                    for err in errors {
+                        tracing::warn!("shopping list watcher error: {err}");
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(tx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
