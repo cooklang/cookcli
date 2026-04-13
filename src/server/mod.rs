@@ -285,9 +285,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     let shopping_list_events = match shopping_list_watcher::spawn(absolute_path.clone()) {
         Ok(tx) => Some(tx),
         Err(e) => {
-            tracing::warn!(
-                "Failed to start shopping list watcher; live updates disabled: {e:#}"
-            );
+            tracing::warn!("Failed to start shopping list watcher; live updates disabled: {e:#}");
             None
         }
     };
@@ -431,10 +429,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/shopping_list/checked", get(handlers::get_checked_items))
         .route("/shopping_list/compact", post(handlers::compact_checked))
-        .route(
-            "/shopping_list/events",
-            get(handlers::shopping_list_events),
-        )
+        .route("/shopping_list/events", get(handlers::shopping_list_events))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
         .route("/pantry/expiring", get(handlers::get_expiring))

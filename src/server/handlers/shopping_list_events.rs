@@ -30,7 +30,9 @@ pub async fn shopping_list_events(
                             .json_data(evt)
                             .unwrap_or_else(|_| Event::default().event("change")))),
                         Err(_lagged) => {
-                            tracing::debug!("SSE subscriber lagged — client will catch up on next fetch");
+                            tracing::debug!(
+                                "SSE subscriber lagged — client will catch up on next fetch"
+                            );
                             None
                         }
                     },
