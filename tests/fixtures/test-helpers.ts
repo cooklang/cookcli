@@ -78,10 +78,13 @@ export class TestHelpers {
 
   /**
    * Navigate to shopping list
+   * Uses 'domcontentloaded' instead of 'networkidle' because the page opens a
+   * persistent EventSource (/api/shopping_list/events) which keeps the network
+   * non-idle indefinitely, causing waitForLoadState('networkidle') to hang.
    */
   async goToShoppingList() {
     await this.page.goto('/shopping-list');
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
   }
 
   /**

@@ -191,8 +191,7 @@ test.describe('Performance', () => {
     await helpers.navigateTo('/');
 
     // Navigate through multiple pages
-    await page.goto('/shopping-list');
-    await page.waitForLoadState('networkidle');
+    await helpers.goToShoppingList();
     await page.goto('/pantry');
     await page.waitForLoadState('networkidle');
     await helpers.navigateTo('/');

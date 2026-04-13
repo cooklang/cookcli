@@ -185,7 +185,7 @@ test.describe('Shopping List', () => {
       const newHelpers = new TestHelpers(newPage);
       const newShoppingList = new ShoppingListPage(newPage, newHelpers);
 
-      await newHelpers.navigateTo('/shopping-list');
+      await newHelpers.goToShoppingList();
 
       // Check items are still there
       const itemsAfter = await newShoppingList.getItems();
