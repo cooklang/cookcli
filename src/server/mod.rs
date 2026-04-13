@@ -431,6 +431,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/shopping_list/checked", get(handlers::get_checked_items))
         .route("/shopping_list/compact", post(handlers::compact_checked))
+        .route(
+            "/shopping_list/events",
+            get(handlers::shopping_list_events),
+        )
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
         .route("/pantry/expiring", get(handlers::get_expiring))
