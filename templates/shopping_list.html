@@ -107,8 +107,8 @@ function renderSelectedRecipes() {
     const container = document.getElementById('selected-recipes');
 
     if (shoppingList.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 text-sm">{{ tr.t("shopping-no-recipes") }}</p>';
-        document.getElementById('list-content').innerHTML = '<p class="text-gray-500">{{ tr.t("shopping-no-items") }}</p>';
+        container.innerHTML = '<p class="text-gray-500 text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>';
+        document.getElementById('list-content').innerHTML = '<p class="text-gray-500">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
         return;
     }
 
@@ -252,7 +252,7 @@ async function generateList() {
     hideError();
 
     if (shoppingList.length === 0) {
-        showError('{{ tr.t("shopping-add-recipes-first") }}');
+        showError({{ tr.t("shopping-add-recipes-first")|json|safe }});
         return;
     }
 
@@ -292,13 +292,13 @@ async function generateList() {
 
         const data = await response.json();
         if (!response.ok) {
-            showError(data.error || '{{ tr.t("shopping-failed-to-generate") }}');
+            showError(data.error || {{ tr.t("shopping-failed-to-generate")|json|safe }});
             return;
         }
         displayShoppingList(data);
     } catch (error) {
         console.error('Failed to generate shopping list:', error);
-        showError('{{ tr.t("shopping-failed-to-generate") }}');
+        showError({{ tr.t("shopping-failed-to-generate")|json|safe }});
     }
 }
 
@@ -416,7 +416,7 @@ function displayShoppingList(data) {
 
     // Display items to buy (organized by aisle)
     if (data.categories && data.categories.length > 0) {
-        html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">{{ tr.t("shopping-title") }}</h2>';
+        html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">' + escHtml({{ tr.t("shopping-title")|json|safe }}) + '</h2>';
         html += data.categories.map(category => `
             <div class="mb-6 bg-white rounded-lg p-4 shadow-sm">
                 <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
@@ -476,7 +476,7 @@ function displayShoppingList(data) {
     }
 
     if (html === '') {
-        contentDiv.innerHTML = '<p class="text-gray-500">{{ tr.t("shopping-no-items") }}</p>';
+        contentDiv.innerHTML = '<p class="text-gray-500">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
     } else {
         contentDiv.innerHTML = html;
         // Load saved checked states

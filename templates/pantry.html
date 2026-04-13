@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!emptyMessage) {
                         const message = document.createElement('p');
                         message.className = 'empty-section-message text-gray-500 italic';
-                        message.textContent = '{{ tr.t("pantry-no-out-of-stock") }}';
+                        message.textContent = {{ tr.t("pantry-no-out-of-stock")|json|safe }};
                         sectionContainer.parentNode.appendChild(message);
                     }
                 } else {
@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.reload();
                 } else {
                     const data = await response.json().catch(() => ({}));
-                    showPantryError(data.error || '{{ tr.t("pantry-failed-add") }}');
+                    showPantryError(data.error || {{ tr.t("pantry-failed-add")|json|safe }});
                 }
             } catch (error) {
                 showPantryError('Error adding item: ' + error);
@@ -530,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     checkOutOfStock();
                 } else {
                     const data = await response.json().catch(() => ({}));
-                    showPantryError(data.error || '{{ tr.t("pantry-failed-update") }}');
+                    showPantryError(data.error || {{ tr.t("pantry-failed-update")|json|safe }});
                 }
             } catch (error) {
                 showPantryError('Error updating item: ' + error);
@@ -562,7 +562,7 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteBtn.addEventListener('click', async function(e) {
                 e.stopPropagation();
 
-                if (confirm('{{ tr.t("pantry-confirm-remove-template") }}'.replace('%s', name).replace('%s', section))) {
+                if (confirm({{ tr.t("pantry-confirm-remove-template")|json|safe }}.replace('%s', name).replace('%s', section))) {
                     try {
                         const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
@@ -582,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             }, 200);
                         } else {
                             const data = await response.json().catch(() => ({}));
-                            showPantryError(data.error || '{{ tr.t("pantry-failed-remove") }}');
+                            showPantryError(data.error || {{ tr.t("pantry-failed-remove")|json|safe }});
                         }
                     } catch (error) {
                         showPantryError('Error removing item: ' + error);

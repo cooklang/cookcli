@@ -58,7 +58,7 @@
                     </svg>
                     <span class="hidden lg:inline">{{ tr.t("action-edit") }}</span>
                 </a>
-                <button onclick="addToShoppingList(event, '{{ recipe_path }}')"
+                <button onclick="addToShoppingList(event, {{ recipe_path|json }})"
                         class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
                         title="{{ tr.t("recipe-add-all-to-shopping") }}">
                     <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,7 +256,7 @@ async function addToShoppingList(event, recipePath) {
         });
 
         if (response.ok) {
-            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> {{ tr.t("recipe-added") }}';
+            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ' + {{ tr.t("recipe-added")|json|safe }};
             button.classList.add('bg-green-500', 'hover:bg-green-600');
             button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
 
@@ -266,11 +266,11 @@ async function addToShoppingList(event, recipePath) {
                 button.classList.add('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
             }, 2000);
         } else {
-            throw new Error('{{ tr.t("shopping-failed-to-add") }}');
+            throw new Error({{ tr.t("shopping-failed-to-add")|json|safe }});
         }
     } catch (error) {
         console.error('Error:', error);
-        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> {{ tr.t("shopping-error") }}';
+        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> ' + {{ tr.t("shopping-error")|json|safe }};
         button.classList.add('bg-red-500', 'hover:bg-red-600');
 
         setTimeout(() => {

@@ -58,7 +58,7 @@
                     </svg>
                     <span class="hidden lg:inline">{{ tr.t("action-edit") }}</span>
                 </a>
-                <button onclick="addToShoppingList(event, '{{ recipe_path }}')"
+                <button onclick="addToShoppingList(event, {{ recipe_path|json }})"
                         class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
                         title="{{ tr.t("recipe-add-to-shopping") }}">
                     <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -396,11 +396,11 @@ async function addToShoppingList(event, recipePath) {
             }, 2000);
         } else {
             const data = await response.json().catch(() => ({}));
-            showRecipeError(data.error || '{{ tr.t("shopping-failed-to-add") }}');
+            showRecipeError(data.error || {{ tr.t("shopping-failed-to-add")|json|safe }});
         }
     } catch (error) {
         console.error('Failed to add to shopping list:', error);
-        showRecipeError('{{ tr.t("shopping-failed-to-add") }}');
+        showRecipeError({{ tr.t("shopping-failed-to-add")|json|safe }});
     }
 }
 
