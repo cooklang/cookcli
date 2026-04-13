@@ -237,6 +237,19 @@
 </div>
 
 <script>
+// Escape a string for safe interpolation into HTML text content. Even
+// though translated strings are compile-time today, defensively escaping
+// matches the pattern used in shopping_list.html and prevents any future
+// translation source from injecting markup via innerHTML.
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 async function addToShoppingList(event, recipePath) {
     event.preventDefault();
     const button = event.currentTarget;
@@ -256,7 +269,7 @@ async function addToShoppingList(event, recipePath) {
         });
 
         if (response.ok) {
-            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ' + {{ tr.t("recipe-added")|json|safe }};
+            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ' + escHtml({{ tr.t("recipe-added")|json|safe }});
             button.classList.add('bg-green-500', 'hover:bg-green-600');
             button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
 
@@ -270,7 +283,7 @@ async function addToShoppingList(event, recipePath) {
         }
     } catch (error) {
         console.error('Error:', error);
-        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> ' + {{ tr.t("shopping-error")|json|safe }};
+        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> ' + escHtml({{ tr.t("shopping-error")|json|safe }});
         button.classList.add('bg-red-500', 'hover:bg-red-600');
 
         setTimeout(() => {
