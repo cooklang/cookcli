@@ -263,15 +263,23 @@ async function generateList() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(shoppingList.flatMap(item => {
-                // Plan/menu entry — expand into individual recipe requests
+                // Plan/menu entry — expand into individual recipe requests,
+                // plus the menu itself (with no references) so its freehand
+                // ingredients are included in the shopping list.
                 if (item.recipes) {
-                    return item.recipes.map(recipe => {
+                    const menuFreehand = {
+                        recipe: item.path,
+                        scale: item.scale,
+                        included_references: []
+                    };
+                    const recipeRequests = item.recipes.map(recipe => {
                         const req = { recipe: recipe.path, scale: recipe.scale };
                         if (recipe.included_references) {
                             req.included_references = recipe.included_references;
                         }
                         return req;
                     });
+                    return [menuFreehand, ...recipeRequests];
                 }
                 // Regular recipe entry
                 const req = { recipe: item.path, scale: item.scale };
