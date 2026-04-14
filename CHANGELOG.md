@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.29.0](https://github.com/cooklang/cookcli/compare/v0.28.1...v0.29.0) (2026-04-14)
+
+
+### Features
+
+* live updates for shopping list page ([#325](https://github.com/cooklang/cookcli/issues/325)) ([3dd5e6f](https://github.com/cooklang/cookcli/commit/3dd5e6fff0e10da08acb93b1f51edfa15775aa1f))
+* migrate shopping list to new format with checked state ([#318](https://github.com/cooklang/cookcli/issues/318)) ([7700032](https://github.com/cooklang/cookcli/commit/77000323a5f4e9b4eddf74e5b57e5c3b53b4969b))
+
+
+### Bug Fixes
+
+* escape single quotes in JS string literals to prevent XSS ([#326](https://github.com/cooklang/cookcli/issues/326)) ([9ee62ae](https://github.com/cooklang/cookcli/commit/9ee62ae6bd67d39b393c3e04d5fd6debdf1c2136))
+* include menu freehand ingredients in web shopping list ([#324](https://github.com/cooklang/cookcli/issues/324)) ([069caee](https://github.com/cooklang/cookcli/commit/069caeea29a945141317bd9c1b1d4affb38bba50))
+* ingredient and cookware names invisible when printing in dark mode ([#322](https://github.com/cooklang/cookcli/issues/322)) ([6b9602e](https://github.com/cooklang/cookcli/commit/6b9602e8eb4fc3d5c53387822d98d6d0dccb0bc8)), closes [#319](https://github.com/cooklang/cookcli/issues/319)
+* unreadable plan card on shopping list in dark mode ([#323](https://github.com/cooklang/cookcli/issues/323)) ([282d221](https://github.com/cooklang/cookcli/commit/282d22161320862956c3a3042020be5c0de0f4bd))
+
 ## [0.28.1](https://github.com/cooklang/cookcli/compare/v0.28.0...v0.28.1) (2026-04-09)
 
 
