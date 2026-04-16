@@ -147,9 +147,18 @@ pub async fn shopping_list(
     let mut shopping_categories = Vec::new();
 
     for (category, items) in categories {
-        let mut shopping_items = Vec::new();
+        let mut entries: Vec<(String, _)> = items.into_iter().collect();
 
-        for (name, qty) in items {
+        // The "other" bucket holds ingredients with no aisle category. They
+        // arrive in recipe insertion order, which is unhelpful when scanning
+        // a long list — sort alphabetically (case-insensitive) so shoppers
+        // can find items predictably.
+        if category == "other" {
+            entries.sort_by(|(a, _), (b, _)| a.to_lowercase().cmp(&b.to_lowercase()));
+        }
+
+        let mut shopping_items = Vec::new();
+        for (name, qty) in entries {
             let item_json = serde_json::json!({
                 "name": name,
                 "quantities": qty.into_vec()
