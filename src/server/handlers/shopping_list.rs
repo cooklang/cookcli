@@ -435,15 +435,20 @@ pub struct AddMenuRequest {
 
 /// Information about a referenced recipe needed to convert a menu's
 /// `{target%unit}` into a storage multiplier for `.shopping-list`.
+#[derive(Default)]
 struct RecipeInfo {
     sub_refs: Vec<String>,
+    /// Numeric `servings` metadata. The cooklang API only exposes this as
+    /// `u32`, so fractional defaults like `servings: 1.5` appear as `None`
+    /// and fall back to raw-multiplier mode.
     default_servings: Option<u32>,
     /// Parsed `yield` metadata (value, unit) if present and well-formed,
     /// e.g. `yield: 500%ml` → `Some((500.0, "ml"))`.
     default_yield: Option<(f64, String)>,
 }
 
-/// Parse `"VALUE%UNIT"` (the only format `scale_to_yield` accepts) into its parts.
+/// Parse the `yield` metadata format `"VALUE%UNIT"` (e.g. `"500%ml"`) into
+/// its numeric value and unit.
 fn parse_yield(s: &str) -> Option<(f64, String)> {
     let (value, unit) = s.split_once('%')?;
     let value = value.trim().parse::<f64>().ok()?;
@@ -533,11 +538,7 @@ pub async fn add_menu_to_shopping_list(
                         ref_display,
                         e
                     );
-                    RecipeInfo {
-                        sub_refs: Vec::new(),
-                        default_servings: None,
-                        default_yield: None,
-                    }
+                    RecipeInfo::default()
                 }
             };
 
@@ -561,9 +562,14 @@ pub async fn add_menu_to_shopping_list(
                         _ => None,
                     };
                     match (value, q.unit()) {
+                        // Non-numeric quantity (e.g. `{some%servings}`): no
+                        // target to scale against, so use identity.
                         (None, _) => 1.0,
                         (Some(v), None) => v,
-                        (Some(target), Some("servings" | "serving")) => {
+                        (Some(target), Some(unit))
+                            if unit.eq_ignore_ascii_case("servings")
+                                || unit.eq_ignore_ascii_case("serving") =>
+                        {
                             match info.default_servings {
                                 Some(base) if base > 0 => target / base as f64,
                                 _ => {
@@ -578,7 +584,9 @@ pub async fn add_menu_to_shopping_list(
                             }
                         }
                         (Some(target), Some(unit)) => match &info.default_yield {
-                            Some((base, base_unit)) if base_unit == unit && *base > 0.0 => {
+                            Some((base, base_unit))
+                                if base_unit.eq_ignore_ascii_case(unit) && *base > 0.0 =>
+                            {
                                 target / base
                             }
                             Some((_, base_unit)) => {
@@ -637,4 +645,40 @@ pub async fn add_menu_to_shopping_list(
         })?;
 
     Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_yield;
+
+    #[test]
+    fn parse_yield_basic() {
+        assert_eq!(parse_yield("500%ml"), Some((500.0, "ml".to_string())));
+    }
+
+    #[test]
+    fn parse_yield_decimal() {
+        assert_eq!(parse_yield("1.5%l"), Some((1.5, "l".to_string())));
+    }
+
+    #[test]
+    fn parse_yield_trims_whitespace() {
+        assert_eq!(parse_yield(" 250 % g "), Some((250.0, "g".to_string())));
+    }
+
+    #[test]
+    fn parse_yield_missing_unit() {
+        assert_eq!(parse_yield("500%"), None);
+        assert_eq!(parse_yield("500"), None);
+    }
+
+    #[test]
+    fn parse_yield_missing_value() {
+        assert_eq!(parse_yield("%ml"), None);
+    }
+
+    #[test]
+    fn parse_yield_non_numeric_value() {
+        assert_eq!(parse_yield("abc%ml"), None);
+    }
 }
