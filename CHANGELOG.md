@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.29.1](https://github.com/cooklang/cookcli/compare/v0.29.0...v0.29.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* resolve menu recipe references from collection root in CLI ([#330](https://github.com/cooklang/cookcli/issues/330)) ([444f1c3](https://github.com/cooklang/cookcli/commit/444f1c30cc241715518f33eb3989e5fbff176cfc))
+* scale menu recipe references by servings/yield ([#329](https://github.com/cooklang/cookcli/issues/329)) ([00d9a1c](https://github.com/cooklang/cookcli/commit/00d9a1ca2467acdd3841b5f99ea1110264ad951c))
+* shop list other ordering ([d76a3b5](https://github.com/cooklang/cookcli/commit/d76a3b56bb76331a5da96d4bff1603a5f9da9b7d))
+
 ## [0.29.0](https://github.com/cooklang/cookcli/compare/v0.28.1...v0.29.0) (2026-04-14)
 
 

@@ -585,7 +585,7 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "cookcli"
-version = "0.29.0"
+version = "0.29.1"
 dependencies = [
  "accept-language",
  "anstream 0.6.21",
