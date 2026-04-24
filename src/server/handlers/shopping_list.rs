@@ -154,7 +154,7 @@ pub async fn shopping_list(
         // a long list — sort alphabetically (case-insensitive) so shoppers
         // can find items predictably.
         if category == "other" {
-            entries.sort_by(|(a, _), (b, _)| a.to_lowercase().cmp(&b.to_lowercase()));
+            entries.sort_by_key(|(a, _)| a.to_lowercase());
         }
 
         let mut shopping_items = Vec::new();
