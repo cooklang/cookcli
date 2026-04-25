@@ -28,11 +28,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "self-update")]
 use crate::update;
 use crate::{doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list};
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub enum ParserExtensions {
+    AdvancedUnits,
+    All,
+    Compat,
+    ComponentAlias,
+    InlineQuantities,
+    IntermediatePreparations,
+    Modes,
+    Modifiers,
+    #[default]
+    None,
+    RangeValues,
+    TimerRequiresTime,
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -45,6 +61,21 @@ pub struct CliArgs {
     /// Increase verbosity (-v for info, -vv for debug, -vvv for trace)
     #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true)]
     pub verbosity: u8,
+
+    /// Configure parser extension
+    ///
+    /// `all` and `none` are mutually exclusive AND overwrite all other extensions
+    ///
+    /// `compat` enables all extensions except `timer-requires-time`
+    #[arg(
+        name = "EXTENSION",
+        short = 'e',
+        long = "extension",
+        value_enum,
+        global = true,
+        default_value = "none"
+    )]
+    pub extensions: Vec<ParserExtensions>,
 
     #[command(subcommand)]
     pub command: Command,

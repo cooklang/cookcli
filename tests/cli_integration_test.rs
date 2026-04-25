@@ -248,3 +248,228 @@ fn test_cli_recipe_from_subdirectory() {
         .success()
         .stdout(predicate::str::contains("Pancakes"));
 }
+
+#[test]
+fn test_cli_recipe_extension_default() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    // Default is no extensions, so inline references should not be resolved
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("&salt"));
+}
+
+#[test]
+fn test_cli_recipe_extension_no_modifiers() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("none")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("&salt"));
+}
+
+#[test]
+fn test_cli_recipe_extension_all() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("all")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("&salt").not());
+}
+
+#[test]
+fn test_cli_recipe_extension_multiple() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("component-alias")
+        .arg("--extension")
+        .arg("intermediate-preparations")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("white wine")
+                .not()
+                .and(predicate::str::contains("@&(1)dough").not()),
+        );
+}
+
+#[test]
+fn test_cli_recipe_extension_compat() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("compat")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("&salt").not());
+}
+
+#[test]
+fn test_cli_recipe_extension_modifiers() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("modifiers")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""relation":{"relation":{"type":"reference","references_to":0},"reference_target":"ingredient"}"#));
+}
+
+#[test]
+fn test_cli_recipe_extension_component_alias() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("component-alias")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("white wine").not());
+}
+
+#[test]
+fn test_cli_recipe_extension_range_values() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("range-values")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r#""value":{"type":"range","value":{"start":{"type":"regular","value":200.0}"#,
+        ));
+}
+
+#[test]
+fn test_cli_recipe_extension_intermediate_preparations() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("intermediate-preparations")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("@&(1)dough").not());
+}
+
+#[test]
+fn test_cli_recipe_extension_advanced_units() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("advanced-units")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#"unit":"g""#));
+}
+
+#[test]
+fn test_cli_recipe_extension_inline_quantities() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("inline-quantities")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r#"{"type":"inlineQuantity","index":0}"#,
+        ));
+}
+
+#[test]
+fn test_cli_recipe_extension_modes() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("extensions.cook")
+        .arg("--extension")
+        .arg("modes")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sugar eggs vanilla").not());
+}

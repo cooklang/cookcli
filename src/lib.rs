@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use anyhow::{bail, Context as _, Result};
-use args::{CliArgs, Command};
+use args::{CliArgs, Command, ParserExtensions};
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{Converter, CooklangParser, Extensions};
 use util::resolve_to_absolute_path;
@@ -44,7 +44,7 @@ impl Context {
     }
 
     pub fn parser(&self) -> &CooklangParser {
-        self.parser.get_or_init(configure_parser)
+        self.parser.get().expect("parser was not configured")
     }
 
     pub fn aisle(&self) -> Option<Utf8PathBuf> {
@@ -76,8 +76,41 @@ impl Context {
     }
 }
 
-fn configure_parser() -> CooklangParser {
-    CooklangParser::new(Extensions::empty(), Converter::default())
+fn configure_parser(args: &CliArgs) -> CooklangParser {
+    if args
+        .extensions
+        .iter()
+        .any(|e| matches!(e, ParserExtensions::None))
+    {
+        return CooklangParser::new(Extensions::empty(), Converter::default());
+    }
+    if args
+        .extensions
+        .iter()
+        .any(|e| matches!(e, ParserExtensions::All))
+    {
+        return CooklangParser::new(Extensions::all(), Converter::default());
+    }
+    let mut extensions = Extensions::empty();
+
+    for ext in &args.extensions {
+        match ext {
+            ParserExtensions::Compat => extensions |= Extensions::COMPAT,
+            ParserExtensions::Modifiers => extensions |= Extensions::COMPONENT_MODIFIERS,
+            ParserExtensions::ComponentAlias => extensions |= Extensions::COMPONENT_ALIAS,
+            ParserExtensions::AdvancedUnits => extensions |= Extensions::ADVANCED_UNITS,
+            ParserExtensions::Modes => extensions |= Extensions::MODES,
+            ParserExtensions::InlineQuantities => extensions |= Extensions::INLINE_QUANTITIES,
+            ParserExtensions::RangeValues => extensions |= Extensions::RANGE_VALUES,
+            ParserExtensions::TimerRequiresTime => extensions |= Extensions::TIMER_REQUIRES_TIME,
+            ParserExtensions::IntermediatePreparations => {
+                extensions |= Extensions::INTERMEDIATE_PREPARATIONS;
+            }
+            ParserExtensions::All | ParserExtensions::None => {}
+        }
+    }
+
+    CooklangParser::new(extensions, Converter::default())
 }
 
 pub fn configure_context(args: &CliArgs) -> Result<Context> {
@@ -97,9 +130,14 @@ pub fn configure_context(args: &CliArgs) -> Result<Context> {
         bail!("Base path is not a directory: {}", absolute_base_path);
     }
 
+    let parser = OnceLock::new();
+    parser
+        .set(configure_parser(args))
+        .expect("failed to set parser");
+
     Ok(Context {
         base_path: absolute_base_path,
-        parser: OnceLock::new(),
+        parser,
     })
 }
 

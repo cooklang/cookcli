@@ -274,6 +274,10 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
 
     // Create a new Context with the actual base path to properly search for config files
     let server_ctx = Context::new(absolute_path.clone());
+    server_ctx
+        .parser
+        .set(ctx.parser().clone())
+        .expect("failed to set parser");
     let aisle_path = server_ctx.aisle();
     let pantry_path = server_ctx.pantry();
 

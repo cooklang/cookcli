@@ -2,6 +2,24 @@
 source: tests/snapshot_test.rs
 expression: sorted_output
 ---
+📄 extensions.cook
+Warning: Invalid YAML frontmatter syntax: did not find expected comment or line break at line 2 column 2, while scanning a block scalar at line 2 column 1
+  ╭─[extensions.cook]
+  │
+3 │ >> [mode]: components
+  ┆  ─                   
+──╯
+Help: The frontmatter will be ignored. Fix the YAML syntax to use metadata.
+Warning: Invalid single word name, the component will be ignored
+   ╭─[extensions.cook]
+   │
+18 │ Let the @&(~1)dough{} rest for ~{1%hour}.
+   ┆          ┬                               
+   ┆          │                               
+   ┆          ╰──────────────────────────────── expected single word name here
+───╯
+Help: Add `{}` at the end of the name to use it, or change the name
+
 📄 with_errors.cook
   ❌ Missing reference: ./nonexistent
 
@@ -19,6 +37,6 @@ title: Recipe with Errors
 === Recipe References ===
 
 === Validation Summary ===
-Total recipes scanned: 5
+Total recipes scanned: 6
 ❌ 1 error(s) found in 0 recipe(s)
-⚠️  1 warning(s) found in 1 recipe(s)
+⚠️  3 warning(s) found in 2 recipe(s)
