@@ -245,9 +245,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 }
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
-    let Context { base_path } = ctx;
-
-    let path = args.base_path.as_ref().unwrap_or(&base_path);
+    let path = args.base_path.as_ref().unwrap_or(ctx.base_path());
     let absolute_path = resolve_to_absolute_path(path)?;
 
     if absolute_path.is_file() {
@@ -306,6 +304,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     };
 
     Ok(Arc::new(AppState {
+        context: server_ctx,
         base_path: absolute_path,
         aisle_path,
         pantry_path,
@@ -352,6 +351,7 @@ async fn shutdown_signal() {
 }
 
 pub struct AppState {
+    pub context: Context,
     pub base_path: Utf8PathBuf,
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,

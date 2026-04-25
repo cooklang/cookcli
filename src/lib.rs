@@ -1,6 +1,9 @@
+use std::sync::OnceLock;
+
 // Re-export modules for testing
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang::{Converter, CooklangParser, Extensions};
 
 // Commands - make them available as public modules
 pub mod doctor;
@@ -23,11 +26,19 @@ pub mod util;
 // Context struct for testing - matches the one in main.rs
 pub struct Context {
     base_path: Utf8PathBuf,
+    parser: OnceLock<CooklangParser>,
 }
 
 impl Context {
     pub fn new(base_path: Utf8PathBuf) -> Self {
-        Self { base_path }
+        Self {
+            base_path,
+            parser: OnceLock::new(),
+        }
+    }
+
+    pub fn parser(&self) -> &CooklangParser {
+        self.parser.get_or_init(configure_parser)
     }
 
     pub fn aisle(&self) -> Option<Utf8PathBuf> {
@@ -51,6 +62,10 @@ impl Context {
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
+}
+
+fn configure_parser() -> CooklangParser {
+    CooklangParser::new(Extensions::empty(), Converter::default())
 }
 
 const APP_NAME: &str = "cook";

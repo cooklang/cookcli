@@ -28,11 +28,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::sync::OnceLock;
+
 use crate::util::resolve_to_absolute_path;
 use anyhow::{bail, Context as AnyhowContext, Result};
 use args::{CliArgs, Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
+use cooklang::{Converter, CooklangParser, Extensions};
 
 // commands
 mod doctor;
@@ -82,11 +85,19 @@ pub fn main() -> Result<()> {
 
 pub struct Context {
     base_path: Utf8PathBuf,
+    parser: OnceLock<CooklangParser>,
 }
 
 impl Context {
     pub fn new(base_path: Utf8PathBuf) -> Self {
-        Self { base_path }
+        Self {
+            base_path: base_path,
+            parser: OnceLock::new(),
+        }
+    }
+
+    pub fn parser(&self) -> &CooklangParser {
+        self.parser.get_or_init(configure_parser)
     }
 
     pub fn aisle(&self) -> Option<Utf8PathBuf> {
@@ -118,6 +129,10 @@ impl Context {
     }
 }
 
+fn configure_parser() -> CooklangParser {
+    CooklangParser::new(Extensions::empty(), Converter::default())
+}
+
 fn configure_context() -> Result<Context> {
     let args = CliArgs::parse();
     let base_path = match args.command {
@@ -138,6 +153,7 @@ fn configure_context() -> Result<Context> {
 
     Ok(Context {
         base_path: absolute_base_path,
+        parser: OnceLock::new(),
     })
 }
 

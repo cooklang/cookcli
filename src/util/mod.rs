@@ -39,26 +39,24 @@ pub mod format;
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::CommandFactory;
-use cooklang::{
-    ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
-};
+use cooklang::{ingredient_list::IngredientList, quantity::Value, Converter, Recipe};
 use cooklang_find::RecipeEntry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use tracing::warn;
+
+use crate::Context;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
 
-pub static PARSER: LazyLock<CooklangParser> = LazyLock::new(|| {
-    // Use no extensions but with default converter for basic unit support
-    CooklangParser::new(Extensions::empty(), Converter::default())
-});
-
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
-pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
+pub fn parse_recipe_from_entry(
+    ctx: &Context,
+    entry: &RecipeEntry,
+    scaling_factor: f64,
+) -> Result<Arc<Recipe>> {
     let content = entry.content().context("Failed to read recipe content")?;
-    let parsed = PARSER.parse(&content);
+    let parsed = ctx.parser().parse(&content);
 
     // Log any warnings
     if parsed.report().has_warnings() {
@@ -91,7 +89,7 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
     let (mut recipe, _warnings) = parsed.into_result().expect("already checked for errors");
 
     // Scale the recipe
-    recipe.scale(scaling_factor, PARSER.converter());
+    recipe.scale(scaling_factor, ctx.parser().converter());
     Ok(Arc::new(recipe))
 }
 
@@ -151,6 +149,7 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
 }
 
 pub fn extract_ingredients(
+    ctx: &Context,
     entry: &str,
     list: &mut IngredientList,
     seen: &mut BTreeMap<String, usize>,
@@ -187,7 +186,7 @@ pub fn extract_ingredients(
 
     let recipe_entry =
         get_recipe(base_path, name).with_context(|| format!("Failed to find recipe '{name}'"))?;
-    let recipe = parse_recipe_from_entry(&recipe_entry, scaling_factor)?;
+    let recipe = parse_recipe_from_entry(ctx, &recipe_entry, scaling_factor)?;
     let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
 
     tracing::debug!(
@@ -258,7 +257,7 @@ pub fn extract_ingredients(
                     let content = ref_entry
                         .content()
                         .context("Failed to read recipe content")?;
-                    let parsed = PARSER.parse(&content);
+                    let parsed = ctx.parser().parse(&content);
 
                     // Check for parsing errors and format them with line context
                     if parsed.report().has_errors() {
@@ -286,7 +285,7 @@ pub fn extract_ingredients(
                         quantity.unit().unwrap_or("(no unit)")
                     );
                     recipe
-                        .scale_to_target(target_value, quantity.unit(), PARSER.converter())
+                        .scale_to_target(target_value, quantity.unit(), ctx.parser().converter())
                         .context(format!(
                             "Failed to scale recipe '{}' with target {} {}",
                             ref_path,
@@ -301,7 +300,7 @@ pub fn extract_ingredients(
                 }
                 None => {
                     // No quantity specified, use CLI scaling only
-                    parse_recipe_from_entry(&ref_entry, scaling_factor)?
+                    parse_recipe_from_entry(ctx, &ref_entry, scaling_factor)?
                 }
             };
 
@@ -338,7 +337,8 @@ pub fn extract_ingredients(
                     let nested_content = nested_entry_path
                         .content()
                         .context("Failed to read nested recipe")?;
-                    let (nested_recipe, _) = PARSER
+                    let (nested_recipe, _) = ctx
+                        .parser()
                         .parse(&nested_content)
                         .into_result()
                         .context("Failed to parse nested recipe")?;
@@ -354,7 +354,11 @@ pub fn extract_ingredients(
                                 let target = target_servings.to_string().parse().unwrap_or(1.0);
                                 tracing::debug!("Scaling nested recipe to {} servings", target);
                                 scaled_nested
-                                    .scale_to_target(target, Some("servings"), PARSER.converter())
+                                    .scale_to_target(
+                                        target,
+                                        Some("servings"),
+                                        ctx.parser().converter(),
+                                    )
                                     .context("Failed to scale nested recipe")?;
 
                                 // Now add this properly scaled nested recipe's ingredients
@@ -367,7 +371,7 @@ pub fn extract_ingredients(
                             if let Value::Number(num) = quantity.value() {
                                 let scaling = num.to_string().parse().unwrap_or(1.0);
                                 let mut scaled_nested = nested_recipe;
-                                scaled_nested.scale(scaling, PARSER.converter());
+                                scaled_nested.scale(scaling, ctx.parser().converter());
                                 list.add_recipe(&Arc::new(scaled_nested), converter, false);
                             }
                         }
