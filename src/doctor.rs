@@ -253,8 +253,11 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
             }
         }
 
-        // Recursively check children
-        for subtree in tree.children.values() {
+        // Recursively check children (sorted for deterministic output)
+        let mut keys: Vec<_> = tree.children.keys().collect();
+        keys.sort();
+        for key in keys {
+            let subtree = tree.children.get(key).unwrap();
             process_recipes(
                 ctx,
                 subtree,
@@ -373,8 +376,11 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
             }
         }
 
-        // Recursively check children
-        for subtree in tree.children.values() {
+        // Recursively check children (sorted for deterministic output)
+        let mut keys: Vec<_> = tree.children.keys().collect();
+        keys.sort();
+        for key in keys {
+            let subtree = tree.children.get(key).unwrap();
             process_recipes(ctx, subtree, all_ingredients, recipe_count);
         }
     }
@@ -523,8 +529,11 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
             }
         }
 
-        // Recursively check children
-        for subtree in tree.children.values() {
+        // Recursively check children (sorted for deterministic output)
+        let mut keys: Vec<_> = tree.children.keys().collect();
+        keys.sort();
+        for key in keys {
+            let subtree = tree.children.get(key).unwrap();
             validate_recipes(ctx, subtree, base_path, stats, recipe_refs);
         }
     }
