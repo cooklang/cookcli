@@ -65,7 +65,7 @@ pub fn main() -> Result<()> {
     let args = CliArgs::parse();
     configure_logging(args.verbosity);
 
-    let ctx = configure_context()?;
+    let ctx = configure_context(&args)?;
 
     match args.command {
         Command::Recipe(args) => recipe::run(&ctx, args),
@@ -133,8 +133,7 @@ fn configure_parser() -> CooklangParser {
     CooklangParser::new(Extensions::empty(), Converter::default())
 }
 
-fn configure_context() -> Result<Context> {
-    let args = CliArgs::parse();
+fn configure_context(args: &CliArgs) -> Result<Context> {
     let base_path = match args.command {
         Command::Server(ref server_args) => server_args
             .get_base_path()
