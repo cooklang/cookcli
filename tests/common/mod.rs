@@ -76,6 +76,33 @@ Cook on a #griddle for ~{3%minutes} per side.
 "#,
     )?;
 
+    let _ = fs::write(
+        recipes_dir.join("extensions.cook"),
+        r#"---
+title: Recipe which require extensions
+>> [mode]: components
+@sugar
+@eggs
+@vanilla
+>> [mode]: steps
+---
+
+Mix all ingredients together.
+
+Add @salt{200%g} and @&salt{100%g}.
+
+Add @white wine|wine{}.
+
+Mix @flour{100-200%g} with @water{200-300%ml}.
+
+Let the @&(~1)dough{} rest for ~{1%hour}.
+
+Let the dough rest at 25 F in the refrigerator.
+
+Add @milk{1 L} and @onion{200 g}.
+"#,
+    );
+
     // Create config directory
     let config_dir = recipes_dir.join("config");
     fs::create_dir(&config_dir)?;

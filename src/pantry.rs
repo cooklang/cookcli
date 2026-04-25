@@ -595,6 +595,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
 
     // Recursively process recipes in the tree
     fn process_tree(
+        ctx: &AppContext,
         tree: &cooklang_find::RecipeTree,
         pantry_ingredients: &HashSet<String>,
         full_matches: &mut Vec<String>,
@@ -604,7 +605,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+            if let Ok(recipe) = parse_recipe_from_entry(ctx, entry, 1.0) {
                 // Get all ingredients from the recipe (excluding recipe references)
                 let mut recipe_ingredients = HashSet::new();
                 for ingredient in &recipe.ingredients {
@@ -647,6 +648,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
         // Recursively check children
         for subtree in tree.children.values() {
             process_tree(
+                ctx,
                 subtree,
                 pantry_ingredients,
                 full_matches,
@@ -657,6 +659,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
     }
 
     process_tree(
+        ctx,
         &tree,
         &pantry_ingredients,
         &mut full_matches,
@@ -748,7 +751,11 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
     let mut recipes: Vec<RecipeInfo> = Vec::new();
 
     // Recursively process recipes in the tree
-    fn process_tree(tree: &cooklang_find::RecipeTree, recipes: &mut Vec<RecipeInfo>) {
+    fn process_tree(
+        ctx: &AppContext,
+        tree: &cooklang_find::RecipeTree,
+        recipes: &mut Vec<RecipeInfo>,
+    ) {
         // Check if this node has a recipe
         if let Some(entry) = &tree.recipe {
             // Skip .menu files - only process .cook files
@@ -757,7 +764,7 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
             }
 
             // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
+            if let Ok(recipe) = parse_recipe_from_entry(ctx, entry, 1.0) {
                 let mut recipe_ingredients = HashSet::new();
 
                 // Get all ingredients from the recipe (excluding recipe references)
@@ -782,11 +789,11 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
         // Recursively check children
         for subtree in tree.children.values() {
-            process_tree(subtree, recipes);
+            process_tree(ctx, subtree, recipes);
         }
     }
 
-    process_tree(&tree, &mut recipes);
+    process_tree(ctx, &tree, &mut recipes);
 
     if recipes.is_empty() {
         match format {

@@ -168,13 +168,14 @@ pub async fn get_menu(
         ));
     }
 
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
-        tracing::error!("Failed to parse menu: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to parse menu: {e}")),
-        )
-    })?;
+    let recipe =
+        crate::util::parse_recipe_from_entry(&state.context, &entry, scale).map_err(|e| {
+            tracing::error!("Failed to parse menu: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error(format!("Failed to parse menu: {e}")),
+            )
+        })?;
 
     // Build metadata as a JSON object
     let metadata = if recipe.metadata.map.is_empty() {
@@ -411,6 +412,7 @@ pub async fn get_menu(
 /// Scan all menus for a section whose date matches today.
 /// Returns the first match with menu name, path, and formatted date.
 pub fn find_todays_menu(
+    state: &AppState,
     base_path: &camino::Utf8Path,
     tree: &RecipeTree,
 ) -> Option<crate::server::templates::TodaysMenu> {
@@ -428,7 +430,7 @@ pub fn find_todays_menu(
             Err(_) => continue,
         };
 
-        let recipe = match crate::util::parse_recipe_from_entry(&entry, 1.0) {
+        let recipe = match crate::util::parse_recipe_from_entry(&state.context, &entry, 1.0) {
             Ok(r) => r,
             Err(_) => continue,
         };

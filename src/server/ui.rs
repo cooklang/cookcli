@@ -139,7 +139,7 @@ async fn recipes_handler(
     });
 
     let todays_menu = if path.is_none() {
-        crate::server::handlers::find_todays_menu(base, &tree)
+        crate::server::handlers::find_todays_menu(&state, base, &tree)
     } else {
         None
     };
@@ -242,7 +242,7 @@ async fn recipe_page(
         };
     }
 
-    let recipe = match crate::util::parse_recipe_from_entry(&entry, scale) {
+    let recipe = match crate::util::parse_recipe_from_entry(&state.context, &entry, scale) {
         Ok(recipe) => recipe,
         Err(e) => {
             tracing::error!("Failed to parse recipe: {e}");
@@ -291,14 +291,14 @@ async fn recipe_page(
         ),
     > = std::collections::HashMap::new();
 
-    for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
+    for entry in recipe.group_ingredients(state.context.parser().converter()) {
         let ingredient = entry.ingredient;
         let display_name = ingredient.display_name().to_string();
 
         grouped_ingredients
             .entry(display_name)
             .and_modify(|(merged_qty, igrs)| {
-                merged_qty.merge(&entry.quantity, crate::util::PARSER.converter());
+                merged_qty.merge(&entry.quantity, state.context.parser().converter());
                 igrs.push(ingredient);
             })
             .or_insert_with(|| (entry.quantity.clone(), vec![ingredient]));
@@ -370,7 +370,7 @@ async fn recipe_page(
         });
     }
 
-    for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
+    for item in &recipe.group_cookware(state.context.parser().converter()) {
         cookware.push(CookwareData {
             name: item.cookware.name.to_string(),
         });
@@ -533,7 +533,7 @@ async fn recipe_page(
                     let display_name = ingredient.display_name().to_string();
                     let qty = if let Some(q) = &ingredient.quantity {
                         let mut grouped_qty = cooklang::quantity::GroupedQuantity::empty();
-                        grouped_qty.add(q, crate::util::PARSER.converter());
+                        grouped_qty.add(q, state.context.parser().converter());
                         grouped_qty
                     } else {
                         cooklang::quantity::GroupedQuantity::empty()
@@ -543,7 +543,7 @@ async fn recipe_page(
                         .entry(display_name)
                         .and_modify(|(merged_qty, igrs)| {
                             if let Some(q) = &ingredient.quantity {
-                                merged_qty.add(q, crate::util::PARSER.converter());
+                                merged_qty.add(q, state.context.parser().converter());
                             }
                             igrs.push(ingredient);
                         })
@@ -1115,10 +1115,11 @@ async fn menu_page_handler(
     state: Arc<AppState>,
     lang: LanguageIdentifier,
 ) -> Result<MenuTemplate, String> {
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale).map_err(|e| {
-        tracing::error!("Failed to parse menu: {e}");
-        format!("Failed to parse menu: {e}")
-    })?;
+    let recipe =
+        crate::util::parse_recipe_from_entry(&state.context, &entry, scale).map_err(|e| {
+            tracing::error!("Failed to parse menu: {e}");
+            format!("Failed to parse menu: {e}")
+        })?;
 
     // Get the image path if available
     let image_path = entry.title_image().clone().and_then(|img_path| {

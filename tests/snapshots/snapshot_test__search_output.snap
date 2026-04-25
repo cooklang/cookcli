@@ -3,3 +3,4 @@ source: tests/snapshot_test.rs
 expression: sorted
 ---
 "Breakfast/pancakes.cook"
+"extensions.cook"

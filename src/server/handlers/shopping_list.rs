@@ -1,8 +1,11 @@
-use crate::server::{
-    shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
-    AppState,
+use crate::util::extract_ingredients;
+use crate::{
+    server::{
+        shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
+        AppState,
+    },
+    Context,
 };
-use crate::util::{extract_ingredients, PARSER};
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
 use camino::Utf8PathBuf;
@@ -35,11 +38,12 @@ pub async fn shopping_list(
         };
 
         extract_ingredients(
+            &state.context,
             &recipe_with_scale,
             &mut list,
             &mut seen,
             &state.base_path,
-            PARSER.converter(),
+            state.context.parser().converter(),
             false,
             entry.included_references.as_deref(),
         )
@@ -107,7 +111,7 @@ pub async fn shopping_list(
     };
 
     // Use common names from aisle configuration
-    list = list.use_common_names(&aisle, PARSER.converter());
+    list = list.use_common_names(&aisle, state.context.parser().converter());
 
     // Track pantry items that were found and subtracted (excluding zero quantities)
     let mut pantry_items = Vec::new();
@@ -136,7 +140,7 @@ pub async fn shopping_list(
 
     // Apply pantry subtraction if pantry is available
     let final_list = if let Some(ref pantry) = pantry_conf {
-        list.subtract_pantry(pantry, PARSER.converter())
+        list.subtract_pantry(pantry, state.context.parser().converter())
     } else {
         list
     };
@@ -396,11 +400,12 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 let mut seen = BTreeMap::new();
                 let scaled = format!("{}:{}", recipe.path, recipe.scale);
                 extract_ingredients(
+                    &state.context,
                     &scaled,
                     &mut list,
                     &mut seen,
                     &state.base_path,
-                    PARSER.converter(),
+                    state.context.parser().converter(),
                     false,
                     recipe.included_references.as_deref(),
                 )
@@ -410,11 +415,12 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
             let mut seen = BTreeMap::new();
             let scaled = format!("{}:{}", item.path, item.scale);
             extract_ingredients(
+                &state.context,
                 &scaled,
                 &mut list,
                 &mut seen,
                 &state.base_path,
-                PARSER.converter(),
+                state.context.parser().converter(),
                 false,
                 item.included_references.as_deref(),
             )
@@ -459,9 +465,13 @@ fn parse_yield(s: &str) -> Option<(f64, String)> {
     Some((value, unit.to_string()))
 }
 
-fn resolve_recipe_info(base_path: &Utf8PathBuf, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
+fn resolve_recipe_info(
+    ctx: &Context,
+    base_path: &Utf8PathBuf,
+    recipe_path: &str,
+) -> anyhow::Result<RecipeInfo> {
     let entry = crate::util::get_recipe(base_path, recipe_path)?;
-    let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
+    let recipe = crate::util::parse_recipe_from_entry(ctx, &entry, 1.0)?;
 
     let mut sub_refs = Vec::new();
     for ingredient in &recipe.ingredients {
@@ -509,7 +519,7 @@ pub async fn add_menu_to_shopping_list(
     })?;
 
     // Parse at scale 1.0 to get raw quantities for recipe references
-    let menu = crate::util::parse_recipe_from_entry(&entry, 1.0).map_err(|e| {
+    let menu = crate::util::parse_recipe_from_entry(&state.context, &entry, 1.0).map_err(|e| {
         tracing::error!("Failed to parse menu: {e}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -530,17 +540,18 @@ pub async fn add_menu_to_shopping_list(
 
             // Resolve this recipe's sub-recipe references, default servings, and yield
             let ref_path_for_find = recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
-            let info = match resolve_recipe_info(&state.base_path, &ref_path_for_find) {
-                Ok(info) => info,
-                Err(e) => {
-                    tracing::warn!(
-                        "Could not resolve referenced recipe '{}': {}",
-                        ref_display,
-                        e
-                    );
-                    RecipeInfo::default()
-                }
-            };
+            let info =
+                match resolve_recipe_info(&state.context, &state.base_path, &ref_path_for_find) {
+                    Ok(info) => info,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not resolve referenced recipe '{}': {}",
+                            ref_display,
+                            e
+                        );
+                        RecipeInfo::default()
+                    }
+                };
 
             // Convert `{target%unit}` on the menu reference into a scale
             // multiplier for `.shopping-list`. Per the Cooklang spec
