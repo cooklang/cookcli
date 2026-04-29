@@ -17,6 +17,7 @@ playwright/.cache/
 # Editor directories and files
 .vscode/
 .idea/
+*.iml
 
 # Temporary files
 *.tmp
