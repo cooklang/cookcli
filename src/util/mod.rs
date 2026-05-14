@@ -38,7 +38,6 @@ pub mod format;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::CommandFactory;
 use cooklang::{
     ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
 };
@@ -113,8 +112,10 @@ where
     Ok(())
 }
 
-pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, &str)> {
-    query.trim().rsplit_once(RECIPE_SCALING_DELIMITER)
+pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, f64)> {
+    let (name, factor) = query.trim().rsplit_once(RECIPE_SCALING_DELIMITER)?;
+    let factor = factor.parse::<f64>().ok()?;
+    Some((name, factor))
 }
 
 /// Resolves a path to an absolute path. If the input path is already absolute,
@@ -171,19 +172,8 @@ pub fn extract_ingredients(
     seen.insert(entry.to_string(), seen.len());
 
     // split into name and servings
-    let (name, scaling_factor) = split_recipe_name_and_scaling_factor(entry)
-        .map(|(name, scaling_factor)| {
-            let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::args::CliArgs::command();
-                cmd.error(
-                    clap::error::ErrorKind::InvalidValue,
-                    format!("Invalid scaling target for '{name}': {err}"),
-                )
-                .exit()
-            });
-            (name, target)
-        })
-        .unwrap_or((entry, 1.0));
+    let (name, scaling_factor) =
+        split_recipe_name_and_scaling_factor(entry).unwrap_or((entry, 1.0));
 
     let recipe_entry =
         get_recipe(base_path, name).with_context(|| format!("Failed to find recipe '{name}'"))?;
@@ -399,4 +389,47 @@ pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
         vec![base_path.clone()],
         clean_name.into(),
     )?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_recipe_with_numeric_scaling_factor() {
+        assert_eq!(
+            split_recipe_name_and_scaling_factor("recipe.cook:2"),
+            Some(("recipe.cook", 2.0))
+        );
+    }
+
+    #[test]
+    fn splits_recipe_with_decimal_scaling_factor() {
+        assert_eq!(
+            split_recipe_name_and_scaling_factor("recipe.cook:1.5"),
+            Some(("recipe.cook", 1.5))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_no_colon() {
+        assert_eq!(split_recipe_name_and_scaling_factor("recipe.cook"), None);
+    }
+
+    #[test]
+    fn returns_none_for_windows_absolute_path() {
+        // Regression for https://github.com/cooklang/cookcli/issues/335
+        assert_eq!(
+            split_recipe_name_and_scaling_factor(r"C:\test\recipe.cook"),
+            None
+        );
+    }
+
+    #[test]
+    fn returns_none_when_right_side_is_not_numeric() {
+        assert_eq!(
+            split_recipe_name_and_scaling_factor("recipe.cook:abc"),
+            None
+        );
+    }
 }

@@ -1,7 +1,7 @@
 use crate::util::split_recipe_name_and_scaling_factor;
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use cooklang_reports::{config::Config, render_template_with_config};
 use std::{fs, path::PathBuf};
 use tracing::warn;
@@ -66,19 +66,8 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     warn!("⚠️  The report command is a prototype feature and will change in future versions.");
 
     // Split recipe name and scaling factor
-    let (recipe_name, scaling_factor) = split_recipe_name_and_scaling_factor(&args.recipe)
-        .map(|(name, factor)| {
-            let scale = factor.parse::<f64>().unwrap_or_else(|err| {
-                let mut cmd = crate::args::CliArgs::command();
-                cmd.error(
-                    clap::error::ErrorKind::InvalidValue,
-                    format!("Invalid scaling factor for '{name}': {err}"),
-                )
-                .exit()
-            });
-            (name, scale)
-        })
-        .unwrap_or((&args.recipe, 1.0));
+    let (recipe_name, scaling_factor) =
+        split_recipe_name_and_scaling_factor(&args.recipe).unwrap_or((&args.recipe, 1.0));
 
     // Read the recipe file
     let recipe = fs::read_to_string(recipe_name)

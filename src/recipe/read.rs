@@ -29,7 +29,7 @@
 // SOFTWARE.
 
 use anyhow::{Context as _, Result};
-use clap::{Args, CommandFactory, ValueEnum};
+use clap::{Args, ValueEnum};
 use std::io::Read;
 
 use camino::Utf8PathBuf;
@@ -99,17 +99,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
 
     let (recipe, title) = if let Some(query) = args.input.recipe {
         let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
-            .map(|(name, scaling_factor)| {
-                let target = scaling_factor.parse::<f64>().unwrap_or_else(|err| {
-                    let mut cmd = crate::args::CliArgs::command();
-                    cmd.error(
-                        clap::error::ErrorKind::InvalidValue,
-                        format!("Invalid scaling target for '{name}': {err}. Use a number value after : to specify a scaling factor."),
-                    )
-                    .exit()
-                });
-                (name, Some(target))
-            })
+            .map(|(name, factor)| (name, Some(factor)))
             .unwrap_or((query.as_str(), None));
 
         if let Some(scaling_factor) = scaling_factor {
