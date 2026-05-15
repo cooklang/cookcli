@@ -3,6 +3,7 @@ use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 
 // Commands - make them available as public modules
+pub mod build;
 pub mod doctor;
 pub mod import;
 pub mod lsp;

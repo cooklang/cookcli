@@ -32,7 +32,7 @@ use clap::{Parser, Subcommand};
 
 #[cfg(feature = "self-update")]
 use crate::update;
-use crate::{doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list};
+use crate::{build, doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -84,6 +84,22 @@ pub enum Command {
         long_about = "Run a web server to browse and interact with your recipe collection"
     )]
     Server(server::ServerArgs),
+
+    /// Generate a self-contained static website from your recipe collection
+    ///
+    /// Renders your recipes as static HTML files browsable on any static-file
+    /// host or directly from disk via file://. Excludes dynamic features
+    /// (shopping list, pantry, editing).
+    ///
+    /// Examples:
+    ///   cook build                         # Build to ./_site
+    ///   cook build out                     # Build to ./out
+    ///   cook build --base-path ~/recipes   # Use specific source directory
+    ///   cook build --base-url /recipes/    # Absolute URL prefix for subpath hosting
+    #[command(
+        long_about = "Generate a static HTML website from your recipe collection"
+    )]
+    Build(build::BuildArgs),
 
     /// Generate a combined shopping list from multiple recipes
     ///
