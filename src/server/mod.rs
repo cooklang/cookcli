@@ -64,7 +64,7 @@ mod ui;
 // Embed static files at compile time
 #[derive(RustEmbed)]
 #[folder = "static/"]
-struct StaticFiles;
+pub struct StaticFiles;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
