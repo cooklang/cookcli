@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -10,10 +9,10 @@ pub struct SearchEntry {
 }
 
 /// Build a flat list of search entries by walking the recipe tree.
-pub fn build_search_index(tree: &cooklang_find::RecipeTree) -> Result<Vec<SearchEntry>> {
+pub fn build_search_index(tree: &cooklang_find::RecipeTree) -> Vec<SearchEntry> {
     let mut out = Vec::new();
     collect(tree, String::new(), &mut out);
-    Ok(out)
+    out
 }
 
 fn collect(tree: &cooklang_find::RecipeTree, prefix: String, out: &mut Vec<SearchEntry>) {
@@ -50,7 +49,10 @@ fn collect(tree: &cooklang_find::RecipeTree, prefix: String, out: &mut Vec<Searc
                     .into_iter()
                     .map(|e| e.ingredient.display_name().to_string())
                     .collect(),
-                Err(_) => Vec::new(),
+                Err(e) => {
+                    tracing::warn!("Skipping ingredients for search index entry {url_path}: {e:#}");
+                    Vec::new()
+                }
             };
             out.push(SearchEntry {
                 title: name.clone(),

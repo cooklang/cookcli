@@ -80,7 +80,7 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
     let image_count = copy_all_images(&source, &output)?;
     let asset_count = writer::copy_static_assets(&output)?;
 
-    let entries = index::build_search_index(&tree)?;
+    let entries = index::build_search_index(&tree);
     let entry_count = entries.len();
     let json = serde_json::to_string(&entries)?;
     writer::write_bytes(
