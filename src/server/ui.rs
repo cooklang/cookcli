@@ -22,6 +22,7 @@ fn error_page(
         error_message: msg.to_string(),
         tr: Tr::new(lang),
         prefix: prefix.to_string(),
+        static_mode: false,
     };
     template.into_response()
 }
@@ -175,6 +176,7 @@ async fn recipes_handler(
         todays_menu,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     };
 
     template.into_response()
@@ -761,6 +763,7 @@ async fn recipe_page(
         image_path,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     };
 
     template.into_response()
@@ -1344,6 +1347,7 @@ async fn menu_page_handler(
         image_path,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     };
 
     Ok(template)

@@ -43,6 +43,8 @@ pub struct ErrorTemplate {
     pub error_message: String,
     pub tr: Tr,
     pub prefix: String,
+    #[allow(dead_code)]
+    pub static_mode: bool,
 }
 
 pub struct TodaysMenu {
@@ -61,6 +63,8 @@ pub struct RecipesTemplate {
     pub todays_menu: Option<TodaysMenu>,
     pub tr: Tr,
     pub prefix: String,
+    #[allow(dead_code)]
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
@@ -78,6 +82,8 @@ pub struct RecipeTemplate {
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
+    #[allow(dead_code)]
+    pub static_mode: bool,
 }
 
 impl RecipeTemplate {
@@ -167,6 +173,8 @@ pub struct MenuTemplate {
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
+    #[allow(dead_code)]
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
