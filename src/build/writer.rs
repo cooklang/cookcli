@@ -37,6 +37,23 @@ pub fn copy_static_assets(output_root: &Utf8Path) -> Result<usize> {
     Ok(count)
 }
 
+/// Copy a single source file into `output_root/api/static/<relpath>`.
+pub fn copy_image(
+    output_root: &Utf8Path,
+    source_root: &Utf8Path,
+    abs_image: &Utf8Path,
+) -> Result<()> {
+    let rel = abs_image
+        .strip_prefix(source_root)
+        .with_context(|| format!("Image {abs_image} not under source {source_root}"))?;
+    let dest = output_root.join("api/static").join(rel);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(abs_image, &dest).with_context(|| format!("Failed to copy {abs_image} -> {dest}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

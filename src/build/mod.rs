@@ -76,11 +76,50 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
         String::new(),
     )?;
 
+    let image_count = copy_all_images(&source, &output)?;
     let asset_count = writer::copy_static_assets(&output)?;
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, and {asset_count} static assets"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets"
     );
     Ok(())
+}
+
+fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Result<usize> {
+    let mut count = 0;
+    for path in walkdir_utf8(source)? {
+        if path.is_file() {
+            if let Some("jpg" | "jpeg" | "png" | "gif" | "webp" | "avif") =
+                path.extension().map(|e| e.to_ascii_lowercase()).as_deref()
+            {
+                writer::copy_image(output, source, &path)?;
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
+}
+
+fn walkdir_utf8(root: &camino::Utf8Path) -> Result<Vec<camino::Utf8PathBuf>> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = camino::Utf8PathBuf::try_from(entry.path())
+                .map_err(|e| anyhow::anyhow!("Non-UTF-8 path: {e}"))?;
+            if path.is_dir() {
+                if let Some(name) = path.file_name() {
+                    if name.starts_with('.') {
+                        continue;
+                    }
+                }
+                stack.push(path);
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn walk_directories(

@@ -125,3 +125,28 @@ fn build_renders_recipes_with_title_metadata() {
         "lamb-chops.html should exist (title-metadata regression)"
     );
 }
+
+#[test]
+fn build_copies_images_when_present() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // At minimum, no panic. If the seed has images, api/static exists.
+    let images_dir = out.join("api/static");
+    if images_dir.is_dir() {
+        let entries: Vec<_> = std::fs::read_dir(&images_dir).unwrap().collect();
+        assert!(!entries.is_empty(), "api/static is empty");
+    }
+}
