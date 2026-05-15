@@ -1,3 +1,5 @@
+mod links;
+
 use crate::util::resolve_to_absolute_path;
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
