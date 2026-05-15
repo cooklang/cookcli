@@ -193,3 +193,26 @@ fn build_copies_images_when_present() {
         "expected copied image at {pancakes_image:?}"
     );
 }
+
+#[test]
+fn build_writes_search_js() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    assert!(
+        out.join("static/js/search.js").is_file(),
+        "search.js should exist"
+    );
+}
