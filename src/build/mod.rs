@@ -1,4 +1,5 @@
 mod links;
+mod renderer;
 mod writer;
 
 use crate::util::resolve_to_absolute_path;
@@ -54,5 +55,40 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
 
     tracing::info!("Building static site from {source} into {output}");
     println!("Building static site from {source} into {output}");
+
+    let lang: unic_langid::LanguageIdentifier = "en-US".parse().unwrap();
+    let base_url = args.base_url.as_deref();
+
+    renderer::render_index(&source, &output, base_url, &lang)?;
+
+    let tree = cooklang_find::build_tree(&source)
+        .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+    walk_directories(&tree, &source, &output, base_url, &lang, String::new())?;
+
+    let asset_count = writer::copy_static_assets(&output)?;
+    println!("Wrote index, directories, and {asset_count} static assets");
+    Ok(())
+}
+
+fn walk_directories(
+    tree: &cooklang_find::RecipeTree,
+    source: &camino::Utf8Path,
+    output: &camino::Utf8Path,
+    base_url: Option<&str>,
+    lang: &unic_langid::LanguageIdentifier,
+    prefix_path: String,
+) -> Result<()> {
+    for (name, child) in &tree.children {
+        if child.children.is_empty() {
+            continue; // it's a recipe file, handled in next task
+        }
+        let sub = if prefix_path.is_empty() {
+            name.to_string()
+        } else {
+            format!("{prefix_path}/{name}")
+        };
+        renderer::render_directory(source, output, &sub, base_url, lang)?;
+        walk_directories(child, source, output, base_url, lang, sub)?;
+    }
     Ok(())
 }

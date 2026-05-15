@@ -7,7 +7,6 @@ use camino::Utf8Path;
 ///   "directory/Breakfast.html"              -> ".."
 ///   "recipe/Breakfast/Pancakes.html"        -> "../.."
 ///   "menu/Sunday/Brunch.html"               -> "../.."
-#[allow(dead_code)]
 pub fn relative_prefix(output_relpath: &Utf8Path) -> String {
     let depth = output_relpath.components().count().saturating_sub(1); // last component is the filename
     if depth == 0 {

@@ -3,7 +3,6 @@ use camino::Utf8Path;
 use std::fs;
 
 /// Write `contents` to `output_root/relpath`, creating parent directories.
-#[allow(dead_code)]
 pub fn write_html(output_root: &Utf8Path, relpath: &Utf8Path, contents: &str) -> Result<()> {
     let dest = output_root.join(relpath);
     if let Some(parent) = dest.parent() {
@@ -15,7 +14,6 @@ pub fn write_html(output_root: &Utf8Path, relpath: &Utf8Path, contents: &str) ->
 }
 
 /// Copy `bytes` to `output_root/relpath`, creating parent directories.
-#[allow(dead_code)]
 pub fn write_bytes(output_root: &Utf8Path, relpath: &Utf8Path, bytes: &[u8]) -> Result<()> {
     let dest = output_root.join(relpath);
     if let Some(parent) = dest.parent() {
@@ -27,7 +25,6 @@ pub fn write_bytes(output_root: &Utf8Path, relpath: &Utf8Path, bytes: &[u8]) -> 
 }
 
 /// Copy every file in the rust-embed `StaticFiles` to `output_root/static/<path>`.
-#[allow(dead_code)]
 pub fn copy_static_assets(output_root: &Utf8Path) -> Result<usize> {
     let mut count = 0;
     for path in crate::server::StaticFiles::iter() {
