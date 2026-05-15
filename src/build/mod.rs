@@ -1,3 +1,4 @@
+mod index;
 mod links;
 mod renderer;
 mod writer;
@@ -78,8 +79,18 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
 
     let image_count = copy_all_images(&source, &output)?;
     let asset_count = writer::copy_static_assets(&output)?;
+
+    let entries = index::build_search_index(&tree)?;
+    let entry_count = entries.len();
+    let json = serde_json::to_string(&entries)?;
+    writer::write_bytes(
+        &output,
+        camino::Utf8Path::new("static/search-index.json"),
+        json.as_bytes(),
+    )?;
+
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries"
     );
     Ok(())
 }

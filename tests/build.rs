@@ -127,6 +127,49 @@ fn build_renders_recipes_with_title_metadata() {
 }
 
 #[test]
+fn build_writes_search_index() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let idx = out.join("static/search-index.json");
+    assert!(idx.is_file(), "search-index.json should exist");
+
+    let json: serde_json::Value =
+        serde_json::from_reader(std::fs::File::open(&idx).unwrap()).unwrap();
+    let arr = json.as_array().expect("index is array");
+    assert!(!arr.is_empty(), "index should not be empty for seed");
+
+    let first = &arr[0];
+    assert!(first.get("title").is_some());
+    assert!(first.get("path").is_some());
+    assert!(first.get("tags").is_some());
+    assert!(first.get("ingredients").is_some());
+
+    // Find the Risotto entry (title from metadata) and confirm its path uses file stem.
+    let risotto = arr
+        .iter()
+        .find(|e| e.get("path").and_then(|p| p.as_str()) == Some("recipe/Risotto.html"))
+        .expect("entry for recipe/Risotto.html");
+    assert_eq!(
+        risotto.get("title").and_then(|t| t.as_str()),
+        Some("Classic Risotto alla Milanese"),
+        "title should be the metadata title; path should be the file stem"
+    );
+}
+
+#[test]
 fn build_copies_images_when_present() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
