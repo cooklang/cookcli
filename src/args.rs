@@ -32,7 +32,9 @@ use clap::{Parser, Subcommand};
 
 #[cfg(feature = "self-update")]
 use crate::update;
-use crate::{build, doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list};
+use crate::{
+    build, doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list,
+};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -96,9 +98,7 @@ pub enum Command {
     ///   cook build out                     # Build to ./out
     ///   cook build --base-path ~/recipes   # Use specific source directory
     ///   cook build --base-url /recipes/    # Absolute URL prefix for subpath hosting
-    #[command(
-        long_about = "Generate a static HTML website from your recipe collection"
-    )]
+    #[command(long_about = "Generate a static HTML website from your recipe collection")]
     Build(build::BuildArgs),
 
     /// Generate a combined shopping list from multiple recipes
