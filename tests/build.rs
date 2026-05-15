@@ -143,10 +143,10 @@ fn build_copies_images_when_present() {
         .assert()
         .success();
 
-    // At minimum, no panic. If the seed has images, api/static exists.
-    let images_dir = out.join("api/static");
-    if images_dir.is_dir() {
-        let entries: Vec<_> = std::fs::read_dir(&images_dir).unwrap().collect();
-        assert!(!entries.is_empty(), "api/static is empty");
-    }
+    // The seed contains "Easy Pancakes.jpg" alongside "Easy Pancakes.cook".
+    let pancakes_image = out.join("api/static/Breakfast/Easy Pancakes.jpg");
+    assert!(
+        pancakes_image.is_file(),
+        "expected copied image at {pancakes_image:?}"
+    );
 }

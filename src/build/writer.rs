@@ -48,7 +48,8 @@ pub fn copy_image(
         .with_context(|| format!("Image {abs_image} not under source {source_root}"))?;
     let dest = output_root.join("api/static").join(rel);
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create parent dir: {parent}"))?;
     }
     fs::copy(abs_image, &dest).with_context(|| format!("Failed to copy {abs_image} -> {dest}"))?;
     Ok(())
