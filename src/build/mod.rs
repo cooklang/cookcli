@@ -117,14 +117,18 @@ fn walk_recipes(
 ) -> Result<usize> {
     let mut count = 0;
     for (name, child) in &tree.children {
-        let sub = if prefix_path.is_empty() {
-            name.to_string()
-        } else {
-            format!("{prefix_path}/{name}")
-        };
-
         if child.children.is_empty() {
-            // Recipe file
+            // Recipe file — use the on-disk file name, not the tree key (which may be the title).
+            let leaf_name = child
+                .recipe
+                .as_ref()
+                .and_then(|r| r.file_name())
+                .unwrap_or_else(|| name.to_string());
+            let sub = if prefix_path.is_empty() {
+                leaf_name
+            } else {
+                format!("{prefix_path}/{leaf_name}")
+            };
             if let Err(e) =
                 renderer::render_recipe(source, output, &sub, aisle_path, base_url, lang)
             {
@@ -133,6 +137,11 @@ fn walk_recipes(
             }
             count += 1;
         } else {
+            let sub = if prefix_path.is_empty() {
+                name.to_string()
+            } else {
+                format!("{prefix_path}/{name}")
+            };
             count += walk_recipes(child, source, output, aisle_path, base_url, lang, sub)?;
         }
     }

@@ -96,3 +96,32 @@ fn build_writes_recipe_pages() {
         "no shopping-list api references"
     );
 }
+
+#[test]
+fn build_renders_recipes_with_title_metadata() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Risotto.cook has title metadata "Classic Risotto alla Milanese".
+    // The output URL/path must use the file stem, not the title.
+    assert!(
+        out.join("recipe/Risotto.html").is_file(),
+        "Risotto.html should exist (title-metadata regression)"
+    );
+    assert!(
+        out.join("recipe/lamb-chops.html").is_file(),
+        "lamb-chops.html should exist (title-metadata regression)"
+    );
+}
