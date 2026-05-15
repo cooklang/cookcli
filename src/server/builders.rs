@@ -1,0 +1,994 @@
+//! Template builders shared between the dynamic web server and the static-site
+//! renderer. Each function takes plain inputs and produces an Askama template
+//! struct ready to render (or be turned into an `axum::Response` by a handler).
+//!
+//! The builders intentionally avoid any axum / tokio-async types so they can be
+//! reused from a non-async context (e.g. `cook build`).
+
+use crate::server::templates::*;
+use anyhow::Result;
+use camino::{Utf8Path, Utf8PathBuf};
+use fluent_templates::Loader;
+use unic_langid::LanguageIdentifier;
+
+/// Inputs for [`build_recipes_template`].
+pub struct RecipesBuildInput<'a> {
+    pub base_path: &'a Utf8Path,
+    pub url_prefix: &'a str,
+    pub sub_path: Option<&'a str>,
+    pub lang: LanguageIdentifier,
+    pub static_mode: bool,
+}
+
+/// Build a [`RecipesTemplate`] for either the root or a subdirectory.
+pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTemplate> {
+    let RecipesBuildInput {
+        base_path,
+        url_prefix,
+        sub_path,
+        lang,
+        static_mode,
+    } = input;
+
+    let search_path = if let Some(p) = sub_path {
+        base_path.join(p)
+    } else {
+        base_path.to_path_buf()
+    };
+
+    let tree = cooklang_find::build_tree(&search_path)
+        .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+
+    let mut items = Vec::new();
+
+    for (name, child) in &tree.children {
+        let is_dir = !child.children.is_empty();
+        let item_path = {
+            let url_path = child
+                .recipe
+                .as_ref()
+                .and_then(|recipe| recipe.file_name())
+                .unwrap_or_else(|| name.to_string());
+
+            match sub_path {
+                Some(p) => format!("{p}/{url_path}"),
+                None => url_path.to_string(),
+            }
+        };
+
+        // Extract tags, image, and is_menu if this is a recipe
+        let (tags, image_path, is_menu) = if let Some(ref recipe) = child.recipe {
+            let img_path = recipe.title_image().clone().and_then(|img| {
+                if img.starts_with("http://") || img.starts_with("https://") {
+                    Some(img)
+                } else {
+                    // Make path relative to base and accessible via /api/static
+                    let img_path = camino::Utf8Path::new(&img);
+                    if let Ok(relative) = img_path.strip_prefix(base_path) {
+                        Some(format!("{url_prefix}/api/static/{relative}"))
+                    } else if !img_path.is_absolute() {
+                        Some(format!("{url_prefix}/api/static/{img_path}"))
+                    } else {
+                        img_path
+                            .file_name()
+                            .map(|name| format!("{url_prefix}/api/static/{name}"))
+                    }
+                }
+            });
+            (recipe.tags(), img_path, recipe.is_menu())
+        } else {
+            (Vec::new(), None, false)
+        };
+
+        items.push(RecipeItem {
+            name: name.to_string(),
+            path: item_path,
+            is_directory: is_dir,
+            count: if is_dir {
+                count_recipes_tree(child)
+            } else {
+                None
+            },
+            description: None,
+            tags,
+            image_path,
+            is_menu,
+        });
+    }
+
+    items.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
+
+    let todays_menu = if sub_path.is_none() {
+        crate::server::handlers::find_todays_menu(base_path, &tree)
+    } else {
+        None
+    };
+
+    let breadcrumbs = if let Some(p) = sub_path {
+        p.split('/')
+            .scan(String::new(), |acc, segment| {
+                if !acc.is_empty() {
+                    acc.push('/');
+                }
+                acc.push_str(segment);
+                Some(Breadcrumb {
+                    name: segment.to_string(),
+                    path: acc.clone(),
+                })
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let current_name = if let Some(p) = sub_path {
+        p.split('/').next_back().unwrap_or("Recipes").to_string()
+    } else {
+        crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
+    };
+
+    Ok(RecipesTemplate {
+        active: "recipes".to_string(),
+        current_name,
+        breadcrumbs,
+        items,
+        todays_menu,
+        tr: Tr::new(lang),
+        prefix: url_prefix.to_string(),
+        static_mode,
+    })
+}
+
+/// Inputs for [`build_recipe_template`].
+pub struct RecipeBuildInput<'a> {
+    pub base_path: &'a Utf8Path,
+    pub url_prefix: &'a str,
+    pub recipe_path: &'a str,
+    pub aisle_path: Option<&'a Utf8PathBuf>,
+    pub scale: f64,
+    pub lang: LanguageIdentifier,
+    pub static_mode: bool,
+}
+
+/// Output of [`build_recipe_template`] — either a regular recipe or a menu.
+pub enum RecipeBuildOutput {
+    Recipe(Box<RecipeTemplate>),
+    Menu(Box<MenuTemplate>),
+}
+
+/// Build a [`RecipeTemplate`] or [`MenuTemplate`] for the given recipe path.
+pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildOutput> {
+    let RecipeBuildInput {
+        base_path,
+        url_prefix,
+        recipe_path,
+        aisle_path,
+        scale,
+        lang,
+        static_mode,
+    } = input;
+
+    let recipe_path_buf = Utf8PathBuf::from(recipe_path);
+    tracing::info!(
+        "Looking for recipe at path: {}, extension: {:?}",
+        recipe_path,
+        recipe_path_buf.extension()
+    );
+
+    let entry = cooklang_find::get_recipe(vec![base_path], recipe_path_buf.as_path())
+        .map_err(|e| anyhow::anyhow!("Recipe not found: {recipe_path}: {e}"))?;
+
+    let actual_path = entry.path();
+    tracing::info!(
+        "Recipe path: {}, actual_path: {:?}, is_menu: {}",
+        recipe_path,
+        actual_path,
+        entry.is_menu()
+    );
+
+    if entry.is_menu() {
+        let template = build_menu_template_inner(
+            recipe_path.to_string(),
+            scale,
+            entry,
+            base_path,
+            url_prefix,
+            lang,
+            static_mode,
+        )?;
+        return Ok(RecipeBuildOutput::Menu(Box::new(template)));
+    }
+
+    let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
+        .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {e}"))?;
+
+    // Load aisle config for cooking mode ingredient sorting
+    let aisle_content = if let Some(path) = aisle_path {
+        match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => {
+                tracing::warn!("Failed to read aisle file from {:?}: {}", path, e);
+                String::new()
+            }
+        }
+    } else {
+        String::new()
+    };
+    let aisle = cooklang::aisle::parse_lenient(&aisle_content)
+        .into_output()
+        .unwrap_or_default();
+
+    let tags = entry.tags();
+
+    // Get the image path if available
+    let image_path = entry
+        .title_image()
+        .clone()
+        .and_then(|img_path| get_image_path(base_path, url_prefix, img_path));
+
+    let mut ingredients = Vec::new();
+    let mut cookware = Vec::new();
+    let mut sections = Vec::new();
+
+    // Group ingredients by display name and merge quantities
+    let mut grouped_ingredients: std::collections::HashMap<
+        String,
+        (
+            cooklang::quantity::GroupedQuantity,
+            Vec<&cooklang::model::Ingredient>,
+        ),
+    > = std::collections::HashMap::new();
+
+    for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
+        let ingredient = entry.ingredient;
+        let display_name = ingredient.display_name().to_string();
+
+        grouped_ingredients
+            .entry(display_name)
+            .and_modify(|(merged_qty, igrs)| {
+                merged_qty.merge(&entry.quantity, crate::util::PARSER.converter());
+                igrs.push(ingredient);
+            })
+            .or_insert_with(|| (entry.quantity.clone(), vec![ingredient]));
+    }
+
+    // Sort by name for consistent display
+    let mut sorted_ingredients: Vec<_> = grouped_ingredients.into_iter().collect();
+    sorted_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (display_name, (quantity, ingredient_list)) in sorted_ingredients {
+        // Use the first ingredient's data for reference path and notes
+        let first_ingredient = ingredient_list[0];
+        let reference_path = first_ingredient.reference.as_ref().map(|r| {
+            // For web URLs - always use forward slash
+            if r.components.is_empty() {
+                r.name.clone()
+            } else {
+                format!("{}/{}", r.components.join("/"), r.name)
+            }
+        });
+
+        // Combine notes from all ingredients
+        let combined_note = if ingredient_list.len() > 1 {
+            let notes: Vec<_> = ingredient_list
+                .iter()
+                .filter_map(|i| i.note.as_ref())
+                .collect();
+            if notes.is_empty() {
+                None
+            } else {
+                Some(
+                    notes
+                        .iter()
+                        .map(|n| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+            }
+        } else {
+            first_ingredient.note.clone()
+        };
+
+        // Format the merged quantity - show all quantities comma-separated
+        let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
+            (None, None)
+        } else {
+            let quantities: Vec<_> = quantity
+                .iter()
+                .map(|q| {
+                    let qty_str =
+                        crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                    let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
+                    if unit_str.is_empty() {
+                        qty_str
+                    } else {
+                        format!("{} {}", qty_str, unit_str)
+                    }
+                })
+                .collect();
+            (Some(quantities.join(", ")), None)
+        };
+
+        ingredients.push(IngredientData {
+            name: display_name,
+            quantity: formatted_quantity,
+            unit: formatted_unit,
+            note: combined_note,
+            reference_path,
+        });
+    }
+
+    for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
+        cookware.push(CookwareData {
+            name: item.cookware.name.to_string(),
+        });
+    }
+
+    let mut total_steps = 0;
+    for section in &recipe.sections {
+        let mut section_items = Vec::new();
+        let mut section_ingredient_indices = std::collections::HashSet::new();
+        let mut cooking_mode_ingredient_indices: Vec<usize> = Vec::new();
+        let mut step_count = 0;
+
+        for content in &section.content {
+            use cooklang::Content;
+            match content {
+                Content::Step(step) => {
+                    let mut step_items = Vec::new();
+                    let mut step_ingredients = Vec::new();
+
+                    for item in &step.items {
+                        use crate::server::templates::{StepIngredient, StepItem};
+                        use cooklang::Item;
+
+                        match item {
+                            Item::Text { value } => {
+                                let parts: Vec<&str> = value.split('\n').collect();
+                                for (i, part) in parts.iter().enumerate() {
+                                    if i > 0 {
+                                        step_items.push(StepItem::LineBreak);
+                                    }
+                                    if !part.is_empty() {
+                                        step_items.push(StepItem::Text(part.to_string()));
+                                    }
+                                }
+                            }
+                            Item::Ingredient { index } => {
+                                section_ingredient_indices.insert(*index);
+                                cooking_mode_ingredient_indices.push(*index);
+                                if let Some(ing) = recipe.ingredients.get(*index) {
+                                    let reference_path = ing.reference.as_ref().map(|r| {
+                                        // For web URLs - always use forward slash
+                                        if r.components.is_empty() {
+                                            r.name.clone()
+                                        } else {
+                                            format!("{}/{}", r.components.join("/"), r.name)
+                                        }
+                                    });
+
+                                    step_items.push(StepItem::Ingredient {
+                                        name: ing.name.to_string(),
+                                        reference_path,
+                                    });
+
+                                    // Also add to step ingredients list
+                                    step_ingredients.push(StepIngredient {
+                                        name: ing.name.to_string(),
+                                        quantity: ing.quantity.as_ref().and_then(|q| {
+                                            crate::util::format::format_quantity(q.value())
+                                        }),
+                                        unit: ing
+                                            .quantity
+                                            .as_ref()
+                                            .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
+                                        note: ing.note.clone(),
+                                    });
+                                }
+                            }
+                            Item::Cookware { index } => {
+                                if let Some(cw) = recipe.cookware.get(*index) {
+                                    step_items.push(StepItem::Cookware(cw.name.to_string()));
+                                }
+                            }
+                            Item::Timer { index } => {
+                                if let Some(timer) = recipe.timers.get(*index) {
+                                    let mut timer_text = String::new();
+
+                                    // Add timer quantity and unit
+                                    if let Some(quantity) = &timer.quantity {
+                                        if let Some(formatted) =
+                                            crate::util::format::format_quantity(quantity.value())
+                                        {
+                                            timer_text.push_str(&formatted);
+                                        }
+                                        if let Some(unit) = quantity.unit() {
+                                            if !timer_text.is_empty() {
+                                                timer_text.push(' ');
+                                            }
+                                            timer_text.push_str(unit);
+                                        }
+                                    }
+
+                                    // If no duration info, just show "timer"
+                                    if timer_text.is_empty() {
+                                        timer_text = "timer".to_string();
+                                    }
+
+                                    step_items.push(StepItem::Timer(timer_text));
+                                }
+                            }
+                            Item::InlineQuantity { index } => {
+                                if let Some(q) = recipe.inline_quantities.get(*index) {
+                                    let mut qty = crate::util::format::format_quantity(q.value())
+                                        .unwrap_or_default();
+                                    if let Some(unit) = q.unit() {
+                                        if !qty.is_empty() {
+                                            qty.push_str(&format!(" {unit}"));
+                                        } else {
+                                            qty = unit.to_string();
+                                        }
+                                    }
+                                    step_items.push(StepItem::Quantity(qty));
+                                }
+                            }
+                        }
+                    }
+
+                    let section_image_path = entry
+                        .step_images()
+                        .get(0, total_steps + step_count + 1)
+                        .and_then(|img_path| {
+                            get_image_path(base_path, url_prefix, img_path.to_string())
+                        });
+
+                    section_items.push(RecipeSectionItem::Step(StepData {
+                        number: step_count + 1,
+                        items: step_items,
+                        ingredients: step_ingredients,
+                        image_path: section_image_path,
+                    }));
+                    step_count += 1;
+                }
+                Content::Text(text) => {
+                    // Skip list bullet items
+                    if text.trim() != "-" {
+                        section_items.push(RecipeSectionItem::Note(text.trim().to_string()));
+                    }
+                }
+            }
+        }
+
+        // Only add sections that have items (steps or notes)
+        if !section_items.is_empty() {
+            use crate::server::templates::RecipeSection;
+
+            // Collect and group ingredients used in this section
+            let mut section_grouped_ingredients: std::collections::HashMap<
+                String,
+                (
+                    cooklang::quantity::GroupedQuantity,
+                    Vec<&cooklang::model::Ingredient>,
+                ),
+            > = std::collections::HashMap::new();
+
+            for idx in section_ingredient_indices {
+                if let Some(ingredient) = recipe.ingredients.get(idx) {
+                    let display_name = ingredient.display_name().to_string();
+                    let qty = if let Some(q) = &ingredient.quantity {
+                        let mut grouped_qty = cooklang::quantity::GroupedQuantity::empty();
+                        grouped_qty.add(q, crate::util::PARSER.converter());
+                        grouped_qty
+                    } else {
+                        cooklang::quantity::GroupedQuantity::empty()
+                    };
+
+                    section_grouped_ingredients
+                        .entry(display_name)
+                        .and_modify(|(merged_qty, igrs)| {
+                            if let Some(q) = &ingredient.quantity {
+                                merged_qty.add(q, crate::util::PARSER.converter());
+                            }
+                            igrs.push(ingredient);
+                        })
+                        .or_insert_with(|| (qty, vec![ingredient]));
+                }
+            }
+
+            // Sort section ingredients by name
+            let mut sorted_section_ingredients: Vec<_> =
+                section_grouped_ingredients.into_iter().collect();
+            sorted_section_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
+
+            let mut section_ingredients = Vec::new();
+            for (display_name, (quantity, ingredient_list)) in sorted_section_ingredients {
+                let first_ingredient = ingredient_list[0];
+                let reference_path = first_ingredient.reference.as_ref().map(|r| {
+                    // For web URLs - always use forward slash
+                    if r.components.is_empty() {
+                        r.name.clone()
+                    } else {
+                        format!("{}/{}", r.components.join("/"), r.name)
+                    }
+                });
+
+                // Combine notes from all ingredients in the section
+                let combined_note = if ingredient_list.len() > 1 {
+                    let notes: Vec<_> = ingredient_list
+                        .iter()
+                        .filter_map(|i| i.note.as_ref())
+                        .collect();
+                    if notes.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            notes
+                                .iter()
+                                .map(|n| n.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        )
+                    }
+                } else {
+                    first_ingredient.note.clone()
+                };
+
+                // Format the merged quantity
+                let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
+                    (None, None)
+                } else {
+                    let quantities: Vec<_> = quantity
+                        .iter()
+                        .map(|q| {
+                            let qty_str =
+                                crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                            let unit_str =
+                                q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
+                            if unit_str.is_empty() {
+                                qty_str
+                            } else {
+                                format!("{} {}", qty_str, unit_str)
+                            }
+                        })
+                        .collect();
+                    (Some(quantities.join(", ")), None)
+                };
+
+                section_ingredients.push(IngredientData {
+                    name: display_name,
+                    quantity: formatted_quantity,
+                    unit: formatted_unit,
+                    note: combined_note,
+                    reference_path,
+                });
+            }
+
+            // Build uncombined ingredients for cooking mode, sorted by aisle order
+            let mut cooking_mode_ingredients_with_key: Vec<(
+                Option<(usize, usize)>,
+                IngredientData,
+            )> = Vec::new();
+            for idx in &cooking_mode_ingredient_indices {
+                if let Some(ingredient) = recipe.ingredients.get(*idx) {
+                    if !ingredient.modifiers().should_be_listed() {
+                        continue;
+                    }
+                    let sort_key = aisle.ingredient_sort_key(&ingredient.name);
+
+                    let (formatted_quantity, formatted_unit) = if let Some(q) = &ingredient.quantity
+                    {
+                        let qty_str = crate::util::format::format_quantity(q.value());
+                        let unit_str = q.unit().as_ref().map(|u| u.to_string());
+                        (qty_str, unit_str)
+                    } else {
+                        (None, None)
+                    };
+
+                    cooking_mode_ingredients_with_key.push((
+                        sort_key,
+                        IngredientData {
+                            name: ingredient.name.to_string(),
+                            quantity: formatted_quantity,
+                            unit: formatted_unit,
+                            note: ingredient.note.clone(),
+                            reference_path: None,
+                        },
+                    ));
+                }
+            }
+
+            // Sort: aisle items first (by category_index, ingredient_index), then uncategorized at end
+            cooking_mode_ingredients_with_key.sort_by(|a, b| match (&a.0, &b.0) {
+                (Some(ka), Some(kb)) => ka.cmp(kb),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.1.name.cmp(&b.1.name),
+            });
+
+            let cooking_mode_ingredients: Vec<IngredientData> = cooking_mode_ingredients_with_key
+                .into_iter()
+                .map(|(_, data)| data)
+                .collect();
+
+            sections.push(RecipeSection {
+                name: section.name.clone(),
+                items: section_items.clone(),
+                step_offset: total_steps,
+                ingredients: section_ingredients,
+                cooking_mode_ingredients,
+            });
+            total_steps += step_count;
+        }
+    }
+
+    let breadcrumbs: Vec<String> = recipe_path
+        .split('/')
+        .map(|s| s.trim_end_matches(".cook").to_string())
+        .collect();
+
+    let metadata = if recipe.metadata.map.is_empty() {
+        None
+    } else {
+        // Get standard metadata fields (handle both string and number types)
+        let get_field = |key: &str| -> Option<String> {
+            recipe.metadata.get(key).and_then(|v| {
+                if let Some(s) = v.as_str() {
+                    Some(s.to_string())
+                } else if let Some(n) = v.as_i64() {
+                    Some(n.to_string())
+                } else {
+                    v.as_f64().map(crate::util::format::format_number)
+                }
+            })
+        };
+
+        let mut custom_metadata = Vec::new();
+        for (key, value) in recipe.metadata.map_filtered() {
+            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                if key_str.starts_with("source.") || key_str.starts_with("time.") {
+                    continue;
+                }
+
+                custom_metadata.push((key_str.to_string(), val_str.to_string()));
+            }
+        }
+
+        Some(RecipeMetadata {
+            servings: get_field("servings"),
+            time: get_field("time"),
+            difficulty: get_field("difficulty"),
+            course: get_field("course"),
+            prep_time: get_field("prep time")
+                .or_else(|| get_field("prep_time"))
+                .or_else(|| get_field("preptime"))
+                .or_else(|| get_field("time.prep")),
+            cook_time: get_field("cook time")
+                .or_else(|| get_field("cook_time"))
+                .or_else(|| get_field("cooktime"))
+                .or_else(|| get_field("time.cook")),
+            cuisine: get_field("cuisine"),
+            diet: get_field("diet"),
+            author: get_field("author").or_else(|| get_field("source.author")),
+            description: get_field("description"),
+            source: get_field("source").or_else(|| get_field("source.name")),
+            source_url: get_field("source.url"),
+            custom: custom_metadata,
+        })
+    };
+
+    // Use title from metadata if available, otherwise use filename
+    let recipe_name = recipe
+        .metadata
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            recipe_path
+                .split('/')
+                .next_back()
+                .unwrap_or(recipe_path)
+                .replace(".cook", "")
+        });
+
+    let template = RecipeTemplate {
+        active: "recipes".to_string(),
+        recipe: RecipeData {
+            name: recipe_name,
+            metadata,
+        },
+        recipe_path: recipe_path.to_string(),
+        breadcrumbs,
+        scale,
+        tags,
+        ingredients,
+        cookware,
+        sections,
+        image_path,
+        tr: Tr::new(lang),
+        prefix: url_prefix.to_string(),
+        static_mode,
+    };
+
+    Ok(RecipeBuildOutput::Recipe(Box::new(template)))
+}
+
+fn build_menu_template_inner(
+    path: String,
+    scale: f64,
+    entry: cooklang_find::RecipeEntry,
+    base_path: &Utf8Path,
+    url_prefix: &str,
+    lang: LanguageIdentifier,
+    static_mode: bool,
+) -> Result<MenuTemplate> {
+    let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
+        .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
+
+    // Get the image path if available
+    let image_path = entry.title_image().clone().and_then(|img_path| {
+        if img_path.starts_with("http://") || img_path.starts_with("https://") {
+            Some(img_path)
+        } else {
+            let img_path = camino::Utf8Path::new(&img_path);
+            if let Ok(relative) = img_path.strip_prefix(base_path) {
+                Some(format!("{url_prefix}/api/static/{relative}"))
+            } else if !img_path.is_absolute() {
+                Some(format!("{url_prefix}/api/static/{img_path}"))
+            } else {
+                img_path
+                    .file_name()
+                    .map(|name| format!("{url_prefix}/api/static/{name}"))
+            }
+        }
+    });
+
+    let breadcrumbs: Vec<String> = path.split('/').map(|s| s.to_string()).collect();
+
+    // Parse sections and content
+    let mut sections = Vec::new();
+
+    for section in &recipe.sections {
+        let section_name = section.name.clone();
+        let mut lines = Vec::new();
+
+        for content in &section.content {
+            use cooklang::Content;
+            if let Content::Step(step) = content {
+                // Build the full step content first
+                let mut step_items = Vec::new();
+                let mut current_text = String::new();
+
+                for item in &step.items {
+                    use crate::server::templates::MenuSectionItem;
+                    use cooklang::Item;
+
+                    match item {
+                        Item::Text { value } => {
+                            // Check if this is an isolated dash (bullet marker)
+                            if value == "-" {
+                                // Bullet marker - complete current line and start new one
+                                if !current_text.is_empty() {
+                                    step_items.push(MenuSectionItem::Text(current_text.clone()));
+                                    current_text.clear();
+                                }
+                                if !step_items.is_empty() {
+                                    lines.push(step_items.clone());
+                                    step_items.clear();
+                                }
+                            } else {
+                                // Split on newlines to preserve line breaks
+                                let parts: Vec<&str> = value.split('\n').collect();
+                                for (i, part) in parts.iter().enumerate() {
+                                    if i > 0 {
+                                        // Newline encountered - flush current text and line
+                                        if !current_text.is_empty() {
+                                            step_items
+                                                .push(MenuSectionItem::Text(current_text.clone()));
+                                            current_text.clear();
+                                        }
+                                        if !step_items.is_empty() {
+                                            lines.push(step_items.clone());
+                                            step_items.clear();
+                                        }
+                                    }
+                                    if !part.is_empty() {
+                                        current_text.push_str(part);
+                                    }
+                                }
+                            }
+                        }
+                        Item::Ingredient { index } => {
+                            // First, add any pending text
+                            if !current_text.is_empty() {
+                                step_items.push(MenuSectionItem::Text(current_text.clone()));
+                                current_text.clear();
+                            }
+
+                            if let Some(ing) = recipe.ingredients.get(*index) {
+                                // Check if this is a recipe reference using the reference field
+                                if let Some(ref recipe_ref) = ing.reference {
+                                    // This is a recipe reference
+                                    let recipe_scale =
+                                        ing.quantity.as_ref().and_then(|q| match q.value() {
+                                            cooklang::Value::Number(n) => Some(n.value()),
+                                            _ => None,
+                                        });
+
+                                    // Apply menu scaling to the recipe reference
+                                    let final_scale = recipe_scale.map(|s| s * scale);
+
+                                    // Build the full path from components
+                                    // For web URLs - always use forward slash
+                                    let name = if recipe_ref.components.is_empty() {
+                                        recipe_ref.name.clone()
+                                    } else {
+                                        format!(
+                                            "{}/{}",
+                                            recipe_ref.components.join("/"),
+                                            recipe_ref.name
+                                        )
+                                    };
+
+                                    step_items.push(MenuSectionItem::RecipeReference {
+                                        name,
+                                        scale: final_scale,
+                                    });
+                                } else {
+                                    // Regular ingredient
+                                    let quantity = ing.quantity.as_ref().and_then(|q| {
+                                        crate::util::format::format_quantity(q.value())
+                                    });
+                                    let unit = ing
+                                        .quantity
+                                        .as_ref()
+                                        .and_then(|q| q.unit().as_ref().map(|u| u.to_string()));
+
+                                    step_items.push(MenuSectionItem::Ingredient {
+                                        name: ing.name.to_string(),
+                                        quantity,
+                                        unit,
+                                    });
+                                }
+                            }
+                        }
+                        _ => {} // Ignore other items in menu files
+                    }
+                }
+
+                // Add any remaining content as a line
+                if !current_text.is_empty() {
+                    step_items.push(MenuSectionItem::Text(current_text));
+                }
+                if !step_items.is_empty() {
+                    lines.push(step_items);
+                }
+            }
+        }
+
+        // Filter out empty lines (lines that are only whitespace text)
+        lines.retain(|line| {
+            !line
+                .iter()
+                .all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
+        });
+
+        if !lines.is_empty() {
+            sections.push(MenuSection {
+                name: section_name,
+                lines,
+            });
+        }
+    }
+
+    // Get metadata
+    let metadata = if recipe.metadata.map.is_empty() {
+        None
+    } else {
+        let get_field = |key: &str| -> Option<String> {
+            recipe.metadata.get(key).and_then(|v| {
+                if let Some(s) = v.as_str() {
+                    Some(s.to_string())
+                } else if let Some(n) = v.as_i64() {
+                    Some(n.to_string())
+                } else {
+                    v.as_f64().map(crate::util::format::format_number)
+                }
+            })
+        };
+
+        let mut custom_metadata = Vec::new();
+        for (key, value) in recipe.metadata.map_filtered() {
+            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                custom_metadata.push((key_str.to_string(), val_str.to_string()));
+            }
+        }
+
+        Some(RecipeMetadata {
+            servings: get_field("servings"),
+            time: get_field("time"),
+            difficulty: get_field("difficulty"),
+            course: get_field("course"),
+            prep_time: get_field("prep time")
+                .or_else(|| get_field("prep_time"))
+                .or_else(|| get_field("preptime")),
+            cook_time: get_field("cook time")
+                .or_else(|| get_field("cook_time"))
+                .or_else(|| get_field("cooktime")),
+            cuisine: get_field("cuisine"),
+            diet: get_field("diet"),
+            author: get_field("author").or_else(|| get_field("source.author")),
+            description: get_field("description"),
+            source: get_field("source").or_else(|| get_field("source.name")),
+            source_url: get_field("source.url"),
+            custom: custom_metadata,
+        })
+    };
+
+    let menu_name = recipe
+        .metadata
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            path.split('/')
+                .next_back()
+                .unwrap_or(&path)
+                .replace(".menu", "")
+        });
+
+    Ok(MenuTemplate {
+        active: "recipes".to_string(),
+        name: menu_name,
+        recipe_path: path,
+        breadcrumbs,
+        scale,
+        metadata,
+        sections,
+        image_path,
+        tr: Tr::new(lang),
+        prefix: url_prefix.to_string(),
+        static_mode,
+    })
+}
+
+fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
+    let mut count = 0;
+
+    for child in tree.children.values() {
+        if !child.children.is_empty() {
+            count += count_recipes_tree(child).unwrap_or(0);
+        } else {
+            count += 1;
+        }
+    }
+
+    Some(count)
+}
+
+fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Option<String> {
+    tracing::debug!("Recipe image path from entry: {}", img_path);
+    // If it's a URL, use it directly
+    if img_path.starts_with("http://") || img_path.starts_with("https://") {
+        Some(img_path)
+    } else {
+        // For file paths, we need to make them relative to the base path and accessible via /api/static
+        let img_path = camino::Utf8Path::new(&img_path);
+
+        // Try to strip the base_path prefix to get a relative path
+        if let Ok(relative) = img_path.strip_prefix(base_path) {
+            let result = format!("{prefix}/api/static/{relative}");
+            tracing::debug!("Image path relative to base: {}", result);
+            Some(result)
+        } else if !img_path.is_absolute() {
+            Some(format!("{prefix}/api/static/{img_path}"))
+        } else {
+            img_path
+                .file_name()
+                .map(|name| format!("{prefix}/api/static/{name}"))
+        }
+    }
+}
