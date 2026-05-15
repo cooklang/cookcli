@@ -43,7 +43,6 @@ pub struct ErrorTemplate {
     pub error_message: String,
     pub tr: Tr,
     pub prefix: String,
-    #[allow(dead_code)]
     pub static_mode: bool,
 }
 
@@ -63,7 +62,6 @@ pub struct RecipesTemplate {
     pub todays_menu: Option<TodaysMenu>,
     pub tr: Tr,
     pub prefix: String,
-    #[allow(dead_code)]
     pub static_mode: bool,
 }
 
@@ -82,7 +80,6 @@ pub struct RecipeTemplate {
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
-    #[allow(dead_code)]
     pub static_mode: bool,
 }
 
@@ -173,7 +170,6 @@ pub struct MenuTemplate {
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
-    #[allow(dead_code)]
     pub static_mode: bool,
 }
 
@@ -183,6 +179,7 @@ pub struct ShoppingListTemplate {
     pub active: String,
     pub tr: Tr,
     pub prefix: String,
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
@@ -199,6 +196,7 @@ pub struct PreferencesTemplate {
     pub sync_email: Option<String>,
     pub sync_syncing: bool,
     pub prefix: String,
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
@@ -209,6 +207,7 @@ pub struct PantryTemplate {
     pub sections: Vec<PantrySection>,
     pub tr: Tr,
     pub prefix: String,
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
@@ -221,6 +220,7 @@ pub struct EditTemplate {
     pub base_path: String,
     pub tr: Tr,
     pub prefix: String,
+    pub static_mode: bool,
 }
 
 #[derive(Template)]
@@ -231,6 +231,7 @@ pub struct NewTemplate {
     pub error: Option<String>,
     pub filename: Option<String>,
     pub prefix: String,
+    pub static_mode: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

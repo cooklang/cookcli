@@ -842,6 +842,7 @@ async fn edit_page(
         base_path: state.base_path.to_string(),
         tr: crate::server::templates::Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     };
 
     template.into_response()
@@ -864,6 +865,7 @@ async fn new_page(
         error: query.error,
         filename: query.filename,
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     }
 }
 
@@ -1361,6 +1363,7 @@ async fn shopping_list_page(
         active: "shopping".to_string(),
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     }
 }
 
@@ -1407,6 +1410,7 @@ async fn pantry_page(
         sections,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     })
 }
 
@@ -1439,5 +1443,6 @@ async fn preferences_page(
         sync_email,
         sync_syncing,
         prefix: state.url_prefix.clone(),
+        static_mode: false,
     }
 }
