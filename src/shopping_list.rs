@@ -99,9 +99,17 @@ pub struct ShoppingListArgs {
     #[arg(short, long)]
     aisle: Option<Utf8PathBuf>,
 
+    /// Load pantry conf file
+    #[arg(long)]
+    pantry: Option<Utf8PathBuf>,
+
     /// Don't expand referenced recipes
     #[arg(short, long)]
     ignore_references: bool,
+
+    /// Don't subtract pantry items from the shopping list
+    #[arg(long)]
+    ignore_pantry: bool,
 
     /// Display only ingredient names, one per line, without amounts
     #[arg(long)]
@@ -195,8 +203,15 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         Default::default()
     };
 
-    // Load pantry configuration if available
-    let pantry_path = ctx.pantry();
+    // Resolve pantry path: --ignore-pantry skips entirely; otherwise prefer
+    // --pantry, falling back to ctx.pantry() auto-discovery.
+    let pantry_path = if args.ignore_pantry {
+        tracing::debug!("Pantry ignored via --ignore-pantry");
+        None
+    } else {
+        args.pantry.clone().or_else(|| ctx.pantry())
+    };
+
     let pantry = if let Some(path) = &pantry_path {
         match std::fs::read_to_string(path) {
             Ok(content) => {
