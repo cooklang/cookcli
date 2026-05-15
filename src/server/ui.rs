@@ -167,12 +167,22 @@ async fn recipes_handler(
         crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
     };
 
+    let new_recipe_url = match &path {
+        Some(p) => format!(
+            "{}/new?filename={}%2F",
+            state.url_prefix,
+            urlencoding::encode(p)
+        ),
+        None => format!("{}/new", state.url_prefix),
+    };
+
     let template = RecipesTemplate {
         active: "recipes".to_string(),
         current_name,
         breadcrumbs,
         items,
         todays_menu,
+        new_recipe_url,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
     };
