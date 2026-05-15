@@ -38,6 +38,7 @@
                 <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent print:text-2xl">{{ name }}</h1>
                 <span class="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-full text-sm font-semibold print:hidden">{{ tr.t("recipe-type-menu") }}</span>
             </div>
+            {% if !static_mode %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 <div class="flex items-center">
                     <label for="scale" class="text-sm font-medium text-gray-700 mr-2">{{ tr.t("recipe-scale-label") }}:</label>
@@ -67,6 +68,7 @@
                     <span class="hidden lg:inline">{{ tr.t("recipe-add-all-to-shopping") }}</span>
                 </button>
             </div>
+            {% endif %}
         </div>
 
         <!-- Menu info section -->
@@ -236,6 +238,7 @@
     </div>
 </div>
 
+{% if !static_mode %}
 <script>
 // Escape a string for safe interpolation into HTML text content. Even
 // though translated strings are compile-time today, defensively escaping
@@ -293,4 +296,5 @@ async function addToShoppingList(event, recipePath) {
     }
 }
 </script>
+{% endif %}
 {% endblock %}
