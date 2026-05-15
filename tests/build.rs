@@ -292,3 +292,44 @@ fn static_output_omits_dynamic_ui() {
         "static search.js link missing"
     );
 }
+
+#[test]
+fn build_internal_links_resolve_to_existing_files() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Parse a directory listing and verify every anchor href that points
+    // into recipe/ menu/ or directory/ resolves to an actual file.
+    let listing = std::fs::read_to_string(out.join("directory/Breakfast.html")).unwrap();
+    let re = regex::Regex::new(r##"href="\.\./([^"#?]+)""##).unwrap();
+    let prefixes = ["recipe/", "menu/", "directory/"];
+    let mut checked = 0;
+    for cap in re.captures_iter(&listing) {
+        let rel = &cap[1];
+        if !prefixes.iter().any(|p| rel.starts_with(p)) {
+            continue;
+        }
+        let target = out.join(rel);
+        assert!(
+            target.is_file(),
+            "broken link in directory/Breakfast.html: '{rel}' -> {target:?}"
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "no recipe/menu/directory links found in listing"
+    );
+}

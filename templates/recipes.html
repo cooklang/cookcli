@@ -44,7 +44,7 @@
                 </div>
                 <p class="text-sm opacity-90">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="{{ prefix }}/recipe/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
+            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
                 {{ tr.t("todays-menu-view") }}
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -72,7 +72,7 @@
             </div>
         </a>
         {% else %}
-        <a href="{{ prefix }}/recipe/{{ item.path }}{% if static_mode %}.html{% endif %}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
             {% match item.image_path %}
             {% when Some with (img) %}
             <div class="h-48 bg-gray-100 overflow-hidden">

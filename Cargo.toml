@@ -86,6 +86,7 @@ insta = { version = "1", features = ["yaml", "json", "filters"] }
 strip-ansi-escapes = "0.2"
 tokio = { version = "1", features = ["full", "test-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+regex = "1"
 
 [profile.release]
 strip = true

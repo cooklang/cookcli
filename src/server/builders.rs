@@ -48,6 +48,11 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                 .recipe
                 .as_ref()
                 .and_then(|recipe| recipe.file_name())
+                .map(|f| {
+                    f.trim_end_matches(".cook")
+                        .trim_end_matches(".menu")
+                        .to_string()
+                })
                 .unwrap_or_else(|| name.to_string());
 
             match sub_path {
