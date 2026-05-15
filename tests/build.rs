@@ -216,3 +216,79 @@ fn build_writes_search_js() {
         "search.js should exist"
     );
 }
+
+#[test]
+fn build_writes_menu_pages_without_dotmenu_suffix() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Menu files (e.g. "Weekly Plan.menu") must land at "menu/<name>.html",
+    // not "menu/<name>.menu.html", so search-index URLs resolve.
+    assert!(
+        out.join("menu/Weekly Plan.html").is_file(),
+        "menu page should be at menu/<name>.html (no .menu suffix)"
+    );
+    assert!(
+        !out.join("menu/Weekly Plan.menu.html").exists(),
+        "menu page should not have a .menu.html suffix"
+    );
+}
+
+#[test]
+fn static_output_omits_dynamic_ui() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+
+    // Dynamic nav links to dynamic-only pages should be gone.
+    // We look for the rendered <a href=...> form to avoid matching unrelated
+    // CSS selectors that mention the same paths.
+    assert!(
+        !index.contains("href=\"./shopping-list\""),
+        "shopping-list nav link still present in static index"
+    );
+    assert!(
+        !index.contains("href=\"./pantry\""),
+        "pantry nav link still present in static index"
+    );
+    assert!(
+        !index.contains("href=\"./preferences\""),
+        "preferences nav link still present in static index"
+    );
+
+    // The dynamic server search fetch should be gone; the static search.js
+    // link should be in its place.
+    assert!(
+        !index.contains("/api/search"),
+        "api search reference remains in static index"
+    );
+    assert!(
+        index.contains("/static/js/search.js"),
+        "static search.js link missing"
+    );
+}

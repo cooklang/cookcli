@@ -172,8 +172,8 @@
         }
 
         /* Fix for navigation pill hover states */
-        .dark a[href="{{ prefix }}/"].hover\\:bg-gradient-to-r:hover,
-        .dark a[href="{{ prefix }}/shopping-list"].hover\\:bg-gradient-to-r:hover {
+        .dark a[href="{{ prefix }}/"].hover\\:bg-gradient-to-r:hover{% if !static_mode %},
+        .dark a[href="{{ prefix }}/shopping-list"].hover\\:bg-gradient-to-r:hover{% endif %} {
             background: #374151 !important;
         }
 
@@ -468,7 +468,7 @@
             }
 
             /* Hide all navigation links */
-            a[href="{{ prefix }}/"], a[href="{{ prefix }}/shopping-list"], a[href="{{ prefix }}/preferences"] {
+            a[href="{{ prefix }}/"]{% if !static_mode %}, a[href="{{ prefix }}/shopping-list"], a[href="{{ prefix }}/preferences"]{% endif %} {
                 display: none !important;
             }
 

@@ -71,7 +71,9 @@ pub fn render_recipe(
     base_url: Option<&str>,
     lang: &LanguageIdentifier,
 ) -> Result<()> {
-    let trimmed = recipe_relpath.trim_end_matches(".cook");
+    let trimmed = recipe_relpath
+        .trim_end_matches(".cook")
+        .trim_end_matches(".menu");
     let provisional = Utf8PathBuf::from(format!("recipe/{trimmed}.html"));
     let prefix = compute_prefix(base_url, &provisional);
 
