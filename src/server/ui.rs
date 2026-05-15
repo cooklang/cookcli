@@ -721,7 +721,9 @@ async fn recipe_page(
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
-            time: get_field("time"),
+            time: get_field("time")
+                .or_else(|| get_field("duration"))
+                .or_else(|| get_field("time required")),
             difficulty: get_field("difficulty"),
             course: get_field("course"),
             prep_time: get_field("prep time")
@@ -1312,7 +1314,9 @@ async fn menu_page_handler(
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
-            time: get_field("time"),
+            time: get_field("time")
+                .or_else(|| get_field("duration"))
+                .or_else(|| get_field("time required")),
             difficulty: get_field("difficulty"),
             course: get_field("course"),
             prep_time: get_field("prep time")
