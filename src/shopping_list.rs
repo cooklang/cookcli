@@ -209,7 +209,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         tracing::debug!("Pantry ignored via --ignore-pantry");
         None
     } else {
-        args.pantry.clone().or_else(|| ctx.pantry())
+        args.pantry.or_else(|| ctx.pantry())
     };
 
     let pantry = if let Some(path) = &pantry_path {
