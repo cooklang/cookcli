@@ -64,3 +64,35 @@ fn build_writes_index_and_static_assets() {
         "no shopping list UI"
     );
 }
+
+#[test]
+fn build_writes_recipe_pages() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // The seed contains "Easy Pancakes.cook" under Breakfast.
+    let pancakes = out.join("recipe/Breakfast/Easy Pancakes.html");
+    assert!(
+        pancakes.is_file(),
+        "pancakes html should exist at {pancakes:?}"
+    );
+
+    let html = std::fs::read_to_string(&pancakes).unwrap();
+    assert!(html.contains("Pancakes"), "title should be present");
+    assert!(
+        !html.contains("/api/shopping_list"),
+        "no shopping-list api references"
+    );
+}

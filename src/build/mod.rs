@@ -65,8 +65,21 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
     walk_directories(&tree, &source, &output, base_url, &lang, String::new())?;
 
+    let aisle = ctx.aisle();
+    let recipe_count = walk_recipes(
+        &tree,
+        &source,
+        &output,
+        aisle.as_ref(),
+        base_url,
+        &lang,
+        String::new(),
+    )?;
+
     let asset_count = writer::copy_static_assets(&output)?;
-    println!("Wrote index, directories, and {asset_count} static assets");
+    println!(
+        "Wrote index, directories, {recipe_count} recipe pages, and {asset_count} static assets"
+    );
     Ok(())
 }
 
@@ -80,7 +93,7 @@ fn walk_directories(
 ) -> Result<()> {
     for (name, child) in &tree.children {
         if child.children.is_empty() {
-            continue; // it's a recipe file, handled in next task
+            continue; // it's a recipe file, handled by walk_recipes
         }
         let sub = if prefix_path.is_empty() {
             name.to_string()
@@ -91,4 +104,37 @@ fn walk_directories(
         walk_directories(child, source, output, base_url, lang, sub)?;
     }
     Ok(())
+}
+
+fn walk_recipes(
+    tree: &cooklang_find::RecipeTree,
+    source: &camino::Utf8Path,
+    output: &camino::Utf8Path,
+    aisle_path: Option<&camino::Utf8PathBuf>,
+    base_url: Option<&str>,
+    lang: &unic_langid::LanguageIdentifier,
+    prefix_path: String,
+) -> Result<usize> {
+    let mut count = 0;
+    for (name, child) in &tree.children {
+        let sub = if prefix_path.is_empty() {
+            name.to_string()
+        } else {
+            format!("{prefix_path}/{name}")
+        };
+
+        if child.children.is_empty() {
+            // Recipe file
+            if let Err(e) =
+                renderer::render_recipe(source, output, &sub, aisle_path, base_url, lang)
+            {
+                tracing::warn!("Skipping recipe {sub}: {e:#}");
+                continue;
+            }
+            count += 1;
+        } else {
+            count += walk_recipes(child, source, output, aisle_path, base_url, lang, sub)?;
+        }
+    }
+    Ok(count)
 }
