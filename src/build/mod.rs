@@ -1,5 +1,6 @@
+use crate::util::resolve_to_absolute_path;
 use crate::Context;
-use anyhow::Result;
+use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::Args;
 
@@ -31,7 +32,24 @@ impl BuildArgs {
     }
 }
 
-pub fn run(_ctx: &Context, _args: BuildArgs) -> Result<()> {
-    println!("cook build: not yet implemented");
+pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
+    let source = resolve_to_absolute_path(ctx.base_path())?;
+    if !source.is_dir() {
+        bail!("Source base path is not a directory: {source}");
+    }
+
+    let output_raw = args
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| Utf8PathBuf::from("_site"));
+
+    // Create the output directory before canonicalizing (canonicalize requires existence).
+    std::fs::create_dir_all(&output_raw)
+        .with_context(|| format!("Failed to create output directory: {output_raw}"))?;
+
+    let output = resolve_to_absolute_path(&output_raw)?;
+
+    tracing::info!("Building static site from {source} into {output}");
+    println!("Building static site from {source} into {output}");
     Ok(())
 }
