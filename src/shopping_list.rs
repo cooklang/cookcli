@@ -205,6 +205,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // Resolve pantry path: --ignore-pantry skips entirely; otherwise prefer
     // --pantry, falling back to ctx.pantry() auto-discovery.
+    let explicit_pantry = args.pantry.is_some();
     let pantry_path = if args.ignore_pantry {
         tracing::debug!("Pantry ignored via --ignore-pantry");
         None
@@ -237,13 +238,20 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 }
                 pantry_conf
             }
+            Err(e) if explicit_pantry => {
+                return Err(anyhow::anyhow!(
+                    "Failed to read pantry file '{}': {}",
+                    path,
+                    e
+                ));
+            }
             Err(e) => {
                 warn!("Failed to read pantry file: {}", e);
                 None
             }
         }
     } else {
-        tracing::debug!("No pantry file found");
+        tracing::debug!("No pantry file resolved");
         None
     };
 
