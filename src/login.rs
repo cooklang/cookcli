@@ -41,8 +41,11 @@ async fn run_async() -> Result<()> {
     println!();
     println!("(Press Enter to open it automatically, or Ctrl-C to abort.)");
 
-    let stdin = std::io::stdin();
-    let _ = stdin.lock().lines().next();
+    let _ = tokio::task::spawn_blocking(|| {
+        let stdin = std::io::stdin();
+        let _ = stdin.lock().lines().next();
+    })
+    .await;
 
     if let Err(e) = open::that(&dc.verification_uri_complete) {
         eprintln!("Couldn't open browser automatically: {e}");
