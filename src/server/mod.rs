@@ -49,21 +49,22 @@ use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
+pub mod builders;
 mod handlers;
 mod i18n;
-mod language;
+pub mod language;
 mod lsp_bridge;
 mod shopping_list_store;
 mod shopping_list_watcher;
 #[cfg(feature = "sync")]
 pub mod sync;
-mod templates;
+pub mod templates;
 mod ui;
 
 // Embed static files at compile time
 #[derive(RustEmbed)]
 #[folder = "static/"]
-struct StaticFiles;
+pub struct StaticFiles;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {

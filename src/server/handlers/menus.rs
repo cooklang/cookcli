@@ -438,7 +438,11 @@ pub fn find_todays_menu(
             if date.as_deref() == Some(today.as_str()) {
                 return Some(crate::server::templates::TodaysMenu {
                     menu_name: menu_item.name.clone(),
-                    menu_path: menu_item.path.clone(),
+                    menu_path: menu_item
+                        .path
+                        .trim_end_matches(".cook")
+                        .trim_end_matches(".menu")
+                        .to_string(),
                     date_display: today_display,
                 });
             }

@@ -35,6 +35,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 
 // commands
+mod build;
 mod doctor;
 mod import;
 mod lsp;
@@ -67,6 +68,7 @@ pub fn main() -> Result<()> {
     match args.command {
         Command::Recipe(args) => recipe::run(&ctx, args),
         Command::Server(args) => server::run(ctx, args),
+        Command::Build(args) => build::run(&ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
         Command::Search(args) => search::run(&ctx, args),
@@ -125,6 +127,9 @@ fn configure_context() -> Result<Context> {
             .get_base_path()
             .unwrap_or_else(|| Utf8PathBuf::from(".")),
         Command::ShoppingList(ref shopping_list_args) => shopping_list_args
+            .get_base_path()
+            .unwrap_or_else(|| Utf8PathBuf::from(".")),
+        Command::Build(ref build_args) => build_args
             .get_base_path()
             .unwrap_or_else(|| Utf8PathBuf::from(".")),
         _ => Utf8PathBuf::from("."),

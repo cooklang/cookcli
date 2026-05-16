@@ -172,8 +172,8 @@
         }
 
         /* Fix for navigation pill hover states */
-        .dark a[href="{{ prefix }}/"].hover\\:bg-gradient-to-r:hover,
-        .dark a[href="{{ prefix }}/shopping-list"].hover\\:bg-gradient-to-r:hover {
+        .dark a[href="{{ prefix }}/"].hover\\:bg-gradient-to-r:hover{% if !static_mode %},
+        .dark a[href="{{ prefix }}/shopping-list"].hover\\:bg-gradient-to-r:hover{% endif %} {
             background: #374151 !important;
         }
 
@@ -468,7 +468,7 @@
             }
 
             /* Hide all navigation links */
-            a[href="{{ prefix }}/"], a[href="{{ prefix }}/shopping-list"], a[href="{{ prefix }}/preferences"] {
+            a[href="{{ prefix }}/"]{% if !static_mode %}, a[href="{{ prefix }}/shopping-list"], a[href="{{ prefix }}/preferences"]{% endif %} {
                 display: none !important;
             }
 
@@ -750,7 +750,7 @@
         <nav class="bg-white shadow-lg rounded-2xl mb-8 relative">
             <div class="px-3 lg:px-6 py-4 relative">
                 <div class="flex items-center justify-between flex-wrap gap-y-3">
-                    <a href="{{ prefix }}/" class="order-1 hidden md:flex items-center space-x-2">
+                    <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="order-1 hidden md:flex items-center space-x-2">
                         <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="h-8 w-8 rounded-md dark:bg-gray-200 dark:p-0.5" width="32" height="32">
                     </a>
 
@@ -771,19 +771,25 @@
                     </div>
 
                     <div class="order-3 w-full md:w-auto flex items-center gap-1 lg:gap-2">
-                        <a href="{{ prefix }}/" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
+                        <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-recipes") }}</span>
                         </a>
+                        {% if !static_mode %}
                         <a href="{{ prefix }}/shopping-list" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "shopping" %}bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 hover:text-purple-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-shopping-list") }}</span>
                         </a>
+                        {% endif %}
+                        {% if !static_mode %}
                         <a href="{{ prefix }}/pantry" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "pantry" %}bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-green-100 hover:to-teal-100 hover:text-green-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>{{ tr.t("nav-pantry") }}</span>
                         </a>
+                        {% endif %}
                         <!-- Inline buttons on md+ screens -->
+                        {% if !static_mode %}
                         <a href="{{ prefix }}/preferences" class="hidden md:inline-flex px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "preferences" %}bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gray-100 hover:text-gray-800 hover:shadow-md hover:-translate-y-0.5{% endif %}">
                             <span>⚙️</span>
                         </a>
+                        {% endif %}
                         <button onclick="showShortcutsHelp()" class="hidden md:inline-flex ml-2 p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors print:hidden" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
                             <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -805,9 +811,11 @@
                                 </svg>
                             </button>
                             <div id="more-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-xl z-50 py-1">
+                                {% if !static_mode %}
                                 <a href="{{ prefix }}/preferences" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                     <span>⚙️</span> <span>Preferences</span>
                                 </a>
+                                {% endif %}
                                 <button onclick="showShortcutsHelp(); document.getElementById('more-dropdown').classList.add('hidden');" class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                     <span>Keyboard Shortcuts</span>
@@ -827,14 +835,16 @@
         <main>
             {% block content %}{% endblock %}
         </main>
+
+        {% if static_mode %}
+        <footer class="mt-12 mb-6 text-center text-sm text-gray-500 print:hidden">
+            Built with
+            <a href="https://cooklang.org/cli/" class="text-orange-600 hover:text-orange-700 hover:underline" target="_blank" rel="noopener">CookCLI</a>
+        </footer>
+        {% endif %}
     </div>
 
     <script>
-        // Translations for JavaScript
-        const translations = {
-            noRecipes: {{ tr.t("search-no-results")|json|safe }}
-        };
-
         // Theme toggle function
         function toggleTheme() {
             const html = document.documentElement;
@@ -844,6 +854,14 @@
             html.classList.toggle('dark');
             localStorage.setItem('theme', newTheme);
         }
+    </script>
+
+    {% if !static_mode %}
+    <script>
+        // Translations for JavaScript
+        const translations = {
+            noRecipes: {{ tr.t("search-no-results")|json|safe }}
+        };
 
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
@@ -931,9 +949,16 @@
             }
         });
     </script>
+    {% else %}
+    <script>window.__PREFIX__ = {{ prefix|json|safe }};</script>
+    <script src="{{ prefix }}/static/js/search.js"></script>
+    {% endif %}
 
     <!-- URL prefix for JavaScript -->
-    <script>window.__PREFIX__ = {{ prefix|json|safe }};</script>
+    <script>
+        window.__PREFIX__ = {{ prefix|json|safe }};
+        window.__STATIC_MODE__ = {{ static_mode|json|safe }};
+    </script>
 
     <!-- Keyboard shortcuts -->
     <script src="{{ prefix }}/static/js/keyboard-shortcuts.js"></script>

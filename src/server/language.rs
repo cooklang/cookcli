@@ -16,8 +16,23 @@ pub const ES_ES: LanguageIdentifier = langid!("es-ES");
 pub const EU_ES: LanguageIdentifier = langid!("eu-ES");
 pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
 
-const SUPPORTED_LANGUAGES: &[LanguageIdentifier] =
+pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] =
     &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE];
+
+/// Parse a user-supplied language tag (e.g. "de", "de-DE") into one of the
+/// supported [`LanguageIdentifier`]s. Returns `None` for unsupported tags.
+pub fn parse_supported_language(s: &str) -> Option<LanguageIdentifier> {
+    let parsed: LanguageIdentifier = s.parse().ok()?;
+    if SUPPORTED_LANGUAGES.contains(&parsed) {
+        return Some(parsed);
+    }
+    // Allow bare language codes ("de") to match a supported region ("de-DE").
+    let base = s.split('-').next().unwrap_or(s);
+    SUPPORTED_LANGUAGES
+        .iter()
+        .find(|l| l.language.as_str().eq_ignore_ascii_case(base))
+        .cloned()
+}
 
 /// Get the preferred language from headers
 /// 1. Check for 'lang' cookie

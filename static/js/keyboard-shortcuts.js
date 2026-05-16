@@ -73,6 +73,51 @@
             return;
         }
 
+        const staticMode = window.__STATIC_MODE__ === true;
+        const kbd = 'class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono"';
+        const row = (label, keys) => `
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600 dark:text-gray-400">${label}</span>
+                <span>${keys}</span>
+            </div>`;
+        const k = (s) => `<kbd ${kbd}>${s}</kbd>`;
+
+        const navRows = [
+            row('Focus search', k('/')),
+            row('Navigate search results', `${k('&uarr;')} ${k('&darr;')} ${k('Enter')}`),
+            row('Go to recipes', `${k('g')} ${k('h')}`),
+        ];
+        if (!staticMode) {
+            navRows.push(
+                row('Go to shopping list', `${k('g')} ${k('s')}`),
+                row('Go to pantry', `${k('g')} ${k('p')}`),
+                row('Go to preferences', `${k('g')} ${k('x')}`)
+            );
+        }
+
+        const recipeRows = [row('Start cooking mode', k('c'))];
+        if (!staticMode) {
+            recipeRows.push(
+                row('Edit recipe', k('e')),
+                row('Add to shopping list', k('a'))
+            );
+        }
+        recipeRows.push(row('Print recipe', k('p')));
+        if (!staticMode) {
+            recipeRows.push(
+                row('Increase scale', k('+')),
+                row('Decrease scale', k('-'))
+            );
+        }
+
+        const shoppingSection = staticMode ? '' : `
+            <div>
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Shopping List</h3>
+                <div class="space-y-2">
+                    ${row('Clear all items', k('c'))}
+                </div>
+            </div>`;
+
         const modal = document.createElement('div');
         modal.id = 'keyboard-shortcuts-modal';
         modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
@@ -90,88 +135,21 @@
                     <div class="grid md:grid-cols-2 gap-6">
                         <div>
                             <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Navigation</h3>
-                            <div class="space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Focus search</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">/</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Navigate search results</span>
-                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">&uarr;</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">&darr;</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Enter</kbd></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Go to recipes</span>
-                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">g</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">h</kbd></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Go to shopping list</span>
-                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">g</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">s</kbd></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Go to pantry</span>
-                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">g</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">p</kbd></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Go to preferences</span>
-                                    <span><kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">g</kbd> <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">x</kbd></span>
-                                </div>
-                            </div>
+                            <div class="space-y-2">${navRows.join('')}</div>
                         </div>
                         <div>
                             <h3 class="font-semibold text-gray-900 dark:text-white mb-3">General</h3>
                             <div class="space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Toggle theme</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">t</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Show shortcuts</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">?</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Close modal</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Esc</kbd>
-                                </div>
+                                ${row('Toggle theme', k('t'))}
+                                ${row('Show shortcuts', k('?'))}
+                                ${row('Close modal', k('Esc'))}
                             </div>
                         </div>
                         <div>
                             <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Recipe Page</h3>
-                            <div class="space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Start cooking mode</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">c</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Edit recipe</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">e</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Add to shopping list</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">a</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Print recipe</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">p</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Increase scale</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">+</kbd>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Decrease scale</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">-</kbd>
-                                </div>
-                            </div>
+                            <div class="space-y-2">${recipeRows.join('')}</div>
                         </div>
-                        <div>
-                            <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Shopping List</h3>
-                            <div class="space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600 dark:text-gray-400">Clear all items</span>
-                                    <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">c</kbd>
-                                </div>
-                            </div>
-                        </div>
+                        ${shoppingSection}
                     </div>
                 </div>
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -220,6 +198,7 @@
         if (pendingKey === 'g') {
             clearPendingKey();
             const pfx = window.__PREFIX__ || '';
+            const staticMode = window.__STATIC_MODE__ === true;
             switch (key) {
                 case 'h':
                 case 'r':
@@ -227,14 +206,17 @@
                     window.location.href = pfx + '/';
                     return;
                 case 's':
+                    if (staticMode) break;
                     event.preventDefault();
                     window.location.href = pfx + '/shopping-list';
                     return;
                 case 'p':
+                    if (staticMode) break;
                     event.preventDefault();
                     window.location.href = pfx + '/pantry';
                     return;
                 case 'x':
+                    if (staticMode) break;
                     event.preventDefault();
                     window.location.href = pfx + '/preferences';
                     return;
@@ -308,6 +290,7 @@
 
     // Recipe page specific shortcuts
     function handleRecipeShortcuts(event, key) {
+        const staticMode = window.__STATIC_MODE__ === true;
         switch (key) {
             case 'c':
                 event.preventDefault();
@@ -317,6 +300,7 @@
                 return;
 
             case 'e':
+                if (staticMode) return;
                 event.preventDefault();
                 // Find and click the edit link
                 const editPfx = (window.__PREFIX__ || '') + '/edit/';
@@ -327,6 +311,7 @@
                 return;
 
             case 'a':
+                if (staticMode) return;
                 event.preventDefault();
                 // Find and click the add to shopping list button
                 const addButton = document.querySelector('button[onclick^="addToShoppingList"]');
@@ -342,22 +327,26 @@
 
             case '+':
             case '=': // = is on the same key as + without shift
+                if (staticMode) return;
                 event.preventDefault();
                 adjustScale(0.5);
                 return;
 
             case '-':
             case '_':
+                if (staticMode) return;
                 event.preventDefault();
                 adjustScale(-0.5);
                 return;
 
             case ']':
+                if (staticMode) return;
                 event.preventDefault();
                 adjustScale(1);
                 return;
 
             case '[':
+                if (staticMode) return;
                 event.preventDefault();
                 adjustScale(-1);
                 return;
