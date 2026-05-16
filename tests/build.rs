@@ -445,3 +445,51 @@ fn build_internal_links_resolve_to_existing_files() {
         "no recipe/menu/directory links found in listing"
     );
 }
+
+#[test]
+fn build_twice_with_output_inside_source_does_not_recurse() {
+    // Regression: when the output dir lives inside the source dir
+    // (`cook build` from the recipe root with default `_site`), every run
+    // used to discover the previous run's generated files and copy them one
+    // level deeper, eventually hitting ENAMETOOLONG.
+    let tmp = TempDir::new().unwrap();
+    // Use a non-hidden subdir; the image walker skips dotted directories,
+    // and `TempDir::new()` creates `.tmpXXXX`.
+    let source = tmp.path().join("recipes");
+    std::fs::create_dir_all(&source).unwrap();
+
+    // Copy the seed into a writable scratch dir so we can build into it.
+    let seed = seed_dir();
+    for entry in walkdir::WalkDir::new(&seed) {
+        let entry = entry.unwrap();
+        let rel = entry.path().strip_prefix(&seed).unwrap();
+        let dst = source.join(rel);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&dst).unwrap();
+        } else {
+            std::fs::copy(entry.path(), &dst).unwrap();
+        }
+    }
+
+    let out = source.join("_site");
+    for _ in 0..3 {
+        Command::cargo_bin("cook")
+            .unwrap()
+            .args([
+                "build",
+                out.to_str().unwrap(),
+                "--base-path",
+                source.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+    }
+
+    // No nested `_site/api/static/_site/...` should exist — that's the
+    // signature of the previous run's output being re-walked as input.
+    let nested = out.join("api/static/_site");
+    assert!(
+        !nested.exists(),
+        "output should not contain a nested _site after repeated builds: {nested:?}"
+    );
+}

@@ -79,8 +79,15 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
 
     renderer::render_index(&source, &output, base_url, &lang)?;
 
-    let tree = cooklang_find::build_tree(&source)
+    let mut tree = cooklang_find::build_tree(&source)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+    // If the user pointed the output directory inside the source directory
+    // (the common case: `cook build` with default `_site` next to recipes),
+    // strip the output subtree so we don't re-process the previous run's
+    // generated files. Without this, every run would nest `_site/recipe/...`
+    // and `_site/api/static/...` one level deeper until the OS rejects the
+    // path length.
+    prune_output_subtree(&mut tree, &output);
     walk_directories(&tree, &source, &output, base_url, &lang, String::new())?;
 
     let aisle = ctx.aisle();
@@ -112,12 +119,27 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
     Ok(())
 }
 
+fn prune_output_subtree(tree: &mut cooklang_find::RecipeTree, output: &camino::Utf8Path) {
+    tree.children
+        .retain(|_, child| !child.path.starts_with(output));
+    for child in tree.children.values_mut() {
+        prune_output_subtree(child, output);
+    }
+}
+
 fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Result<usize> {
     let mut count = 0;
     // `walkdir` doesn't follow symlinks by default, which prevents infinite
     // loops on symlink cycles. We also filter out dotted directories so that
-    // hidden caches (.git, .cache, etc.) are skipped.
+    // hidden caches (.git, .cache, etc.) are skipped. Skip the output
+    // subtree too — when the user builds into a directory inside the source
+    // (default: `_site` next to recipes), we'd otherwise re-copy the
+    // previous run's images into a deeper path each time.
+    let output_std = output.as_std_path();
     let walker = walkdir::WalkDir::new(source).into_iter().filter_entry(|e| {
+        if e.path().starts_with(output_std) {
+            return false;
+        }
         !e.file_type().is_dir()
             || e.file_name()
                 .to_str()
