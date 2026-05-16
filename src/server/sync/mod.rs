@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 
+pub mod device_flow;
 pub mod endpoints;
 pub mod runner;
 pub mod session;

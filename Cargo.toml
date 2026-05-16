@@ -13,7 +13,7 @@ categories = ["command-line-utilities"]
 [features]
 default = ["self-update", "sync"]
 self-update = ["dep:self_update"]
-sync = ["dep:cooklang-sync-client", "dep:uuid", "dep:tokio-util", "dep:base64", "dep:libsqlite3-sys"]
+sync = ["dep:cooklang-sync-client", "dep:uuid", "dep:tokio-util", "dep:base64", "dep:libsqlite3-sys", "dep:thiserror"]
 
 [lib]
 name = "cookcli"
@@ -66,6 +66,7 @@ textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7", optional = true }
+thiserror = { version = "2", optional = true }
 toml = "0.9.5"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "trace", "cors", "normalize-path"] }
