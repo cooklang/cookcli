@@ -102,12 +102,18 @@ fn build_writes_recipe_pages() {
     assert!(source.is_file(), "source .cook should exist at {source:?}");
 
     // And the recipe page should expose a download link to it.
+    // We check the exact href to catch extension-doubling regressions
+    // (e.g. ".cook.cook") where the file silently 404s.
     assert!(
-        html.contains("Easy Pancakes.cook"),
-        "recipe page should link to the .cook source"
+        html.contains("href=\"../../recipe/Breakfast/Easy Pancakes.cook\""),
+        "recipe page should link to the .cook source with correct extension"
     );
     assert!(
-        html.contains("download"),
+        !html.contains(".cook.cook"),
+        "download link must not double the .cook extension"
+    );
+    assert!(
+        html.contains(" download"),
         "recipe page should use a download attribute"
     );
 }

@@ -80,7 +80,10 @@ pub fn render_recipe(
     let kind = build_recipe_template(RecipeBuildInput {
         base_path: source,
         url_prefix: &prefix,
-        recipe_path: recipe_relpath,
+        // Pass the extension-less path so template URLs (e.g. the .cook
+        // download link) match the server convention without doubling the
+        // extension.
+        recipe_path: trimmed,
         aisle_path,
         scale: 1.0,
         lang: lang.clone(),
