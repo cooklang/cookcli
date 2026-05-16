@@ -42,8 +42,6 @@ use camino::Utf8PathBuf;
 use clap::Args;
 use rust_embed::RustEmbed;
 #[cfg(feature = "sync")]
-use std::sync::atomic::AtomicBool;
-#[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
@@ -318,7 +316,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
-        login_in_progress: Arc::new(AtomicBool::new(false)),
+        pending_device_flow: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
         session_path,
         #[cfg(feature = "sync")]
@@ -372,7 +370,7 @@ pub struct AppState {
     #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
     #[cfg(feature = "sync")]
-    pub login_in_progress: Arc<AtomicBool>,
+    pub pending_device_flow: Arc<tokio::sync::Mutex<Option<sync::PendingDeviceFlow>>>,
     #[cfg(feature = "sync")]
     pub session_path: std::path::PathBuf,
     #[cfg(feature = "sync")]
@@ -462,6 +460,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = router
         .route("/sync/status", get(handlers::sync_status))
         .route("/sync/login", post(handlers::sync_login))
+        .route("/sync/cancel_login", post(handlers::sync_cancel_login))
         .route("/sync/logout", post(handlers::sync_logout));
 
     Ok(router)

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
