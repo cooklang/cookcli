@@ -185,6 +185,11 @@ fn walk_recipes(
                 tracing::warn!("Skipping recipe {sub}: {e:#}");
                 continue;
             }
+            if sub.ends_with(".cook") {
+                if let Err(e) = writer::copy_recipe_source(output, source, &sub) {
+                    tracing::warn!("Skipping source copy for {sub}: {e:#}");
+                }
+            }
             count += 1;
         } else {
             let sub = if prefix_path.is_empty() {

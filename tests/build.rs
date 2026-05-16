@@ -95,6 +95,21 @@ fn build_writes_recipe_pages() {
         !html.contains("/api/shopping_list"),
         "no shopping-list api references"
     );
+
+    // The .cook source should be copied alongside the rendered HTML so visitors
+    // can download the canonical recipe data.
+    let source = out.join("recipe/Breakfast/Easy Pancakes.cook");
+    assert!(source.is_file(), "source .cook should exist at {source:?}");
+
+    // And the recipe page should expose a download link to it.
+    assert!(
+        html.contains("Easy Pancakes.cook"),
+        "recipe page should link to the .cook source"
+    );
+    assert!(
+        html.contains("download"),
+        "recipe page should use a download attribute"
+    );
 }
 
 #[test]

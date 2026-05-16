@@ -41,6 +41,7 @@ cook build --base-url /recipes/
 | `index.html` | Root recipe listing |
 | `directory/<path>.html` | One listing page per subdirectory |
 | `recipe/<path>.html` | One page per `.cook` recipe (URL uses the file stem, not the title metadata) |
+| `recipe/<path>.cook` | Raw `.cook` source for each recipe — exposed as a download link on the recipe page |
 | `menu/<path>.html` | One page per `.menu` file |
 | `api/static/<path>` | Images alongside recipes (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.avif`) |
 | `static/css/`, `static/js/` | Compiled CSS, fonts, icons, and the client-side search script |

@@ -55,6 +55,23 @@ pub fn copy_image(
     Ok(())
 }
 
+/// Copy a `.cook` source file into `output_root/recipe/<relpath>` so visitors
+/// can download the canonical recipe source alongside the rendered page.
+pub fn copy_recipe_source(
+    output_root: &Utf8Path,
+    source_root: &Utf8Path,
+    recipe_relpath: &str,
+) -> Result<()> {
+    let src = source_root.join(recipe_relpath);
+    let dest = output_root.join("recipe").join(recipe_relpath);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create parent dir: {parent}"))?;
+    }
+    fs::copy(&src, &dest).with_context(|| format!("Failed to copy {src} -> {dest}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
