@@ -163,6 +163,10 @@ pub async fn sync_cancel_login(State(state): State<Arc<AppState>>) -> Json<serde
 pub async fn sync_logout(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if let Some(p) = state.pending_device_flow.lock().await.take() {
+        p.cancel.cancel();
+    }
+
     if let Some(handle) = state.sync_handle.lock().await.take() {
         handle.stop().await;
     }
