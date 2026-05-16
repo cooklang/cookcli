@@ -3,6 +3,8 @@
 {% block title %}{{ recipe.name }} - Cook{% endblock %}
 
 {% block content %}
+<script type="application/ld+json">{{ self.recipe_jsonld()|safe }}</script>
+
 <div>
     <nav class="mb-4 breadcrumb print:hidden">
         <ol class="flex items-center space-x-2 text-sm text-gray-600">

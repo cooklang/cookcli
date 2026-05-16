@@ -66,6 +66,54 @@ fn build_writes_index_and_static_assets() {
 }
 
 #[test]
+fn build_lang_arg_changes_ui_locale() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--lang",
+            "de-DE",
+        ])
+        .assert()
+        .success();
+
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    // The German locale renders the search placeholder text in German rather
+    // than the English default ("Search recipes...").
+    assert!(
+        !index.contains("Search recipes"),
+        "index should not contain the English search placeholder under --lang de-DE"
+    );
+}
+
+#[test]
+fn build_lang_arg_rejects_unsupported() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--lang",
+            "xx-YY",
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
 fn build_writes_recipe_pages() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
@@ -115,6 +163,24 @@ fn build_writes_recipe_pages() {
     assert!(
         html.contains(" download"),
         "recipe page should use a download attribute"
+    );
+
+    // schema.org Recipe JSON-LD must be embedded for SEO.
+    assert!(
+        html.contains("application/ld+json"),
+        "recipe page should embed JSON-LD"
+    );
+    assert!(
+        html.contains("\"@type\":\"Recipe\""),
+        "JSON-LD should declare @type Recipe"
+    );
+    assert!(
+        html.contains("\"recipeIngredient\""),
+        "JSON-LD should include recipeIngredient list"
+    );
+    assert!(
+        html.contains("\"recipeInstructions\""),
+        "JSON-LD should include recipeInstructions list"
     );
 }
 
@@ -258,7 +324,7 @@ fn build_writes_search_js() {
 
     let index = std::fs::read_to_string(out.join("index.html")).unwrap();
     assert!(
-        index.contains("github.com/cooklang/cookcli"),
+        index.contains("https://cooklang.org/cli/"),
         "static pages should include a 'Built with CookCLI' footer link"
     );
 }

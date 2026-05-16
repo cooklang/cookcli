@@ -3,11 +3,13 @@ mod links;
 mod renderer;
 mod writer;
 
+use crate::server::language::{parse_supported_language, EN_US};
 use crate::util::resolve_to_absolute_path;
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::Args;
+use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Args)]
 pub struct BuildArgs {
@@ -29,6 +31,22 @@ pub struct BuildArgs {
     /// page-relative paths. Useful when you know the deployed subpath.
     #[arg(long)]
     pub base_url: Option<String>,
+
+    /// UI language for the generated site (default: en-US)
+    ///
+    /// Accepts a BCP-47 tag like `de-DE`, or a bare language code like `de`
+    /// that matches a supported region. Supported: en-US, de-DE, nl-NL,
+    /// fr-FR, es-ES, eu-ES, sv-SE.
+    #[arg(long, value_parser = parse_lang_arg)]
+    pub lang: Option<LanguageIdentifier>,
+}
+
+fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
+    parse_supported_language(s).ok_or_else(|| {
+        format!(
+            "unsupported language '{s}'. Supported: en-US, de-DE, nl-NL, fr-FR, es-ES, eu-ES, sv-SE"
+        )
+    })
 }
 
 impl BuildArgs {
@@ -57,7 +75,7 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
     tracing::info!("Building static site from {source} into {output}");
     println!("Building static site from {source} into {output}");
 
-    let lang: unic_langid::LanguageIdentifier = "en-US".parse().unwrap();
+    let lang = args.lang.clone().unwrap_or(EN_US);
     let base_url = args.base_url.as_deref();
 
     renderer::render_index(&source, &output, base_url, &lang)?;

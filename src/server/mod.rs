@@ -52,7 +52,7 @@ use tracing::{error, info};
 pub mod builders;
 mod handlers;
 mod i18n;
-mod language;
+pub mod language;
 mod lsp_bridge;
 mod shopping_list_store;
 mod shopping_list_watcher;

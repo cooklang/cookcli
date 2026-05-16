@@ -156,6 +156,216 @@ impl RecipeTemplate {
             .map(|s| s.replace("</", "<\\/"))
             .unwrap_or_else(|_| "{}".to_string())
     }
+
+    /// Build schema.org Recipe JSON-LD for SEO.
+    /// Embedded as `<script type="application/ld+json">` on the recipe page.
+    pub fn recipe_jsonld(&self) -> String {
+        let recipe_ingredient: Vec<String> = self
+            .ingredients
+            .iter()
+            .map(|ing| format_ingredient_string(&ing.name, &ing.quantity, &ing.unit, &ing.note))
+            .collect();
+
+        let recipe_instructions: Vec<serde_json::Value> = self
+            .sections
+            .iter()
+            .flat_map(|section| {
+                section
+                    .items
+                    .iter()
+                    .filter_map(|item| match item {
+                        RecipeSectionItem::Step(step) => {
+                            let text = step_text(step);
+                            if text.trim().is_empty() {
+                                None
+                            } else {
+                                Some(serde_json::json!({
+                                    "@type": "HowToStep",
+                                    "text": text,
+                                }))
+                            }
+                        }
+                        RecipeSectionItem::Note(_) => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let mut data = serde_json::Map::new();
+        data.insert("@context".into(), "https://schema.org".into());
+        data.insert("@type".into(), "Recipe".into());
+        data.insert("name".into(), self.recipe.name.clone().into());
+        if let Some(img) = &self.image_path {
+            data.insert("image".into(), img.clone().into());
+        }
+        data.insert("recipeIngredient".into(), recipe_ingredient.into());
+        data.insert("recipeInstructions".into(), recipe_instructions.into());
+        if !self.tags.is_empty() {
+            data.insert("keywords".into(), self.tags.join(", ").into());
+        }
+
+        if let Some(meta) = &self.recipe.metadata {
+            if let Some(desc) = &meta.description {
+                data.insert("description".into(), desc.clone().into());
+            }
+            if let Some(author) = &meta.author {
+                data.insert(
+                    "author".into(),
+                    serde_json::json!({ "@type": "Person", "name": author }),
+                );
+            }
+            if let Some(servings) = &meta.servings {
+                data.insert("recipeYield".into(), servings.clone().into());
+            }
+            if let Some(course) = &meta.course {
+                data.insert("recipeCategory".into(), course.clone().into());
+            }
+            if let Some(cuisine) = &meta.cuisine {
+                data.insert("recipeCuisine".into(), cuisine.clone().into());
+            }
+            if let Some(prep) = meta.prep_time.as_deref().and_then(to_iso8601_duration) {
+                data.insert("prepTime".into(), prep.into());
+            }
+            if let Some(cook) = meta.cook_time.as_deref().and_then(to_iso8601_duration) {
+                data.insert("cookTime".into(), cook.into());
+            }
+            if let Some(total) = meta.time.as_deref().and_then(to_iso8601_duration) {
+                data.insert("totalTime".into(), total.into());
+            }
+        }
+
+        // Escape </script> sequences to prevent premature script tag closing
+        serde_json::to_string(&serde_json::Value::Object(data))
+            .map(|s| s.replace("</", "<\\/"))
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+fn format_ingredient_string(
+    name: &str,
+    quantity: &Option<String>,
+    unit: &Option<String>,
+    note: &Option<String>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(q) = quantity {
+        if !q.is_empty() {
+            parts.push(q.clone());
+        }
+    }
+    if let Some(u) = unit {
+        if !u.is_empty() {
+            parts.push(u.clone());
+        }
+    }
+    parts.push(name.to_string());
+    let mut s = parts.join(" ");
+    if let Some(n) = note {
+        if !n.is_empty() {
+            s.push_str(&format!(" ({n})"));
+        }
+    }
+    s
+}
+
+fn step_text(step: &StepData) -> String {
+    let mut out = String::new();
+    for item in &step.items {
+        match item {
+            StepItem::Text(t) => out.push_str(t),
+            StepItem::Ingredient { name, .. } => out.push_str(name),
+            StepItem::Cookware(c) => out.push_str(c),
+            StepItem::Timer(t) => out.push_str(t),
+            StepItem::Quantity(q) => out.push_str(q),
+            StepItem::LineBreak => out.push(' '),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Best-effort conversion of free-form time strings (e.g. "30 minutes",
+/// "1 hour 15 min", "1h30m") to an ISO 8601 duration like "PT1H30M".
+/// Returns `None` if the input cannot be parsed confidently — callers should
+/// then skip the field rather than emit an invalid schema.org Duration.
+fn to_iso8601_duration(s: &str) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // If already ISO 8601, pass through.
+    if trimmed.starts_with('P') && trimmed.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Some(trimmed.to_string());
+    }
+
+    let lower = trimmed.to_lowercase();
+    let mut hours: u32 = 0;
+    let mut minutes: u32 = 0;
+    let mut found = false;
+
+    // Capture all "<number> <unit>" pairs, where unit is hour(s)/h or minute(s)/min/m.
+    let mut chars = lower.char_indices().peekable();
+    while let Some(&(idx, c)) = chars.peek() {
+        if c.is_ascii_digit() {
+            let start = idx;
+            while let Some(&(_, ch)) = chars.peek() {
+                if ch.is_ascii_digit() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let end = chars.peek().map(|&(i, _)| i).unwrap_or(lower.len());
+            let n: u32 = lower[start..end].parse().ok()?;
+            // Skip whitespace
+            while let Some(&(_, ch)) = chars.peek() {
+                if ch.is_whitespace() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            // Read unit letters
+            let unit_start = chars.peek().map(|&(i, _)| i).unwrap_or(lower.len());
+            while let Some(&(_, ch)) = chars.peek() {
+                if ch.is_ascii_alphabetic() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let unit_end = chars.peek().map(|&(i, _)| i).unwrap_or(lower.len());
+            let unit = &lower[unit_start..unit_end];
+            match unit {
+                "h" | "hr" | "hrs" | "hour" | "hours" => {
+                    hours += n;
+                    found = true;
+                }
+                "m" | "min" | "mins" | "minute" | "minutes" => {
+                    minutes += n;
+                    found = true;
+                }
+                _ => return None,
+            }
+        } else {
+            chars.next();
+        }
+    }
+
+    if !found {
+        return None;
+    }
+
+    let mut out = String::from("PT");
+    if hours > 0 {
+        out.push_str(&format!("{hours}H"));
+    }
+    if minutes > 0 {
+        out.push_str(&format!("{minutes}M"));
+    }
+    if out == "PT" {
+        return None;
+    }
+    Some(out)
 }
 
 #[derive(Template)]
