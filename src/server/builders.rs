@@ -136,12 +136,18 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
     };
 
+    let new_recipe_url = match sub_path {
+        Some(p) => format!("{url_prefix}/new?filename={}%2F", urlencoding::encode(p)),
+        None => format!("{url_prefix}/new"),
+    };
+
     Ok(RecipesTemplate {
         active: "recipes".to_string(),
         current_name,
         breadcrumbs,
         items,
         todays_menu,
+        new_recipe_url,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,

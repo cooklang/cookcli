@@ -60,6 +60,7 @@ pub struct RecipesTemplate {
     pub breadcrumbs: Vec<Breadcrumb>,
     pub items: Vec<RecipeItem>,
     pub todays_menu: Option<TodaysMenu>,
+    pub new_recipe_url: String,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,

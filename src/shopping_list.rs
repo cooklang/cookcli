@@ -99,9 +99,17 @@ pub struct ShoppingListArgs {
     #[arg(short, long)]
     aisle: Option<Utf8PathBuf>,
 
+    /// Load pantry conf file
+    #[arg(long)]
+    pantry: Option<Utf8PathBuf>,
+
     /// Don't expand referenced recipes
     #[arg(short, long)]
     ignore_references: bool,
+
+    /// Don't subtract pantry items from the shopping list
+    #[arg(long)]
+    ignore_pantry: bool,
 
     /// Display only ingredient names, one per line, without amounts
     #[arg(long)]
@@ -195,8 +203,16 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         Default::default()
     };
 
-    // Load pantry configuration if available
-    let pantry_path = ctx.pantry();
+    // Resolve pantry path: --ignore-pantry skips entirely; otherwise prefer
+    // --pantry, falling back to ctx.pantry() auto-discovery.
+    let explicit_pantry = args.pantry.is_some();
+    let pantry_path = if args.ignore_pantry {
+        tracing::debug!("Pantry ignored via --ignore-pantry");
+        None
+    } else {
+        args.pantry.or_else(|| ctx.pantry())
+    };
+
     let pantry = if let Some(path) = &pantry_path {
         match std::fs::read_to_string(path) {
             Ok(content) => {
@@ -222,13 +238,20 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 }
                 pantry_conf
             }
+            Err(e) if explicit_pantry => {
+                return Err(anyhow::anyhow!(
+                    "Failed to read pantry file '{}': {}",
+                    path,
+                    e
+                ));
+            }
             Err(e) => {
                 warn!("Failed to read pantry file: {}", e);
                 None
             }
         }
     } else {
-        tracing::debug!("No pantry file found");
+        tracing::debug!("No pantry file resolved");
         None
     };
 
