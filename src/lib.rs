@@ -8,6 +8,8 @@ pub mod doctor;
 pub mod import;
 #[cfg(feature = "sync")]
 pub mod login;
+#[cfg(feature = "sync")]
+pub mod logout;
 pub mod lsp;
 pub mod pantry;
 pub mod recipe;
