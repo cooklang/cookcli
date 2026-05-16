@@ -212,6 +212,21 @@
       if (countdownHandle) { clearInterval(countdownHandle); countdownHandle = null; }
     }
 
+    function startPolling() {
+      stopPolling();
+      pollHandle = setInterval(async () => {
+        const status = await fetch('{{ prefix }}/api/sync/status').then(r => r.json()).catch(() => null);
+        if (!status) return; // network blip — keep polling
+        if (status.logged_in) {
+          stopPolling();
+          window.location.reload();
+        } else if (!status.pending_login) {
+          stopPolling();
+          resetLoginUi('Login was cancelled or expired.');
+        }
+      }, 2000);
+    }
+
     function resetLoginUi(msg) {
       document.getElementById('sync-login-card').classList.add('hidden');
       document.getElementById('sync-login-section').classList.remove('hidden');
@@ -236,16 +251,7 @@
         const body = await resp.json();
         renderPending({ ...body, expires_in_secs: body.expires_in });
 
-        pollHandle = setInterval(async () => {
-          const status = await fetch('{{ prefix }}/api/sync/status').then(r => r.json());
-          if (status.logged_in) {
-            stopPolling();
-            window.location.reload();
-          } else if (!status.pending_login) {
-            stopPolling();
-            resetLoginUi('Login was cancelled or expired.');
-          }
-        }, 2000);
+        startPolling();
       } catch (e) {
         btn.disabled = false;
         msg.textContent = 'Failed to start login: ' + e.message;
@@ -257,8 +263,12 @@
       if (copyBtn) {
         copyBtn.addEventListener('click', async () => {
           const code = document.getElementById('sync-login-code').textContent;
-          await navigator.clipboard.writeText(code.replace(/\s+/g, ''));
-          copyBtn.textContent = 'Copied!';
+          try {
+            await navigator.clipboard.writeText(code.replace(/\s+/g, ''));
+            copyBtn.textContent = 'Copied!';
+          } catch (e) {
+            copyBtn.textContent = 'Copy failed';
+          }
           setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
         });
       }
@@ -275,11 +285,7 @@
       fetch('{{ prefix }}/api/sync/status').then(r => r.json()).then(status => {
         if (!status.logged_in && status.pending_login) {
           renderPending(status.pending_login);
-          pollHandle = setInterval(async () => {
-            const s = await fetch('{{ prefix }}/api/sync/status').then(r => r.json());
-            if (s.logged_in) { stopPolling(); window.location.reload(); }
-            else if (!s.pending_login) { stopPolling(); resetLoginUi('Login was cancelled or expired.'); }
-          }, 2000);
+          startPolling();
         }
       });
     });
