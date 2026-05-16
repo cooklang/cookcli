@@ -272,6 +272,21 @@ cook server --port 8080
 cook server --open
 ```
 
+### `cook build`
+
+Generate a self-contained static website from your recipes. Hostable anywhere or browsable via `file://`.
+
+```bash
+# Build into ./_site from the current directory
+cook build
+
+# Build a specific collection into a custom output
+cook build dist --base-path ~/my-recipes
+
+# Build for hosting under a subpath
+cook build --base-url /recipes/
+```
+
 ### `cook search`
 
 Find recipes by searching through ingredients, instructions, and metadata.
@@ -371,6 +386,7 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 * [Recipe command](docs/recipe.md) - viewing and converting recipes
 * [Shopping lists](docs/shopping-list.md) - creating shopping lists
 * [Server](docs/server.md) - web interface
+* [Build](docs/build.md) - generate a static website
 * [Search](docs/search.md) - finding recipes
 * [Import](docs/import.md) - importing from websites
 * [Doctor](docs/doctor.md) - validation and maintenance
