@@ -234,6 +234,12 @@ fn build_writes_search_js() {
         listing.contains("window.__STATIC_MODE__ = true"),
         "__STATIC_MODE__ must be set to true in static output"
     );
+
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        index.contains("github.com/cooklang/cookcli"),
+        "static pages should include a 'Built with CookCLI' footer link"
+    );
 }
 
 #[test]
