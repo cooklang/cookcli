@@ -227,6 +227,13 @@ fn build_writes_search_js() {
         prefix_idx < search_idx,
         "__PREFIX__ must be set before search.js loads"
     );
+
+    // Keyboard-shortcuts JS reads __STATIC_MODE__ to hide dynamic-only entries
+    // and skip nav to nonexistent pages.
+    assert!(
+        listing.contains("window.__STATIC_MODE__ = true"),
+        "__STATIC_MODE__ must be set to true in static output"
+    );
 }
 
 #[test]

@@ -948,7 +948,10 @@
     {% endif %}
 
     <!-- URL prefix for JavaScript -->
-    <script>window.__PREFIX__ = {{ prefix|json|safe }};</script>
+    <script>
+        window.__PREFIX__ = {{ prefix|json|safe }};
+        window.__STATIC_MODE__ = {{ static_mode|json|safe }};
+    </script>
 
     <!-- Keyboard shortcuts -->
     <script src="{{ prefix }}/static/js/keyboard-shortcuts.js"></script>
