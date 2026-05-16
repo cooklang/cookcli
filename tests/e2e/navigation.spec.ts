@@ -131,9 +131,12 @@ test.describe('Navigation', () => {
   });
 
   test('should use recipe filename in URLs instead of display names', async ({ page }) => {
-    // Check the recipe with title 'Sicilian-style Scottadito Lamb Chops' and filename 'lamb-chops.cook'
+    // Check the recipe with title 'Sicilian-style Scottadito Lamb Chops' and filename 'lamb-chops.cook'.
+    // Recipe URLs use the bare stem (no .cook extension) — the title would be
+    // 'Sicilian-style Scottadito Lamb Chops', so 'lamb-chops' in the URL proves
+    // the filename is used, not the title.
 
-    const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops.cook"]');
+    const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops"]');
     await expect(simpleRecipeCard).toBeVisible();
 
     const recipeName = await simpleRecipeCard.locator('h3').textContent();
@@ -143,7 +146,7 @@ test.describe('Navigation', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify we're on the correct recipe page
-    expect(page.url()).toContain('/recipe/lamb-chops.cook');
+    expect(page.url()).toContain('/recipe/lamb-chops');
     const recipeTitle = page.locator('h1, h2').first();
     await expect(recipeTitle).toContainText('Sicilian-style Scottadito Lamb Chops');
   });
