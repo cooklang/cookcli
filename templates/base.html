@@ -943,6 +943,7 @@
         });
     </script>
     {% else %}
+    <script>window.__PREFIX__ = {{ prefix|json|safe }};</script>
     <script src="{{ prefix }}/static/js/search.js"></script>
     {% endif %}
 

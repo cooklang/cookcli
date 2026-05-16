@@ -215,6 +215,18 @@ fn build_writes_search_js() {
         out.join("static/js/search.js").is_file(),
         "search.js should exist"
     );
+
+    // __PREFIX__ must be assigned BEFORE search.js loads, otherwise the IIFE
+    // snapshots `undefined` and fetches use the wrong base, 404ing the index.
+    let listing = std::fs::read_to_string(out.join("directory/Breakfast.html")).unwrap();
+    let prefix_idx = listing
+        .find("window.__PREFIX__")
+        .expect("__PREFIX__ assignment missing");
+    let search_idx = listing.find("search.js").expect("search.js tag missing");
+    assert!(
+        prefix_idx < search_idx,
+        "__PREFIX__ must be set before search.js loads"
+    );
 }
 
 #[test]
