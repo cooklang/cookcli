@@ -233,6 +233,18 @@ pub enum Command {
     )]
     Lsp(lsp::LspArgs),
 
+    /// Sign in to CookCloud
+    ///
+    /// Initiates the OAuth 2.0 Device Authorization Grant flow:
+    /// displays a code, opens your browser to the verification page,
+    /// and polls until you approve the request.
+    ///
+    /// Examples:
+    ///   cook login                      # Start the device-code login flow
+    #[cfg(feature = "sync")]
+    #[command(long_about = "Sign in to CookCloud via the OAuth 2.0 device-code flow")]
+    Login(crate::login::LoginArgs),
+
     /// Update CookCLI to the latest version
     ///
     /// Checks for new releases on GitHub and automatically downloads and
