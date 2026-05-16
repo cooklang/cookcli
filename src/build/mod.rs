@@ -72,7 +72,6 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
 
     let output = resolve_to_absolute_path(&output_raw)?;
 
-    tracing::info!("Building static site from {source} into {output}");
     println!("Building static site from {source} into {output}");
 
     let lang = args.lang.clone().unwrap_or(EN_US);
@@ -115,40 +114,31 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
 
 fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Result<usize> {
     let mut count = 0;
-    for path in walkdir_utf8(source)? {
-        if path.is_file() {
-            if let Some("jpg" | "jpeg" | "png" | "gif" | "webp" | "avif") =
-                path.extension().map(|e| e.to_ascii_lowercase()).as_deref()
-            {
-                writer::copy_image(output, source, &path)?;
-                count += 1;
-            }
+    // `walkdir` doesn't follow symlinks by default, which prevents infinite
+    // loops on symlink cycles. We also filter out dotted directories so that
+    // hidden caches (.git, .cache, etc.) are skipped.
+    let walker = walkdir::WalkDir::new(source).into_iter().filter_entry(|e| {
+        !e.file_type().is_dir()
+            || e.file_name()
+                .to_str()
+                .map(|n| !n.starts_with('.'))
+                .unwrap_or(true)
+    });
+    for entry in walker {
+        let entry = entry.with_context(|| format!("Failed to walk {source}"))?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = camino::Utf8PathBuf::try_from(entry.into_path())
+            .map_err(|e| anyhow::anyhow!("Non-UTF-8 path: {e}"))?;
+        if let Some("jpg" | "jpeg" | "png" | "gif" | "webp" | "avif") =
+            path.extension().map(|e| e.to_ascii_lowercase()).as_deref()
+        {
+            writer::copy_image(output, source, &path)?;
+            count += 1;
         }
     }
     Ok(count)
-}
-
-fn walkdir_utf8(root: &camino::Utf8Path) -> Result<Vec<camino::Utf8PathBuf>> {
-    let mut out = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = camino::Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| anyhow::anyhow!("Non-UTF-8 path: {e}"))?;
-            if path.is_dir() {
-                if let Some(name) = path.file_name() {
-                    if name.starts_with('.') {
-                        continue;
-                    }
-                }
-                stack.push(path);
-            } else {
-                out.push(path);
-            }
-        }
-    }
-    Ok(out)
 }
 
 fn walk_directories(

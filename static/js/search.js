@@ -40,7 +40,7 @@
     } else {
       results.innerHTML = matches.map(function (m) {
         var href = prefix + "/" + m.path;
-        return '<a href="' + href + '" class="search-result block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">' +
+        return '<a href="' + escapeHtml(href) + '" class="search-result block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">' +
           '<div class="font-medium text-gray-800">' + escapeHtml(m.title) + '</div>' +
           '</a>';
       }).join("");
