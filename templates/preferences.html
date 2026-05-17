@@ -189,9 +189,11 @@
       document.getElementById('sync-login-open').href = p.verification_uri_complete;
 
       if (countdownHandle) clearInterval(countdownHandle);
-      let remaining = p.expires_in_secs ?? p.expires_in;
+      const initialSecs = p.expires_in_secs ?? p.expires_in;
+      const deadline = Date.now() + initialSecs * 1000;
       const expEl = document.getElementById('sync-login-expires');
       const tick = () => {
+        const remaining = Math.max(0, Math.round((deadline - Date.now()) / 1000));
         if (remaining <= 0) {
           expEl.textContent = 'Code expired.';
           stopPolling();
@@ -201,7 +203,6 @@
         const m = Math.floor(remaining / 60);
         const s = String(remaining % 60).padStart(2, '0');
         expEl.textContent = `Expires in ${m}:${s}`;
-        remaining--;
       };
       tick();
       countdownHandle = setInterval(tick, 1000);

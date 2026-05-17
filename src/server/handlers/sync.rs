@@ -64,14 +64,12 @@ pub async fn sync_login(
         ));
     }
 
-    {
-        let guard = state.pending_device_flow.lock().await;
-        if guard.is_some() {
-            return Err((
-                StatusCode::CONFLICT,
-                Json(serde_json::json!({ "error": "Login already in progress" })),
-            ));
-        }
+    let mut pending_guard = state.pending_device_flow.lock().await;
+    if pending_guard.is_some() {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({ "error": "Login already in progress" })),
+        ));
     }
 
     let client = reqwest::Client::new();
@@ -89,17 +87,14 @@ pub async fn sync_login(
     let expires_at = Instant::now() + Duration::from_secs(dc.expires_in);
     let interval = Duration::from_secs(dc.interval);
 
-    let pending = PendingDeviceFlow {
-        device_code: dc.device_code.clone(),
+    *pending_guard = Some(PendingDeviceFlow {
         user_code: dc.user_code.clone(),
         verification_uri: dc.verification_uri.clone(),
         verification_uri_complete: dc.verification_uri_complete.clone(),
         expires_at,
-        interval,
         cancel: cancel.clone(),
-    };
-
-    *state.pending_device_flow.lock().await = Some(pending);
+    });
+    drop(pending_guard);
 
     let state_clone = state.clone();
     let device_code = dc.device_code.clone();

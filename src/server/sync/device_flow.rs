@@ -1,6 +1,5 @@
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
@@ -56,24 +55,23 @@ pub enum DeviceFlowError {
 pub async fn request_device_code(
     client: &reqwest::Client,
     client_name: &str,
-) -> anyhow::Result<DeviceCodeResponse> {
+) -> Result<DeviceCodeResponse, DeviceFlowError> {
     let url = format!("{}/oauth/device/code", endpoints::base_url());
     let resp = client
         .post(&url)
         .json(&DeviceCodeRequest { client_name })
         .send()
-        .await
-        .context("calling /oauth/device/code")?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!("device code request failed: HTTP {status}: {body}");
+        return Err(DeviceFlowError::BadResponse(format!(
+            "device code request failed: HTTP {status}: {body}"
+        )));
     }
 
-    resp.json::<DeviceCodeResponse>()
-        .await
-        .context("parsing device code response")
+    resp.json::<DeviceCodeResponse>().await.map_err(Into::into)
 }
 
 /// Polls /oauth/device/token until approved, denied, expired, or cancelled.

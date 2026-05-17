@@ -12,14 +12,10 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct PendingDeviceFlow {
-    #[allow(dead_code)]
-    pub device_code: String,
     pub user_code: String,
     pub verification_uri: String,
     pub verification_uri_complete: String,
     pub expires_at: std::time::Instant,
-    #[allow(dead_code)]
-    pub interval: std::time::Duration,
     pub cancel: CancellationToken,
 }
 
