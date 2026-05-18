@@ -51,7 +51,7 @@ pub struct LoginResponse {
     pub user_code: String,
     pub verification_uri: String,
     pub verification_uri_complete: String,
-    pub expires_in: u64,
+    pub expires_in_secs: u64,
 }
 
 pub async fn sync_login(
@@ -141,7 +141,7 @@ pub async fn sync_login(
         user_code: dc.user_code,
         verification_uri: dc.verification_uri,
         verification_uri_complete: dc.verification_uri_complete,
-        expires_in: dc.expires_in,
+        expires_in_secs: dc.expires_in,
     }))
 }
 

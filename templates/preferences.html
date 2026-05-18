@@ -189,8 +189,7 @@
       document.getElementById('sync-login-open').href = p.verification_uri_complete;
 
       if (countdownHandle) clearInterval(countdownHandle);
-      const initialSecs = p.expires_in_secs ?? p.expires_in;
-      const deadline = Date.now() + initialSecs * 1000;
+      const deadline = Date.now() + p.expires_in_secs * 1000;
       const expEl = document.getElementById('sync-login-expires');
       const tick = () => {
         const remaining = Math.max(0, Math.round((deadline - Date.now()) / 1000));
@@ -250,7 +249,7 @@
           return;
         }
         const body = await resp.json();
-        renderPending({ ...body, expires_in_secs: body.expires_in });
+        renderPending(body);
 
         startPolling();
       } catch (e) {

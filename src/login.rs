@@ -41,11 +41,25 @@ async fn run_async() -> Result<()> {
     println!();
     println!("(Press Enter to open it automatically, or Ctrl-C to abort.)");
 
-    let _ = tokio::task::spawn_blocking(|| {
+    let cancel = CancellationToken::new();
+    let cancel_for_signal = cancel.clone();
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        cancel_for_signal.cancel();
+    });
+
+    let stdin_task = tokio::task::spawn_blocking(|| {
         let stdin = std::io::stdin();
         let _ = stdin.lock().lines().next();
-    })
-    .await;
+    });
+
+    tokio::select! {
+        _ = stdin_task => {}
+        _ = cancel.cancelled() => {
+            println!();
+            anyhow::bail!("Cancelled.");
+        }
+    }
 
     if let Err(e) = open::that(&dc.verification_uri_complete) {
         eprintln!("Couldn't open browser automatically: {e}");
@@ -54,13 +68,6 @@ async fn run_async() -> Result<()> {
 
     print!("Waiting for authorization");
     std::io::stdout().flush().ok();
-
-    let cancel = CancellationToken::new();
-    let cancel_for_signal = cancel.clone();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        cancel_for_signal.cancel();
-    });
 
     let expires_at = Instant::now() + Duration::from_secs(dc.expires_in);
     let interval = Duration::from_secs(dc.interval);
