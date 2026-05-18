@@ -38,6 +38,10 @@ use clap::Parser;
 mod build;
 mod doctor;
 mod import;
+#[cfg(feature = "sync")]
+mod login;
+#[cfg(feature = "sync")]
+mod logout;
 mod lsp;
 mod pantry;
 mod recipe;
@@ -77,6 +81,10 @@ pub fn main() -> Result<()> {
         Command::Doctor(args) => doctor::run(&ctx, args),
         Command::Pantry(args) => pantry::run(&ctx, args),
         Command::Lsp(args) => lsp::run(&ctx, args),
+        #[cfg(feature = "sync")]
+        Command::Login(args) => login::run(&ctx, args),
+        #[cfg(feature = "sync")]
+        Command::Logout(args) => logout::run(&ctx, args),
         #[cfg(feature = "self-update")]
         Command::Update(args) => update::run(args),
     }

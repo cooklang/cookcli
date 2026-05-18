@@ -1,11 +1,23 @@
 use camino::Utf8PathBuf;
 
+pub mod device_flow;
 pub mod endpoints;
 pub mod runner;
 pub mod session;
 
 pub use runner::{start_sync, SyncHandle};
 pub use session::SyncSession;
+
+use tokio_util::sync::CancellationToken;
+
+#[derive(Clone)]
+pub struct PendingDeviceFlow {
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: String,
+    pub expires_at: std::time::Instant,
+    pub cancel: CancellationToken,
+}
 
 /// Resolve the sync database file path.
 /// Returns an error if the global config directory cannot be determined.

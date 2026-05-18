@@ -22,4 +22,4 @@ pub use shopping_list::{
 pub use shopping_list_events::shopping_list_events;
 pub use stats::stats;
 #[cfg(feature = "sync")]
-pub use sync::{sync_login, sync_logout, sync_status};
+pub use sync::{sync_cancel_login, sync_login, sync_logout, sync_status};

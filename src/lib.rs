@@ -6,6 +6,10 @@ use camino::{Utf8Path, Utf8PathBuf};
 pub mod build;
 pub mod doctor;
 pub mod import;
+#[cfg(feature = "sync")]
+pub mod login;
+#[cfg(feature = "sync")]
+pub mod logout;
 pub mod lsp;
 pub mod pantry;
 pub mod recipe;
