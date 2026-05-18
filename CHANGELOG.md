@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.30.0](https://github.com/cooklang/cookcli/compare/v0.29.1...v0.30.0) (2026-05-18)
+
+
+### Features
+
+* add cook build static-site generator ([#344](https://github.com/cooklang/cookcli/issues/344)) ([f6703df](https://github.com/cooklang/cookcli/commit/f6703dfd848acd1173b65430340cd39ee095ac9f))
+* **shopping-list:** add --pantry and --ignore-pantry flags ([#340](https://github.com/cooklang/cookcli/issues/340)) ([dd5264b](https://github.com/cooklang/cookcli/commit/dd5264b33ea3310223378ab456e321d8788c2db5))
+* **sync:** OAuth 2.0 device-code login for CLI and Docker users ([#347](https://github.com/cooklang/cookcli/issues/347)) ([6aa725c](https://github.com/cooklang/cookcli/commit/6aa725cd2b39d2fe6b5cc56fcbb719e4902d8f2a))
+
+
+### Bug Fixes
+
+* default new recipe path to current folder ([#332](https://github.com/cooklang/cookcli/issues/332)) ([#341](https://github.com/cooklang/cookcli/issues/341)) ([f8bde38](https://github.com/cooklang/cookcli/commit/f8bde38ef8344fed420c80095a92aa1324d93465))
+* don't treat Windows drive-letter colons as scaling delimiter ([#338](https://github.com/cooklang/cookcli/issues/338)) ([4bc724d](https://github.com/cooklang/cookcli/commit/4bc724ddeb82920d34425c97dedb177361ed5da0)), closes [#335](https://github.com/cooklang/cookcli/issues/335)
+* **server:** recognize `duration` and `time required` as `time` aliases ([#342](https://github.com/cooklang/cookcli/issues/342)) ([d685eaf](https://github.com/cooklang/cookcli/commit/d685eaf1fdaf7ef47e0f33b7d9306f14518f311e)), closes [#320](https://github.com/cooklang/cookcli/issues/320)
+
 ## [0.29.1](https://github.com/cooklang/cookcli/compare/v0.29.0...v0.29.1) (2026-04-24)
 
 
