@@ -272,19 +272,19 @@ cook server --port 8080
 cook server --open
 ```
 
-### `cook build`
+### `cook build web`
 
 Generate a self-contained static website from your recipes. Hostable anywhere or browsable via `file://`.
 
 ```bash
 # Build into ./_site from the current directory
-cook build
+cook build web
 
 # Build a specific collection into a custom output
-cook build dist --base-path ~/my-recipes
+cook build web dist --base-path ~/my-recipes
 
 # Build for hosting under a subpath
-cook build --base-url /recipes/
+cook build web --base-url /recipes/
 ```
 
 ### `cook search`

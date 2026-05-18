@@ -87,18 +87,18 @@ pub enum Command {
     )]
     Server(server::ServerArgs),
 
-    /// Generate a self-contained static website from your recipe collection
+    /// Build artifacts from your recipe collection
     ///
-    /// Renders your recipes as static HTML files browsable on any static-file
-    /// host or directly from disk via file://. Excludes dynamic features
-    /// (shopping list, pantry, editing).
+    /// Container for build subcommands. Currently supports `web` (static
+    /// website generation). More targets (e.g. cookbooks) may be added in
+    /// future releases.
     ///
     /// Examples:
-    ///   cook build                         # Build to ./_site
-    ///   cook build out                     # Build to ./out
-    ///   cook build --base-path ~/recipes   # Use specific source directory
-    ///   cook build --base-url /recipes/    # Absolute URL prefix for subpath hosting
-    #[command(long_about = "Generate a static HTML website from your recipe collection")]
+    ///   cook build web                         # Build a static website to ./_site
+    ///   cook build web out                     # Build to ./out
+    ///   cook build web --base-path ~/recipes   # Use specific source directory
+    ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
+    #[command(long_about = "Build artifacts (static website, etc.) from your recipe collection")]
     Build(build::BuildArgs),
 
     /// Generate a combined shopping list from multiple recipes

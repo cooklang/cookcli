@@ -10,7 +10,7 @@ Usage: cook [OPTIONS] <COMMAND>
 Commands:
   recipe         Parse, validate and display recipe files in various formats
   server         Start a local web server to browse and view your recipe collection
-  build          Generate a self-contained static website from your recipe collection
+  build          Build artifacts from your recipe collection
   shopping-list  Generate a combined shopping list from multiple recipes [aliases: sl]
   seed           Initialize a directory with example Cooklang recipes
   search         Search through your recipe collection for matching text
