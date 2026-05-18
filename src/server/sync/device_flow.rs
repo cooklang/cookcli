@@ -30,7 +30,7 @@ struct TokenRequest<'a> {
 
 #[derive(Debug, Deserialize)]
 struct TokenSuccess {
-    token: String,
+    access_token: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,7 +108,7 @@ pub async fn poll_for_token(
 
         if status.is_success() {
             let body: TokenSuccess = resp.json().await.map_err(DeviceFlowError::Network)?;
-            return Ok(body.token);
+            return Ok(body.access_token);
         }
 
         // 400 → parse {"error": "..."} per RFC 8628
