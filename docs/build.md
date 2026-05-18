@@ -1,11 +1,15 @@
 # Build Command
 
+The `cook build` command groups artifact-generation subcommands. Today it offers `web` for static-site generation; future targets (e.g. cookbooks) will live alongside it.
+
+## `cook build web`
+
 Generate a self-contained static website from your recipe collection. The output mirrors `cook server`'s browsing experience but ships as plain HTML, CSS, and JS — no Rust process needed at runtime, so it can be hosted on GitHub Pages, Netlify, S3, or opened directly via `file://`.
 
 ## Usage
 
 ```
-cook build [OPTIONS] [OUTPUT_DIR]
+cook build web [OPTIONS] [OUTPUT_DIR]
 ```
 
 ## Arguments
@@ -25,13 +29,13 @@ cook build [OPTIONS] [OUTPUT_DIR]
 
 ```bash
 # Build into ./_site from the current directory
-cook build
+cook build web
 
 # Build a specific recipe collection into a custom output directory
-cook build dist --base-path ~/my-recipes
+cook build web dist --base-path ~/my-recipes
 
 # Build for hosting under /recipes/ on your domain
-cook build --base-url /recipes/
+cook build web --base-url /recipes/
 ```
 
 ## What gets generated
@@ -66,7 +70,7 @@ Because internal links default to page-relative paths, no configuration is neede
 
 ```bash
 # GitHub Pages: push _site/ to gh-pages
-cook build && git -C _site init && git -C _site add . && \
+cook build web && git -C _site init && git -C _site add . && \
   git -C _site commit -m "site" && \
   git -C _site push -f git@github.com:user/repo gh-pages
 
@@ -85,5 +89,5 @@ Use `--base-url` only if your host serves the site under a fixed subpath and you
 
 - The generated site has no server dependency — it works fully offline via `file://`.
 - Search runs entirely in the browser by loading `static/search-index.json`.
-- Re-run `cook build` after editing recipes; the command is idempotent.
+- Re-run `cook build web` after editing recipes; the command is idempotent.
 - For a live editing experience, use `cook server` instead.

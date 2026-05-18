@@ -9,7 +9,7 @@ fn seed_dir() -> PathBuf {
 #[test]
 fn build_command_help_works() {
     let mut cmd = Command::cargo_bin("cook").unwrap();
-    cmd.args(["build", "--help"]).assert().success();
+    cmd.args(["build", "web", "--help"]).assert().success();
 }
 
 #[test]
@@ -21,6 +21,7 @@ fn build_creates_output_dir() {
     let mut cmd = Command::cargo_bin("cook").unwrap();
     cmd.args([
         "build",
+        "web",
         out.to_str().unwrap(),
         "--base-path",
         seed.to_str().unwrap(),
@@ -41,6 +42,7 @@ fn build_writes_index_and_static_assets() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -75,6 +77,7 @@ fn build_lang_arg_changes_ui_locale() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -103,6 +106,7 @@ fn build_lang_arg_rejects_unsupported() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -123,6 +127,7 @@ fn build_writes_recipe_pages() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -194,6 +199,7 @@ fn build_renders_recipes_with_title_metadata() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -223,6 +229,7 @@ fn build_writes_search_index() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -266,6 +273,7 @@ fn build_copies_images_when_present() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -291,6 +299,7 @@ fn build_writes_search_js() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -339,6 +348,7 @@ fn build_writes_menu_pages_without_dotmenu_suffix() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -368,6 +378,7 @@ fn static_output_omits_dynamic_ui() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -415,6 +426,7 @@ fn build_internal_links_resolve_to_existing_files() {
         .unwrap()
         .args([
             "build",
+            "web",
             out.to_str().unwrap(),
             "--base-path",
             seed.to_str().unwrap(),
@@ -449,7 +461,7 @@ fn build_internal_links_resolve_to_existing_files() {
 #[test]
 fn build_twice_with_output_inside_source_does_not_recurse() {
     // Regression: when the output dir lives inside the source dir
-    // (`cook build` from the recipe root with default `_site`), every run
+    // (`cook build web` from the recipe root with default `_site`), every run
     // used to discover the previous run's generated files and copy them one
     // level deeper, eventually hitting ENAMETOOLONG.
     let tmp = TempDir::new().unwrap();
@@ -477,6 +489,7 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
             .unwrap()
             .args([
                 "build",
+                "web",
                 out.to_str().unwrap(),
                 "--base-path",
                 source.to_str().unwrap(),

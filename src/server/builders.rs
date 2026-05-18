@@ -3,7 +3,7 @@
 //! struct ready to render (or be turned into an `axum::Response` by a handler).
 //!
 //! The builders intentionally avoid any axum / tokio-async types so they can be
-//! reused from a non-async context (e.g. `cook build`).
+//! reused from a non-async context (e.g. `cook build web`).
 
 use crate::server::templates::*;
 use anyhow::Result;

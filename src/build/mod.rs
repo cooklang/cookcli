@@ -8,11 +8,33 @@ use crate::util::resolve_to_absolute_path;
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
-use clap::Args;
+use clap::{Args, Subcommand};
 use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Args)]
 pub struct BuildArgs {
+    #[command(subcommand)]
+    pub command: BuildCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BuildCommand {
+    /// Generate a self-contained static website from your recipes
+    ///
+    /// Renders your recipes as static HTML files browsable on any static-file
+    /// host or directly from disk via file://. Excludes dynamic features
+    /// (shopping list, pantry, editing).
+    ///
+    /// Examples:
+    ///   cook build web                         # Build to ./_site
+    ///   cook build web out                     # Build to ./out
+    ///   cook build web --base-path ~/recipes   # Use specific source directory
+    ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
+    Web(WebBuildArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct WebBuildArgs {
     /// Output directory for the generated static site
     ///
     /// Defaults to ./_site if not specified. The directory is created if
@@ -51,11 +73,19 @@ fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
 
 impl BuildArgs {
     pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
-        self.base_path.clone()
+        match &self.command {
+            BuildCommand::Web(args) => args.base_path.clone(),
+        }
     }
 }
 
 pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
+    match args.command {
+        BuildCommand::Web(web_args) => run_web(ctx, web_args),
+    }
+}
+
+fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let source = resolve_to_absolute_path(ctx.base_path())?;
     if !source.is_dir() {
         bail!("Source base path is not a directory: {source}");
@@ -82,7 +112,7 @@ pub fn run(ctx: &Context, args: BuildArgs) -> Result<()> {
     let mut tree = cooklang_find::build_tree(&source)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
     // If the user pointed the output directory inside the source directory
-    // (the common case: `cook build` with default `_site` next to recipes),
+    // (the common case: `cook build web` with default `_site` next to recipes),
     // strip the output subtree so we don't re-process the previous run's
     // generated files. Without this, every run would nest `_site/recipe/...`
     // and `_site/api/static/...` one level deeper until the OS rejects the
