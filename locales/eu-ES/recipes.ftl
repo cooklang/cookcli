@@ -36,6 +36,16 @@ meta-total-time = Denbora guztira
 meta-servings = Anoak
 meta-difficulty = Zailtasuna
 meta-description = Deskribapena
+meta-nutrition = Elikadura balioak
+meta-calories = Kaloriak
+meta-protein = Proteinak
+meta-fat = Koipeak
+meta-saturated-fat = Gantz aseak
+meta-carbohydrates = Karbohidratoak
+meta-fiber = Zuntzak
+meta-sugar = Azukreak
+meta-sodium = Sodioa
+meta-serving-size = Zerbitzatu tamaina
 
 # Recipe Types
 recipe-type-menu = Menua

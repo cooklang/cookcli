@@ -36,6 +36,16 @@ meta-total-time = Temps Total
 meta-servings = Portions
 meta-difficulty = Difficulté
 meta-description = Description
+meta-nutrition = Valeurs nutritionnelles
+meta-calories = Calories
+meta-protein = Protéines
+meta-fat = Lipides
+meta-saturated-fat = Acides gras saturés
+meta-carbohydrates = Glucides
+meta-fiber = Fibres
+meta-sugar = Sucres
+meta-sodium = Sodium
+meta-serving-size = Par portion
 
 # Recipe Types
 recipe-type-menu = Menu

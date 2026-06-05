@@ -692,10 +692,15 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             })
         };
 
+        let nutrition = extract_nutrition(&recipe.metadata);
+
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
             if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
-                if key_str.starts_with("source.") || key_str.starts_with("time.") {
+                if key_str.starts_with("source.")
+                    || key_str.starts_with("time.")
+                    || is_nutrition_key(key_str)
+                {
                     continue;
                 }
 
@@ -723,6 +728,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
+            nutrition,
         })
     };
 
@@ -949,9 +955,14 @@ fn build_menu_template_inner(
             })
         };
 
+        let nutrition = extract_nutrition(&recipe.metadata);
+
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
             if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                if is_nutrition_key(key_str) {
+                    continue;
+                }
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
@@ -974,6 +985,7 @@ fn build_menu_template_inner(
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
+            nutrition,
         })
     };
 
@@ -1040,5 +1052,103 @@ fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Optio
                 .file_name()
                 .map(|name| format!("{prefix}/api/static/{name}"))
         }
+    }
+}
+
+const NUTRITION_KEYS: &[&str] = &[
+    "nutrition",
+    "calories",
+    "protein",
+    "fat",
+    "saturated fat",
+    "saturated_fat",
+    "carbohydrates",
+    "fiber",
+    "sugar",
+    "sodium",
+    "serving size",
+    "serving_size",
+];
+
+fn is_nutrition_key(key: &str) -> bool {
+    NUTRITION_KEYS.contains(&key)
+}
+
+fn yaml_value_to_string(v: &serde_yaml::Value) -> Option<String> {
+    if let Some(s) = v.as_str() {
+        Some(s.to_string())
+    } else if let Some(n) = v.as_i64() {
+        Some(n.to_string())
+    } else {
+        v.as_f64().map(crate::util::format::format_number)
+    }
+}
+
+fn extract_nutrition(metadata: &cooklang::Metadata) -> Option<NutritionData> {
+    // Try nested `nutrition:` mapping first (importer format)
+    if let Some(nutrition_val) = metadata.map.get("nutrition") {
+        if let Some(nutrition_map) = nutrition_val.as_mapping() {
+            let get = |key: &str| -> Option<String> {
+                nutrition_map.get(key).and_then(yaml_value_to_string)
+            };
+
+            let data = NutritionData {
+                calories: get("calories"),
+                protein: get("protein"),
+                fat: get("fat"),
+                saturated_fat: get("saturated fat").or_else(|| get("saturated_fat")),
+                carbohydrates: get("carbohydrates"),
+                fiber: get("fiber"),
+                sugar: get("sugar"),
+                sodium: get("sodium"),
+                serving_size: get("serving size").or_else(|| get("serving_size")),
+            };
+
+            let has_data = data.calories.is_some()
+                || data.protein.is_some()
+                || data.fat.is_some()
+                || data.saturated_fat.is_some()
+                || data.carbohydrates.is_some()
+                || data.fiber.is_some()
+                || data.sugar.is_some()
+                || data.sodium.is_some()
+                || data.serving_size.is_some();
+
+            if has_data {
+                return Some(data);
+            }
+        }
+    }
+
+    // Fall back to flat top-level keys (hand-authored format)
+    let get =
+        |key: &str| -> Option<String> { metadata.map.get(key).and_then(yaml_value_to_string) };
+
+    let data = NutritionData {
+        calories: get("calories"),
+        protein: get("protein"),
+        fat: get("fat"),
+        saturated_fat: get("saturated fat").or_else(|| get("saturated_fat")),
+        carbohydrates: get("carbohydrates"),
+        fiber: get("fiber"),
+        sugar: get("sugar"),
+        sodium: get("sodium"),
+        serving_size: get("serving size").or_else(|| get("serving_size")),
+    };
+
+    let has_data = data.calories.is_some()
+        || data.protein.is_some()
+        || data.fat.is_some()
+        || data.saturated_fat.is_some()
+        || data.carbohydrates.is_some()
+        || data.fiber.is_some()
+        || data.sugar.is_some()
+        || data.sodium.is_some()
+        || data.serving_size.is_some();
+
+    if has_data {
+        Some(data)
+    } else {
+        None
     }
 }

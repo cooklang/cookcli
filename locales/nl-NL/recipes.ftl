@@ -36,6 +36,16 @@ meta-total-time = Totale tijd
 meta-servings = Porties
 meta-difficulty = Moeilijkheidsgraad
 meta-description = Beschrijving
+meta-nutrition = Voedingswaarden
+meta-calories = Calorieën
+meta-protein = Eiwitten
+meta-fat = Vetten
+meta-saturated-fat = Verzadigde vetten
+meta-carbohydrates = Koolhydraten
+meta-fiber = Vezels
+meta-sugar = Suikers
+meta-sodium = Natrium
+meta-serving-size = Portiegrootte
 
 # Recipe Types
 recipe-type-menu = Menu
