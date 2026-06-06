@@ -49,9 +49,15 @@ fn render_sitemap_xml(base: &str, entries: &[SitemapUrl]) -> String {
     out.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
     for entry in entries {
         out.push_str("  <url>\n");
-        out.push_str(&format!("    <loc>{}</loc>\n", build_loc(base, &entry.relpath)));
+        out.push_str(&format!(
+            "    <loc>{}</loc>\n",
+            build_loc(base, &entry.relpath)
+        ));
         if let Some(date) = entry.lastmod {
-            out.push_str(&format!("    <lastmod>{}</lastmod>\n", format_lastmod(date)));
+            out.push_str(&format!(
+                "    <lastmod>{}</lastmod>\n",
+                format_lastmod(date)
+            ));
         }
         out.push_str("  </url>\n");
     }
@@ -69,7 +75,10 @@ fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
 /// Walk the recipe tree into a flat list of sitemap entries: the homepage, one
 /// per directory listing page, and one per recipe/menu page.
 fn build_sitemap_entries(tree: &RecipeTree) -> Vec<SitemapUrl> {
-    let mut out = vec![SitemapUrl { relpath: String::new(), lastmod: None }];
+    let mut out = vec![SitemapUrl {
+        relpath: String::new(),
+        lastmod: None,
+    }];
     collect(tree, String::new(), &mut out);
     out
 }
@@ -182,7 +191,10 @@ mod tests {
     #[test]
     fn renders_well_formed_document() {
         let entries = vec![
-            SitemapUrl { relpath: String::new(), lastmod: None },
+            SitemapUrl {
+                relpath: String::new(),
+                lastmod: None,
+            },
             SitemapUrl {
                 relpath: "recipe/Pancakes.html".to_string(),
                 lastmod: Some(date(2026, 6, 6)),

@@ -155,8 +155,8 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     )?;
 
     let sitemap_written = if let Some(base) = args.sitemap.as_deref() {
-        let parsed = url::Url::parse(base)
-            .with_context(|| format!("Invalid --sitemap URL: {base}"))?;
+        let parsed =
+            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
         if parsed.host().is_none() || !matches!(parsed.scheme(), "http" | "https") {
             bail!("--sitemap must be an absolute http(s) URL with a host, e.g. https://recipes.example.com");
         }
