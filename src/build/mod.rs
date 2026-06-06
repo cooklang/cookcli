@@ -1,6 +1,7 @@
 mod index;
 mod links;
 mod renderer;
+mod sitemap;
 mod writer;
 
 use crate::server::language::{parse_supported_language, EN_US};
@@ -61,6 +62,16 @@ pub struct WebBuildArgs {
     /// fr-FR, es-ES, eu-ES, sv-SE.
     #[arg(long, value_parser = parse_lang_arg)]
     pub lang: Option<LanguageIdentifier>,
+
+    /// Full base URL of the deployed site to generate a sitemap.xml
+    ///
+    /// When set (e.g. https://recipes.example.com or
+    /// https://example.com/recipes), writes a sitemaps.org-compliant
+    /// sitemap.xml at the output root listing every page with absolute URLs.
+    /// This is the complete URL prefix (scheme + host + optional subpath) and
+    /// is independent of --base-url. Omit it to skip sitemap generation.
+    #[arg(long)]
+    pub sitemap: Option<String>,
 }
 
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
@@ -107,6 +118,21 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let lang = args.lang.clone().unwrap_or(EN_US);
     let base_url = args.base_url.as_deref();
 
+    // Validate the sitemap URL up front so a typo fails fast, before spending
+    // time rendering the whole site. The actual sitemap is written at the end.
+    let sitemap_base = args.sitemap.as_deref();
+    if let Some(base) = sitemap_base {
+        let parsed =
+            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
+        if parsed.host().is_none()
+            || !matches!(parsed.scheme(), "http" | "https")
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            bail!("--sitemap must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
+        }
+    }
+
     renderer::render_index(&source, &output, base_url, &lang)?;
 
     let mut tree = cooklang_find::build_tree(&source)
@@ -143,8 +169,17 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         json.as_bytes(),
     )?;
 
+    // The URL was already validated near the top of run_web.
+    let sitemap_written = if let Some(base) = sitemap_base {
+        sitemap::write_sitemap(&output, base, &tree)?;
+        true
+    } else {
+        false
+    };
+
+    let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}"
     );
     Ok(())
 }
