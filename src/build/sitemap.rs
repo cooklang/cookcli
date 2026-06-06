@@ -65,10 +65,14 @@ fn render_sitemap_xml(base: &str, entries: &[SitemapUrl]) -> String {
     out
 }
 
-/// Read a file's modification time as a local `NaiveDate`, best-effort.
+/// Read a file's modification time as a UTC `NaiveDate`, best-effort.
+///
+/// UTC (rather than the local timezone) keeps `<lastmod>` reproducible across
+/// machines: the same source file yields the same date regardless of where the
+/// site is built.
 fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
     let modified = std::fs::metadata(path).ok()?.modified().ok()?;
-    let datetime: chrono::DateTime<chrono::Local> = modified.into();
+    let datetime: chrono::DateTime<chrono::Utc> = modified.into();
     Some(datetime.date_naive())
 }
 
@@ -142,10 +146,15 @@ fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<S
             } else {
                 format!("{prefix}/{name}")
             };
-            out.push(SitemapUrl {
-                relpath: format!("directory/{sub}.html"),
-                lastmod: None,
-            });
+            let relpath = format!("directory/{sub}.html");
+            // List the directory page only if it was written, but always recurse:
+            // a missing directory page doesn't mean its recipes are missing.
+            if output.join(page_file(&relpath)).exists() {
+                out.push(SitemapUrl {
+                    relpath,
+                    lastmod: None,
+                });
+            }
             collect(child, sub, output, out);
         }
     }
@@ -164,6 +173,45 @@ mod tests {
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn build_entries_filters_missing_pages_and_sorts() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let src = TempDir::new().unwrap();
+        let out = TempDir::new().unwrap();
+        let src_root = Utf8Path::from_path(src.path()).unwrap();
+        let out_root = Utf8Path::from_path(out.path()).unwrap();
+
+        // Source recipes: one nested under a directory, one at the root.
+        fs::create_dir_all(src_root.join("Breakfast")).unwrap();
+        fs::write(src_root.join("Breakfast/Pancakes.cook"), "Mix @flour{1}.\n").unwrap();
+        fs::write(src_root.join("Soup.cook"), "Boil @water{1}.\n").unwrap();
+
+        let tree = cooklang_find::build_tree(src_root).unwrap();
+
+        // Simulate the render pass writing the homepage, the directory page, and
+        // Pancakes — but NOT Soup (e.g. it failed to render).
+        fs::write(out_root.join("index.html"), "x").unwrap();
+        fs::create_dir_all(out_root.join("recipe/Breakfast")).unwrap();
+        fs::write(out_root.join("recipe/Breakfast/Pancakes.html"), "x").unwrap();
+        fs::create_dir_all(out_root.join("directory")).unwrap();
+        fs::write(out_root.join("directory/Breakfast.html"), "x").unwrap();
+
+        let entries = build_sitemap_entries(&tree, out_root);
+        let paths: Vec<&str> = entries.iter().map(|e| e.relpath.as_str()).collect();
+
+        // Homepage first, then sorted; Soup is excluded because no file was written.
+        assert_eq!(
+            paths,
+            vec![
+                "",
+                "directory/Breakfast.html",
+                "recipe/Breakfast/Pancakes.html"
+            ]
+        );
     }
 
     #[test]

@@ -118,6 +118,21 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let lang = args.lang.clone().unwrap_or(EN_US);
     let base_url = args.base_url.as_deref();
 
+    // Validate the sitemap URL up front so a typo fails fast, before spending
+    // time rendering the whole site. The actual sitemap is written at the end.
+    let sitemap_base = args.sitemap.as_deref();
+    if let Some(base) = sitemap_base {
+        let parsed =
+            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
+        if parsed.host().is_none()
+            || !matches!(parsed.scheme(), "http" | "https")
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            bail!("--sitemap must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
+        }
+    }
+
     renderer::render_index(&source, &output, base_url, &lang)?;
 
     let mut tree = cooklang_find::build_tree(&source)
@@ -154,16 +169,8 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         json.as_bytes(),
     )?;
 
-    let sitemap_written = if let Some(base) = args.sitemap.as_deref() {
-        let parsed =
-            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
-        if parsed.host().is_none()
-            || !matches!(parsed.scheme(), "http" | "https")
-            || parsed.query().is_some()
-            || parsed.fragment().is_some()
-        {
-            bail!("--sitemap must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
-        }
+    // The URL was already validated near the top of run_web.
+    let sitemap_written = if let Some(base) = sitemap_base {
         sitemap::write_sitemap(&output, base, &tree)?;
         true
     } else {
