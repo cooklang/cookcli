@@ -1,6 +1,7 @@
 use anyhow::Result;
 use camino::Utf8Path;
 use chrono::NaiveDate;
+use cooklang_find::RecipeTree;
 
 /// One entry in the sitemap.
 ///
@@ -57,8 +58,6 @@ fn render_sitemap_xml(base: &str, entries: &[SitemapUrl]) -> String {
     out.push_str("</urlset>\n");
     out
 }
-
-use cooklang_find::RecipeTree;
 
 /// Read a file's modification time as a local `NaiveDate`, best-effort.
 fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
