@@ -74,16 +74,34 @@ fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
 
 /// Walk the recipe tree into a flat list of sitemap entries: the homepage, one
 /// per directory listing page, and one per recipe/menu page.
-fn build_sitemap_entries(tree: &RecipeTree) -> Vec<SitemapUrl> {
+///
+/// Only pages that were actually written under `output` are listed: the render
+/// pass skips recipes whose templates fail to build (warn + continue), so a
+/// purely tree-derived list could point at pages that don't exist. We run after
+/// rendering, so an on-disk existence check keeps the sitemap free of 404s.
+/// Entries are sorted by path so repeated builds produce a stable, diff-friendly
+/// file (the underlying tree iteration order is non-deterministic).
+fn build_sitemap_entries(tree: &RecipeTree, output: &Utf8Path) -> Vec<SitemapUrl> {
     let mut out = vec![SitemapUrl {
         relpath: String::new(),
         lastmod: None,
     }];
-    collect(tree, String::new(), &mut out);
+    collect(tree, String::new(), output, &mut out);
+    out.sort_by(|a, b| a.relpath.cmp(&b.relpath));
     out
 }
 
-fn collect(tree: &RecipeTree, prefix: String, out: &mut Vec<SitemapUrl>) {
+/// The on-disk file backing a page entry, relative to `output`
+/// (the homepage's empty relpath maps to `index.html`).
+fn page_file(relpath: &str) -> &str {
+    if relpath.is_empty() {
+        "index.html"
+    } else {
+        relpath
+    }
+}
+
+fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<SitemapUrl>) {
     for (name, child) in &tree.children {
         if child.children.is_empty() {
             let Some(recipe) = child.recipe.as_ref() else {
@@ -110,6 +128,10 @@ fn collect(tree: &RecipeTree, prefix: String, out: &mut Vec<SitemapUrl>) {
             } else {
                 format!("recipe/{sub}.html")
             };
+            // Skip recipes the render pass failed to write (avoids dead links).
+            if !output.join(page_file(&relpath)).exists() {
+                continue;
+            }
             out.push(SitemapUrl {
                 relpath,
                 lastmod: file_lastmod(&child.path),
@@ -124,14 +146,14 @@ fn collect(tree: &RecipeTree, prefix: String, out: &mut Vec<SitemapUrl>) {
                 relpath: format!("directory/{sub}.html"),
                 lastmod: None,
             });
-            collect(child, sub, out);
+            collect(child, sub, output, out);
         }
     }
 }
 
 /// Build and write `sitemap.xml` to the output root.
 pub fn write_sitemap(output: &Utf8Path, base: &str, tree: &RecipeTree) -> Result<()> {
-    let entries = build_sitemap_entries(tree);
+    let entries = build_sitemap_entries(tree, output);
     let xml = render_sitemap_xml(base, &entries);
     crate::build::writer::write_bytes(output, Utf8Path::new("sitemap.xml"), xml.as_bytes())
 }
