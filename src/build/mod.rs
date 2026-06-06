@@ -1,6 +1,7 @@
 mod index;
 mod links;
 mod renderer;
+mod sitemap;
 mod writer;
 
 use crate::server::language::{parse_supported_language, EN_US};
