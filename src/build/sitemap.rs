@@ -1,6 +1,4 @@
-#[allow(unused_imports)] // used by the next task's tree-walk glue
 use anyhow::Result;
-#[allow(unused_imports)] // used by the next task's tree-walk glue
 use camino::Utf8Path;
 use chrono::NaiveDate;
 
@@ -58,6 +56,76 @@ fn render_sitemap_xml(base: &str, entries: &[SitemapUrl]) -> String {
     }
     out.push_str("</urlset>\n");
     out
+}
+
+use cooklang_find::RecipeTree;
+
+/// Read a file's modification time as a local `NaiveDate`, best-effort.
+fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let datetime: chrono::DateTime<chrono::Local> = modified.into();
+    Some(datetime.date_naive())
+}
+
+/// Walk the recipe tree into a flat list of sitemap entries: the homepage, one
+/// per directory listing page, and one per recipe/menu page.
+fn build_sitemap_entries(tree: &RecipeTree) -> Vec<SitemapUrl> {
+    let mut out = vec![SitemapUrl { relpath: String::new(), lastmod: None }];
+    collect(tree, String::new(), &mut out);
+    out
+}
+
+fn collect(tree: &RecipeTree, prefix: String, out: &mut Vec<SitemapUrl>) {
+    for (name, child) in &tree.children {
+        if child.children.is_empty() {
+            let Some(recipe) = child.recipe.as_ref() else {
+                continue;
+            };
+            // URL path uses the on-disk file stem, not the tree key (which may
+            // be the title from metadata) — consistent with index.rs.
+            let stem = recipe
+                .file_name()
+                .as_deref()
+                .map(|f| {
+                    f.trim_end_matches(".cook")
+                        .trim_end_matches(".menu")
+                        .to_string()
+                })
+                .unwrap_or_else(|| name.clone());
+            let sub = if prefix.is_empty() {
+                stem
+            } else {
+                format!("{prefix}/{stem}")
+            };
+            let relpath = if recipe.is_menu() {
+                format!("menu/{sub}.html")
+            } else {
+                format!("recipe/{sub}.html")
+            };
+            out.push(SitemapUrl {
+                relpath,
+                lastmod: file_lastmod(&child.path),
+            });
+        } else {
+            let sub = if prefix.is_empty() {
+                name.to_string()
+            } else {
+                format!("{prefix}/{name}")
+            };
+            out.push(SitemapUrl {
+                relpath: format!("directory/{sub}.html"),
+                lastmod: None,
+            });
+            collect(child, sub, out);
+        }
+    }
+}
+
+/// Build and write `sitemap.xml` to the output root.
+pub fn write_sitemap(output: &Utf8Path, base: &str, tree: &RecipeTree) -> Result<()> {
+    let entries = build_sitemap_entries(tree);
+    let xml = render_sitemap_xml(base, &entries);
+    crate::build::writer::write_bytes(output, Utf8Path::new("sitemap.xml"), xml.as_bytes())
 }
 
 #[cfg(test)]

@@ -62,6 +62,16 @@ pub struct WebBuildArgs {
     /// fr-FR, es-ES, eu-ES, sv-SE.
     #[arg(long, value_parser = parse_lang_arg)]
     pub lang: Option<LanguageIdentifier>,
+
+    /// Full base URL of the deployed site to generate a sitemap.xml
+    ///
+    /// When set (e.g. https://recipes.example.com or
+    /// https://example.com/recipes), writes a sitemaps.org-compliant
+    /// sitemap.xml at the output root listing every page with absolute URLs.
+    /// This is the complete URL prefix (scheme + host + optional subpath) and
+    /// is independent of --base-url. Omit it to skip sitemap generation.
+    #[arg(long)]
+    pub sitemap: Option<String>,
 }
 
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
@@ -144,8 +154,21 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         json.as_bytes(),
     )?;
 
+    let sitemap_written = if let Some(base) = args.sitemap.as_deref() {
+        let parsed = url::Url::parse(base)
+            .with_context(|| format!("Invalid --sitemap URL: {base}"))?;
+        if parsed.cannot_be_a_base() || parsed.host().is_none() {
+            bail!("--sitemap must be an absolute URL with a host, e.g. https://recipes.example.com");
+        }
+        sitemap::write_sitemap(&output, base, &tree)?;
+        true
+    } else {
+        false
+    };
+
+    let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}"
     );
     Ok(())
 }
