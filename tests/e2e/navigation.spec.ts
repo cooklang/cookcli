@@ -151,3 +151,66 @@ test.describe('Navigation', () => {
     await expect(recipeTitle).toContainText('Sicilian-style Scottadito Lamb Chops');
   });
 });
+
+test.describe('Feature flag nav visibility', () => {
+  test.beforeEach(async ({ context }) => {
+    // Reset both feature flags to default (enabled) before each test
+    await context.addCookies([
+      { name: 'show_shopping_list', value: '1', url: 'http://localhost:9080' },
+      { name: 'show_pantry', value: '1', url: 'http://localhost:9080' },
+    ]);
+  });
+
+  test('shows Recipes, Shopping List, and Pantry nav links by default', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('nav a.nav-pill', { hasText: /Recipes/i })).toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Pantry/i })).toBeVisible();
+  });
+
+  test('hides Shopping List nav link when cookie is 0', async ({ context, page }) => {
+    await context.addCookies([
+      { name: 'show_shopping_list', value: '0', url: 'http://localhost:9080' },
+    ]);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).not.toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Recipes/i })).toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Pantry/i })).toBeVisible();
+  });
+
+  test('hides Pantry nav link when cookie is 0', async ({ context, page }) => {
+    await context.addCookies([
+      { name: 'show_pantry', value: '0', url: 'http://localhost:9080' },
+    ]);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('nav a.nav-pill', { hasText: /Pantry/i })).not.toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Recipes/i })).toBeVisible();
+    await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).toBeVisible();
+  });
+
+  test('shows no nav pills when both features are disabled', async ({ context, page }) => {
+    await context.addCookies([
+      { name: 'show_shopping_list', value: '0', url: 'http://localhost:9080' },
+      { name: 'show_pantry', value: '0', url: 'http://localhost:9080' },
+    ]);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('nav a.nav-pill')).toHaveCount(0);
+  });
+
+  test('nav pill is active on its corresponding page', async ({ page }) => {
+    await page.goto('/shopping-list');
+    await page.waitForLoadState('domcontentloaded');
+
+    const shoppingPill = page.locator('nav a.nav-pill.active');
+    await expect(shoppingPill).toBeVisible();
+    await expect(shoppingPill).toContainText(/Shopping/i);
+  });
+});

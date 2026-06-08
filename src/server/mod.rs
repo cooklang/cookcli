@@ -192,12 +192,19 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         Router::new().nest(&state.url_prefix, inner)
     };
 
+    // Capture url_prefix before state is consumed by with_state.
+    let url_prefix_for_features = state.url_prefix.clone();
+
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
 
     let app = app
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
+        .layer(axum::middleware::from_fn_with_state(
+            url_prefix_for_features,
+            language::features_middleware,
+        ))
         .layer(axum::middleware::from_fn(language::language_middleware))
         .layer(
             CorsLayer::new()

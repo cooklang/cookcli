@@ -4,6 +4,7 @@ use crate::server::builders::{
     build_recipe_template, build_recipes_template, RecipeBuildInput, RecipeBuildOutput,
     RecipesBuildInput,
 };
+use crate::server::language::FeatureFlags;
 use anyhow::Result;
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -24,6 +25,7 @@ pub fn render_index(
         sub_path: None,
         lang: lang.clone(),
         static_mode: true,
+        features: FeatureFlags::default(),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
@@ -45,6 +47,7 @@ pub fn render_directory(
         sub_path: Some(sub_path),
         lang: lang.clone(),
         static_mode: true,
+        features: FeatureFlags::default(),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
@@ -88,6 +91,7 @@ pub fn render_recipe(
         scale: 1.0,
         lang: lang.clone(),
         static_mode: true,
+        features: FeatureFlags::default(),
     })?;
 
     match kind {

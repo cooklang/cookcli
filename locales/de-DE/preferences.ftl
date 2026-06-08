@@ -21,3 +21,7 @@ pref-upload-aisle = Gang-Konfiguration hochladen
 pref-upload-pantry = Vorratskammer-Konfiguration hochladen
 pref-upload-success = Konfiguration erfolgreich hochgeladen
 pref-upload-error = Fehler beim Hochladen der Konfiguration
+
+# Features
+pref-features = Funktionen
+pref-features-desc = Wähle, welche Funktionen in der Navigationsleiste angezeigt werden.

@@ -21,3 +21,7 @@ pref-upload-aisle = Gang Configuratie uploaden
 pref-upload-pantry = Voorraadkast Configuratie uploaden
 pref-upload-success = Configuratie succesvol geüpload
 pref-upload-error = Fout bij het uploaden van configuratie
+
+# Features
+pref-features = Functies
+pref-features-desc = Kies welke functies in de navigatiebalk worden weergegeven.

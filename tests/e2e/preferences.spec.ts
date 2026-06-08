@@ -209,3 +209,56 @@ olive_oil = { amount = "1", unit = "l" }
     }
   });
 });
+
+test.describe('Feature toggles in preferences', () => {
+  test.beforeEach(async ({ context }) => {
+    await context.addCookies([
+      { name: 'show_shopping_list', value: '1', url: 'http://localhost:9080' },
+      { name: 'show_pantry', value: '1', url: 'http://localhost:9080' },
+    ]);
+  });
+
+  test('displays Features section with two active buttons', async ({ page }) => {
+    await page.goto('/preferences');
+    await page.waitForLoadState('networkidle');
+
+    const shoppingBtn = page.getByRole('button', { name: /Shopping/i });
+    const pantryBtn = page.getByRole('button', { name: /Pantry/i });
+
+    await expect(shoppingBtn).toBeVisible();
+    await expect(pantryBtn).toBeVisible();
+
+    // Both enabled → should have the active (orange gradient) classes
+    await expect(shoppingBtn).toHaveClass(/from-orange-500/);
+    await expect(pantryBtn).toHaveClass(/from-orange-500/);
+  });
+
+  test('toggling Shopping List off removes it from nav', async ({ page }) => {
+    await page.goto('/preferences');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /Shopping/i }).click();
+    await page.waitForLoadState('networkidle');
+
+    // Button is now inactive
+    const shoppingBtn = page.getByRole('button', { name: /Shopping/i });
+    await expect(shoppingBtn).not.toHaveClass(/from-orange-500/);
+
+    // Nav no longer shows Shopping List
+    await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).not.toBeVisible();
+  });
+
+  test('toggling a feature back on restores the nav link', async ({ context, page }) => {
+    await context.addCookies([
+      { name: 'show_shopping_list', value: '0', url: 'http://localhost:9080' },
+    ]);
+    await page.goto('/preferences');
+    await page.waitForLoadState('networkidle');
+
+    // Shopping is currently off — click to enable
+    await page.getByRole('button', { name: /Shopping/i }).click();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).toBeVisible();
+  });
+});

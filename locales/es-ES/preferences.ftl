@@ -21,3 +21,7 @@ pref-upload-aisle = Subir configuración de pasillos
 pref-upload-pantry = Subir configuración de despensa
 pref-upload-success = Configuración subida con éxito
 pref-upload-error = Error al subir la configuración
+
+# Features
+pref-features = Funcionalidades
+pref-features-desc = Elige qué funciones se muestran en la barra de navegación.

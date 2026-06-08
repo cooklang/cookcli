@@ -1,6 +1,6 @@
 use accept_language::parse;
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::{header, HeaderMap},
     middleware::Next,
     response::Response,
@@ -18,6 +18,48 @@ pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
 
 pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] =
     &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE];
+
+/// Per-request feature visibility flags, read from cookies.
+#[derive(Clone, Copy, Debug)]
+pub struct FeatureFlags {
+    pub show_shopping_list: bool,
+    pub show_pantry: bool,
+}
+
+impl Default for FeatureFlags {
+    fn default() -> Self {
+        Self {
+            show_shopping_list: true,
+            show_pantry: true,
+        }
+    }
+}
+
+/// Parse feature flag cookies from request headers.
+/// Absent cookie → feature enabled (default true).
+/// Cookie value "0" → disabled. Any other value → enabled.
+pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
+    let mut flags = FeatureFlags::default();
+
+    if let Some(cookie_header) = headers.get(header::COOKIE) {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    match parts[0] {
+                        "show_shopping_list" => {
+                            flags.show_shopping_list = parts[1] != "0"
+                        }
+                        "show_pantry" => flags.show_pantry = parts[1] != "0",
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    flags
+}
 
 /// Parse a user-supplied language tag (e.g. "de", "de-DE") into one of the
 /// supported [`LanguageIdentifier`]s. Returns `None` for unsupported tags.
@@ -94,4 +136,94 @@ pub async fn language_middleware(mut req: Request, next: Next) -> Response {
     let lang = get_preferred_language(req.headers());
     req.extensions_mut().insert(lang);
     next.run(req).await
+}
+
+/// Middleware that reads feature flag cookies, injects them as a request
+/// extension, and refreshes the cookie expiry on every response.
+/// Takes the URL prefix as state so Set-Cookie headers use the correct path.
+pub async fn features_middleware(
+    State(url_prefix): State<String>,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    let features = parse_feature_flags(req.headers());
+    req.extensions_mut().insert(features);
+    let mut response = next.run(req).await;
+
+    let max_age = 365 * 24 * 60 * 60_u32;
+    let cookie_path = if url_prefix.is_empty() {
+        "/".to_string()
+    } else {
+        format!("{url_prefix}/")
+    };
+
+    for (name, val) in [
+        (
+            "show_shopping_list",
+            if features.show_shopping_list { "1" } else { "0" },
+        ),
+        ("show_pantry", if features.show_pantry { "1" } else { "0" }),
+    ] {
+        let cookie = format!(
+            "{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax"
+        );
+        if let Ok(header_val) = cookie.parse() {
+            response.headers_mut().append(header::SET_COOKIE, header_val);
+        }
+    }
+
+    response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_cookie_headers(cookies: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(header::COOKIE, cookies.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn test_feature_flags_default_true_when_no_cookies() {
+        let flags = parse_feature_flags(&HeaderMap::new());
+        assert!(flags.show_shopping_list);
+        assert!(flags.show_pantry);
+    }
+
+    #[test]
+    fn test_feature_flags_disabled_by_zero() {
+        let flags = parse_feature_flags(&make_cookie_headers(
+            "show_shopping_list=0; show_pantry=0",
+        ));
+        assert!(!flags.show_shopping_list);
+        assert!(!flags.show_pantry);
+    }
+
+    #[test]
+    fn test_feature_flags_enabled_by_one() {
+        let flags = parse_feature_flags(&make_cookie_headers(
+            "show_shopping_list=1; show_pantry=1",
+        ));
+        assert!(flags.show_shopping_list);
+        assert!(flags.show_pantry);
+    }
+
+    #[test]
+    fn test_feature_flags_partial_override() {
+        let flags =
+            parse_feature_flags(&make_cookie_headers("show_shopping_list=0"));
+        assert!(!flags.show_shopping_list);
+        assert!(flags.show_pantry); // absent → default true
+    }
+
+    #[test]
+    fn test_feature_flags_unknown_value_treated_as_enabled() {
+        // Anything that isn't "0" is truthy
+        let flags = parse_feature_flags(&make_cookie_headers(
+            "show_shopping_list=yes",
+        ));
+        assert!(flags.show_shopping_list);
+    }
 }

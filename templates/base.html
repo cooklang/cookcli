@@ -185,6 +185,21 @@
             color: #a78bfa !important;
         }
 
+        /* Nav pill dark mode */
+        .dark .nav-pill {
+            color: #9ca3af;
+        }
+
+        .dark .nav-pill:hover {
+            background: #374151;
+            color: #fb923c;
+        }
+
+        .dark .nav-pill.active {
+            background: linear-gradient(135deg, #ff6b35, #f97316);
+            color: white;
+        }
+
         /* Button dark mode styles */
         .dark .bg-gray-200 {
             background-color: #4b5563;
@@ -771,18 +786,25 @@
                     </div>
 
                     <div class="order-3 w-full md:w-auto flex items-center gap-1 lg:gap-2">
-                        <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "recipes" %}bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:text-orange-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
-                            <span>{{ tr.t("nav-recipes") }}</span>
-                        </a>
-                        {% if !static_mode %}
-                        <a href="{{ prefix }}/shopping-list" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "shopping" %}bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 hover:text-purple-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
-                            <span>{{ tr.t("nav-shopping-list") }}</span>
-                        </a>
-                        {% endif %}
-                        {% if !static_mode %}
-                        <a href="{{ prefix }}/pantry" class="px-3 lg:px-5 py-2 rounded-full font-medium whitespace-nowrap text-sm lg:text-base transition-all duration-300 {% if active == "pantry" %}bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold shadow-lg scale-105{% else %}text-gray-600 hover:bg-gradient-to-r hover:from-green-100 hover:to-teal-100 hover:text-green-700 hover:shadow-md hover:-translate-y-0.5{% endif %}">
-                            <span>{{ tr.t("nav-pantry") }}</span>
-                        </a>
+                        {% if features.show_shopping_list || features.show_pantry %}
+                        <div class="hidden md:flex items-center gap-1 mr-2 lg:mr-4">
+                            <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}"
+                               class="nav-pill {% if active == "recipes" %}active{% endif %}">
+                                {{ tr.t("nav-recipes") }}
+                            </a>
+                            {% if features.show_shopping_list && !static_mode %}
+                            <a href="{{ prefix }}/shopping-list"
+                               class="nav-pill {% if active == "shopping" %}active{% endif %}">
+                                {{ tr.t("nav-shopping-list") }}
+                            </a>
+                            {% endif %}
+                            {% if features.show_pantry && !static_mode %}
+                            <a href="{{ prefix }}/pantry"
+                               class="nav-pill {% if active == "pantry" %}active{% endif %}">
+                                {{ tr.t("nav-pantry") }}
+                            </a>
+                            {% endif %}
+                        </div>
                         {% endif %}
                         <!-- Inline buttons on md+ screens -->
                         {% if !static_mode %}
@@ -811,6 +833,22 @@
                                 </svg>
                             </button>
                             <div id="more-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-xl z-50 py-1">
+                                {% if features.show_shopping_list || features.show_pantry %}
+                                <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors {% if active == "recipes" %}font-semibold text-orange-600{% endif %}">
+                                    <span>🍳</span> <span>{{ tr.t("nav-recipes") }}</span>
+                                </a>
+                                {% if features.show_shopping_list && !static_mode %}
+                                <a href="{{ prefix }}/shopping-list" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors {% if active == "shopping" %}font-semibold text-orange-600{% endif %}">
+                                    <span>🛒</span> <span>{{ tr.t("nav-shopping-list") }}</span>
+                                </a>
+                                {% endif %}
+                                {% if features.show_pantry && !static_mode %}
+                                <a href="{{ prefix }}/pantry" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors {% if active == "pantry" %}font-semibold text-orange-600{% endif %}">
+                                    <span>🥫</span> <span>{{ tr.t("nav-pantry") }}</span>
+                                </a>
+                                {% endif %}
+                                <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                                {% endif %}
                                 {% if !static_mode %}
                                 <a href="{{ prefix }}/preferences" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                     <span>⚙️</span> <span>Preferences</span>

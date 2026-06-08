@@ -21,3 +21,7 @@ pref-upload-aisle = Igo pasilloen konfigurazioa
 pref-upload-pantry = Igo despentsaren konfigurazioa
 pref-upload-success = Konfigurazioaren igoera arrakastatsua
 pref-upload-error = Errorea konfigurazioa igotzerakoan
+
+# Features
+pref-features = Eginbideak
+pref-features-desc = Aukeratu nabigazio-barran zer eginbide erakutsi nahi duzun.
