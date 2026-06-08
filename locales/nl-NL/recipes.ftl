@@ -44,3 +44,10 @@ recipe-type-menu = Menu
 todays-menu-title = Menu van Vandaag
 todays-menu-from = Van
 todays-menu-view = Menu bekijken
+
+# Sort Controls
+sort-by = Sorteren op:
+sort-name = Naam
+sort-modified = Gewijzigd
+sort-created = Aangemaakt
+sort-direction-toggle = Sorteervolgorde omdraaien

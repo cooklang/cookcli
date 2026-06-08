@@ -44,3 +44,10 @@ recipe-type-menu = Menú
 todays-menu-title = Menú de Hoy
 todays-menu-from = De
 todays-menu-view = Ver Menú
+
+# Sort Controls
+sort-by = Ordenar por:
+sort-name = Nombre
+sort-modified = Modificado
+sort-created = Creado
+sort-direction-toggle = Invertir orden

@@ -44,3 +44,10 @@ recipe-type-menu = Menu
 todays-menu-title = Today's Menu
 todays-menu-from = From
 todays-menu-view = View Menu
+
+# Sort Controls
+sort-by = Sort by:
+sort-name = Name
+sort-modified = Modified
+sort-created = Created
+sort-direction-toggle = Toggle sort direction

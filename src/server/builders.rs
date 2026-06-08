@@ -61,8 +61,8 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             }
         };
 
-        // Extract tags, image, and is_menu if this is a recipe
-        let (tags, image_path, is_menu) = if let Some(ref recipe) = child.recipe {
+        // Extract tags, image, is_menu, and file timestamps if this is a recipe
+        let (tags, image_path, is_menu, modified_at, created_at) = if let Some(ref recipe) = child.recipe {
             let img_path = recipe.title_image().clone().and_then(|img| {
                 if img.starts_with("http://") || img.starts_with("https://") {
                     Some(img)
@@ -80,9 +80,23 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                     }
                 }
             });
-            (recipe.tags(), img_path, recipe.is_menu())
+
+            let (modified_at, created_at) = recipe.path().map(|p| {
+                let meta = std::fs::metadata(p).ok();
+                let modified = meta.as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                let created = meta.as_ref()
+                    .and_then(|m| m.created().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                (modified, created)
+            }).unwrap_or((None, None));
+
+            (recipe.tags(), img_path, recipe.is_menu(), modified_at, created_at)
         } else {
-            (Vec::new(), None, false)
+            (Vec::new(), None, false, None, None)
         };
 
         items.push(RecipeItem {
@@ -98,6 +112,8 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             tags,
             image_path,
             is_menu,
+            modified_at,
+            created_at,
         });
     }
 
