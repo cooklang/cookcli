@@ -99,8 +99,11 @@ impl ShoppingListStore {
 
         // Rename the old file so it's not picked up again
         let backup = self.legacy_path.with_extension("txt.bak");
-        fs::rename(&self.legacy_path, backup.as_std_path())
-            .context("renaming legacy shopping list to .bak")?;
+        crate::server::fs_atomic::rename_replace(
+            self.legacy_path.as_std_path(),
+            backup.as_std_path(),
+        )
+        .context("renaming legacy shopping list to .bak")?;
 
         tracing::info!("Migration complete. Legacy file renamed to {}", backup);
         Ok(true)
@@ -331,8 +334,9 @@ impl ShoppingListStore {
         // Stage the new content in a sibling temp file, fsync it, and rename
         // into place. Temp path is scoped to base_path so it ends up on the
         // same filesystem — otherwise rename would fall back to copy+delete
-        // and lose atomicity. If any step fails we remove the partial temp
-        // file so it doesn't linger on disk.
+        // and lose atomicity. (On Android `rename_replace` always copies +
+        // removes to dodge the seccomp-blocked `renameat2` syscall.) If any
+        // step fails we remove the partial temp file so it doesn't linger.
         let tmp_path = self.checked_path.with_file_name(".shopping-checked.tmp");
         let write_result = (|| -> Result<()> {
             use std::io::Write as _;
@@ -350,8 +354,11 @@ impl ShoppingListStore {
             let _ = fs::remove_file(&tmp_path);
             return Err(e);
         }
-        if let Err(e) = fs::rename(&tmp_path, &self.checked_path)
-            .context("renaming compacted temp file into place")
+        if let Err(e) = crate::server::fs_atomic::rename_replace(
+            tmp_path.as_std_path(),
+            self.checked_path.as_std_path(),
+        )
+        .context("renaming compacted temp file into place")
         {
             let _ = fs::remove_file(&tmp_path);
             return Err(e);

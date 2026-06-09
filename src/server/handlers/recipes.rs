@@ -227,7 +227,12 @@ pub async fn recipe_save(
         )
     })?;
 
-    tokio::fs::rename(&temp_path, &file_path)
+    // Replace the original file with the temp file. `rename_replace_async`
+    // uses an atomic rename on capable platforms but copies + removes on
+    // Android, where the aarch64 `rename()` libc wrapper hits the
+    // seccomp-blocked `renameat2` syscall (SIGSYS / "Bad system call").
+    // See https://github.com/cooklang/cookcli/issues/349.
+    crate::server::fs_atomic::rename_replace_async(temp_path.clone(), file_path.clone())
         .await
         .map_err(|e| {
             tracing::error!("Failed to rename temp file to {}: {}", file_path, e);

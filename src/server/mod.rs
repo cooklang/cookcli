@@ -48,6 +48,7 @@ use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
 pub mod builders;
+mod fs_atomic;
 mod handlers;
 mod i18n;
 pub mod language;
