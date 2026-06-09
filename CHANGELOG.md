@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.0](https://github.com/cooklang/cookcli/compare/v0.30.0...v0.31.0) (2026-06-09)
+
+
+### Features
+
+* **build:** generate sitemap.xml with `cook build web --sitemap` ([#351](https://github.com/cooklang/cookcli/issues/351)) ([6db127a](https://github.com/cooklang/cookcli/commit/6db127a10a4e13ac18db31613380c57d7b554393))
+
+
+### Bug Fixes
+
+* **server:** avoid renameat2 SIGSYS on aarch64 Android (Termux) ([#353](https://github.com/cooklang/cookcli/issues/353)) ([46950ab](https://github.com/cooklang/cookcli/commit/46950ab35fbeaf15c16ddc954b7e1a4decab12bd)), closes [#349](https://github.com/cooklang/cookcli/issues/349)
+
 ## [0.30.0](https://github.com/cooklang/cookcli/compare/v0.29.1...v0.30.0) (2026-05-18)
 
 
