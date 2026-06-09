@@ -95,19 +95,41 @@ pub struct ShoppingListArgs {
     #[arg(long)]
     pretty: bool,
 
-    /// Load aisle conf file
-    #[arg(short, long)]
+    /// Load aisle configuration file
+    ///
+    /// The aisle file groups ingredients into categories (produce, dairy, etc.)
+    /// so the shopping list is organized by store section.
+    ///
+    /// If not specified, the tool looks for `aisle.conf` in `./config/` and then
+    /// in the global config directory (`~/.config/cook/` or the platform
+    /// equivalent).
+    #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     aisle: Option<Utf8PathBuf>,
 
-    /// Load pantry conf file
-    #[arg(long)]
+    /// Load pantry configuration file
+    ///
+    /// Ingredients you already have on hand are subtracted from the shopping
+    /// list. The pantry file is TOML, with optional quantities and dates.
+    ///
+    /// If not specified, the tool looks for `pantry.conf` in `./config/` and then
+    /// in the global config directory (`~/.config/cook/` or the platform
+    /// equivalent). Use --ignore-pantry to skip pantry subtraction entirely.
+    #[arg(long, value_hint = clap::ValueHint::FilePath)]
     pantry: Option<Utf8PathBuf>,
 
     /// Don't expand referenced recipes
+    ///
+    /// By default, recipes referenced from within a recipe (via @./other.cook)
+    /// are expanded and their ingredients included. This flag treats each recipe
+    /// in isolation.
     #[arg(short, long)]
     ignore_references: bool,
 
     /// Don't subtract pantry items from the shopping list
+    ///
+    /// By default, ingredients found in the pantry configuration are subtracted
+    /// from the shopping list. This flag includes every ingredient regardless of
+    /// what's in the pantry, and skips loading the pantry file altogether.
     #[arg(long)]
     ignore_pantry: bool,
 
