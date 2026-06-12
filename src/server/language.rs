@@ -47,9 +47,7 @@ pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
                 let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
                 if parts.len() == 2 {
                     match parts[0] {
-                        "show_shopping_list" => {
-                            flags.show_shopping_list = parts[1] != "0"
-                        }
+                        "show_shopping_list" => flags.show_shopping_list = parts[1] != "0",
                         "show_pantry" => flags.show_pantry = parts[1] != "0",
                         _ => {}
                     }
@@ -160,15 +158,19 @@ pub async fn features_middleware(
     for (name, val) in [
         (
             "show_shopping_list",
-            if features.show_shopping_list { "1" } else { "0" },
+            if features.show_shopping_list {
+                "1"
+            } else {
+                "0"
+            },
         ),
         ("show_pantry", if features.show_pantry { "1" } else { "0" }),
     ] {
-        let cookie = format!(
-            "{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax"
-        );
+        let cookie = format!("{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax");
         if let Ok(header_val) = cookie.parse() {
-            response.headers_mut().append(header::SET_COOKIE, header_val);
+            response
+                .headers_mut()
+                .append(header::SET_COOKIE, header_val);
         }
     }
 
@@ -194,26 +196,23 @@ mod tests {
 
     #[test]
     fn test_feature_flags_disabled_by_zero() {
-        let flags = parse_feature_flags(&make_cookie_headers(
-            "show_shopping_list=0; show_pantry=0",
-        ));
+        let flags =
+            parse_feature_flags(&make_cookie_headers("show_shopping_list=0; show_pantry=0"));
         assert!(!flags.show_shopping_list);
         assert!(!flags.show_pantry);
     }
 
     #[test]
     fn test_feature_flags_enabled_by_one() {
-        let flags = parse_feature_flags(&make_cookie_headers(
-            "show_shopping_list=1; show_pantry=1",
-        ));
+        let flags =
+            parse_feature_flags(&make_cookie_headers("show_shopping_list=1; show_pantry=1"));
         assert!(flags.show_shopping_list);
         assert!(flags.show_pantry);
     }
 
     #[test]
     fn test_feature_flags_partial_override() {
-        let flags =
-            parse_feature_flags(&make_cookie_headers("show_shopping_list=0"));
+        let flags = parse_feature_flags(&make_cookie_headers("show_shopping_list=0"));
         assert!(!flags.show_shopping_list);
         assert!(flags.show_pantry); // absent → default true
     }
@@ -221,9 +220,7 @@ mod tests {
     #[test]
     fn test_feature_flags_unknown_value_treated_as_enabled() {
         // Anything that isn't "0" is truthy
-        let flags = parse_feature_flags(&make_cookie_headers(
-            "show_shopping_list=yes",
-        ));
+        let flags = parse_feature_flags(&make_cookie_headers("show_shopping_list=yes"));
         assert!(flags.show_shopping_list);
     }
 }

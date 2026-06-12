@@ -133,7 +133,12 @@ async fn edit_page(
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
         tracing::error!("Invalid path: {path}");
-        return error_page(lang, &state.url_prefix, format!("Invalid path: {path}"), features);
+        return error_page(
+            lang,
+            &state.url_prefix,
+            format!("Invalid path: {path}"),
+            features,
+        );
     }
 
     let recipe_path = Utf8PathBuf::from(&path);

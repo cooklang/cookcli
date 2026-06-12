@@ -735,6 +735,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     Ok(RecipeBuildOutput::Recipe(Box::new(template)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_menu_template_inner(
     path: String,
     scale: f64,
