@@ -44,3 +44,10 @@ recipe-type-menu = Meny
 todays-menu-title = Dagens meny
 todays-menu-from = Från
 todays-menu-view = Visa meny
+
+# Sort Controls
+sort-by = Sortera efter:
+sort-name = Namn
+sort-modified = Ändrad
+sort-created = Skapad
+sort-direction-toggle = Byt sorteringsriktning

@@ -32,6 +32,16 @@
         {% endif %}
     </div>
 
+    <div id="sort-controls" class="hidden items-center gap-2 mb-6">
+        <label for="sort-field" class="text-sm text-gray-500 dark:text-gray-400">{{ tr.t("sort-by") }}</label>
+        <select id="sort-field" class="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            <option value="name">{{ tr.t("sort-name") }}</option>
+            <option value="modified">{{ tr.t("sort-modified") }}</option>
+            <option value="created" id="sort-created-option">{{ tr.t("sort-created") }}</option>
+        </select>
+        <button id="sort-dir" class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" title="{{ tr.t("sort-direction-toggle") }}">↑</button>
+    </div>
+
     {% match todays_menu %}
     {% when Some with (menu) %}
     <div class="mb-8 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
@@ -55,10 +65,10 @@
     {% when None %}
     {% endmatch %}
 
-    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div id="recipes-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}
-        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
             <div class="p-6 flex-1">
                 <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-4">
                     <span class="text-2xl">📁</span>
@@ -72,7 +82,11 @@
             </div>
         </a>
         {% else %}
-        <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
+           data-type="recipe"
+           {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
+           {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
+           class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
             {% match item.image_path %}
             {% when Some with (img) %}
             <div class="h-48 bg-gray-100 overflow-hidden">
@@ -118,4 +132,82 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const grid = document.getElementById('recipes-grid');
+    const controls = document.getElementById('sort-controls');
+    const fieldSelect = document.getElementById('sort-field');
+    const dirBtn = document.getElementById('sort-dir');
+    const createdOption = document.getElementById('sort-created-option');
+
+    if (!grid) return;
+
+    let sortField = 'name';
+    let sortDir = 'asc';
+
+    // Hide Created option unless every recipe card has a creation date
+    const allRecipeCards = grid.querySelectorAll('[data-type="recipe"]');
+    const allHaveCreated = allRecipeCards.length > 0 &&
+        Array.from(allRecipeCards).every(el => el.hasAttribute('data-created'));
+    if (!allHaveCreated && createdOption) {
+        createdOption.remove();
+    }
+
+    // Show controls only when there are at least 2 recipe cards
+    const recipeCount = grid.querySelectorAll('[data-type="recipe"]').length;
+    if (recipeCount >= 2) {
+        controls.classList.remove('hidden');
+        controls.classList.add('flex');
+    }
+
+    function getValue(el) {
+        if (sortField === 'name') {
+            return (el.querySelector('h3')?.textContent ?? '').trim().toLowerCase();
+        }
+        const attr = sortField === 'modified' ? 'data-modified' : 'data-created';
+        const raw = el.getAttribute(attr);
+        if (raw === null) return null;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? null : n;
+    }
+
+    function applySort() {
+        const all = Array.from(grid.children);
+        const dirs = all.filter(el => el.dataset.type === 'directory');
+        const recipes = all.filter(el => el.dataset.type === 'recipe');
+        const others = all.filter(el => !el.dataset.type);
+
+        recipes.sort((a, b) => {
+            const av = getValue(a);
+            const bv = getValue(b);
+            if (av === null && bv === null) return 0;
+            if (av === null) return 1;
+            if (bv === null) return -1;
+            const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+
+        dirs.forEach(el => grid.appendChild(el));
+        recipes.forEach(el => grid.appendChild(el));
+        others.forEach(el => grid.appendChild(el));
+
+        dirBtn.textContent = sortDir === 'asc' ? '↑' : '↓';
+    }
+
+    fieldSelect.addEventListener('change', function () {
+        sortField = this.value;
+        // Default to desc for date sorts (newest first), asc for name
+        sortDir = sortField === 'name' ? 'asc' : 'desc';
+        applySort();
+    });
+
+    dirBtn.addEventListener('click', function () {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        applySort();
+    });
+})();
+</script>
 {% endblock %}

@@ -44,3 +44,10 @@ recipe-type-menu = Menua
 todays-menu-title = Gaurko menua
 todays-menu-from = Nondik
 todays-menu-view = Ikusi menua
+
+# Sort Controls
+sort-by = Ordenatu:
+sort-name = Izena
+sort-modified = Aldatua
+sort-created = Sortua
+sort-direction-toggle = Ordena aldatu

@@ -476,6 +476,8 @@ pub struct RecipeItem {
     pub tags: Vec<String>,
     pub image_path: Option<String>,
     pub is_menu: bool,
+    pub modified_at: Option<u64>,
+    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
