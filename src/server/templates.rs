@@ -3,6 +3,8 @@ use fluent_templates::Loader;
 use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
+use crate::server::language::FeatureFlags;
+
 /// Helper struct for translations in templates
 #[derive(Clone, Debug, Serialize)]
 pub struct Tr {
@@ -44,6 +46,7 @@ pub struct ErrorTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 pub struct TodaysMenu {
@@ -64,6 +67,7 @@ pub struct RecipesTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -82,6 +86,7 @@ pub struct RecipeTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 impl RecipeTemplate {
@@ -382,6 +387,7 @@ pub struct MenuTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -391,6 +397,7 @@ pub struct ShoppingListTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -408,6 +415,7 @@ pub struct PreferencesTemplate {
     pub sync_syncing: bool,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -419,6 +427,7 @@ pub struct PantryTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -432,6 +441,7 @@ pub struct EditTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Template)]
@@ -443,6 +453,7 @@ pub struct NewTemplate {
     pub filename: Option<String>,
     pub prefix: String,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 #[derive(Debug, Clone, Serialize)]

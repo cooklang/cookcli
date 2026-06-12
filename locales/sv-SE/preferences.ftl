@@ -21,3 +21,7 @@ pref-upload-aisle = Ladda upp redskap konfiguration
 pref-upload-pantry = Ladda upp skafferi konfiguration
 pref-upload-success = Konfiguration har laddats upp
 pref-upload-error = Fel vid uppladdning av konfiguration
+
+# Features
+pref-features = Funktioner
+pref-features-desc = Välj vilka funktioner som visas i navigeringsfältet.

@@ -21,3 +21,7 @@ pref-upload-aisle = Télécharger la configuration des allées
 pref-upload-pantry = Télécharger la configuration du garde-manger
 pref-upload-success = Configuration téléchargée avec succès
 pref-upload-error = Erreur lors du téléchargement de la configuration
+
+# Features
+pref-features = Fonctionnalités
+pref-features-desc = Choisissez les fonctionnalités à afficher dans la barre de navigation.

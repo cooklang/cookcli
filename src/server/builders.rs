@@ -5,6 +5,7 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
+use crate::server::language::FeatureFlags;
 use crate::server::templates::*;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -18,6 +19,7 @@ pub struct RecipesBuildInput<'a> {
     pub sub_path: Option<&'a str>,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
@@ -28,6 +30,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         sub_path,
         lang,
         static_mode,
+        features,
     } = input;
 
     let search_path = if let Some(p) = sub_path {
@@ -179,6 +182,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        features,
     })
 }
 
@@ -191,6 +195,7 @@ pub struct RecipeBuildInput<'a> {
     pub scale: f64,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
+    pub features: FeatureFlags,
 }
 
 /// Output of [`build_recipe_template`] — either a regular recipe or a menu.
@@ -209,6 +214,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         scale,
         lang,
         static_mode,
+        features,
     } = input;
 
     let recipe_path_buf = Utf8PathBuf::from(recipe_path);
@@ -238,6 +244,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             url_prefix,
             lang,
             static_mode,
+            features,
         )?;
         return Ok(RecipeBuildOutput::Menu(Box::new(template)));
     }
@@ -750,11 +757,13 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        features,
     };
 
     Ok(RecipeBuildOutput::Recipe(Box::new(template)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_menu_template_inner(
     path: String,
     scale: f64,
@@ -763,6 +772,7 @@ fn build_menu_template_inner(
     url_prefix: &str,
     lang: LanguageIdentifier,
     static_mode: bool,
+    features: FeatureFlags,
 ) -> Result<MenuTemplate> {
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
         .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
@@ -991,6 +1001,7 @@ fn build_menu_template_inner(
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        features,
     })
 }
 

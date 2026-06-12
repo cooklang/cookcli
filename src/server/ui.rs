@@ -1,3 +1,4 @@
+use crate::server::language::FeatureFlags;
 use crate::server::{templates::*, AppState};
 use axum::{
     extract::{Extension, Host, Path, Query, State},
@@ -15,6 +16,7 @@ fn error_page(
     lang: LanguageIdentifier,
     prefix: &str,
     msg: impl std::fmt::Display,
+    features: FeatureFlags,
 ) -> axum::response::Response {
     let template = ErrorTemplate {
         active: String::new(),
@@ -22,6 +24,7 @@ fn error_page(
         tr: Tr::new(lang),
         prefix: prefix.to_string(),
         static_mode: false,
+        features,
     };
     template.into_response()
 }
@@ -41,22 +44,25 @@ pub fn ui() -> Router<Arc<AppState>> {
 async fn recipes_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> axum::response::Response {
-    recipes_handler(state, None, lang).await
+    recipes_handler(state, None, lang, features).await
 }
 
 async fn recipes_directory(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> axum::response::Response {
-    recipes_handler(state, Some(path), lang).await
+    recipes_handler(state, Some(path), lang, features).await
 }
 
 async fn recipes_handler(
     state: Arc<AppState>,
     path: Option<String>,
     lang: LanguageIdentifier,
+    features: FeatureFlags,
 ) -> axum::response::Response {
     let input = crate::server::builders::RecipesBuildInput {
         base_path: &state.base_path,
@@ -64,12 +70,13 @@ async fn recipes_handler(
         sub_path: path.as_deref(),
         lang: lang.clone(),
         static_mode: false,
+        features,
     };
     match crate::server::builders::build_recipes_template(input) {
         Ok(template) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipes template: {:?}", e);
-            error_page(lang, &state.url_prefix, &e)
+            error_page(lang, &state.url_prefix, &e, features)
         }
     }
 }
@@ -84,6 +91,7 @@ async fn recipe_page(
     Query(query): Query<RecipeQuery>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> axum::response::Response {
     let scale = query.scale.unwrap_or(1.0);
 
@@ -95,6 +103,7 @@ async fn recipe_page(
         scale,
         lang: lang.clone(),
         static_mode: false,
+        features,
     };
 
     match crate::server::builders::build_recipe_template(input) {
@@ -104,7 +113,7 @@ async fn recipe_page(
         Ok(crate::server::builders::RecipeBuildOutput::Menu(template)) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipe template: {:?}", e);
-            error_page(lang, &state.url_prefix, &e)
+            error_page(lang, &state.url_prefix, &e, features)
         }
     }
 }
@@ -113,6 +122,7 @@ async fn edit_page(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> axum::response::Response {
     tracing::info!("Edit page requested for path: {}", path);
 
@@ -123,7 +133,12 @@ async fn edit_page(
         .all(|c| matches!(c, Utf8Component::Normal(_)))
     {
         tracing::error!("Invalid path: {path}");
-        return error_page(lang, &state.url_prefix, format!("Invalid path: {path}"));
+        return error_page(
+            lang,
+            &state.url_prefix,
+            format!("Invalid path: {path}"),
+            features,
+        );
     }
 
     let recipe_path = Utf8PathBuf::from(&path);
@@ -137,6 +152,7 @@ async fn edit_page(
                 lang,
                 &state.url_prefix,
                 format!("Recipe not found: {path}: {e}"),
+                features,
             );
         }
     };
@@ -149,6 +165,7 @@ async fn edit_page(
                 lang,
                 &state.url_prefix,
                 format!("Recipe has no file path: {path}"),
+                features,
             );
         }
     };
@@ -162,6 +179,7 @@ async fn edit_page(
                 lang,
                 &state.url_prefix,
                 format!("Failed to read recipe file: {e}"),
+                features,
             );
         }
     };
@@ -183,6 +201,7 @@ async fn edit_page(
         tr: crate::server::templates::Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        features,
     };
 
     template.into_response()
@@ -197,6 +216,7 @@ struct NewPageQuery {
 async fn new_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
     Query(query): Query<NewPageQuery>,
 ) -> impl askama_axum::IntoResponse {
     crate::server::templates::NewTemplate {
@@ -206,6 +226,7 @@ async fn new_page(
         filename: query.filename,
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        features,
     }
 }
 
@@ -432,18 +453,21 @@ async fn create_recipe(
 async fn shopping_list_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> impl askama_axum::IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        features,
     }
 }
 
 async fn pantry_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> Result<impl askama_axum::IntoResponse, StatusCode> {
     // Load pantry configuration
     let pantry_path = state.pantry_path.as_ref();
@@ -485,12 +509,14 @@ async fn pantry_page(
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        features,
     })
 }
 
 async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
 ) -> impl askama_axum::IntoResponse {
     #[cfg(feature = "sync")]
     let (sync_logged_in, sync_email, sync_syncing) = state.sync_status().await;
@@ -518,5 +544,6 @@ async fn preferences_page(
         sync_syncing,
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        features,
     }
 }
