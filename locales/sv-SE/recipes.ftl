@@ -36,6 +36,16 @@ meta-total-time = Total tid
 meta-servings = Portioner
 meta-difficulty = Svårighet
 meta-description = Beskrivning
+meta-nutrition = Näringsvärden
+meta-calories = Kalorier
+meta-protein = Protein
+meta-fat = Fett
+meta-saturated-fat = Mättat fett
+meta-carbohydrates = Kolhydrater
+meta-fiber = Fibrer
+meta-sugar = Socker
+meta-sodium = Natrium
+meta-serving-size = Portionsstorlek
 
 # Recipe Types
 recipe-type-menu = Meny
