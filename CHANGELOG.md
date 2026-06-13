@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.0](https://github.com/cooklang/cookcli/compare/v0.31.0...v0.32.0) (2026-06-12)
+
+
+### Features
+
+* add recipe sorting by name, modified date, and created date ([#356](https://github.com/cooklang/cookcli/issues/356)) ([633de0b](https://github.com/cooklang/cookcli/commit/633de0bbcb85dca2c0e97b6fce7d23624fd7eccf))
+* make shopping list and pantry nav links configurable via settings ([#357](https://github.com/cooklang/cookcli/issues/357)) ([e6bd4ca](https://github.com/cooklang/cookcli/commit/e6bd4ca528c9955a82b438cd83123a7f21af1efc))
+
 ## [0.31.0](https://github.com/cooklang/cookcli/compare/v0.30.0...v0.31.0) (2026-06-09)
 
 
