@@ -1,7 +1,7 @@
 # Plan — `cook server` authentication
 
 * Upstream reference: [cooklang/cookcli#312](https://github.com/cooklang/cookcli/issues/312).
-* Date: 2026-04-29 (revised 2026-04-30).
+* Date: 2026-04-29 (revised 2026-06-17).
 
 This plan is the single source of truth for implementing the
 authentication feature. Each phase ships code AND the tests that lock
@@ -70,7 +70,11 @@ Additional constraints:
   Recommend HTTPS via reverse proxy in the docs.
 - **Password brute-force**: no lockout in this first iteration; mention
   in the docs and apply a constant ~250 ms delay on the login handler
-  regardless of outcome.
+  regardless of outcome. The delay duration is injectable via the
+  `COOK_LOGIN_DELAY_MS` env var (default 250) so the constant-delay test
+  can assert against a known value and the rest of the suite can set it
+  to 0 — a test-only knob, mirroring `COOK_SESSION_FILE`, not a
+  documented user setting.
 
 ## 3. Architecture
 
@@ -135,12 +139,24 @@ pub struct ServerConfig {
     pub auth: Option<AuthConfig>,
 }
 
+/// Raw on-disk shape (TOML deserialization target). `password` is the
+/// raw prefixed string; it is parsed exactly once at startup.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthConfig {
     pub username: String,
-    pub password: String, // raw prefixed value, parsed at startup
+    pub password: String, // raw prefixed value, e.g. "bcrypt:$2b$.."
 }
 
+/// Parsed credentials held in `AuthState`. `build_state` produces this
+/// by running `Password::parse` at startup, so a malformed password
+/// fails fast (§11) and `verify()` never re-parses on the login path.
+#[derive(Debug, Clone)]
+pub struct Credentials {
+    pub username: String,
+    pub password: Password,
+}
+
+#[derive(Debug, Clone)]
 pub enum Password {
     Plain(String),
     Bcrypt(String),
@@ -191,7 +207,7 @@ pub struct AppState {
 
 pub struct AuthState {
     pub mode: AuthMode,
-    pub config: Option<AuthConfig>,    // None if no creds loaded
+    pub credentials: Option<Credentials>,  // parsed once at startup; None if no creds loaded
     pub sessions: Arc<RwLock<SessionStore>>,
 }
 
@@ -248,7 +264,10 @@ so a third `ReadOnly` variant is unnecessary.
   apps on the same origin.
 - **Invalidation**: expired sessions are purged on load and on each
   check (lazy). Logout removes the session server-side AND sends a
-  cookie with `Max-Age=0`.
+  cookie with `Max-Age=0`. Purge is lazy only — there is no background
+  GC, so a long-lived server can retain expired entries in the map and
+  file until the next load/check. Acceptable for single-user; noted as a
+  known limitation alongside rate-limiting.
 
 ### 3.5 Relationship to existing CookCloud sync
 
@@ -295,6 +314,22 @@ avoids adding `axum-extra` for one struct.
 
 The existing `validate_same_origin` ([src/server/ui.rs:884](../../src/server/ui.rs))
 moves into the auth module and is reused by the middleware.
+
+**Existing CORS layer.** `run()` mounts `CorsLayer::allow_origin("*")`
+([src/server/mod.rs:204](../../src/server/mod.rs)). This does not
+undermine cookie auth: browsers refuse to attach credentials (cookies)
+to a wildcard-origin CORS response, so a cross-origin
+`fetch(…, { credentials })` cannot ride an authenticated session. The
+write-path defense rests on `SameSite=Lax` + the Origin/Referer check,
+**not** on CORS. Left as-is; flagged so any future change to the CORS
+policy is evaluated against auth.
+
+**WebSocket caveat.** `/ws/lsp` is a GET upgrade, so the Origin/Referer
+check (gated on non-GET methods) does not fire on it — it is gated by
+session presence only. `SameSite=Lax` stops a cross-site script from
+attaching the session cookie to the handshake, which covers cross-site
+WebSocket hijacking (CSWSH) in practice. If the cookie's `SameSite` is
+ever relaxed, add an explicit Origin check to the WS upgrade path.
 
 ## 4. CLI surface
 
@@ -386,7 +421,7 @@ if a real script use case appears.
 | `/api/menus/*path` | GET | read | |
 | `/api/search` | GET | read | |
 | `/api/stats` | GET | read | |
-| `/api/reload` | GET / POST | read | refreshes the cache, no FS write — classified **read** |
+| `/api/reload` | GET / POST | read | no-op today (server re-reads disk per request; [src/server/handlers/recipes.rs:252](../../src/server/handlers/recipes.rs)) — classified **read** |
 | `/api/shopping_list` | POST | read | computes from request body, no mutation |
 | `/api/shopping_list/items` | GET | read | |
 | `/api/shopping_list/checked` | GET | read | |
@@ -437,26 +472,63 @@ Extend each `*Template` in `src/server/templates.rs` with a shared
 field:
 
 ```rust
-pub struct AuthContext {
-    pub auth_enabled: bool,        // true when AuthMode::Authenticated
-    pub signed_in: bool,
-    pub username: Option<String>,
+/// Single presentation-layer projection of auth state, modeled as an
+/// enum so illegal combinations are unrepresentable — there is no
+/// `signed_in` without auth on, and no `username` without being signed
+/// in. Built in ONE place (`AuthContext::new`) from the resolved
+/// `AuthMode` (§3.3) and the request's `AuthIdentity` (§3.6), so the
+/// projection cannot drift across handlers or templates.
+#[derive(Debug, Clone)]
+pub enum AuthContext {
+    /// Auth disabled (legacy): everything open, no sign-in affordance.
+    Disabled,
+    /// Auth on, request is anonymous: write UI hidden, "Sign in" shown.
+    Anonymous,
+    /// Auth on, request is authenticated.
+    SignedIn { username: String },
+}
+
+impl AuthContext {
+    pub fn new(mode: &AuthMode, identity: &AuthIdentity) -> Self {
+        match (mode, identity) {
+            (AuthMode::Disabled, _) => Self::Disabled,
+            (AuthMode::Authenticated, AuthIdentity::User { username }) => {
+                Self::SignedIn { username: username.clone() }
+            }
+            (AuthMode::Authenticated, AuthIdentity::Anonymous) => Self::Anonymous,
+        }
+    }
+
+    // Accessors consumed by Askama — templates stay readable, e.g.
+    // `{% if auth.can_write() %}` / `{% if auth.signed_in() %}`.
+    pub fn can_write(&self) -> bool { !matches!(self, Self::Anonymous) }
+    pub fn auth_enabled(&self) -> bool { !matches!(self, Self::Disabled) }
+    pub fn signed_in(&self) -> bool { matches!(self, Self::SignedIn { .. }) }
+    pub fn username(&self) -> Option<&str> {
+        match self {
+            Self::SignedIn { username } => Some(username),
+            _ => None,
+        }
+    }
 }
 ```
 
-Pass `AuthContext` as a direct field on each template struct (no
-shared trait — the repo doesn't have one and Askama makes that
-ergonomic). The risk of forgetting one struct is caught by the
-rendered-HTML tests in Phase 5.
+Pass `AuthContext` as a direct field on each template struct, built once
+via `AuthContext::new(...)` (no shared trait — the repo doesn't have one,
+and the accessor methods keep Askama ergonomic). Modeling the three
+states as an enum makes illegal combinations impossible by construction
+rather than relying on discipline; the Phase 5 rendered-HTML tests then
+only confirm each template is actually wired to the context, not police
+state consistency.
 
 ### 6.2 Template changes
 
 Concretely hide / adapt:
 
-- `templates/base.html` (nav): right-side `🔒 Sign in` link
-  (anonymous + auth_enabled) or `👤 username | Logout` (signed in).
-- `templates/recipes.html`: the `+ New` button → only when signed_in
-  or auth disabled.
+- `templates/base.html` (nav): right-side `🔒 Sign in` link (the
+  `Anonymous` state) or `👤 username | Logout` (the `SignedIn` state).
+- `templates/recipes.html`: the `+ New` button → only when
+  `can_write()` (signed in, or auth disabled).
 - `templates/recipe.html`: `Edit` link.
 - `templates/menu.html`: `Edit` link.
 - `templates/shopping_list.html`: `Clear list` button hidden;
@@ -500,10 +572,11 @@ locales.
 In [tests/common/mod.rs](../../tests/common/mod.rs):
 
 ```rust
-pub fn pick_free_port() -> u16 {
-    // Bind to :0, read the port, drop the listener, hand the port to
-    // the child process. Avoids flaky CI from hard-coded ports.
-}
+// No pick_free_port(): binding :0 in the parent, dropping the listener,
+// then handing the port to the child is a TOCTOU race — another process
+// can grab the freed port before the child rebinds, which shows up as
+// flaky CI under parallelism. Instead the child binds :0 itself (via
+// `--port 0`) and the parent reads the actual port from its stdout.
 
 pub struct ServerHandle {
     child: std::process::Child,
@@ -538,14 +611,31 @@ drafts. `COOK_SESSION_FILE` env var is set on the child to override
 the session-file path when tests need to share it across restarts.
 
 Implementation notes:
-- Wait loop: poll `GET /api/recipes` with a 5-second timeout. Bail
-  with the captured stderr if the server fails to start.
+- Port allocation: spawn with `--port 0` and parse the bound port from
+  the child's `Listening on http://<addr>` stdout line. This requires
+  `run()` to print `listener.local_addr()` **after** the bind — today it
+  prints the *requested* `addr` before binding
+  ([src/server/mod.rs:132](../../src/server/mod.rs)), so that print moves
+  below `TcpListener::bind` and uses the resolved address. The same
+  bind-`:0`-then-read-`local_addr` pattern already exists for the sync
+  OAuth callback ([src/server/handlers/sync.rs:80](../../src/server/handlers/sync.rs)).
+  (The in-process router of §7.4 would sidestep ports entirely.)
+- Wait loop: after reading the port, poll `GET /api/recipes` with a
+  5-second timeout. Bail with the captured stderr if the server fails to
+  start.
 - `Drop` kills the child (`child.kill()` + `child.wait()`); never leak
   processes between tests.
 - Default `--server-config` to a guaranteed-nonexistent path unless
   the caller already supplied one. Without this, the test would pick
   up the developer's `~/.config/cook/server.toml` (if any), making
   behavior non-hermetic.
+- Default `COOK_SESSION_FILE` to a temp path under the spawn's
+  `_temp_dirs` unless `with_session_path` was called. Same hermeticity
+  rationale as `--server-config`: otherwise tests read/write the
+  developer's real `~/.config/cook/server-sessions.json`.
+- Default `COOK_LOGIN_DELAY_MS` to `0` in `spawn()` so the login tax
+  doesn't slow the suite; the `login_constant_delay` test overrides it
+  with a distinctive value to assert the delay is applied to both paths.
 - HTTP client: `reqwest::blocking::Client` with `.cookie_store(true)`
   for session-aware tests. `reqwest` is already a dev-dependency.
 
@@ -576,10 +666,17 @@ cleanly, and the next phase starts from a green tree.
 
 1. Add `bcrypt` and `rand` crates to `Cargo.toml`.
 2. Create `src/server/auth/{mod.rs, config.rs}` with:
-   - `ServerConfig`, `AuthConfig`, `Password::parse`, `load_server_config`
+   - `ServerConfig`, `AuthConfig` (raw on-disk), `Credentials` (parsed),
+     `Password::parse`, `load_server_config`
    - `AuthMode` enum (`Authenticated` / `Disabled`)
-   - `resolve_mode(flag: bool, creds: Option<&AuthConfig>) -> Result<AuthMode>`
+   - `resolve_mode(flag: bool, creds: Option<&Credentials>) -> Result<AuthMode>`
      — returns an error when `flag && creds.is_none()`.
+   - `build_state` parses `AuthConfig` → `Credentials` via
+     `Password::parse` **only when `--enable-auth` is set**, so a
+     malformed password fails fast at startup and `verify()` never
+     re-parses. Without the flag the config is ignored (not parsed),
+     keeping a stale `server.toml` from ever crashing a legacy start
+     (§4.2, §1.3.2).
 3. Add `Context::server_config()` in `src/main.rs` (mirrors `aisle()`
    and `pantry()`).
 4. Extend `ServerArgs` with `--enable-auth` and `--server-config`
@@ -640,7 +737,8 @@ roundtrips through disk. Still no HTTP behavior change.
    - `GET /login` (renders the form; redirects home when mode is
      `Disabled`)
    - `POST /login` (verifies creds, creates session, sets cookie,
-     redirects to `next`; 250 ms constant delay regardless of outcome)
+     redirects to `next`; constant delay regardless of outcome, duration
+     from `COOK_LOGIN_DELAY_MS`, default 250 ms)
    - `POST /logout` (clears cookie + server-side session)
    - Pure helpers: `sanitize_next` (open-redirect guard),
      `build_session_cookie`, `clear_session_cookie`
@@ -649,8 +747,12 @@ roundtrips through disk. Still no HTTP behavior change.
    (`Server::HashPassword(HashPwArgs)` variant). Auto-detects non-TTY
    stdin via `IsTerminal` and skips the confirmation prompt then.
 
+4. Move the startup `Listening on` print **after** `TcpListener::bind`
+   and print the resolved `local_addr()`, so tests can spawn with
+   `--port 0` and discover the real port from stdout (see §7.2).
+
 Add the `tests/common/mod.rs` infrastructure described in §7.2
-(`pick_free_port`, `ServerHandle`, `ServerSpawn` builder).
+(`ServerHandle`, `ServerSpawn` builder, `--port 0` stdout parsing).
 
 **Tests:**
 
@@ -658,7 +760,7 @@ Add the `tests/common/mod.rs` infrastructure described in §7.2
 
 | Test | Verifies |
 |---|---|
-| `sanitize_next_basic` | local path kept; absolute URL / protocol-relative / backslash-escape rejected; URL-encoded local path decoded; `None` → fallback `<prefix>/` |
+| `sanitize_next_basic` | local path kept; absolute URL / protocol-relative / backslash-escape rejected; URL-encoded local path decoded; **encoded protocol-relative `%2F%2Fevil.com` rejected (decode-then-validate ordering)**; `None` → fallback `<prefix>/` |
 | `sanitize_next_under_prefix` | local path under url_prefix kept unchanged |
 | `build_session_cookie_attributes` | output contains `HttpOnly`, `SameSite=Lax`, the right `Path` (with and without prefix), `Max-Age=604800` |
 | `clear_session_cookie_max_age_zero` | sanity |
@@ -738,7 +840,7 @@ the API-vs-UI branch works without `OriginalUri`.
 |---|---|
 | `login_good_creds_sets_cookie_and_redirects` | POST `/login` (Origin OK) → 303 + `Set-Cookie: cook_session=…; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`; `next=/edit/foo` honored |
 | `login_bad_creds_redirect_with_error` | bad password → 303 to `/login?error=…&next=…`, no `Set-Cookie` |
-| `login_constant_delay` | bad creds AND unknown user both ≥250 ms (single test, both paths) |
+| `login_constant_delay` | with `COOK_LOGIN_DELAY_MS` set to a distinctive value (e.g. 400), bad creds AND unknown user both take ≥ that value (single test, both paths) — deterministic, independent of machine speed |
 | `login_csrf_blocks` | POST `/login` without Origin OR cross-origin → 403 |
 | `unknown_session_cookie_is_anonymous` | injected `cook_session=garbage` → PUT 401 |
 | `next_open_redirect_blocked` | `next=//evil.com` → `Location: /` |
@@ -802,6 +904,12 @@ Add a one-line pointer in the README server section.
 `CLAUDE.md` updates are a follow-up if the implementation diverges
 from this plan.
 
+**Tests (integration):**
+
+| Test | Verifies |
+|---|---|
+| `server_help_lists_auth_flags` | `cook server --help` lists `--enable-auth` and `--server-config`, and `cook server hash-password --help` resolves. Help text is generated from clap, so this stays in sync for free and catches an accidental flag rename/removal — a regression guard prose docs can't provide. |
+
 **Checkpoint:** docs published; feature shippable.
 
 ## 9. Backward compatibility
@@ -823,8 +931,9 @@ from this plan.
 - [ ] bcrypt cost ≥ 12 in `hash-password` (configurable later).
 - [ ] Mandatory console warning at startup when the resolved algorithm
       is `plain`.
-- [ ] Constant delay on `POST /login` (~250 ms) regardless of whether
-      the user exists.
+- [ ] Constant delay on `POST /login` (default ~250 ms, overridable via
+      `COOK_LOGIN_DELAY_MS` for tests) regardless of whether the user
+      exists.
 - [ ] Cookie `HttpOnly`, `SameSite=Lax`, no `Secure` by default
       (documented).
 - [ ] Cookie `Path` aligned with `state.url_prefix` (see §3.4).
@@ -854,7 +963,7 @@ The feature is shippable when:
       any warning.
 - [ ] `server.toml` with a password missing the prefix (e.g. bare
       `$2b...` or bare `mypassword`) fails fast at startup with a
-      clear error.
+      clear error (when `--enable-auth` is passed).
 - [ ] With creds in `server.toml` + `--enable-auth`, web login works,
       and the cookie survives both server AND browser restarts (TTL 7d).
 - [ ] Every route in the §5.1 / §5.2 tables returns 401 (API) / login
