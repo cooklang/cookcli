@@ -408,9 +408,10 @@ pub async fn get_menu(
     }))
 }
 
-/// Find the menu whose section matches today's date, using cooklang-find's
-/// `list_menus_for_date`. Returns the first match with menu name, path, and a
-/// human-friendly date for display.
+/// Find the first menu with a section matching today's date, using
+/// cooklang-find's `list_menus_for_date`. A section header containing the date
+/// anywhere (e.g. `= Day 1 (2026-06-24)` or `= 2026-06-24 Dinner`) counts as a
+/// match. Returns the menu name, path, and a human-friendly date for display.
 pub fn find_todays_menu(
     base_path: &camino::Utf8Path,
 ) -> Option<crate::server::templates::TodaysMenu> {
@@ -467,6 +468,22 @@ mod tests {
         let dir = camino::Utf8Path::from_path(temp.path()).unwrap();
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let content = format!("= Day 1 ({today})\n\nBreakfast:\n- @eggs{{}}\n");
+        fs::write(dir.join("week.menu"), content).unwrap();
+
+        let result = find_todays_menu(dir);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().menu_path, "week");
+    }
+
+    #[test]
+    fn find_todays_menu_matches_bare_date_header() {
+        // The library matches the date as a substring, so a header without
+        // parentheses (e.g. "= 2026-06-24 Dinner") also counts as today.
+        let temp = TempDir::new().unwrap();
+        let dir = camino::Utf8Path::from_path(temp.path()).unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let content = format!("= {today} Dinner\n\nBreakfast:\n- @eggs{{}}\n");
         fs::write(dir.join("week.menu"), content).unwrap();
 
         let result = find_todays_menu(dir);
