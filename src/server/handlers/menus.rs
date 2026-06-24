@@ -408,48 +408,35 @@ pub async fn get_menu(
     }))
 }
 
-/// Scan all menus for a section whose date matches today.
-/// Returns the first match with menu name, path, and formatted date.
+/// Find the menu whose section matches today's date, using cooklang-find's
+/// `list_menus_for_date`. Returns the first match with menu name, path, and a
+/// human-friendly date for display.
 pub fn find_todays_menu(
     base_path: &camino::Utf8Path,
-    tree: &RecipeTree,
 ) -> Option<crate::server::templates::TodaysMenu> {
     let now = chrono::Local::now();
     let today = now.format("%Y-%m-%d").to_string();
     let today_display = now.format("%A, %B %-d").to_string();
 
-    let mut menus = Vec::new();
-    collect_menus(tree, base_path, &mut menus);
+    let menus = cooklang_find::list_menus_for_date(&[base_path], &today).unwrap_or_default();
+    let entry = menus.first()?;
 
-    for menu_item in &menus {
-        let recipe_path = camino::Utf8PathBuf::from(&menu_item.path);
-        let entry = match cooklang_find::get_recipe(vec![base_path], &recipe_path) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+    let full_path = entry.path()?;
+    let relative = full_path
+        .strip_prefix(base_path)
+        .unwrap_or(full_path.as_ref());
+    let menu_name = entry.name().clone().unwrap_or_else(|| relative.to_string());
+    let menu_path = relative
+        .as_str()
+        .trim_end_matches(".cook")
+        .trim_end_matches(".menu")
+        .to_string();
 
-        let recipe = match crate::util::parse_recipe_from_entry(&entry, 1.0) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-
-        for section in &recipe.sections {
-            let date = section.name.as_deref().and_then(extract_date);
-            if date.as_deref() == Some(today.as_str()) {
-                return Some(crate::server::templates::TodaysMenu {
-                    menu_name: menu_item.name.clone(),
-                    menu_path: menu_item
-                        .path
-                        .trim_end_matches(".cook")
-                        .trim_end_matches(".menu")
-                        .to_string(),
-                    date_display: today_display,
-                });
-            }
-        }
-    }
-
-    None
+    Some(crate::server::templates::TodaysMenu {
+        menu_name,
+        menu_path,
+        date_display: today_display,
+    })
 }
 
 /// Internal representation of a line item while parsing.
@@ -466,4 +453,37 @@ enum LineItem {
         quantity: Option<String>,
         unit: Option<String>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn find_todays_menu_matches_section_with_today() {
+        let temp = TempDir::new().unwrap();
+        let dir = camino::Utf8Path::from_path(temp.path()).unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let content = format!("= Day 1 ({today})\n\nBreakfast:\n- @eggs{{}}\n");
+        fs::write(dir.join("week.menu"), content).unwrap();
+
+        let result = find_todays_menu(dir);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().menu_path, "week");
+    }
+
+    #[test]
+    fn find_todays_menu_returns_none_when_no_section_matches_today() {
+        let temp = TempDir::new().unwrap();
+        let dir = camino::Utf8Path::from_path(temp.path()).unwrap();
+        let content = "= Day 1 (1999-01-01)\n\nBreakfast:\n- @eggs{}\n";
+        fs::write(dir.join("week.menu"), content).unwrap();
+
+        let result = find_todays_menu(dir);
+
+        assert!(result.is_none());
+    }
 }

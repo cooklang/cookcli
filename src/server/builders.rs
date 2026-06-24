@@ -139,7 +139,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     });
 
     let todays_menu = if sub_path.is_none() {
-        crate::server::handlers::find_todays_menu(base_path, &tree)
+        crate::server::handlers::find_todays_menu(base_path)
     } else {
         None
     };
