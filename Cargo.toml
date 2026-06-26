@@ -43,7 +43,7 @@ cooklang-find = { version = "0.6" }
 cooklang-import = "0.9.3"
 cooklang-sync-client = { version = "0.4.11", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
-cooklang-language-server = "0.2.1"
+cooklang-language-server = "0.2.3"
 cooklang-reports = { version = "0.2.2" }
 directories = "6"
 fluent = "0.16"
