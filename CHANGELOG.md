@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.1](https://github.com/cooklang/cookcli/compare/v0.32.0...v0.32.1) (2026-06-26)
+
+
+### Miscellaneous Chores
+
+* release 0.32.1 ([bb6471f](https://github.com/cooklang/cookcli/commit/bb6471f0f845db2bf9f378ccf5e294937e47b4bc))
+
 ## [0.32.0](https://github.com/cooklang/cookcli/compare/v0.31.0...v0.32.0) (2026-06-12)
 
 
