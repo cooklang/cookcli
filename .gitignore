@@ -17,6 +17,7 @@ playwright/.cache/
 # Editor directories and files
 .vscode/
 .idea/
+*.iml
 
 # Temporary files
 *.tmp
@@ -25,3 +26,6 @@ playwright/.cache/
 .shopping_list.txt.bak
 .shopping-list
 .shopping-checked
+
+# Claude local settings
+.claude/settings.local.json
