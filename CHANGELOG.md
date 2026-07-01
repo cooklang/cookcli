@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/cooklang/cookcli/compare/v0.32.1...v0.33.0) (2026-07-01)
+
+
+### Features
+
+* **server:** respect prefers-color-scheme for selecting theme ([#364](https://github.com/cooklang/cookcli/issues/364)) ([cf94de9](https://github.com/cooklang/cookcli/commit/cf94de9bb8ece158594da33d5d7d759d483f4648))
+
 ## [0.32.1](https://github.com/cooklang/cookcli/compare/v0.32.0...v0.32.1) (2026-06-26)
 
 
