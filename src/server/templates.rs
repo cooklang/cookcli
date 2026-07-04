@@ -498,6 +498,19 @@ pub struct RecipeData {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct NutritionData {
+    pub calories: Option<String>,
+    pub protein: Option<String>,
+    pub fat: Option<String>,
+    pub saturated_fat: Option<String>,
+    pub carbohydrates: Option<String>,
+    pub fiber: Option<String>,
+    pub sugar: Option<String>,
+    pub sodium: Option<String>,
+    pub serving_size: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct RecipeMetadata {
     pub servings: Option<String>,
     pub time: Option<String>,
@@ -512,6 +525,7 @@ pub struct RecipeMetadata {
     pub source: Option<String>,
     pub source_url: Option<String>,
     pub custom: Vec<(String, String)>,
+    pub nutrition: Option<NutritionData>,
 }
 
 #[derive(Debug, Clone, Serialize)]
