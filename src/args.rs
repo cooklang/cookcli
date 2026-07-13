@@ -30,11 +30,15 @@
 
 use clap::{Parser, Subcommand};
 
+#[cfg(feature = "import")]
+use crate::import;
+#[cfg(feature = "lsp")]
+use crate::lsp;
+#[cfg(feature = "server")]
+use crate::server;
 #[cfg(feature = "self-update")]
 use crate::update;
-use crate::{
-    build, doctor, import, lsp, pantry, recipe, report, search, seed, server, shopping_list,
-};
+use crate::{build, doctor, pantry, recipe, report, search, seed, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -85,6 +89,7 @@ pub enum Command {
         alias = "s",
         long_about = "Run a web server to browse and interact with your recipe collection"
     )]
+    #[cfg(feature = "server")]
     Server(server::ServerArgs),
 
     /// Build artifacts from your recipe collection
@@ -159,6 +164,7 @@ pub enum Command {
         alias = "i",
         long_about = "Import recipes from websites and automatically convert them to Cooklang format"
     )]
+    #[cfg(feature = "import")]
     Import(import::ImportArgs),
 
     /// Generate custom reports from recipes using templates
@@ -231,6 +237,7 @@ pub enum Command {
     #[command(
         long_about = "Start the Language Server Protocol server for Cooklang editor integration"
     )]
+    #[cfg(feature = "lsp")]
     Lsp(lsp::LspArgs),
 
     /// Sign in to CookCloud

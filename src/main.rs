@@ -37,17 +37,20 @@ use clap::Parser;
 // commands
 mod build;
 mod doctor;
+#[cfg(feature = "import")]
 mod import;
 #[cfg(feature = "sync")]
 mod login;
 #[cfg(feature = "sync")]
 mod logout;
+#[cfg(feature = "lsp")]
 mod lsp;
 mod pantry;
 mod recipe;
 mod report;
 mod search;
 mod seed;
+#[cfg(feature = "server")]
 mod server;
 mod shopping_list;
 #[cfg(feature = "sync")]
@@ -74,15 +77,18 @@ pub fn main() -> Result<()> {
 
     match args.command {
         Command::Recipe(args) => recipe::run(&ctx, args),
+        #[cfg(feature = "server")]
         Command::Server(args) => server::run(ctx, args),
         Command::Build(args) => build::run(&ctx, args),
         Command::ShoppingList(args) => shopping_list::run(&ctx, args),
         Command::Seed(args) => seed::run(&ctx, args),
         Command::Search(args) => search::run(&ctx, args),
+        #[cfg(feature = "import")]
         Command::Import(args) => import::run(&ctx, args),
         Command::Report(args) => report::run(&ctx, args),
         Command::Doctor(args) => doctor::run(&ctx, args),
         Command::Pantry(args) => pantry::run(&ctx, args),
+        #[cfg(feature = "lsp")]
         Command::Lsp(args) => lsp::run(&ctx, args),
         #[cfg(feature = "sync")]
         Command::Login(args) => login::run(&ctx, args),
@@ -134,6 +140,7 @@ impl Context {
 fn configure_context() -> Result<Context> {
     let args = CliArgs::parse();
     let base_path = match args.command {
+        #[cfg(feature = "server")]
         Command::Server(ref server_args) => server_args
             .get_base_path()
             .unwrap_or_else(|| Utf8PathBuf::from(".")),

@@ -11,9 +11,37 @@ keywords = ["cooklang", "recipes", "cli", "cooking"]
 categories = ["command-line-utilities"]
 
 [features]
-default = ["self-update", "sync"]
-self-update = ["dep:self_update"]
-sync = ["dep:cooklang-sync-client", "dep:uuid", "dep:tokio-util", "dep:base64", "dep:libsqlite3-sys", "dep:thiserror"]
+default = ["self-update", "sync", "server", "import", "lsp"]
+
+# `cook server` - the axum web UI. Pulls in the whole HTTP server stack.
+server = [
+    "dep:axum",
+    "dep:askama_axum",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:notify",
+    "dep:notify-debouncer-full",
+    "dep:tokio-stream",
+    "dep:futures-util",
+    "dep:open",
+]
+# `cook import` - scrape a recipe from a website.
+import = ["dep:cooklang-import", "dep:reqwest"]
+# `cook lsp` - language server for editor integrations.
+lsp = ["dep:cooklang-language-server", "dep:tower-lsp"]
+
+self-update = ["dep:self_update", "dep:reqwest"]
+# The sync loop only runs inside the web server, so sync implies server.
+sync = [
+    "server",
+    "dep:cooklang-sync-client",
+    "dep:uuid",
+    "dep:tokio-util",
+    "dep:base64",
+    "dep:libsqlite3-sys",
+    "dep:thiserror",
+    "dep:reqwest",
+]
 
 [lib]
 name = "cookcli"
@@ -32,8 +60,8 @@ anstyle = "1"
 anstyle-yansi = "2"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
-askama_axum = "0.4"
-axum = { version = "0.7", features = ["ws"] }
+askama_axum = { version = "0.4", optional = true }
+axum = { version = "0.7", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
@@ -44,22 +72,22 @@ base64 = { version = "0.22", optional = true }
 # depend on cooklang with default features. Declare it where it is actually used.
 cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.6" }
-cooklang-import = "0.9.3"
+cooklang-import = { version = "0.9.3", optional = true }
 cooklang-sync-client = { version = "0.4.11", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
-cooklang-language-server = "0.2.3"
+cooklang-language-server = { version = "0.2.3", optional = true }
 cooklang-reports = { version = "0.2.2" }
 directories = "6"
 fluent = "0.16"
-futures-util = "0.3"
+futures-util = { version = "0.3", optional = true }
 fluent-templates = "0.10"
 humantime = "2"
 mime_guess = "2.0"
-notify = "8"
-notify-debouncer-full = "0.7"
-open = "5.3"
+notify = { version = "8", optional = true }
+notify-debouncer-full = { version = "0.7", optional = true }
+open = { version = "5.3", optional = true }
 regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 rust-embed = "8"
 self_update = { version = "0.41", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "rustls"], optional = true }
 serde = "1.0"
@@ -68,13 +96,13 @@ serde_yaml = "0.9"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = { version = "0.7", optional = true }
 thiserror = { version = "2", optional = true }
 toml = "0.9.5"
-tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.5", features = ["fs", "trace", "cors", "normalize-path"] }
-tower-lsp = "0.20"
+tower = { version = "0.5", features = ["util"], optional = true }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
+tower-lsp = { version = "0.20", optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unic-langid = "0.9"

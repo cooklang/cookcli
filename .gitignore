@@ -25,3 +25,6 @@ playwright/.cache/
 .shopping_list.txt.bak
 .shopping-list
 .shopping-checked
+
+# insta rejects pending snapshots as .snap.new
+*.snap.new

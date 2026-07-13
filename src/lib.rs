@@ -5,17 +5,20 @@ use camino::{Utf8Path, Utf8PathBuf};
 // Commands - make them available as public modules
 pub mod build;
 pub mod doctor;
+#[cfg(feature = "import")]
 pub mod import;
 #[cfg(feature = "sync")]
 pub mod login;
 #[cfg(feature = "sync")]
 pub mod logout;
+#[cfg(feature = "lsp")]
 pub mod lsp;
 pub mod pantry;
 pub mod recipe;
 pub mod report;
 pub mod search;
 pub mod seed;
+#[cfg(feature = "server")]
 pub mod server;
 pub mod shopping_list;
 #[cfg(feature = "sync")]

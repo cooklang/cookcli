@@ -213,16 +213,27 @@ cargo build --release
 # Binary will be at target/release/cook
 ```
 
-#### Building without Self-Update
+#### Cargo features
 
-By default, CookCLI includes a self-update feature. To build without this feature (useful for CI/CD pipelines, package managers, or environments where auto-update is not desired):
+The optional commands are behind Cargo features, all enabled by default. Turning them off cuts the dependency graph roughly in half (412 crates → 225) and the binary from ~23 MB to ~9 MB — useful for CI/CD, package managers, or small machines where you only want the core recipe tooling.
+
+| Feature | Command | Notes |
+|---|---|---|
+| `server` | `cook server` | Web UI (axum + tower). `cook build` still works without it. |
+| `import` | `cook import` | Scrape a recipe from a website. |
+| `lsp` | `cook lsp` | Language server for editor integrations. |
+| `sync` | `cook login` / `cook logout` | Recipe sync. Implies `server` — the sync loop runs inside it. |
+| `self-update` | `cook update` | In-place binary upgrade. |
 
 ```bash
-# Build without self-update feature
+# Core CLI only: recipe, shopping-list, search, doctor, pantry, report, build, seed
 cargo build --release --no-default-features
 
-# This disables the 'self-update' feature flag while keeping all other functionality
+# Core plus the web server
+cargo build --release --no-default-features --features server
 ```
+
+Everything not listed above — parsing, scaling, shopping lists, search, pantry, reports and the static site builder — is always compiled in.
 
 ### Development Setup
 
