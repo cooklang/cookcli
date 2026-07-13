@@ -164,8 +164,33 @@ brew install cookcli
 If you have Rust installed:
 
 ```bash
-cargo install cookcli
+cargo install cookcli --locked
 ```
+
+`--locked` builds against the dependency versions we tested and released with, rather than re-resolving to the newest compatible ones.
+
+Note that this compiles CookCLI and all its dependencies from source, which needs a few GB of RAM and disk. If you are on a Raspberry Pi, an Armbian board, or anything else memory-constrained, prefer the [prebuilt binaries](https://github.com/cooklang/CookCLI/releases) — we publish `aarch64` and `armv7` Linux builds.
+
+<details>
+<summary>Building on a low-memory single-board computer</summary>
+
+`cargo install` places its build directory under `$TMPDIR`. On Armbian, `/tmp` is mounted on zram — a RAM-backed device sized to half your RAM — so a multi-gigabyte build will exhaust memory and fail, sometimes with a confusing `failed to load bitcode of module ...` error.
+
+Point the build somewhere on real storage:
+
+```bash
+CARGO_TARGET_DIR=~/.cache/cookcli-build cargo install cookcli --locked
+```
+
+If memory is still tight, disable link-time optimisation for the build:
+
+```bash
+CARGO_PROFILE_RELEASE_LTO=false \
+CARGO_TARGET_DIR=~/.cache/cookcli-build \
+  cargo install cookcli --locked
+```
+
+</details>
 
 ### Build from Source
 
