@@ -124,5 +124,6 @@ regex = "1"
 
 [profile.release]
 strip = true
-lto = true
-codegen-units = 1
+# Fat LTO with codegen-units = 1 needs a multi-GB heap to link this dependency
+# graph, which OOMs on low-memory ARM boards. See #366.
+lto = "thin"
