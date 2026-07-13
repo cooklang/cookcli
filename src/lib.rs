@@ -18,8 +18,11 @@ pub mod search;
 pub mod seed;
 pub mod server;
 pub mod shopping_list;
+#[cfg(feature = "sync")]
+pub mod sync;
 #[cfg(feature = "self-update")]
 pub mod update;
+pub mod web;
 
 // Other modules
 pub mod args;

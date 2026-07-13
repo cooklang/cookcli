@@ -1,10 +1,10 @@
 use crate::build::links::relative_prefix;
 use crate::build::writer::write_html;
-use crate::server::builders::{
+use crate::web::builders::{
     build_recipe_template, build_recipes_template, RecipeBuildInput, RecipeBuildOutput,
     RecipesBuildInput,
 };
-use crate::server::language::FeatureFlags;
+use crate::web::language::FeatureFlags;
 use anyhow::Result;
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};

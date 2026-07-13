@@ -50,8 +50,11 @@ mod search;
 mod seed;
 mod server;
 mod shopping_list;
+#[cfg(feature = "sync")]
+mod sync;
 #[cfg(feature = "self-update")]
 mod update;
+mod web;
 
 // other modules
 mod args;

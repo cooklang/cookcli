@@ -3,7 +3,7 @@ use fluent_templates::Loader;
 use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
-use crate::server::language::FeatureFlags;
+use crate::web::language::FeatureFlags;
 
 /// Helper struct for translations in templates
 #[derive(Clone, Debug, Serialize)]
@@ -18,7 +18,7 @@ impl Tr {
     }
 
     pub fn t(&self, key: &str) -> String {
-        crate::server::i18n::LOCALES.lookup(&self.lang, key)
+        crate::web::i18n::LOCALES.lookup(&self.lang, key)
     }
 
     pub fn lang_string(&self) -> String {

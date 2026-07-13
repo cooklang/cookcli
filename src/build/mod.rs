@@ -4,8 +4,8 @@ mod renderer;
 mod sitemap;
 mod writer;
 
-use crate::server::language::{parse_supported_language, EN_US};
 use crate::util::resolve_to_absolute_path;
+use crate::web::language::{parse_supported_language, EN_US};
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
