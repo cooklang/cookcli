@@ -71,12 +71,12 @@ base64 = { version = "0.22", optional = true }
 # via feature unification from cooklang-language-server / cooklang-reports, which
 # depend on cooklang with default features. Declare it where it is actually used.
 cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
-cooklang-find = { version = "0.6" }
+cooklang-find = { version = "0.6.1", default-features = false }
 cooklang-import = { version = "0.9.3", optional = true }
 cooklang-sync-client = { version = "0.4.11", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = { version = "0.2.3", optional = true }
-cooklang-reports = { version = "0.2.2" }
+cooklang-reports = { version = "0.5.1" }
 directories = "6"
 fluent = "0.16"
 futures-util = { version = "0.3", optional = true }
