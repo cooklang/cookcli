@@ -115,7 +115,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
                         sep,
                         reference.components.join(&sep),
                         sep,
-                        &igr.name
+                        igr.name
                     )
                 } else {
                     igr.name.clone()
