@@ -176,7 +176,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         );
     }
 
-    println!("Serving recipe files from: {:?}", &state.base_path);
+    println!("Serving recipe files from: {:?}", state.base_path);
 
     // Maximum request body size: 1MB (reasonable for recipe files)
     const MAX_BODY_SIZE: usize = 1024 * 1024;
