@@ -1,5 +1,5 @@
-use crate::server::sync::{self, device_flow, PendingDeviceFlow, SyncSession};
 use crate::server::AppState;
+use crate::sync::{self, device_flow, PendingDeviceFlow, SyncSession};
 use axum::{extract::State, http::StatusCode, Json};
 use serde::Serialize;
 use std::sync::Arc;

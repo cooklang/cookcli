@@ -5,8 +5,8 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
-use crate::server::language::FeatureFlags;
-use crate::server::templates::*;
+use crate::web::language::FeatureFlags;
+use crate::web::templates::*;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fluent_templates::Loader;
@@ -139,7 +139,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     });
 
     let todays_menu = if sub_path.is_none() {
-        crate::server::handlers::find_todays_menu(base_path)
+        crate::web::menus::find_todays_menu(base_path)
     } else {
         None
     };
@@ -164,7 +164,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     let current_name = if let Some(p) = sub_path {
         p.split('/').next_back().unwrap_or("Recipes").to_string()
     } else {
-        crate::server::i18n::LOCALES.lookup(&lang, "recipes-title")
+        crate::web::i18n::LOCALES.lookup(&lang, "recipes-title")
     };
 
     let new_recipe_url = match sub_path {
@@ -389,7 +389,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     let mut step_ingredients = Vec::new();
 
                     for item in &step.items {
-                        use crate::server::templates::{StepIngredient, StepItem};
+                        use crate::web::templates::{StepIngredient, StepItem};
                         use cooklang::Item;
 
                         match item {
@@ -511,7 +511,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
         // Only add sections that have items (steps or notes)
         if !section_items.is_empty() {
-            use crate::server::templates::RecipeSection;
+            use crate::web::templates::RecipeSection;
 
             // Collect and group ingredients used in this section
             let mut section_grouped_ingredients: std::collections::HashMap<
@@ -812,7 +812,7 @@ fn build_menu_template_inner(
                 let mut current_text = String::new();
 
                 for item in &step.items {
-                    use crate::server::templates::MenuSectionItem;
+                    use crate::web::templates::MenuSectionItem;
                     use cooklang::Item;
 
                     match item {

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Args;
 
-use crate::server::sync::SyncSession;
+use crate::sync::SyncSession;
 use crate::Context;
 
 #[derive(Debug, Args)]

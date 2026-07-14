@@ -1,4 +1,6 @@
+#[cfg(feature = "server")]
 use accept_language::parse;
+#[cfg(feature = "server")]
 use axum::{
     extract::{Request, State},
     http::{header, HeaderMap},
@@ -38,6 +40,7 @@ impl Default for FeatureFlags {
 /// Parse feature flag cookies from request headers.
 /// Absent cookie → feature enabled (default true).
 /// Cookie value "0" → disabled. Any other value → enabled.
+#[cfg(feature = "server")]
 pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
     let mut flags = FeatureFlags::default();
 
@@ -78,6 +81,7 @@ pub fn parse_supported_language(s: &str) -> Option<LanguageIdentifier> {
 /// 1. Check for 'lang' cookie
 /// 2. Parse Accept-Language header
 /// 3. Fall back to EN_US
+#[cfg(feature = "server")]
 pub fn get_preferred_language(headers: &HeaderMap) -> LanguageIdentifier {
     // First, check for language cookie
     if let Some(cookie_header) = headers.get(header::COOKIE) {
@@ -130,6 +134,7 @@ pub fn get_preferred_language(headers: &HeaderMap) -> LanguageIdentifier {
 }
 
 /// Middleware to inject language into request extensions
+#[cfg(feature = "server")]
 pub async fn language_middleware(mut req: Request, next: Next) -> Response {
     let lang = get_preferred_language(req.headers());
     req.extensions_mut().insert(lang);
@@ -139,6 +144,7 @@ pub async fn language_middleware(mut req: Request, next: Next) -> Response {
 /// Middleware that reads feature flag cookies, injects them as a request
 /// extension, and refreshes the cookie expiry on every response.
 /// Takes the URL prefix as state so Set-Cookie headers use the correct path.
+#[cfg(feature = "server")]
 pub async fn features_middleware(
     State(url_prefix): State<String>,
     mut req: Request,
@@ -177,7 +183,7 @@ pub async fn features_middleware(
     response
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
 

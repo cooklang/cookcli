@@ -27,9 +27,9 @@ pub fn write_bytes(output_root: &Utf8Path, relpath: &Utf8Path, bytes: &[u8]) -> 
 /// Copy every file in the rust-embed `StaticFiles` to `output_root/static/<path>`.
 pub fn copy_static_assets(output_root: &Utf8Path) -> Result<usize> {
     let mut count = 0;
-    for path in crate::server::StaticFiles::iter() {
+    for path in crate::web::StaticFiles::iter() {
         let rel = Utf8Path::new("static").join(path.as_ref());
-        let file = crate::server::StaticFiles::get(path.as_ref())
+        let file = crate::web::StaticFiles::get(path.as_ref())
             .with_context(|| format!("Embedded file vanished: {path}"))?;
         write_bytes(output_root, &rel, &file.data)?;
         count += 1;

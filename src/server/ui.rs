@@ -1,5 +1,6 @@
-use crate::server::language::FeatureFlags;
-use crate::server::{templates::*, AppState};
+use crate::server::AppState;
+use crate::web::language::FeatureFlags;
+use crate::web::templates::*;
 use axum::{
     extract::{Extension, Host, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
@@ -64,7 +65,7 @@ async fn recipes_handler(
     lang: LanguageIdentifier,
     features: FeatureFlags,
 ) -> axum::response::Response {
-    let input = crate::server::builders::RecipesBuildInput {
+    let input = crate::web::builders::RecipesBuildInput {
         base_path: &state.base_path,
         url_prefix: &state.url_prefix,
         sub_path: path.as_deref(),
@@ -72,7 +73,7 @@ async fn recipes_handler(
         static_mode: false,
         features,
     };
-    match crate::server::builders::build_recipes_template(input) {
+    match crate::web::builders::build_recipes_template(input) {
         Ok(template) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipes template: {:?}", e);
@@ -95,7 +96,7 @@ async fn recipe_page(
 ) -> axum::response::Response {
     let scale = query.scale.unwrap_or(1.0);
 
-    let input = crate::server::builders::RecipeBuildInput {
+    let input = crate::web::builders::RecipeBuildInput {
         base_path: &state.base_path,
         url_prefix: &state.url_prefix,
         recipe_path: &path,
@@ -106,11 +107,9 @@ async fn recipe_page(
         features,
     };
 
-    match crate::server::builders::build_recipe_template(input) {
-        Ok(crate::server::builders::RecipeBuildOutput::Recipe(template)) => {
-            template.into_response()
-        }
-        Ok(crate::server::builders::RecipeBuildOutput::Menu(template)) => template.into_response(),
+    match crate::web::builders::build_recipe_template(input) {
+        Ok(crate::web::builders::RecipeBuildOutput::Recipe(template)) => template.into_response(),
+        Ok(crate::web::builders::RecipeBuildOutput::Menu(template)) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipe template: {:?}", e);
             error_page(lang, &state.url_prefix, &e, features)
@@ -192,13 +191,13 @@ async fn edit_page(
         .replace(".cook", "")
         .replace(".menu", "");
 
-    let template = crate::server::templates::EditTemplate {
+    let template = crate::web::templates::EditTemplate {
         active: "recipes".to_string(),
         recipe_name,
         recipe_path: path,
         content,
         base_path: state.base_path.to_string(),
-        tr: crate::server::templates::Tr::new(lang),
+        tr: crate::web::templates::Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
         features,
@@ -219,7 +218,7 @@ async fn new_page(
     Extension(features): Extension<FeatureFlags>,
     Query(query): Query<NewPageQuery>,
 ) -> impl askama_axum::IntoResponse {
-    crate::server::templates::NewTemplate {
+    crate::web::templates::NewTemplate {
         active: "recipes".to_string(),
         tr: Tr::new(lang),
         error: query.error,
@@ -484,7 +483,7 @@ async fn pantry_page(
                     let mut pantry_items = Vec::new();
 
                     for item in items {
-                        pantry_items.push(crate::server::templates::PantryItem {
+                        pantry_items.push(crate::web::templates::PantryItem {
                             name: item.name().to_string(),
                             quantity: item.quantity().map(|q| q.to_string()),
                             bought: item.bought().map(|b| b.to_string()),
@@ -493,7 +492,7 @@ async fn pantry_page(
                         });
                     }
 
-                    sections.push(crate::server::templates::PantrySection {
+                    sections.push(crate::web::templates::PantrySection {
                         name: section_name.clone(),
                         items: pantry_items,
                     });

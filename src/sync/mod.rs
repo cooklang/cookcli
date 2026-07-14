@@ -10,6 +10,8 @@ pub use session::SyncSession;
 
 use tokio_util::sync::CancellationToken;
 
+/// An in-flight device authorisation, held by the server while the user
+/// completes the flow in their browser.
 #[derive(Clone)]
 pub struct PendingDeviceFlow {
     pub user_code: String,

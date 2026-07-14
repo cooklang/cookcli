@@ -3,7 +3,7 @@ use fluent_templates::Loader;
 use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
-use crate::server::language::FeatureFlags;
+use crate::web::language::FeatureFlags;
 
 /// Helper struct for translations in templates
 #[derive(Clone, Debug, Serialize)]
@@ -18,9 +18,10 @@ impl Tr {
     }
 
     pub fn t(&self, key: &str) -> String {
-        crate::server::i18n::LOCALES.lookup(&self.lang, key)
+        crate::web::i18n::LOCALES.lookup(&self.lang, key)
     }
 
+    #[cfg(feature = "server")]
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
@@ -38,6 +39,7 @@ mod filters {
     }
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "error.html")]
 pub struct ErrorTemplate {
@@ -390,6 +392,7 @@ pub struct MenuTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "shopping_list.html")]
 pub struct ShoppingListTemplate {
@@ -400,6 +403,7 @@ pub struct ShoppingListTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "preferences.html")]
 pub struct PreferencesTemplate {
@@ -418,6 +422,7 @@ pub struct PreferencesTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "pantry.html")]
 pub struct PantryTemplate {
@@ -430,6 +435,7 @@ pub struct PantryTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "edit.html")]
 pub struct EditTemplate {
@@ -444,6 +450,7 @@ pub struct EditTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "new.html")]
 pub struct NewTemplate {
@@ -456,12 +463,14 @@ pub struct NewTemplate {
     pub features: FeatureFlags,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize)]
 pub struct PantrySection {
     pub name: String,
     pub items: Vec<PantryItem>,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize)]
 pub struct PantryItem {
     pub name: String,

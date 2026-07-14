@@ -2,7 +2,10 @@
 mod common;
 
 use assert_cmd::Command;
-use insta::{assert_snapshot, with_settings};
+use insta::assert_snapshot;
+// Only used by test_help_output, which needs the optional commands compiled in.
+#[cfg(all(feature = "server", feature = "import", feature = "lsp"))]
+use insta::with_settings;
 
 #[test]
 fn test_recipe_human_output() {
@@ -289,7 +292,10 @@ fn test_scaled_recipe_output() {
     assert_snapshot!(formatted);
 }
 
+// The snapshot lists every subcommand, so it only holds when the optional
+// commands are compiled in.
 #[test]
+#[cfg(all(feature = "server", feature = "import", feature = "lsp"))]
 fn test_help_output() {
     let output = Command::cargo_bin("cook")
         .unwrap()

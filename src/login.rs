@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Args;
 use tokio_util::sync::CancellationToken;
 
-use crate::server::sync::{device_flow, SyncSession};
+use crate::sync::{device_flow, SyncSession};
 use crate::Context;
 
 #[derive(Debug, Args)]

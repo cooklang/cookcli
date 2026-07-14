@@ -40,30 +40,18 @@ use axum::{
 };
 use camino::Utf8PathBuf;
 use clap::Args;
-use rust_embed::RustEmbed;
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
-pub mod builders;
 mod fs_atomic;
 mod handlers;
-mod i18n;
-pub mod language;
 mod lsp_bridge;
 mod shopping_list_store;
 mod shopping_list_watcher;
-#[cfg(feature = "sync")]
-pub mod sync;
-pub mod templates;
 mod ui;
-
-// Embed static files at compile time
-#[derive(RustEmbed)]
-#[folder = "static/"]
-pub struct StaticFiles;
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
@@ -151,9 +139,9 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     {
         let session_guard = state.sync_session.lock().unwrap();
         if let Some(ref session) = *session_guard {
-            match sync::sync_db_path() {
+            match crate::sync::sync_db_path() {
                 Ok(db_path) => {
-                    match sync::start_sync(session, state.base_path.to_string(), db_path) {
+                    match crate::sync::start_sync(session, state.base_path.to_string(), db_path) {
                         Ok(handle) => {
                             // Safe to use try_lock here: no contention before the server accepts connections
                             if let Ok(mut guard) = state.sync_handle.try_lock() {
@@ -169,7 +157,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         }
 
         // Start token refresh task (cancelled on shutdown via shutdown_token)
-        sync::runner::start_token_refresh(
+        crate::sync::runner::start_token_refresh(
             Arc::clone(&state.sync_session),
             state.session_path.clone(),
             state.shutdown_token.child_token(),
@@ -204,9 +192,11 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(axum::middleware::from_fn_with_state(
             url_prefix_for_features,
-            language::features_middleware,
+            crate::web::language::features_middleware,
         ))
-        .layer(axum::middleware::from_fn(language::language_middleware))
+        .layer(axum::middleware::from_fn(
+            crate::web::language::language_middleware,
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin("*".parse::<HeaderValue>().unwrap())
@@ -302,7 +292,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         let path = crate::global_file_path("session.json")
             .map(|p: Utf8PathBuf| p.into_std_path_buf())
             .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
-        let session = match sync::SyncSession::load(&path) {
+        let session = match crate::sync::SyncSession::load(&path) {
             Ok(s) => s,
             Err(e) => {
                 tracing::warn!("Failed to load sync session: {e}");
@@ -374,11 +364,11 @@ pub struct AppState {
     /// clients can still connect but will never receive events.
     pub shopping_list_events: Option<shopping_list_watcher::ChangeSender>,
     #[cfg(feature = "sync")]
-    pub sync_session: Arc<Mutex<Option<sync::SyncSession>>>,
+    pub sync_session: Arc<Mutex<Option<crate::sync::SyncSession>>>,
     #[cfg(feature = "sync")]
-    pub sync_handle: Arc<tokio::sync::Mutex<Option<sync::SyncHandle>>>,
+    pub sync_handle: Arc<tokio::sync::Mutex<Option<crate::sync::SyncHandle>>>,
     #[cfg(feature = "sync")]
-    pub pending_device_flow: Arc<tokio::sync::Mutex<Option<sync::PendingDeviceFlow>>>,
+    pub pending_device_flow: Arc<tokio::sync::Mutex<Option<crate::sync::PendingDeviceFlow>>>,
     #[cfg(feature = "sync")]
     pub session_path: std::path::PathBuf,
     #[cfg(feature = "sync")]
@@ -477,7 +467,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
 async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResponse {
     let path = path.trim_start_matches('/');
 
-    StaticFiles::get(path)
+    crate::web::StaticFiles::get(path)
         .map(|content| {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
             Response::builder()
