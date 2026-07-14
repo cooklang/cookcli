@@ -38,7 +38,11 @@ camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 base64 = { version = "0.22", optional = true }
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+# bundled_units carries the unit database (quantity scaling, unit normalisation).
+# We rely on it in `cook recipe`, but never declared it: it was reaching us only
+# via feature unification from cooklang-language-server / cooklang-reports, which
+# depend on cooklang with default features. Declare it where it is actually used.
+cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.6" }
 cooklang-import = "0.9.3"
 cooklang-sync-client = { version = "0.4.11", optional = true }
