@@ -21,9 +21,29 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup(&self.lang, key)
     }
 
+    /// Translate a pluralized message. Passes `$count` as a number so Fluent
+    /// plural selectors (`[one]` / `[other]`, etc.) resolve correctly.
+    pub fn tn(&self, key: &str, count: &usize) -> String {
+        let args = std::collections::HashMap::from([("count", fluent::FluentValue::from(count))]);
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     #[cfg(feature = "server")]
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tr_tests {
+    use super::*;
+    use unic_langid::langid;
+
+    #[test]
+    fn recipes_count_pluralizes() {
+        let tr = Tr::new(langid!("en-US"));
+        assert_eq!(tr.tn("recipes-count", &1), "1 recipe");
+        assert_eq!(tr.tn("recipes-count", &3), "3 recipes");
     }
 }
 

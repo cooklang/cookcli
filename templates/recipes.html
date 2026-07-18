@@ -76,7 +76,7 @@
                 <h3 class="font-bold text-lg mb-2">{{ item.name }}</h3>
                 {% match item.count %}
                 {% when Some with (count) %}
-                <span class="text-sm text-orange-600 font-medium">{{ count }} recipes</span>
+                <span class="text-sm text-orange-600 font-medium">{{ tr.tn("recipes-count", count) }}</span>
                 {% when None %}
                 {% endmatch %}
             </div>
