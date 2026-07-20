@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.33.0](https://github.com/cooklang/cookcli/compare/v0.32.1...v0.33.0) (2026-07-20)
+
+
+### Features
+
+* **i18n:** allow pluralization ([#377](https://github.com/cooklang/cookcli/issues/377)) ([3d5be1a](https://github.com/cooklang/cookcli/commit/3d5be1aa5121f45d8acf0511d8baaf172fad21a3))
+* put server, import and lsp behind cargo features ([#369](https://github.com/cooklang/cookcli/issues/369)) ([baee2a8](https://github.com/cooklang/cookcli/commit/baee2a8fa5b750332f414a8102dd7e0acbb98b2b)), closes [#366](https://github.com/cooklang/cookcli/issues/366)
+* **server:** respect prefers-color-scheme for selecting theme ([#364](https://github.com/cooklang/cookcli/issues/364)) ([cf94de9](https://github.com/cooklang/cookcli/commit/cf94de9bb8ece158594da33d5d7d759d483f4648))
+
+
+### Bug Fixes
+
+* **deps:** declare cooklang's bundled_units feature explicitly ([#371](https://github.com/cooklang/cookcli/issues/371)) ([cb00cc9](https://github.com/cooklang/cookcli/commit/cb00cc97cb5ea96842e4cace5101a648936c5202)), closes [#366](https://github.com/cooklang/cookcli/issues/366)
+* **i18n:** remove hardcoded english meta titles ([#378](https://github.com/cooklang/cookcli/issues/378)) ([0d2140d](https://github.com/cooklang/cookcli/commit/0d2140d71a325022627de30b9ea7c629ba3fd549))
+* satisfy clippy::useless_borrows_in_formatting ([#370](https://github.com/cooklang/cookcli/issues/370)) ([6120c7c](https://github.com/cooklang/cookcli/commit/6120c7c80475c3269aa4713990887f588828dc72))
+
 ## [0.32.1](https://github.com/cooklang/cookcli/compare/v0.32.0...v0.32.1) (2026-06-26)
 
 
