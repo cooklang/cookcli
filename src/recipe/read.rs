@@ -74,6 +74,46 @@ pub struct ReadArgs {
     /// Has no effect on human, cooklang, or markdown formats.
     #[arg(long)]
     pretty: bool,
+
+    /// Paper size for LaTeX and Typst output (default: a4)
+    ///
+    /// Has no effect on other formats.
+    #[arg(short = 'p', long, value_enum)]
+    paper_size: Option<PaperSize>,
+
+    /// Page margin in centimeters for LaTeX and Typst output (default: 2.5)
+    ///
+    /// Applied equally to all four sides. Has no effect on other formats.
+    #[arg(short, long)]
+    margin: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum PaperSize {
+    A4,
+    Letter,
+    A5,
+    Legal,
+}
+
+impl PaperSize {
+    fn latex_name(self) -> &'static str {
+        match self {
+            PaperSize::A4 => "a4paper",
+            PaperSize::Letter => "letterpaper",
+            PaperSize::A5 => "a5paper",
+            PaperSize::Legal => "legalpaper",
+        }
+    }
+
+    fn typst_name(self) -> &'static str {
+        match self {
+            PaperSize::A4 => "a4",
+            PaperSize::Letter => "us-letter",
+            PaperSize::A5 => "a5",
+            PaperSize::Legal => "us-legal",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -142,6 +182,18 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
         None => OutputFormat::Human,
     });
 
+    if !matches!(format, OutputFormat::Latex | OutputFormat::Typst) {
+        if args.paper_size.is_some() {
+            eprintln!("warning: --paper-size has no effect with the selected output format");
+        }
+        if args.margin.is_some() {
+            eprintln!("warning: --margin has no effect with the selected output format");
+        }
+    }
+
+    let paper_size = args.paper_size.unwrap_or(PaperSize::A4);
+    let margin = args.margin.unwrap_or(2.5);
+
     write_to_output(args.output.as_deref(), |writer| {
         match format {
             OutputFormat::Human => crate::util::cooklang_to_human::print_human(
@@ -175,6 +227,8 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 writer,
+                paper_size.latex_name(),
+                margin,
             )?,
             OutputFormat::Typst => crate::util::cooklang_to_typst::print_typst(
                 &recipe,
@@ -182,6 +236,8 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 writer,
+                paper_size.typst_name(),
+                margin,
             )?,
             OutputFormat::Schema => crate::util::cooklang_to_schema::print_schema(
                 &recipe,

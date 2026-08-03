@@ -69,6 +69,131 @@ fn test_recipe_markdown_output() {
 }
 
 #[test]
+fn test_recipe_latex_default_paper_size_and_margin() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("latex")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r"\documentclass[11pt,a4paper]{article}",
+        ))
+        .stdout(predicate::str::contains(
+            r"\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}",
+        ));
+}
+
+#[test]
+fn test_recipe_latex_custom_paper_size() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("latex")
+        .arg("--paper-size")
+        .arg("letter")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r"\documentclass[11pt,letterpaper]{article}",
+        ));
+}
+
+#[test]
+fn test_recipe_latex_custom_margin() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("latex")
+        .arg("--margin")
+        .arg("3")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r"\geometry{left=3cm,right=3cm,top=3cm,bottom=3cm}",
+        ));
+}
+
+#[test]
+fn test_recipe_typst_default_paper_size_and_margin() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("typst")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r#"#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#,
+        ));
+}
+
+#[test]
+fn test_recipe_typst_custom_paper_size_and_margin() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("typst")
+        .arg("--paper-size")
+        .arg("letter")
+        .arg("--margin")
+        .arg("3")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r#"#set page(paper: "us-letter", margin: (left: 3cm, right: 3cm, top: 3cm, bottom: 3cm))"#,
+        ));
+}
+
+#[test]
+fn test_recipe_paper_size_warns_for_unrelated_format() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("-f")
+        .arg("json")
+        .arg("--paper-size")
+        .arg("letter")
+        .arg("simple.cook")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--paper-size"));
+}
+
+#[test]
 fn test_recipe_cooklang_output() {
     let temp_dir = common::setup_test_recipes().unwrap();
 
