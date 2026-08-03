@@ -18,7 +18,7 @@ cook seed [OPTIONS] [DIR]
 
 ```bash
 # Add examples to current directory
-cook seed
+cook seed ./
 
 # Create examples in a specific directory
 cook seed ~/my-recipes
@@ -28,3 +28,4 @@ cook seed ~/my-recipes
 
 - Creates example recipes demonstrating Cooklang features (ingredients, cookware, timers, metadata, recipe references)
 - Includes folder structure and an `aisle.conf` configuration file
+- Populates the target directory directly, so run it in an empty or dedicated directory rather than an existing one you care about

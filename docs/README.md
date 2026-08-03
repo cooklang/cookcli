@@ -50,8 +50,11 @@ cargo install cookcli
 
 ## Quick Start
 
+`cook seed` populates its target directory with recipe files and folders, so create a dedicated directory first:
+
 ```bash
-cook seed                                     # Create example recipes
+mkdir my-recipes && cd my-recipes
+cook seed ./                                  # Create example recipes
 cook recipe "Neapolitan Pizza"                # View a recipe
 cook shopping-list "Neapolitan Pizza" "Easy Pancakes"  # Shopping list
 cook server --open                            # Browse in browser
