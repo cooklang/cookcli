@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::*;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -187,6 +188,92 @@ fn build_writes_recipe_pages() {
         html.contains("\"recipeInstructions\""),
         "JSON-LD should include recipeInstructions list"
     );
+}
+
+#[test]
+fn build_omits_repo_link_when_repo_url_not_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        !index.contains("View source"),
+        "no repo link should be present without --repo-url"
+    );
+}
+
+#[test]
+fn build_writes_repo_link_when_repo_url_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--repo-url",
+            "https://github.com/cooklang/cookcli",
+        ])
+        .assert()
+        .success();
+
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        index.contains(r#"href="https://github.com/cooklang/cookcli""#),
+        "footer should link to the repo URL"
+    );
+    assert!(
+        index.contains("View source"),
+        "footer should label the repo link"
+    );
+
+    // Recipe pages should carry the same link, not just the index.
+    let pancakes = out.join("recipe/Breakfast/Easy Pancakes.html");
+    let html = std::fs::read_to_string(&pancakes).unwrap();
+    assert!(
+        html.contains(r#"href="https://github.com/cooklang/cookcli""#),
+        "recipe page footer should also link to the repo URL"
+    );
+}
+
+#[test]
+fn build_repo_url_rejects_invalid_url() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--repo-url",
+            "not-a-url",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--repo-url"));
 }
 
 #[test]

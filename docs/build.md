@@ -24,6 +24,7 @@ cook build web [OPTIONS] [OUTPUT_DIR]
 |--------|-------------|
 | `--base-path <PATH>` | Root directory containing recipe files (default: current directory) |
 | `--base-url <URL>` | Absolute URL prefix for hosting under a subpath (e.g. `/recipes/`). When unset, links are page-relative and the site works under any prefix, including `file://`. |
+| `--repo-url <URL>` | URL of the recipe repository. When set, the footer's "Built with CookCLI" line gains a "View source" link pointing here. |
 
 ## Examples
 
@@ -36,6 +37,9 @@ cook build web dist --base-path ~/my-recipes
 
 # Build for hosting under /recipes/ on your domain
 cook build web --base-url /recipes/
+
+# Link back to the recipe repository from the footer
+cook build web --repo-url https://github.com/user/my-recipes
 ```
 
 ## What gets generated

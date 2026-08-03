@@ -25,6 +25,7 @@ fn error_page(
         tr: Tr::new(lang),
         prefix: prefix.to_string(),
         static_mode: false,
+        repo_url: None,
         features,
     };
     template.into_response()
@@ -71,6 +72,7 @@ async fn recipes_handler(
         sub_path: path.as_deref(),
         lang: lang.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     };
     match crate::web::builders::build_recipes_template(input) {
@@ -104,6 +106,7 @@ async fn recipe_page(
         scale,
         lang: lang.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     };
 
@@ -200,6 +203,7 @@ async fn edit_page(
         tr: crate::web::templates::Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     };
 
@@ -225,6 +229,7 @@ async fn new_page(
         filename: query.filename,
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     }
 }
@@ -459,6 +464,7 @@ async fn shopping_list_page(
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     }
 }
@@ -508,6 +514,7 @@ async fn pantry_page(
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     })
 }
@@ -543,6 +550,7 @@ async fn preferences_page(
         sync_syncing,
         prefix: state.url_prefix.clone(),
         static_mode: false,
+        repo_url: None,
         features,
     }
 }
