@@ -12,8 +12,10 @@ pub fn print_latex(
     scale: f64,
     converter: &Converter,
     mut writer: impl io::Write,
+    paper_size: &str,
+    margin: f64,
 ) -> Result<()> {
-    write_document_header(&mut writer)?;
+    write_document_header(&mut writer, paper_size, margin)?;
 
     writeln!(writer, "% BEGIN_RECIPE_CONTENT")?;
 
@@ -43,8 +45,8 @@ pub fn print_latex(
     Ok(())
 }
 
-fn write_document_header(w: &mut impl io::Write) -> Result<()> {
-    writeln!(w, r"\documentclass[11pt,a4paper]{{article}}")?;
+fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> Result<()> {
+    writeln!(w, r"\documentclass[11pt,{paper_size}]{{article}}")?;
     writeln!(w, r"\usepackage[utf8]{{inputenc}}")?;
     writeln!(w, r"\usepackage[T1]{{fontenc}}")?;
     writeln!(w, r"\usepackage{{lmodern}}")?;
@@ -60,7 +62,7 @@ fn write_document_header(w: &mut impl io::Write) -> Result<()> {
     writeln!(w)?;
     writeln!(
         w,
-        r"\geometry{{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}}"
+        r"\geometry{{left={margin}cm,right={margin}cm,top={margin}cm,bottom={margin}cm}}"
     )?;
     writeln!(w)?;
     writeln!(w, r"% Define colors for recipe elements")?;

@@ -12,8 +12,10 @@ pub fn print_typst(
     scale: f64,
     converter: &Converter,
     mut writer: impl io::Write,
+    paper_size: &str,
+    margin: f64,
 ) -> Result<()> {
-    write_document_header(&mut writer)?;
+    write_document_header(&mut writer, paper_size, margin)?;
 
     writeln!(writer)?;
     writeln!(writer, "// BEGIN_RECIPE_CONTENT")?;
@@ -44,10 +46,10 @@ pub fn print_typst(
     Ok(())
 }
 
-fn write_document_header(w: &mut impl io::Write) -> Result<()> {
+fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> Result<()> {
     writeln!(
         w,
-        r#"#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))"#
+        r#"#set page(paper: "{paper_size}", margin: (left: {margin}cm, right: {margin}cm, top: {margin}cm, bottom: {margin}cm))"#
     )?;
     writeln!(w)?;
     writeln!(w, r"#set text(size: 11pt)")?;
