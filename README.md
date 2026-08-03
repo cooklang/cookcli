@@ -322,6 +322,9 @@ cook build web dist --base-path ~/my-recipes
 
 # Build for hosting under a subpath
 cook build web --base-url /recipes/
+
+# Link back to the recipe repository from the footer
+cook build web --repo-url https://github.com/user/my-recipes
 ```
 
 ### `cook search`

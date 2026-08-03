@@ -72,6 +72,13 @@ pub struct WebBuildArgs {
     /// is independent of --base-url. Omit it to skip sitemap generation.
     #[arg(long)]
     pub sitemap: Option<String>,
+
+    /// URL of the recipe repository, linked from the site footer
+    ///
+    /// When set, the generated footer's "Built with CookCLI" line gains a
+    /// "View source" link pointing here. Omit it to skip the link.
+    #[arg(long)]
+    pub repo_url: Option<String>,
 }
 
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
@@ -133,7 +140,17 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         }
     }
 
-    renderer::render_index(&source, &output, base_url, &lang)?;
+    // Validate the repo URL up front for the same reason as --sitemap above.
+    let repo_url = args.repo_url.as_deref();
+    if let Some(repo) = repo_url {
+        let parsed =
+            url::Url::parse(repo).with_context(|| format!("Invalid --repo-url URL: {repo}"))?;
+        if parsed.host().is_none() || !matches!(parsed.scheme(), "http" | "https") {
+            bail!("--repo-url must be an absolute http(s) URL, e.g. https://github.com/user/repo");
+        }
+    }
+
+    renderer::render_index(&source, &output, base_url, repo_url, &lang)?;
 
     let mut tree = cooklang_find::build_tree(&source)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
@@ -144,7 +161,15 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     // and `_site/api/static/...` one level deeper until the OS rejects the
     // path length.
     prune_output_subtree(&mut tree, &output);
-    walk_directories(&tree, &source, &output, base_url, &lang, String::new())?;
+    walk_directories(
+        &tree,
+        &source,
+        &output,
+        base_url,
+        repo_url,
+        &lang,
+        String::new(),
+    )?;
 
     let aisle = ctx.aisle();
     let recipe_count = walk_recipes(
@@ -153,6 +178,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         &output,
         aisle.as_ref(),
         base_url,
+        repo_url,
         &lang,
         String::new(),
     )?;
@@ -233,6 +259,7 @@ fn walk_directories(
     source: &camino::Utf8Path,
     output: &camino::Utf8Path,
     base_url: Option<&str>,
+    repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
     prefix_path: String,
 ) -> Result<()> {
@@ -245,18 +272,20 @@ fn walk_directories(
         } else {
             format!("{prefix_path}/{name}")
         };
-        renderer::render_directory(source, output, &sub, base_url, lang)?;
-        walk_directories(child, source, output, base_url, lang, sub)?;
+        renderer::render_directory(source, output, &sub, base_url, repo_url, lang)?;
+        walk_directories(child, source, output, base_url, repo_url, lang, sub)?;
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_recipes(
     tree: &cooklang_find::RecipeTree,
     source: &camino::Utf8Path,
     output: &camino::Utf8Path,
     aisle_path: Option<&camino::Utf8PathBuf>,
     base_url: Option<&str>,
+    repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
     prefix_path: String,
 ) -> Result<usize> {
@@ -275,7 +304,7 @@ fn walk_recipes(
                 format!("{prefix_path}/{leaf_name}")
             };
             if let Err(e) =
-                renderer::render_recipe(source, output, &sub, aisle_path, base_url, lang)
+                renderer::render_recipe(source, output, &sub, aisle_path, base_url, repo_url, lang)
             {
                 tracing::warn!("Skipping recipe {sub}: {e:#}");
                 continue;
@@ -292,7 +321,9 @@ fn walk_recipes(
             } else {
                 format!("{prefix_path}/{name}")
             };
-            count += walk_recipes(child, source, output, aisle_path, base_url, lang, sub)?;
+            count += walk_recipes(
+                child, source, output, aisle_path, base_url, repo_url, lang, sub,
+            )?;
         }
     }
     Ok(count)

@@ -68,6 +68,7 @@ pub struct ErrorTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -89,6 +90,7 @@ pub struct RecipesTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -108,6 +110,7 @@ pub struct RecipeTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -409,6 +412,7 @@ pub struct MenuTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -420,6 +424,7 @@ pub struct ShoppingListTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -439,6 +444,7 @@ pub struct PreferencesTemplate {
     pub sync_syncing: bool,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -452,6 +458,7 @@ pub struct PantryTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -467,6 +474,7 @@ pub struct EditTemplate {
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -480,6 +488,7 @@ pub struct NewTemplate {
     pub filename: Option<String>,
     pub prefix: String,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 

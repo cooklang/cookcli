@@ -879,6 +879,10 @@
         <footer class="mt-12 mb-6 text-center text-sm text-gray-500 print:hidden">
             Built with
             <a href="https://cooklang.org/cli/" class="text-orange-600 hover:text-orange-700 hover:underline" target="_blank" rel="noopener">CookCLI</a>
+            {% if let Some(url) = repo_url %}
+            &middot;
+            <a href="{{ url }}" class="text-orange-600 hover:text-orange-700 hover:underline" target="_blank" rel="noopener">View source</a>
+            {% endif %}
         </footer>
         {% endif %}
     </div>

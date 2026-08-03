@@ -19,6 +19,7 @@ pub struct RecipesBuildInput<'a> {
     pub sub_path: Option<&'a str>,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -30,6 +31,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         sub_path,
         lang,
         static_mode,
+        repo_url,
         features,
     } = input;
 
@@ -182,6 +184,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        repo_url,
         features,
     })
 }
@@ -195,6 +198,7 @@ pub struct RecipeBuildInput<'a> {
     pub scale: f64,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
+    pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
 
@@ -214,6 +218,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         scale,
         lang,
         static_mode,
+        repo_url,
         features,
     } = input;
 
@@ -244,6 +249,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             url_prefix,
             lang,
             static_mode,
+            repo_url,
             features,
         )?;
         return Ok(RecipeBuildOutput::Menu(Box::new(template)));
@@ -757,6 +763,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        repo_url,
         features,
     };
 
@@ -772,6 +779,7 @@ fn build_menu_template_inner(
     url_prefix: &str,
     lang: LanguageIdentifier,
     static_mode: bool,
+    repo_url: Option<String>,
     features: FeatureFlags,
 ) -> Result<MenuTemplate> {
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
@@ -1001,6 +1009,7 @@ fn build_menu_template_inner(
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
+        repo_url,
         features,
     })
 }

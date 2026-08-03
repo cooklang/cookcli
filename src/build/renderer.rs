@@ -15,6 +15,7 @@ pub fn render_index(
     source: &Utf8Path,
     output: &Utf8Path,
     base_url: Option<&str>,
+    repo_url: Option<&str>,
     lang: &LanguageIdentifier,
 ) -> Result<()> {
     let relpath = Utf8PathBuf::from("index.html");
@@ -25,6 +26,7 @@ pub fn render_index(
         sub_path: None,
         lang: lang.clone(),
         static_mode: true,
+        repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
     })?;
     let html = template.render()?;
@@ -37,6 +39,7 @@ pub fn render_directory(
     output: &Utf8Path,
     sub_path: &str,
     base_url: Option<&str>,
+    repo_url: Option<&str>,
     lang: &LanguageIdentifier,
 ) -> Result<()> {
     let relpath = Utf8PathBuf::from(format!("directory/{sub_path}.html"));
@@ -47,6 +50,7 @@ pub fn render_directory(
         sub_path: Some(sub_path),
         lang: lang.clone(),
         static_mode: true,
+        repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
     })?;
     let html = template.render()?;
@@ -72,6 +76,7 @@ pub fn render_recipe(
     recipe_relpath: &str,
     aisle_path: Option<&Utf8PathBuf>,
     base_url: Option<&str>,
+    repo_url: Option<&str>,
     lang: &LanguageIdentifier,
 ) -> Result<()> {
     let trimmed = recipe_relpath
@@ -91,6 +96,7 @@ pub fn render_recipe(
         scale: 1.0,
         lang: lang.clone(),
         static_mode: true,
+        repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
     })?;
 
