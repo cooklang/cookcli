@@ -77,6 +77,33 @@ pub fn parse_supported_language(s: &str) -> Option<LanguageIdentifier> {
         .cloned()
 }
 
+/// Map an OS locale tag to a supported language, falling back to en-US.
+///
+/// Accepts both BCP-47 tags ("fr-FR") and POSIX-style tags as found in
+/// LANG/LC_ALL ("fr_FR.UTF-8", "de_DE@euro").
+pub fn language_from_system_locale(locale: Option<String>) -> LanguageIdentifier {
+    locale
+        .as_deref()
+        .map(|tag| {
+            let tag = tag.split(['.', '@']).next().unwrap_or(tag);
+            tag.replace('_', "-")
+        })
+        .and_then(|tag| parse_supported_language(&tag))
+        .unwrap_or(EN_US)
+}
+
+/// Detect the system locale and map it to a supported language,
+/// falling back to en-US.
+///
+/// POSIX locale env vars take precedence over the OS-level locale
+/// (on macOS `sys_locale` reads system preferences, not the environment).
+pub fn system_language() -> LanguageIdentifier {
+    let env_locale = ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .find_map(|var| std::env::var(var).ok().filter(|v| !v.is_empty()));
+    language_from_system_locale(env_locale.or_else(sys_locale::get_locale))
+}
+
 /// Get the preferred language from headers
 /// 1. Check for 'lang' cookie
 /// 2. Parse Accept-Language header
@@ -181,6 +208,47 @@ pub async fn features_middleware(
     }
 
     response
+}
+
+#[cfg(test)]
+mod locale_tests {
+    use super::*;
+
+    #[test]
+    fn test_system_locale_bcp47_tag() {
+        assert_eq!(language_from_system_locale(Some("fr-FR".into())), FR_FR);
+    }
+
+    #[test]
+    fn test_system_locale_posix_tag_with_encoding() {
+        assert_eq!(
+            language_from_system_locale(Some("fr_FR.UTF-8".into())),
+            FR_FR
+        );
+    }
+
+    #[test]
+    fn test_system_locale_posix_tag_with_modifier() {
+        assert_eq!(
+            language_from_system_locale(Some("de_DE@euro".into())),
+            DE_DE
+        );
+    }
+
+    #[test]
+    fn test_system_locale_bare_language_code() {
+        assert_eq!(language_from_system_locale(Some("sv".into())), SV_SE);
+    }
+
+    #[test]
+    fn test_system_locale_unsupported_falls_back_to_english() {
+        assert_eq!(language_from_system_locale(Some("ja-JP".into())), EN_US);
+    }
+
+    #[test]
+    fn test_system_locale_missing_falls_back_to_english() {
+        assert_eq!(language_from_system_locale(None), EN_US);
+    }
 }
 
 #[cfg(all(test, feature = "server"))]

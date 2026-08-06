@@ -93,6 +93,7 @@ self_update = { version = "0.41", default-features = false, features = ["archive
 serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
+sys-locale = "0.3"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
