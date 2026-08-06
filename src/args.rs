@@ -104,6 +104,7 @@ pub enum Command {
     ///   cook build web --base-path ~/recipes   # Use specific source directory
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
+    ///   cook build web --compress              # Also write .gz copies for precompressed hosting
     #[command(long_about = "Build artifacts (static website, etc.) from your recipe collection")]
     Build(build::BuildArgs),
 

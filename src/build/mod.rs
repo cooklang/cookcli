@@ -37,6 +37,7 @@ pub enum BuildCommand {
     ///   cook build web --base-path ~/recipes   # Use specific source directory
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
+    ///   cook build web --compress              # Also write .gz copies for precompressed hosting
     Web(WebBuildArgs),
 }
 
@@ -90,6 +91,14 @@ pub struct WebBuildArgs {
     /// "View source" link pointing here. Omit it to skip the link.
     #[arg(long)]
     pub repo_url: Option<String>,
+
+    /// Also write gzip-compressed copies (.gz) of generated text assets
+    ///
+    /// Writes a `<file>.gz` next to every HTML, CSS, JS, JSON, XML, SVG and
+    /// .cook file so static hosts that support precompressed assets (e.g.
+    /// GitLab Pages) can serve them directly. Images are skipped.
+    #[arg(long)]
+    pub compress: bool,
 }
 
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
@@ -214,9 +223,16 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         false
     };
 
+    let compressed_note = if args.compress {
+        let compressed_count = writer::compress_output(&output)?;
+        format!(", {compressed_count} files compressed")
+    } else {
+        String::new()
+    };
+
     let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{compressed_note}"
     );
     Ok(())
 }

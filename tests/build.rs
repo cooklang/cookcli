@@ -593,3 +593,124 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
         "output should not contain a nested _site after repeated builds: {nested:?}"
     );
 }
+
+#[test]
+fn build_compress_writes_gzip_variants() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--compress",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("compressed"));
+
+    // Text assets get a sibling .gz whose contents decompress to the original.
+    for file in [
+        "index.html",
+        "static/css/output.css",
+        "static/search-index.json",
+    ] {
+        let gz_path = out.join(format!("{file}.gz"));
+        assert!(gz_path.is_file(), "{file}.gz should exist");
+
+        let mut decoder = flate2::read::GzDecoder::new(std::fs::File::open(&gz_path).unwrap());
+        let mut decompressed = Vec::new();
+        std::io::Read::read_to_end(&mut decoder, &mut decompressed).unwrap();
+        let original = std::fs::read(out.join(file)).unwrap();
+        assert_eq!(
+            decompressed, original,
+            "{file}.gz should decompress to {file}"
+        );
+    }
+
+    // Already-compressed assets (images) must not get .gz variants.
+    let image_gz: Vec<_> = walkdir::WalkDir::new(&out)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            name.ends_with(".jpg.gz")
+                || name.ends_with(".jpeg.gz")
+                || name.ends_with(".png.gz")
+                || name.ends_with(".webp.gz")
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    assert!(
+        image_gz.is_empty(),
+        "images should not be gzipped: {image_gz:?}"
+    );
+}
+
+#[test]
+fn build_without_compress_writes_no_gzip() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let gz_files: Vec<_> = walkdir::WalkDir::new(&out)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".gz"))
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    assert!(
+        gz_files.is_empty(),
+        "no .gz files without --compress: {gz_files:?}"
+    );
+}
+
+#[test]
+fn build_compress_twice_does_not_gzip_gzip() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    for _ in 0..2 {
+        Command::cargo_bin("cook")
+            .unwrap()
+            .args([
+                "build",
+                "web",
+                out.to_str().unwrap(),
+                "--base-path",
+                seed.to_str().unwrap(),
+                "--compress",
+            ])
+            .assert()
+            .success();
+    }
+
+    let double_gz: Vec<_> = walkdir::WalkDir::new(&out)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".gz.gz"))
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    assert!(
+        double_gz.is_empty(),
+        "no double-compressed files: {double_gz:?}"
+    );
+}
