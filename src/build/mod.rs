@@ -5,7 +5,7 @@ mod sitemap;
 mod writer;
 
 use crate::util::resolve_to_absolute_path;
-use crate::web::language::{parse_supported_language, EN_US};
+use crate::web::language::{parse_supported_language, system_language};
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
@@ -26,11 +26,17 @@ pub enum BuildCommand {
     /// host or directly from disk via file://. Excludes dynamic features
     /// (shopping list, pantry, editing).
     ///
+    /// Unlike `cook server`, which picks a language per request from the
+    /// browser's Accept-Language header, the static site is rendered in a
+    /// single language chosen at build time via `--lang` (default: the
+    /// system locale, falling back to en-US).
+    ///
     /// Examples:
     ///   cook build web                         # Build to ./_site
     ///   cook build web out                     # Build to ./out
     ///   cook build web --base-path ~/recipes   # Use specific source directory
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
+    ///   cook build web --lang fr-FR            # Render the site in French
     Web(WebBuildArgs),
 }
 
@@ -55,7 +61,12 @@ pub struct WebBuildArgs {
     #[arg(long)]
     pub base_url: Option<String>,
 
-    /// UI language for the generated site (default: en-US)
+    /// UI language for the generated site
+    ///
+    /// The static site is rendered in a single language chosen at build
+    /// time (unlike `cook server`, which negotiates per request from the
+    /// browser's Accept-Language header). Defaults to the system locale,
+    /// falling back to en-US.
     ///
     /// Accepts a BCP-47 tag like `de-DE`, or a bare language code like `de`
     /// that matches a supported region. Supported: en-US, de-DE, nl-NL,
@@ -120,9 +131,9 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
 
     let output = resolve_to_absolute_path(&output_raw)?;
 
-    println!("Building static site from {source} into {output}");
+    let lang = args.lang.clone().unwrap_or_else(system_language);
 
-    let lang = args.lang.clone().unwrap_or(EN_US);
+    println!("Building static site from {source} into {output} (language: {lang})");
     let base_url = args.base_url.as_deref();
 
     // Validate the sitemap URL up front so a typo fails fast, before spending
