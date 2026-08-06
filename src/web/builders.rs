@@ -381,7 +381,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     }
 
     let mut total_steps = 0;
-    for section in &recipe.sections {
+    for (section_index, section) in recipe.sections.iter().enumerate() {
         let mut section_items = Vec::new();
         let mut section_ingredient_indices = std::collections::HashSet::new();
         let mut cooking_mode_ingredient_indices: Vec<usize> = Vec::new();
@@ -491,9 +491,14 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                         }
                     }
 
+                    // Step images come in two naming conventions (issue #374):
+                    // `Recipe.S.N.ext` (section S, step N within it — used by the
+                    // iOS app) and `Recipe.N.ext` (step N counted continuously
+                    // across sections). Prefer the section-specific image.
                     let section_image_path = entry
                         .step_images()
-                        .get(0, total_steps + step_count + 1)
+                        .get(section_index + 1, step_count + 1)
+                        .or_else(|| entry.step_images().get(0, total_steps + step_count + 1))
                         .and_then(|img_path| {
                             get_image_path(base_path, url_prefix, img_path.to_string())
                         });
