@@ -154,11 +154,10 @@ test.describe('Recipe Display', () => {
 
       // Check accessibility attributes
       await expect(noteSpan).toHaveAttribute('aria-label');
-      await expect(noteSpan).toHaveAttribute('title');
 
-      // Check truncation classes are present for long notes
-      await expect(noteSpan).toHaveClass(/truncate/);
-      await expect(noteSpan).toHaveClass(/max-w-/);
+      // Long notes wrap instead of being truncated (issue #375)
+      await expect(noteSpan).toHaveClass(/break-words/);
+      await expect(noteSpan).not.toHaveClass(/truncate/);
     }
 
     // Check step-level ingredient notes
@@ -166,8 +165,8 @@ test.describe('Recipe Display', () => {
     if (await stepIngredients.count() > 0) {
       const stepNoteSpan = stepIngredients.locator('span.italic').first();
       if (await stepNoteSpan.count() > 0) {
-        await expect(stepNoteSpan).toHaveAttribute('title');
         await expect(stepNoteSpan).toHaveAttribute('aria-label');
+        await expect(stepNoteSpan).not.toHaveClass(/truncate/);
       }
     }
   });
