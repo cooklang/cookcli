@@ -237,7 +237,7 @@
                                     {% endmatch %}
                                     {% match ingredient.note %}
                                     {% when Some with (note) %}
-                                        <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
+                                        <span class="text-sm text-gray-600 italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                                     {% when None %}
                                     {% endmatch %}
                                 </div>
@@ -277,7 +277,7 @@
                             {% endmatch %}
                             {% match ingredient.note %}
                             {% when Some with (note) %}
-                                <span class="text-sm text-gray-600 italic ml-1 truncate max-w-xs inline-block" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
+                                <span class="text-sm text-gray-600 italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                             {% when None %}
                             {% endmatch %}
                         </div>
@@ -337,7 +337,7 @@
                                                 <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
                                                     {% for ing in step.ingredients %}
                                                         <span class="inline-block mr-3">
-                                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 truncate max-w-[200px] inline-block align-bottom" title="{{ note }}" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
                                                         </span>
                                                     {% endfor %}
                                                 </div>
