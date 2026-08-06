@@ -72,6 +72,59 @@ pub fn copy_recipe_source(
     Ok(())
 }
 
+/// File extensions worth precompressing. Images, fonts and other binary
+/// formats are already compressed and are skipped.
+const COMPRESSIBLE_EXTENSIONS: &[&str] =
+    &["html", "css", "js", "json", "xml", "svg", "txt", "cook"];
+
+/// Write a gzip-compressed sibling (`<file>.gz`) for every compressible file
+/// under `output_root`, for static hosts that serve precompressed assets
+/// (e.g. GitLab Pages). A `.gz` is only written when it is actually smaller
+/// than the original. Returns the number of files compressed.
+pub fn compress_output(output_root: &Utf8Path) -> Result<usize> {
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::Write;
+
+    let mut count = 0;
+    for entry in walkdir::WalkDir::new(output_root) {
+        let entry = entry.with_context(|| format!("Failed to walk: {output_root}"))?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let compressible = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|ext| {
+                COMPRESSIBLE_EXTENSIONS
+                    .iter()
+                    .any(|c| ext.eq_ignore_ascii_case(c))
+            });
+        if !compressible {
+            continue;
+        }
+
+        let contents =
+            fs::read(path).with_context(|| format!("Failed to read: {}", path.display()))?;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        encoder
+            .write_all(&contents)
+            .with_context(|| format!("Failed to compress: {}", path.display()))?;
+        let compressed = encoder
+            .finish()
+            .with_context(|| format!("Failed to compress: {}", path.display()))?;
+
+        // Only keep the .gz when it actually saves space; hosts fall back to
+        // the uncompressed file when no sibling .gz exists.
+        if compressed.len() < contents.len() {
+            let dest = format!("{}.gz", path.display());
+            fs::write(&dest, compressed).with_context(|| format!("Failed to write: {dest}"))?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -78,6 +78,7 @@ libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = { version = "0.2.4", optional = true }
 cooklang-reports = { version = "0.5.1" }
 directories = "6"
+flate2 = "1"
 fluent = "0.16"
 futures-util = { version = "0.3", optional = true }
 fluent-templates = "0.10"
@@ -116,7 +117,9 @@ yansi = "1"
 [dev-dependencies]
 tempfile = "3"
 assert_cmd = "2"
+flate2 = "1"
 predicates = "3"
+walkdir = "2"
 insta = { version = "1", features = ["yaml", "json", "filters"] }
 strip-ansi-escapes = "0.2"
 tokio = { version = "1", features = ["full", "test-util"] }
