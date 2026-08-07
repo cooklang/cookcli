@@ -35,6 +35,10 @@ pub mod language;
 pub mod menus;
 pub mod templates;
 
+/// API reference content for the `/api-docs` page. Server-only.
+#[cfg(feature = "server")]
+pub mod api_docs;
+
 /// Static assets (CSS, JS, icons) embedded into the binary at compile time.
 #[derive(RustEmbed)]
 #[folder = "static/"]

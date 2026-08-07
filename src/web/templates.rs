@@ -633,3 +633,60 @@ pub enum MenuSectionItem {
         unit: Option<String>,
     },
 }
+
+// -- API documentation page --
+
+/// One parameter of a documented endpoint.
+#[cfg(feature = "server")]
+pub struct ParamDoc {
+    pub name: String,
+    /// Where the parameter goes: "path", "query", or "body".
+    pub kind: String,
+    pub required: bool,
+    /// Human-facing type, e.g. "string", "number", "string[]".
+    pub type_name: String,
+    pub description: String,
+}
+
+/// One documented API endpoint.
+#[cfg(feature = "server")]
+pub struct EndpointDoc {
+    pub method: String,
+    /// Path in axum route syntax, e.g. "/api/pantry/:section/:name".
+    pub path: String,
+    pub summary: String,
+    /// Longer prose. Empty string means "no extra detail".
+    pub description: String,
+    pub params: Vec<ParamDoc>,
+    /// Pretty-printed JSON request body, if the endpoint takes one.
+    pub request_example: Option<String>,
+    /// Pretty-printed JSON response body, if the endpoint returns one.
+    pub response_example: Option<String>,
+    /// Cargo feature required for this endpoint to exist, e.g. "sync".
+    pub feature: Option<String>,
+}
+
+#[cfg(feature = "server")]
+impl EndpointDoc {
+    /// Tailwind classes for the method badge. Kept here rather than in the
+    /// template so the template needs no conditional chain per endpoint.
+    pub fn method_classes(&self) -> &'static str {
+        match self.method.as_str() {
+            "GET" => "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+            "POST" => "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+            "PUT" => "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+            "DELETE" => "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+            _ => "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+        }
+    }
+}
+
+/// A group of related endpoints, rendered as one section with an anchor.
+#[cfg(feature = "server")]
+pub struct ApiSection {
+    /// Anchor target, e.g. "shopping-list".
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub endpoints: Vec<EndpointDoc>,
+}
