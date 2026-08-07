@@ -11,7 +11,7 @@ Commands:
   recipe         Parse, validate and display recipe files in various formats
   server         Start a local web server to browse and view your recipe collection
   build          Build artifacts from your recipe collection
-  shopping-list  Generate a combined shopping list from multiple recipes [aliases: sl]
+  shopping-list  Generate a combined shopping list from multiple recipes [alias: sl]
   seed           Initialize a directory with example Cooklang recipes
   search         Search through your recipe collection for matching text
   import         Import recipes from supported websites and convert to Cooklang
