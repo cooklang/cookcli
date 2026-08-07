@@ -14,7 +14,23 @@
 
 ## Background for the implementer
 
-**All example payloads in this plan were captured from a live server** (`cook server ./seed --port 9099`) on 2026-08-07. Do not rewrite them from imagination. Where a payload was trimmed for length, the plan says so explicitly and the trim is marked in the JSON with a `…` comment line.
+### Do not trust this plan's example payloads. Verify every one.
+
+An earlier draft of this section claimed all payloads were captured from a live server. **That claim was false**, and Task 3 review caught three factual errors because of it. The truth:
+
+- Most payloads *were* captured from `cook server ./seed --port 9099` on 2026-08-07.
+- Several were captured with `head -c 400` or `| head -30` and the **truncated** output was then written up from memory. The `GET /api/recipes` tree example was wrong this way: the real root has four keys (`children`, `name`, `path`, `recipe`), not one, and the accompanying prose misdescribed how to tell a directory from a file.
+- A few are **synthetic**. Where the seed data produced an empty response, representative data was written by hand — `GET /api/pantry/depleted` and `GET /api/shopping_list/checked` both really return `[]` against the seed. Their shapes were derived from the handler's response struct, so they are structurally right, but no server ever emitted those exact bytes.
+- At least one was written from imagination and was simply wrong: the raw-recipe example said `@eggs{6}` where the seed file says `@eggs{3}`, implying — falsely — that the raw endpoint applies scaling.
+
+**Therefore, for every endpoint you document:**
+
+1. Start the server (`./target/debug/cook server ./seed --port 9097 &`) and call the endpoint.
+2. If it returns useful data, transcribe the real response. Trim for length if you must, but keep the structure faithful — never drop a top-level key.
+3. If it returns empty or requires state you cannot create (the sync endpoints need real credentials), write a synthetic example whose shape you have checked field-by-field against the handler's response struct, and say in the endpoint description that it is illustrative.
+4. If the plan's example disagrees with the server, **the server is right**. Report the discrepancy rather than silently fixing it — the same error may appear in other tasks.
+
+This is a reference document for people writing API clients. Its only value is being true; a plausible-looking payload that does not match the server is worse than no documentation, because it will be believed.
 
 **Repo conventions you must follow:**
 - Commit messages use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`). Release automation depends on this.
@@ -1117,6 +1133,8 @@ fn shopping_list() -> ApiSection {
                 "List checked ingredient names",
                 "",
             )
+            // SYNTHETIC: returns [] against ./seed unless items are checked
+            // first. Handler returns Vec<String>. Verify before shipping.
             .response(
                 r#"
 ["mozzarella cheese", "tipo zero flour"]
@@ -1310,6 +1328,9 @@ fn pantry() -> ApiSection {
                 "An item counts as low when its quantity has fallen to or below its `low` \
                  threshold.",
             )
+            // SYNTHETIC: the seed pantry has no low items, so this returns []
+            // against ./seed. Shape checked against DepletedItemResponse in
+            // src/server/handlers/pantry.rs. Verify before shipping.
             .response(
                 r#"
 [
