@@ -4,10 +4,11 @@
 //! here are meant to be real payloads, not plausible ones.
 //!
 //! When you add or change an API route in `src/server/mod.rs`, update this
-//! file: the `every_router_path_is_documented` test fails until the new route
-//! has an entry, and `no_documented_path_is_stale` fails if an entry names a
-//! route that no longer exists. `extracts_wrapped_routes_from_the_real_router`
-//! guards the extractor itself today, ahead of those two tests landing.
+//! file: `no_documented_path_is_stale` fails if an entry names a route that
+//! no longer exists in the router, and `exemptions_are_all_documented` fails
+//! if a `NOT_ROUTER_REGISTERED` exemption outlives the doc entry it excuses.
+//! `extracts_wrapped_routes_from_the_real_router` guards the path extractor
+//! itself.
 
 use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
 
@@ -81,27 +82,43 @@ fn recipes() -> ApiSection {
                 "GET",
                 "/api/recipes",
                 "List every recipe as a directory tree",
-                "Returns the recipe tree rooted at the server's base path. Directories \
-                 become `children` entries; a node with a `recipe` field is a file. \
-                 Menus (`.menu`) appear in the same tree as recipes.",
+                "Returns the recipe tree rooted at the server's base path. Every node — \
+                 root, directory, and file alike — carries the same four keys: `children`, \
+                 `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null \
+                 for a file; that is the discriminator, not the key's presence. Menus \
+                 (`.menu`) appear in the same tree as recipes.",
             )
             .response(
                 r#"
 {
   "children": {
-    "2 Day Plan": {
-      "children": {},
-      "name": "2 Day Plan",
-      "path": "/absolute/path/to/seed/2 Day Plan.menu",
-      "recipe": {
-        "metadata": { "servings": 2 },
-        "source": {
-          "path": "/absolute/path/to/seed/2 Day Plan.menu",
-          "source_type": "Path"
+    "Breakfast": {
+      "children": {
+        "Easy Pancakes": {
+          "children": {},
+          "name": "Easy Pancakes",
+          "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+          "recipe": {
+            "metadata": {
+              "author": "CookCLI Team",
+              "servings": 2,
+              "description": "Simple crepes that are perfect for a lazy weekend breakfast."
+            },
+            "source": {
+              "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+              "source_type": "Path"
+            }
+          }
         }
-      }
+      },
+      "name": "Breakfast",
+      "path": "/absolute/path/to/seed/Breakfast",
+      "recipe": null
     }
-  }
+  },
+  "name": "seed",
+  "path": "/absolute/path/to/seed",
+  "recipe": null
 }
 "#,
             ),
@@ -111,12 +128,13 @@ fn recipes() -> ApiSection {
                 "Read one parsed recipe",
                 "Parses the recipe and returns its ingredients, cookware, timers and steps. \
                  `grouped_ingredients` aggregates repeated ingredients and indexes back into \
-                 `ingredients`. The `image` field is a URL under `/api/static/` when the recipe \
-                 has a title image, otherwise null.",
+                 `ingredients`. `inline_quantities` is also present alongside them at the top \
+                 level of `recipe`. The `image` field is a URL under `/api/static/` when the \
+                 recipe has a title image, otherwise null.",
             )
             .params(vec![
-                param("path", "path", "string", true, "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`."),
-                param("scale", "query", "number", false, "Scaling factor applied during parsing. Defaults to 1."),
+                param("path", "path", "string", true, "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`. The `.cook` extension is optional — the server tries the bare path first, then `.cook`, then `.menu`."),
+                param("scale", "query", "number", false, "Scaling factor applied during parsing. Defaults to 1. A non-numeric value returns a plain-text 400 (\"Failed to deserialize query string: ...\") from axum's query deserializer, not the page's usual JSON error envelope."),
             ])
             .response(
                 r#"
@@ -142,7 +160,15 @@ fn recipes() -> ApiSection {
           "unit": null,
           "value": { "type": "number", "value": { "type": "regular", "value": 6.0 } }
         },
-        "reference": null
+        "reference": null,
+        "relation": {
+          "reference_target": null,
+          "relation": {
+            "defined_in_step": true,
+            "referenced_from": [],
+            "type": "definition"
+          }
+        }
       }
     ],
     "grouped_ingredients": [
@@ -202,7 +228,8 @@ tags: breakfast, quick
 author: CookCLI Team
 ---
 
-Crack the @eggs{6} into a blender.
+Crack the @eggs{3} into a blender, then add the @flour{125%g},
+@milk{250%ml} and @sea salt{pinch}, and blitz until smooth.
 "#,
             ),
             ep(
@@ -211,7 +238,11 @@ Crack the @eggs{6} into a blender.
                 "Create or overwrite a recipe",
                 "The request body is the raw Cooklang source as `text/plain` — not JSON. \
                  Writes are atomic (temp file plus rename). If the file does not exist yet, \
-                 it is created with a `.cook` extension.",
+                 it is created with a `.cook` extension — but the response's `path` echoes \
+                 the request path verbatim and does not report that resolved filename. The \
+                 parent directory must already exist: writing into a directory that is not \
+                 there returns a 500 whose message talks about permissions even when the \
+                 real cause is the missing directory.",
             )
             .params(vec![param(
                 "path",
@@ -232,8 +263,8 @@ Mix the @flour{200%g} and @water{120%ml}.
             .response(
                 r#"
 {
-  "status": "success",
-  "path": "Breakfast/New Recipe.cook"
+  "path": "Breakfast/New Recipe",
+  "status": "success"
 }
 "#,
             ),
@@ -248,7 +279,9 @@ Mix the @flour{200%g} and @water{120%ml}.
                 "path",
                 "string",
                 true,
-                "Recipe path relative to the recipe directory.",
+                "Recipe path relative to the recipe directory. The `.cook` extension is \
+                 optional — the same bare → `.cook` → `.menu` resolution as the raw endpoint \
+                 applies here too.",
             )])
             .response(
                 r#"
@@ -567,6 +600,18 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
                 router.contains(&path),
                 "{path} is documented in api_docs.rs but no longer exists in the router. \
                  Remove or correct the doc entry."
+            );
+        }
+    }
+
+    #[test]
+    fn exemptions_are_all_documented() {
+        let documented = documented_paths();
+        for path in NOT_ROUTER_REGISTERED {
+            assert!(
+                documented.contains(*path),
+                "{path} is exempted from the router check but is not documented — \
+                 remove the stale exemption"
             );
         }
     }
