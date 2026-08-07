@@ -1,38 +1,55 @@
+# Dependabot configuration
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
+
 updates:
+  # ---- Rust (CLI) ----
   - package-ecosystem: cargo
-    directory: "/"
+    directory: /
     schedule:
       interval: cron
-      cronjob: "0 5 1,15 * *"
+      cronjob: "0 9 1,15 * *"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: chore
       include: scope
     groups:
-      cargo-minor-and-patch:
+      cargo-dependencies:
+        patterns:
+          - "*"
         update-types:
           - minor
           - patch
 
+  # ---- Node (frontend tooling) ----
   - package-ecosystem: npm
-    directory: "/"
+    directory: /
     schedule:
       interval: cron
-      cronjob: "0 5 1,15 * *"
+      cronjob: "0 9 1,15 * *"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: chore
       include: scope
     groups:
-      npm-minor-and-patch:
+      npm-dependencies:
+        patterns:
+          - "*"
         update-types:
           - minor
           - patch
 
+  # ---- GitHub Actions ----
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: /
     schedule:
       interval: cron
-      cronjob: "0 5 1,15 * *"
+      cronjob: "0 9 1,15 * *"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: chore
       include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"
