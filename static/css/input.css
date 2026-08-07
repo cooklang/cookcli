@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind v4 is CSS-first and no longer auto-discovers tailwind.config.js.
+   @config keeps the existing JS config (custom colours, gradient keyframes,
+   darkMode: 'class' and the content globs) authoritative. */
+@config "../../tailwind.config.js";
 
 /* Custom component classes */
 @layer components {
@@ -46,7 +49,7 @@
 
     /* Step numbers with colorful circles */
     .step-number {
-        @apply w-8 h-8 flex items-center justify-center rounded-full text-white font-bold flex-shrink-0;
+        @apply w-8 h-8 flex items-center justify-center rounded-full text-white font-bold shrink-0;
         background: linear-gradient(135deg, #ff6b35, #f97316);
     }
 
@@ -54,7 +57,7 @@
     .tag {
         @apply inline-block px-3 py-1 rounded-full text-xs font-medium mr-2;
         background: linear-gradient(135deg, #fbbf24, #fb923c);
-        @apply text-white shadow-sm;
+        @apply text-white shadow-xs;
     }
 
     /* Navigation pills */
@@ -209,6 +212,6 @@
     }
 
     .dark .cm-selectionBackground {
-        @apply bg-blue-800/50 !important;
+        @apply bg-blue-800/50!;
     }
 }

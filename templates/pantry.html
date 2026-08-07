@@ -4,7 +4,7 @@
 <div class="px-4 sm:px-8 lg:px-12 xl:px-16">
     <div id="pantry-error-banner" class="hidden mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
         <div class="flex items-start gap-3">
-            <div class="flex-shrink-0 text-red-500">
+            <div class="shrink-0 text-red-500">
                 <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
@@ -25,7 +25,7 @@
             <div class="flex items-center gap-4">
                 <span id="out-of-stock-count" class="text-sm text-gray-500 dark:text-gray-400"></span>
                 <label class="flex items-center cursor-pointer group">
-                    <input type="checkbox" id="filter-out-of-stock" class="mr-2 w-4 h-4 text-orange-600 rounded focus:ring-orange-500 focus:ring-2">
+                    <input type="checkbox" id="filter-out-of-stock" class="mr-2 w-4 h-4 text-orange-600 rounded-sm focus:ring-orange-500 focus:ring-2">
                     <span class="text-sm text-gray-600 group-hover:text-gray-800 dark:text-gray-400 dark:group-hover:text-gray-200">{{ tr.t("pantry-show-out-of-stock") }}</span>
                 </label>
             </div>
@@ -65,7 +65,7 @@
                          data-low="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                         <!-- Main content with aligned name and attributes -->
                         <div class="flex items-start justify-between">
-                            <div class="flex-grow">
+                            <div class="grow">
                                 <!-- Name aligned with attributes -->
                                 <h3 class="font-medium text-gray-900 mb-2">{{ item.name }}</h3>
 
@@ -97,21 +97,21 @@
                                 <!-- Edit form (hidden by default) -->
                                 <div class="item-edit hidden">
                                     <div class="space-y-2">
-                                        <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border rounded"
+                                        <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border rounded-sm"
                                                placeholder="Quantity (e.g., 500%g)"
                                                value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
-                                        <input type="text" class="edit-bought w-full px-2 py-1 text-sm border rounded"
+                                        <input type="text" class="edit-bought w-full px-2 py-1 text-sm border rounded-sm"
                                                placeholder="Bought (DD.MM.YYYY)"
                                                value="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
-                                        <input type="text" class="edit-expire w-full px-2 py-1 text-sm border rounded"
+                                        <input type="text" class="edit-expire w-full px-2 py-1 text-sm border rounded-sm"
                                                placeholder="Expires (DD.MM.YYYY)"
                                                value="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
-                                        <input type="text" class="edit-low w-full px-2 py-1 text-sm border rounded"
+                                        <input type="text" class="edit-low w-full px-2 py-1 text-sm border rounded-sm"
                                                placeholder="Low threshold (e.g., 100%g)"
                                                value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                                         <div class="flex items-center justify-end space-x-2 mt-2">
-                                            <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">{{ tr.t("pantry-save") }}</button>
-                                            <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 font-medium">{{ tr.t("pantry-cancel") }}</button>
+                                            <button class="save-btn px-3 py-1.5 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 font-medium">{{ tr.t("pantry-save") }}</button>
+                                            <button class="cancel-btn px-3 py-1.5 text-xs bg-gray-400 text-white rounded-sm hover:bg-gray-500 font-medium">{{ tr.t("pantry-cancel") }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -119,15 +119,15 @@
 
                             <!-- Action buttons and status indicator -->
                             <div class="flex items-start space-x-2 ml-4">
-                                <div class="item-status-dot w-2 h-2 bg-green-500 rounded-full mt-1 flex-shrink-0"></div>
+                                <div class="item-status-dot w-2 h-2 bg-green-500 rounded-full mt-1 shrink-0"></div>
                                 <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button class="edit-btn p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                    <button class="edit-btn p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-sm"
                                             title="{{ tr.t("pantry-edit-item") }}">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                         </svg>
                                     </button>
-                                    <button class="delete-btn p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    <button class="delete-btn p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm"
                                             title="{{ tr.t("pantry-remove-item") }}">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -162,7 +162,7 @@
 </div>
 
 <!-- Add Item Modal -->
-<div id="add-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+<div id="add-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <h2 class="text-xl font-bold mb-4">{{ tr.t("pantry-add-pantry-item") }}</h2>
         <form id="add-form">
