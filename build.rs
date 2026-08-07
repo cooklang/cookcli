@@ -1,0 +1,48 @@
+use std::path::Path;
+
+/// Front-end assets that are compiled by npm and embedded into the binary by
+/// rust-embed. They are gitignored, so a build from a git clone or a source
+/// tarball won't have them — and rust-embed silently embeds nothing, shipping
+/// a binary whose web UI renders unstyled (issue #233). Fail the build with
+/// instructions instead. The crates.io package includes the compiled assets,
+/// so `cargo install cookcli` is unaffected.
+const COMPILED_ASSETS: &[(&str, &str)] = &[
+    ("static/css/output.css", "npm run build-css"),
+    ("static/js/editor.bundle.js", "npm run build-js"),
+];
+
+fn main() {
+    let mut missing = Vec::new();
+    for (path, command) in COMPILED_ASSETS {
+        // Re-runs this check when the file changes or is still missing, and
+        // rebuilds the embedded assets after `npm run build-css`/`build-js`.
+        println!("cargo:rerun-if-changed={path}");
+        if !Path::new(path).exists() {
+            missing.push((path, command));
+        }
+    }
+
+    if missing.is_empty() {
+        return;
+    }
+
+    eprintln!("error: missing compiled front-end assets:");
+    for (path, command) in &missing {
+        eprintln!("  - {path}  (generate with: {command})");
+    }
+    eprintln!(
+        "\n\
+        These files are generated and not checked into git, so they are absent\n\
+        from git clones and source tarballs. Building them requires Node.js:\n\
+        \n\
+        \tnpm install\n\
+        \tnpm run build-css\n\
+        \tnpm run build-js\n\
+        \n\
+        Without them the web UI (`cook server`, `cook build web`) renders\n\
+        unstyled pages. Alternatively, install from crates.io with\n\
+        `cargo install cookcli` — the published package ships the compiled\n\
+        assets prebuilt."
+    );
+    std::process::exit(1);
+}
