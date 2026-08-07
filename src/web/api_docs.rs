@@ -91,7 +91,7 @@ impl EndpointDoc {
 
 /// The full API reference, in display order.
 pub fn sections() -> Vec<ApiSection> {
-    vec![recipes()]
+    vec![recipes(), menus()]
 }
 
 fn recipes() -> ApiSection {
@@ -317,6 +317,117 @@ Mix the @flour{200%g} and @water{120%ml}.
                 "path",
                 "Asset path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.jpg`.",
             )]),
+        ],
+    )
+}
+
+fn menus() -> ApiSection {
+    section(
+        "menus",
+        "Menus",
+        "`.menu` files group recipes into meal plans. These endpoints return a menu's \
+         structure — days, meals, and the recipes and loose ingredients in each.",
+        vec![
+            ep(
+                "GET",
+                "/api/menus",
+                "List every menu",
+                "Walks the recipe tree and returns only `.menu` files.",
+            )
+            .response(
+                r#"
+[
+  { "name": "2 Day Plan", "path": "2 Day Plan.menu" },
+  { "name": "Weekly Plan", "path": "Weekly Plan.menu" }
+]
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/menus/*path",
+                "Read one menu",
+                "Sections correspond to days; a `date` is extracted when the section name \
+                 contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't \
+                 use that convention, so `date` is null below. Meal items are tagged by `kind`: \
+                 `recipe_reference` points at another file and carries the scale resolved from \
+                 the menu's `{...}` notation (`null` when the reference has none); \
+                 `ingredient` is a loose item written directly in the menu. Plain connecting \
+                 text in the menu (e.g. \"with\") is dropped — only structured references and \
+                 ingredients are returned. Returns 400 if the path is not a menu file. The \
+                 response below is trimmed to the first of this menu's two `sections`; the \
+                 second follows the same shape.",
+            )
+            .params(vec![
+                path_param(
+                    "path",
+                    "Menu path relative to the recipe directory, e.g. `2 Day Plan.menu`.",
+                ),
+                param(
+                    "scale",
+                    "query",
+                    "number",
+                    false,
+                    "Scaling factor applied to the whole menu. Defaults to 1.",
+                ),
+            ])
+            .response(
+                r#"
+{
+  "name": "2 Day Plan",
+  "path": "2 Day Plan.menu",
+  "metadata": { "servings": "2" },
+  "sections": [
+    {
+      "name": "Day 1",
+      "date": null,
+      "meals": [
+        {
+          "type": "Breakfast",
+          "time": null,
+          "items": [
+            {
+              "kind": "recipe_reference",
+              "name": "./Breakfast/Easy Pancakes",
+              "path": "./Breakfast/Easy Pancakes.cook",
+              "scale": 10.0
+            },
+            { "kind": "ingredient", "name": "maple syrup", "quantity": "2", "unit": "tbsp" },
+            { "kind": "ingredient", "name": "coffee", "quantity": "1", "unit": "c" }
+          ]
+        },
+        {
+          "type": "Lunch",
+          "time": null,
+          "items": [
+            {
+              "kind": "recipe_reference",
+              "name": "./lamb-chops",
+              "path": "./lamb-chops.cook",
+              "scale": null
+            },
+            { "kind": "ingredient", "name": "bread", "quantity": "2", "unit": "slices" },
+            { "kind": "ingredient", "name": "butter", "quantity": "1", "unit": "tbsp" }
+          ]
+        },
+        {
+          "type": "Dinner",
+          "time": null,
+          "items": [
+            {
+              "kind": "recipe_reference",
+              "name": "./Neapolitan Pizza",
+              "path": "./Neapolitan Pizza.cook",
+              "scale": null
+            },
+            { "kind": "ingredient", "name": "soy sauce", "quantity": "1", "unit": "tbsp" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+            ),
         ],
     )
 }
