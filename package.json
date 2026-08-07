@@ -27,6 +27,7 @@
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.11",
     "@playwright/test": "^1.62.1",
+    "@tailwindcss/cli": "^4.3.3",
     "esbuild": "^0.28.1",
     "playwright": "^1.55.0",
     "tailwindcss": "^4.3.3"

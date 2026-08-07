@@ -29,7 +29,7 @@
     <div class="flex-1">
         <div id="error-banner" class="hidden mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
             <div class="flex items-start gap-3">
-                <div class="flex-shrink-0 text-red-500">
+                <div class="shrink-0 text-red-500">
                     <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                     </svg>
@@ -122,7 +122,7 @@ function renderSelectedRecipes() {
                         ${refs.map(ref => {
                             const refName = ref.split('/').pop();
                             return `<li class="text-xs text-gray-400 flex items-center gap-1">
-                                <svg class="w-3 h-3 text-blue-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-3 h-3 text-blue-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                 </svg>
                                 <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
@@ -131,7 +131,7 @@ function renderSelectedRecipes() {
                     </ul>` : '';
                 return `<li class="text-sm text-gray-600 flex flex-col">
                     <div class="flex items-center gap-1">
-                        <svg class="w-3 h-3 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
                         <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}" class="hover:text-orange-600 transition-colors">${escHtml(recipe.name)}</a>
@@ -163,7 +163,7 @@ function renderSelectedRecipes() {
                 ${refs.map(ref => {
                     const refName = ref.split('/').pop();
                     return `<li class="text-sm text-gray-500 flex items-center gap-1">
-                        <svg class="w-3 h-3 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
                         <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
@@ -418,18 +418,18 @@ function displayShoppingList(data) {
     if (data.categories && data.categories.length > 0) {
         html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">' + escHtml({{ tr.t("shopping-title")|json|safe }}) + '</h2>';
         html += data.categories.map(category => `
-            <div class="mb-6 bg-white rounded-lg p-4 shadow-sm">
+            <div class="mb-6 bg-white rounded-lg p-4 shadow-xs">
                 <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
                 <ul class="space-y-2">
                     ${category.items.map((item, idx) => {
                         // Use ingredient name as the unique ID for localStorage
                         const itemId = `item-${item.name.replace(/\s+/g, '-')}`;
                         return `
-                        <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition-colors">
+                        <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded-sm transition-colors">
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
                                     id="${escHtml(itemId)}"
-                                    class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 mr-3"
+                                    class="w-5 h-5 text-orange-600 rounded-sm focus:ring-orange-500 mr-3"
                                     data-action="toggle-item"
                                     data-item-id="${escHtml(itemId)}"
                                     data-ingredient-name="${escHtml(item.name)}">
@@ -459,7 +459,7 @@ function displayShoppingList(data) {
                     return `
                     <li class="flex items-center justify-between py-1">
                         <div class="flex items-center flex-1">
-                            <svg class="w-4 h-4 text-green-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="w-4 h-4 text-green-600 mr-2 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                             </svg>
                             <span class="text-green-800">${escHtml(itemName)}</span>

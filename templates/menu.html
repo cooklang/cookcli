@@ -131,7 +131,7 @@
     <!-- Menu sections -->
     <div class="space-y-6">
             {% for section in sections %}
-            <div class="menu-section bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="menu-section bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden">
                 {% match section.name %}
                 {% when Some with (name) %}
                 <div class="menu-section-header bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3">
