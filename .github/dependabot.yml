@@ -3,7 +3,8 @@ updates:
   - package-ecosystem: cargo
     directory: "/"
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 5 1,15 * *"
     commit-message:
       prefix: chore
       include: scope
@@ -16,7 +17,8 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 5 1,15 * *"
     commit-message:
       prefix: chore
       include: scope
@@ -29,7 +31,8 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 5 1,15 * *"
     commit-message:
       prefix: chore
       include: scope
