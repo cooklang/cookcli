@@ -18,24 +18,59 @@ pub fn sections() -> Vec<ApiSection> {
 #[cfg(test)]
 use std::collections::BTreeSet;
 
+/// The text of `api()`'s body, braces included, or `None` if it can't be
+/// located. Bounding the scan matters because anything after `api()` belongs
+/// to a different router and must not be given the `/api` prefix.
+#[cfg(test)]
+fn api_body(source: &str) -> Option<&str> {
+    let start = source.find("fn api(")?;
+    let rest = &source[start..];
+    let open = rest.find('{')?;
+
+    let mut depth = 0usize;
+    for (i, c) in rest[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&rest[open..=open + i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Extract every route path registered inside the `api()` function of the
 /// given source text, prefixed with `/api` to match how it is nested.
 ///
 /// Deliberately textual rather than reflective: axum's `Router` does not
 /// expose its registered routes at runtime, so comparing against the source
 /// is the only way to catch a new endpoint that nobody documented.
+///
+/// This does not, and cannot, see `.nest_service("/api/static", ...)` on the
+/// *outer* router in `src/server/mod.rs` — it isn't a `.route(` call and
+/// isn't inside `api()`. That endpoint is documented and exempted by hand via
+/// a `NOT_ROUTER_REGISTERED` allowlist (see Task 3); the omission here is
+/// deliberate, not a gap in this scan.
 #[cfg(test)]
 fn router_paths(source: &str) -> BTreeSet<String> {
     const MARKER: &str = ".route(";
 
-    // Everything before `fn api(` is a different router (e.g. the
-    // `/static/*file` route on the outer app) and must not be collected.
-    let Some(start) = source.find("fn api(") else {
+    // Brace-matching bounds the scan to api()'s body so a helper added below
+    // api() that happens to call `.route(` is never mistaken for one of its
+    // routes and given a wrong `/api` prefix. Naive about braces inside
+    // string literals/comments — acceptable because api() contains neither;
+    // if it ever breaks, api_body returns None, the set comes back empty,
+    // and every documented path fails `no_documented_path_is_stale` loudly.
+    let Some(body) = api_body(source) else {
         return BTreeSet::new();
     };
 
     let mut paths = BTreeSet::new();
-    let mut rest = &source[start..];
+    let mut rest = body;
 
     while let Some(i) = rest.find(MARKER) {
         rest = &rest[i + MARKER.len()..];
@@ -46,8 +81,14 @@ fn router_paths(source: &str) -> BTreeSet<String> {
         // `.route("` match silently drops every wrapped registration.
         let after_marker = rest.trim_start();
         let Some(inside) = after_marker.strip_prefix('"') else {
-            // Not a string literal — keep scanning from after this marker.
-            continue;
+            let preview: String = after_marker.chars().take(60).collect();
+            panic!(
+                "a `.route(` in api() is not followed by a string literal, near: {preview:?}\n\
+                 The extractor only understands plain string paths. A const path or a raw \
+                 string literal would be skipped silently, letting an undocumented endpoint \
+                 through the drift guard. Teach `router_paths` this shape rather than \
+                 removing the check."
+            );
         };
         let Some(end) = inside.find('"') else { break };
         paths.insert(format!("/api{}", &inside[..end]));
@@ -156,5 +197,37 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             paths.iter().all(|p| p.starts_with("/api/")),
             "every extracted path should carry the /api nest prefix"
         );
+    }
+
+    #[test]
+    fn ignores_routes_defined_after_the_api_fn() {
+        const TRAILING: &str = r#"
+fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
+    let router = Router::new().route("/inside", get(h));
+    Ok(router)
+}
+
+async fn something_else() {
+    other.route("/outside", get(h));
+}
+"#;
+        let paths = router_paths(TRAILING);
+        assert!(paths.contains("/api/inside"));
+        assert!(
+            !paths.contains("/api/outside"),
+            "routes outside api() are not nested under /api and must not be collected"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "not followed by a string literal")]
+    fn rejects_route_shapes_it_cannot_read() {
+        const CONST_PATH: &str = r#"
+fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
+    let router = Router::new().route(ROUTES_RECIPES, get(h));
+    Ok(router)
+}
+"#;
+        let _ = router_paths(CONST_PATH);
     }
 }
