@@ -199,6 +199,10 @@ git commit -m "feat(server): add data types for the API documentation page"
 
 This is the machinery behind the drift test. It reads `src/server/mod.rs` as text and pulls out every route path. Written test-first because the string handling has real edge cases.
 
+> **Corrected during execution.** The extractor originally specified here matched the contiguous string `.route("`. That is wrong: `src/server/mod.rs` has 24 single-line and **7 rustfmt-wrapped** registrations, where a newline and indentation sit between `.route(` and the path literal. It silently found 23 of 29 paths. A drift guard that under-reports the router by a fifth passes every test while leaving endpoints undocumented — the exact failure this whole approach exists to prevent.
+>
+> The code below is the corrected version: it skips whitespace after `.route(`, bounds the scan to `api()`'s body by brace-matching, and **panics** on a route shape it cannot read (a const path, a raw string literal) rather than skipping it. The tests grew from 4 to 8 to cover each of those.
+
 **Files:**
 - Modify: `src/web/api_docs.rs`
 
@@ -219,6 +223,10 @@ fn serve_static() {
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     let router = Router::new()
         .route("/shopping_list", post(handlers::shopping_list))
+        .route(
+            "/shopping_list/items",
+            get(handlers::get_shopping_list_items),
+        )
         .route("/pantry/:section/:name", axum::routing::delete(h))
         .route("/pantry/:section/:name", axum::routing::put(h))
         .route("/recipes/*path", get(h).put(h).delete(h));
@@ -250,9 +258,10 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     fn deduplicates_paths_registered_once_per_method() {
         let paths = router_paths(FIXTURE);
         assert!(paths.contains("/api/pantry/:section/:name"));
-        // 4 distinct paths in the fixture: shopping_list, pantry/:section/:name
-        // (registered twice, for DELETE and PUT), recipes/*path, sync/status.
-        assert_eq!(paths.len(), 4, "expected 4 distinct paths, got {paths:?}");
+        // 5 distinct paths in the fixture: shopping_list, shopping_list/items,
+        // pantry/:section/:name (registered twice, for DELETE and PUT),
+        // recipes/*path, sync/status.
+        assert_eq!(paths.len(), 5, "expected 5 distinct paths, got {paths:?}");
     }
 
     #[test]
@@ -261,6 +270,78 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         // sync endpoints are always documented and badged rather than hidden.
         let paths = router_paths(FIXTURE);
         assert!(paths.contains("/api/sync/status"));
+    }
+
+    #[test]
+    fn extracts_multiline_route_calls() {
+        // rustfmt wraps long registrations; a contiguous `.route("` search
+        // misses them entirely.
+        let paths = router_paths(FIXTURE);
+        assert!(paths.contains("/api/shopping_list/items"));
+    }
+
+    #[test]
+    fn ignores_routes_defined_after_the_api_fn() {
+        const TRAILING: &str = r#"
+fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
+    let router = Router::new().route("/inside", get(h));
+    Ok(router)
+}
+
+async fn something_else() {
+    other.route("/outside", get(h));
+}
+"#;
+        let paths = router_paths(TRAILING);
+        assert!(paths.contains("/api/inside"));
+        assert!(
+            !paths.contains("/api/outside"),
+            "routes outside api() are not nested under /api and must not be collected"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "not followed by a string literal")]
+    fn rejects_route_shapes_it_cannot_read() {
+        const CONST_PATH: &str = r#"
+fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
+    let router = Router::new().route(ROUTES_RECIPES, get(h));
+    Ok(router)
+}
+"#;
+        let _ = router_paths(CONST_PATH);
+    }
+
+    #[test]
+    fn extracts_wrapped_routes_from_the_real_router() {
+        let paths = router_paths(include_str!("../server/mod.rs"));
+
+        // These are registered with rustfmt-wrapped `.route(` calls in
+        // src/server/mod.rs. They regressed to missing once already; if this
+        // fails, the extractor has stopped seeing wrapped registrations and
+        // the drift guard is quietly under-counting the router.
+        for expected in [
+            "/api/shopping_list/items",
+            "/api/shopping_list/add_menu",
+            "/api/shopping_list/remove",
+            "/api/shopping_list/uncheck",
+            "/api/pantry/:section/:name",
+            "/api/recipes/*path",
+        ] {
+            assert!(
+                paths.contains(expected),
+                "{expected} is missing from the extracted router paths"
+            );
+        }
+
+        assert!(
+            !paths.contains("/api/static/*file"),
+            "the outer router's static route must not be collected"
+        );
+        assert!(
+            paths.iter().all(|p| p.starts_with("/api/")),
+            "every extracted path should carry the /api nest prefix"
+        );
     }
 }
 ```
@@ -278,30 +359,79 @@ Insert into `src/web/api_docs.rs`, above the `#[cfg(test)]` module:
 #[cfg(test)]
 use std::collections::BTreeSet;
 
+/// The text of `api()`'s body, braces included, or `None` if it can't be
+/// located. Bounding the scan matters because anything after `api()` belongs
+/// to a different router and must not be given the `/api` prefix.
+///
+/// Brace counting is naive about braces inside string literals and comments.
+/// That is fine here — `api()` contains neither — and if it ever breaks, this
+/// returns `None`, the path set comes back empty, and `no_documented_path_is_stale`
+/// fails loudly for every entry. It cannot fail quietly.
+#[cfg(test)]
+fn api_body(source: &str) -> Option<&str> {
+    let start = source.find("fn api(")?;
+    let rest = &source[start..];
+    let open = rest.find('{')?;
+
+    let mut depth = 0usize;
+    for (i, c) in rest[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&rest[open..=open + i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Extract every route path registered inside the `api()` function of the
 /// given source text, prefixed with `/api` to match how it is nested.
 ///
 /// Deliberately textual rather than reflective: axum's `Router` does not
 /// expose its registered routes at runtime, so comparing against the source
 /// is the only way to catch a new endpoint that nobody documented.
+///
+/// Does not see `.nest_service("/api/static", ...)` at `src/server/mod.rs:176`
+/// — that is not a `.route(` and not inside `api()`. It is documented by hand
+/// and exempted via `NOT_ROUTER_REGISTERED` in the tests below; the omission
+/// is deliberate, not an oversight.
 #[cfg(test)]
 fn router_paths(source: &str) -> BTreeSet<String> {
-    const MARKER: &str = ".route(\"";
+    const MARKER: &str = ".route(";
 
-    // Everything before `fn api(` is a different router (e.g. the
-    // `/static/*file` route on the outer app) and must not be collected.
-    let Some(start) = source.find("fn api(") else {
+    let Some(body) = api_body(source) else {
         return BTreeSet::new();
     };
 
     let mut paths = BTreeSet::new();
-    let mut rest = &source[start..];
+    let mut rest = body;
 
     while let Some(i) = rest.find(MARKER) {
         rest = &rest[i + MARKER.len()..];
-        let Some(end) = rest.find('"') else { break };
-        paths.insert(format!("/api{}", &rest[..end]));
-        rest = &rest[end..];
+
+        // rustfmt wraps long `.route(...)` calls, putting a newline and
+        // indentation between `.route(` and the path literal. Skipping
+        // whitespace here is what makes those visible — a contiguous
+        // `.route("` match silently drops every wrapped registration.
+        let after_marker = rest.trim_start();
+        let Some(inside) = after_marker.strip_prefix('"') else {
+            let preview: String = after_marker.chars().take(60).collect();
+            panic!(
+                "a `.route(` in api() is not followed by a string literal, near: {preview:?}\n\
+                 The extractor only understands plain string paths. A const path or a raw \
+                 string literal would be skipped silently, letting an undocumented endpoint \
+                 through the drift guard. Teach `router_paths` this shape rather than \
+                 removing the check."
+            );
+        };
+        let Some(end) = inside.find('"') else { break };
+        paths.insert(format!("/api{}", &inside[..end]));
+        rest = &inside[end..];
     }
 
     paths
@@ -311,7 +441,7 @@ fn router_paths(source: &str) -> BTreeSet<String> {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 4 tests pass.
+Expected: PASS — 8 tests pass.
 
 - [ ] **Step 5: Commit**
 
@@ -663,7 +793,7 @@ Add to the `#[cfg(test)] mod tests` block in `src/web/api_docs.rs`:
 - [ ] **Step 4: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
+Expected: PASS — 10 tests. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
 
 - [ ] **Step 5: Commit**
 
@@ -772,7 +902,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests, `no_documented_path_is_stale` now covering the two menu paths.
+Expected: PASS — 10 tests, `no_documented_path_is_stale` now covering the two menu paths.
 
 - [ ] **Step 4: Commit**
 
@@ -1017,7 +1147,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests.
+Expected: PASS — 10 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1203,7 +1333,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
+Expected: PASS — 10 tests. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
 
 - [ ] **Step 4: Commit**
 
@@ -1322,7 +1452,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests.
+Expected: PASS — 10 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1398,7 +1528,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests.
+Expected: PASS — 10 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1535,7 +1665,7 @@ Add to the `#[cfg(test)] mod tests` block:
 - [ ] **Step 4: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests.
+Expected: PASS — 11 tests.
 
 If `every_router_path_is_documented` fails, the named path exists in `src/server/mod.rs` but has no matching entry. Either a route was added since this plan was written, or a path string has a typo. Fix the doc entry rather than the assertion.
 
@@ -1557,7 +1687,7 @@ git checkout src/server/mod.rs
 ```
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 6 tests. This confirms the guard is real and not vacuously passing.
+Expected: PASS — 11 tests. This confirms the guard is real and not vacuously passing.
 
 - [ ] **Step 6: Commit**
 
@@ -1949,7 +2079,7 @@ Expected: no warnings. A likely one is `clippy::too_many_lines` on `shopping_lis
 - [ ] **Step 3: Full test suite**
 
 Run: `cargo test`
-Expected: all tests pass, including the 7 in `api_docs`.
+Expected: all tests pass, including the 11 in `api_docs`.
 
 - [ ] **Step 4: Confirm the drift guard covers the real router**
 
