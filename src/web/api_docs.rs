@@ -23,6 +23,14 @@
 //! contain the literal sequence `"#` (a URL fragment, say), bump to
 //! `r##"..."##` rather than escaping — a plain `r#"..."#` would terminate
 //! early and produce a confusing compile error far from the actual mistake.
+//!
+//! JSON key order in these examples is arranged for readability and does not
+//! reflect the wire order. The server builds responses with `serde_json::json!`
+//! over a `BTreeMap`-backed `Value::Object`, so keys are actually emitted
+//! alphabetically (e.g. `categories, checked, pantry_items`, not the
+//! insertion order used in the handler source). Key order carries no meaning
+//! in JSON, so examples are not reordered to match — only worth knowing if
+//! you're diffing captured bytes against these docs.
 
 use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
 
@@ -332,7 +340,9 @@ fn menus() -> ApiSection {
                 "GET",
                 "/api/menus",
                 "List every menu",
-                "Walks the recipe tree and returns only `.menu` files.",
+                "Walks the recipe tree and returns only `.menu` files. Order is not stable — \
+                 the tree walk is over a hash-ordered map, and consecutive calls can return \
+                 the same menus in a different order. Do not depend on it.",
             )
             .response(
                 r#"
@@ -348,14 +358,22 @@ fn menus() -> ApiSection {
                 "Read one menu",
                 "Sections correspond to days; a `date` is extracted when the section name \
                  contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't \
-                 use that convention, so `date` is null below. Meal items are tagged by `kind`: \
-                 `recipe_reference` points at another file and carries the scale resolved from \
-                 the menu's `{...}` notation (`null` when the reference has none); \
-                 `ingredient` is a loose item written directly in the menu. Plain connecting \
-                 text in the menu (e.g. \"with\") is dropped — only structured references and \
-                 ingredients are returned. Returns 400 if the path is not a menu file. The \
-                 response below is trimmed to the first of this menu's two `sections`; the \
-                 second follows the same shape.",
+                 use that convention, so `date` is null below. A meal's `time` is likewise \
+                 extracted from its header, e.g. `Breakfast (08:30):` yields \
+                 `\"type\": \"Breakfast\", \"time\": \"08:30\"`; none of the seed menus set a \
+                 time either, hence null throughout. Meal items are tagged by `kind`: \
+                 `recipe_reference` points at another file; `ingredient` is a loose item \
+                 written directly in the menu. Plain connecting text in the menu (e.g. \"with\") \
+                 is dropped — only structured references and ingredients are returned. Returns \
+                 400 if the path is not a menu file, 404 if it does not exist. The response \
+                 below is trimmed to the first of this menu's two `sections`; the second \
+                 follows the same shape. A `recipe_reference`'s `scale` is the raw target \
+                 taken from the menu's `{...}` notation — the unit is not applied, so \
+                 `{10%servings}` below yields `10.0`, not the resolved multiplier of `5.0` \
+                 that `POST /api/shopping_list/add_menu` actually stores. If you need a real \
+                 scale factor, `add_menu` is the authority, not this field. `?scale` compounds \
+                 onto it too — `?scale=2` on this menu yields `40.0`, not `20.0` — so treat \
+                 `recipe_reference.scale` as unreliable whenever a query scale is present.",
             )
             .params(vec![
                 path_param(
@@ -440,7 +458,10 @@ fn shopping_list() -> ApiSection {
          get an aggregated ingredient list back. Everything else operates on the server's \
          persistent list, stored as `.shopping-list` and `.shopping-checked` in the recipe \
          directory. Most of the endpoints that mutate the stored list respond `200 OK` with an \
-         empty body — only the three GET endpoints and the stateless POST return JSON.",
+         empty body — only `GET /api/shopping_list/items`, `GET /api/shopping_list/checked`, \
+         and the stateless `POST /api/shopping_list` return JSON. (A third GET lives under \
+         this path in the router, `/api/shopping_list/events`, but it's a Server-Sent Events \
+         stream, not JSON — see the Realtime section.)",
         vec![
             ep(
                 "POST",
@@ -706,7 +727,11 @@ fn shopping_list() -> ApiSection {
                 "Add one recipe to the stored list",
                 "Responds `200 OK` with an empty body. The display name is derived from the \
                  path server-side; a client-supplied name would be discarded, so it is not \
-                 accepted.",
+                 accepted. The path is not checked for existence or validity: adding a recipe \
+                 that doesn't exist still returns 200 and the entry lands on the list — it \
+                 then makes every subsequent `POST /api/shopping_list/compact` fail with 500 \
+                 until it's removed, because compact re-aggregates the whole stored list and \
+                 refuses to proceed if any entry fails to parse.",
             )
             .params(vec![
                 param(
@@ -728,7 +753,11 @@ fn shopping_list() -> ApiSection {
                     "body",
                     "string[]",
                     false,
-                    "Which sub-recipe references to expand. Omit to include all.",
+                    "Which sub-recipe references to expand. Omit and no sub-recipes are \
+                     expanded — unlike the stateless `POST /api/shopping_list`, where omitting \
+                     this field means \"expand all\", omitting it here is not preserved through \
+                     storage and reads back as an explicit empty array. Pass the reference \
+                     paths explicitly if you want them expanded.",
                 ),
             ])
             .request(
@@ -744,11 +773,17 @@ fn shopping_list() -> ApiSection {
                 "POST",
                 "/api/shopping_list/add_menu",
                 "Add every recipe in a menu",
-                "Stored as a single entry with the menu's recipes nested inside. Each nested \
-                 recipe's scale is resolved from the menu reference: a bare `{2}` is a raw \
-                 multiplier, `{3%servings}` targets 3 servings against the recipe's own \
-                 `servings` metadata, and any other unit targets its `yield` metadata. \
-                 Responds `200 OK` with an empty body; returns 404 if the menu is not found.",
+                "Stored as a single entry with the menu's recipes nested inside; each nested \
+                 recipe's own sub-recipe references are resolved automatically (there is no \
+                 `included_references` field to set here). Each nested recipe's scale is \
+                 resolved from the menu reference: a bare `{2}` is a raw multiplier, \
+                 `{3%servings}` targets 3 servings against the recipe's own `servings` \
+                 metadata, and any other unit targets its `yield` metadata. Responds `200 OK` \
+                 with an empty body; returns 404 if `path` does not exist, but does not check \
+                 that it's actually a `.menu` file — pointing this at a plain recipe is \
+                 accepted and stores it as if it were `POST /api/shopping_list/add` with that \
+                 recipe's own references as `included_references`, which can leave the list in \
+                 a state that later makes `compact` fail.",
             )
             .params(vec![
                 param(
@@ -807,7 +842,12 @@ fn shopping_list() -> ApiSection {
                 "Appends the name to the checked log verbatim — the server does not validate \
                  it against the current aggregated list, so any string is accepted. Use a name \
                  as returned by `POST /api/shopping_list` for it to correspond to a real \
-                 ingredient. Responds `200 OK` with an empty body.",
+                 ingredient. Note that `GET /api/shopping_list/checked` lowercases every name \
+                 it reads back, while the aggregated list from `POST /api/shopping_list` keeps \
+                 original case — a client that diffs the two sets directly will fail to match \
+                 any ingredient whose name isn't already all-lowercase, e.g. checking \
+                 `\"Dijon mustard\"` here shows up as `\"dijon mustard\"` from `checked`. \
+                 Responds `200 OK` with an empty body.",
             )
             .params(vec![param(
                 "name",
@@ -843,7 +883,13 @@ fn shopping_list() -> ApiSection {
                 "GET",
                 "/api/shopping_list/checked",
                 "List checked ingredient names",
-                "Returns `[]` against a fresh list — nothing is checked until `check` is called.",
+                "Returns `[]` against a fresh list — nothing is checked until `check` is \
+                 called. Every name comes back lowercased, regardless of the case it was \
+                 checked with or the case `POST /api/shopping_list` uses for the same \
+                 ingredient in its `categories` — compare case-insensitively, or lowercase \
+                 the aggregated names yourself before diffing the two. Order is not stable: \
+                 the underlying set is unordered, and consecutive calls can return the same \
+                 names in a different order.",
             )
             .response(
                 r#"
