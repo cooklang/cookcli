@@ -58,7 +58,9 @@ cargo clippy --all-targets 2>&1 \
   | sort -u
 ```
 
-New section functions (`menus`, `pantry`, …) will each add one line while they are unreferenced, then disappear once `sections()` returns them — so the list should stay at 9 if each task wires its section into `sections()` in the same commit. Anything else appearing is a real finding. Task 10 clears the remainder; Task 13 gates on a fully clean `cargo clippy --all-targets -- -D warnings`.
+**The list grows by exactly one per section task, and wiring the section into `sections()` does not prevent that.** An earlier version of this note claimed otherwise; it was wrong. `recipes` appears in the baseline above even though Task 3 registered it, because `sections()` is *itself* unreachable until Task 10 — so everything reachable only through it stays dead regardless.
+
+Expect: 9 after Task 3, 10 after Task 4, 11 after Task 5, rising to 15 after Task 9. **Anything appearing that is not a new section function is a real finding.** Task 10 clears the whole list by wiring `sections()` into the handler; Task 13 gates on a fully clean `cargo clippy --all-targets -- -D warnings`.
 
 **Repo conventions you must follow:**
 - Commit messages use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`). Release automation depends on this.
