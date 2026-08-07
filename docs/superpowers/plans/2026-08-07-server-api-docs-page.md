@@ -130,12 +130,19 @@ Then rebuild and prove it:
 
 ```bash
 make css
-for c in bg-blue-100 bg-green-100 bg-amber-100 text-amber-800 text-red-800; do
-  printf "%-16s %s\n" "$c" "$(grep -c "\.$c" static/css/output.css)"
+for c in bg-blue-100 bg-green-100 bg-amber-100 text-amber-800 text-red-800 \
+         'dark\\:bg-blue-900' 'dark\\:text-amber-200' 'dark\\:text-red-200'; do
+  printf "%-24s %s\n" "$c" "$(grep -c "\.$c" static/css/output.css)"
 done
 ```
 
-Every count must be non-zero. `static/css/output.css` is gitignored, so only the config change is committed.
+Every count must be non-zero.
+
+**Grep the escaped form for `dark:` variants.** Tailwind escapes the colon in the emitted selector, so it writes `.dark\:bg-blue-900`. Searching for the literal `dark:bg-blue-900` returns 0 whether or not the class is present — a false negative that will make a working build look broken.
+
+`static/css/output.css` is gitignored, so only the config change is committed.
+
+A known, accepted cost of the `./src/**/*.rs` glob: Tailwind scans `.rs` as undifferentiated text, so bare identifiers that happen to match utility names get emitted as dead rules (`to_lowercase()` yields `.lowercase`; the word "grow" yields `.grow`). That is ~40 bytes of inert CSS in a 46 KB file, and no element ever carries those classes. Narrowing to `./src/web/**/*.rs` would shrink the surface but would silently reintroduce the purge bug the day someone emits a class name from `src/server/`. The broad glob fails safe; keep it.
 
 - [ ] **Step 2: Register the module in `src/web/mod.rs`**
 
