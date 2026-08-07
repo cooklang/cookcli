@@ -91,7 +91,7 @@ impl EndpointDoc {
 
 /// The full API reference, in display order.
 pub fn sections() -> Vec<ApiSection> {
-    vec![recipes(), menus()]
+    vec![recipes(), menus(), shopping_list()]
 }
 
 fn recipes() -> ApiSection {
@@ -427,6 +427,437 @@ fn menus() -> ApiSection {
   ]
 }
 "#,
+            ),
+        ],
+    )
+}
+
+fn shopping_list() -> ApiSection {
+    section(
+        "shopping-list",
+        "Shopping List",
+        "Two distinct things live here. `POST /api/shopping_list` is stateless: send recipes, \
+         get an aggregated ingredient list back. Everything else operates on the server's \
+         persistent list, stored as `.shopping-list` and `.shopping-checked` in the recipe \
+         directory. Most of the endpoints that mutate the stored list respond `200 OK` with an \
+         empty body — only the three GET endpoints and the stateless POST return JSON.",
+        vec![
+            ep(
+                "POST",
+                "/api/shopping_list",
+                "Aggregate ingredients across recipes",
+                "Stateless — nothing is stored. Ingredients with the same name are combined and \
+                 unit-converted, then grouped into aisle categories from `aisle.conf`; a \
+                 category with no matching entries is omitted from `categories` entirely, and \
+                 ingredients that match no aisle category land in `other`, sorted \
+                 alphabetically. Quantities are reduced by anything in `pantry.conf`; \
+                 `pantry_items` lists the ingredient names that were found there (with a \
+                 nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's \
+                 current persistent checked state, unrelated to the recipes in this request.",
+            )
+            .params(vec![
+                param(
+                    "recipe",
+                    "body",
+                    "string",
+                    true,
+                    "Recipe path. The array may hold several.",
+                ),
+                param(
+                    "scale",
+                    "body",
+                    "number",
+                    false,
+                    "Scaling factor for this recipe. Defaults to 1.",
+                ),
+                param(
+                    "included_references",
+                    "body",
+                    "string[]",
+                    false,
+                    "Which sub-recipe references to expand. Omit to include all of them.",
+                ),
+            ])
+            .request(
+                r#"
+[
+  { "recipe": "Neapolitan Pizza", "scale": 2 },
+  { "recipe": "Salads/Caprese", "included_references": ["Shared/Vinaigrette"] }
+]
+"#,
+            )
+            .response(
+                r#"
+{
+  "categories": [
+    {
+      "category": "fruit and veg",
+      "items": [
+        {
+          "name": "ripe tomatoes",
+          "quantities": [
+            {
+              "scalable": true,
+              "unit": "large",
+              "value": { "type": "number", "value": { "type": "regular", "value": 3.0 } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "milk and dairy",
+      "items": [
+        {
+          "name": "fresh mozzarella",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "g",
+              "value": { "type": "number", "value": { "type": "regular", "value": 200.0 } }
+            }
+          ]
+        },
+        {
+          "name": "mozzarella cheese",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "g",
+              "value": { "type": "number", "value": { "type": "regular", "value": 200.0 } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "tinned goods and baking",
+      "items": [
+        {
+          "name": "tipo zero flour",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "g",
+              "value": { "type": "number", "value": { "type": "regular", "value": 1680.0 } }
+            }
+          ]
+        },
+        {
+          "name": "fresh yeast",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "g",
+              "value": { "type": "number", "value": { "type": "regular", "value": 3.2 } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "dried herbs and spices",
+      "items": [
+        {
+          "name": "salt",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "tsp",
+              "value": {
+                "type": "number",
+                "value": { "type": "fraction", "value": { "whole": 0, "num": 1, "den": 8, "err": 0.0 } }
+              }
+            },
+            {
+              "scalable": false,
+              "unit": "g",
+              "value": { "type": "number", "value": { "type": "regular", "value": 49.2 } }
+            }
+          ]
+        },
+        {
+          "name": "black pepper",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "tsp",
+              "value": { "type": "number", "value": { "type": "regular", "value": 0.0625 } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "oils and dressings",
+      "items": [
+        {
+          "name": "Dijon mustard",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "tsp",
+              "value": {
+                "type": "number",
+                "value": { "type": "fraction", "value": { "whole": 0, "num": 1, "den": 4, "err": 0.0 } }
+              }
+            }
+          ]
+        },
+        {
+          "name": "honey",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "tsp",
+              "value": {
+                "type": "number",
+                "value": { "type": "fraction", "value": { "whole": 0, "num": 1, "den": 4, "err": 0.0 } }
+              }
+            }
+          ]
+        },
+        {
+          "name": "red wine vinegar",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "ml",
+              "value": { "type": "number", "value": { "type": "regular", "value": 10.0 } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "other",
+      "items": [
+        { "name": "basil leaves", "quantities": [] },
+        {
+          "name": "San Marzano tomato sauce",
+          "quantities": [
+            {
+              "scalable": false,
+              "unit": "tbsp",
+              "value": { "type": "number", "value": { "type": "regular", "value": 10.0 } }
+            }
+          ]
+        },
+        { "name": "semolina", "quantities": [] }
+      ]
+    }
+  ],
+  "pantry_items": ["flour", "water", "salt", "tipo zero flour", "olive oil", "fresh basil", "black pepper"],
+  "checked": []
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/shopping_list/items",
+                "Read the stored recipe list",
+                "Returns the recipes currently on the shopping list, not their ingredients. \
+                 An entry with a `recipes` array is a menu added via `add_menu`; its nested \
+                 entries carry their own resolved scale and `included_references`, independent \
+                 of whatever the same recipe's standalone entry (if any) was given.",
+            )
+            .response(
+                r#"
+[
+  {
+    "path": "Salads/Caprese.cook",
+    "name": "Caprese",
+    "scale": 2.0,
+    "included_references": []
+  },
+  {
+    "path": "2 Day Plan.menu",
+    "name": "2 Day Plan",
+    "scale": 1.0,
+    "recipes": [
+      {
+        "path": "Breakfast/Easy Pancakes",
+        "name": "Easy Pancakes",
+        "scale": 5.0,
+        "included_references": []
+      },
+      { "path": "lamb-chops", "name": "lamb-chops", "scale": 1.0, "included_references": [] },
+      {
+        "path": "Neapolitan Pizza",
+        "name": "Neapolitan Pizza",
+        "scale": 1.0,
+        "included_references": ["Shared/Pizza Dough"]
+      },
+      {
+        "path": "Salads/Caprese",
+        "name": "Caprese",
+        "scale": 1.0,
+        "included_references": ["Shared/Vinaigrette"]
+      },
+      { "path": "Risotto", "name": "Risotto", "scale": 1.0, "included_references": [] }
+    ]
+  }
+]
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/add",
+                "Add one recipe to the stored list",
+                "Responds `200 OK` with an empty body. The display name is derived from the \
+                 path server-side; a client-supplied name would be discarded, so it is not \
+                 accepted.",
+            )
+            .params(vec![
+                param(
+                    "path",
+                    "body",
+                    "string",
+                    true,
+                    "Recipe path relative to the recipe directory.",
+                ),
+                param(
+                    "scale",
+                    "body",
+                    "number",
+                    true,
+                    "Scaling factor to store with the entry.",
+                ),
+                param(
+                    "included_references",
+                    "body",
+                    "string[]",
+                    false,
+                    "Which sub-recipe references to expand. Omit to include all.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "path": "Salads/Caprese.cook",
+  "scale": 2.0,
+  "included_references": ["Shared/Vinaigrette"]
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/add_menu",
+                "Add every recipe in a menu",
+                "Stored as a single entry with the menu's recipes nested inside. Each nested \
+                 recipe's scale is resolved from the menu reference: a bare `{2}` is a raw \
+                 multiplier, `{3%servings}` targets 3 servings against the recipe's own \
+                 `servings` metadata, and any other unit targets its `yield` metadata. \
+                 Responds `200 OK` with an empty body; returns 404 if the menu is not found.",
+            )
+            .params(vec![
+                param(
+                    "path",
+                    "body",
+                    "string",
+                    true,
+                    "Menu path relative to the recipe directory.",
+                ),
+                param(
+                    "scale",
+                    "body",
+                    "number",
+                    true,
+                    "Scaling factor applied to the whole menu.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "path": "2 Day Plan.menu",
+  "scale": 1.0
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/remove",
+                "Remove one recipe from the stored list",
+                "Also compacts the checked log, dropping checks for ingredients no longer \
+                 referenced by any remaining recipe — best-effort; a compaction failure does \
+                 not fail the remove itself. Responds `200 OK` with an empty body.",
+            )
+            .params(vec![param(
+                "path",
+                "body",
+                "string",
+                true,
+                "Recipe path exactly as stored.",
+            )])
+            .request(
+                r#"
+{ "path": "Salads/Caprese.cook" }
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/clear",
+                "Empty the stored list",
+                "Removes every recipe and all checked state. Responds `200 OK` with an empty body.",
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/check",
+                "Mark an ingredient as bought",
+                "Appends the name to the checked log verbatim — the server does not validate \
+                 it against the current aggregated list, so any string is accepted. Use a name \
+                 as returned by `POST /api/shopping_list` for it to correspond to a real \
+                 ingredient. Responds `200 OK` with an empty body.",
+            )
+            .params(vec![param(
+                "name",
+                "body",
+                "string",
+                true,
+                "Aggregated ingredient name.",
+            )])
+            .request(
+                r#"
+{ "name": "mozzarella cheese" }
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/uncheck",
+                "Clear an ingredient's bought mark",
+                "Responds `200 OK` with an empty body.",
+            )
+            .params(vec![param(
+                "name",
+                "body",
+                "string",
+                true,
+                "Aggregated ingredient name.",
+            )])
+            .request(
+                r#"
+{ "name": "mozzarella cheese" }
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/shopping_list/checked",
+                "List checked ingredient names",
+                "Returns `[]` against a fresh list — nothing is checked until `check` is called.",
+            )
+            .response(
+                r#"
+["tipo zero flour", "mozzarella cheese"]
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/compact",
+                "Drop stale checked entries",
+                "Re-aggregates the current list and removes checks for ingredients that are no \
+                 longer in it. Refuses to compact (500) if any recipe fails to parse, rather \
+                 than wiping checks based on a partial ingredient set. Responds `200 OK` with \
+                 an empty body.",
             ),
         ],
     )
