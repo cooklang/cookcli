@@ -9,6 +9,20 @@
 //! if a `NOT_ROUTER_REGISTERED` exemption outlives the doc entry it excuses.
 //! `extracts_wrapped_routes_from_the_real_router` guards the path extractor
 //! itself.
+//!
+//! The check compares paths only; a wrong *method* on a real path is not
+//! caught. `POST /api/recipes/*path` — which does not exist — would pass
+//! `no_documented_path_is_stale` cleanly, because axum registers verbs as
+//! `.route(path, get(h).put(h).delete(h))` and the textual extractor never
+//! sees them.
+//!
+//! Descriptions may use Markdown-style `inline code` spans; the template
+//! renders them through the `inline_code` filter in `web::templates`.
+//!
+//! Examples are written as `r#"..."#` raw strings. If one ever needs to
+//! contain the literal sequence `"#` (a URL fragment, say), bump to
+//! `r##"..."##` rather than escaping — a plain `r#"..."#` would terminate
+//! early and produce a confusing compile error far from the actual mistake.
 
 use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
 
@@ -44,6 +58,14 @@ fn param(name: &str, kind: &str, type_name: &str, required: bool, description: &
     }
 }
 
+/// A path segment. Always required, always a string.
+fn path_param(name: &str, description: &str) -> ParamDoc {
+    param(name, "path", "string", true, description)
+}
+
+/// Private authoring builders for `EndpointDoc`, kept off the type's public
+/// surface in `templates.rs` — see the doc comment on the struct there and
+/// `method_classes`, its one public method.
 impl EndpointDoc {
     fn params(mut self, params: Vec<ParamDoc>) -> Self {
         self.params = params;
@@ -60,6 +82,7 @@ impl EndpointDoc {
         self
     }
 
+    #[expect(dead_code, reason = "first used by the sync section, which lands last")]
     fn requires(mut self, feature: &str) -> Self {
         self.feature = Some(feature.to_string());
         self
@@ -133,7 +156,7 @@ fn recipes() -> ApiSection {
                  recipe has a title image, otherwise null.",
             )
             .params(vec![
-                param("path", "path", "string", true, "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`. The `.cook` extension is optional — the server tries the bare path first, then `.cook`, then `.menu`."),
+                path_param("path", "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`. The `.cook` extension is optional — the server tries the bare path first, then `.cook`, then `.menu`."),
                 param("scale", "query", "number", false, "Scaling factor applied during parsing. Defaults to 1. A non-numeric value returns a plain-text 400 (\"Failed to deserialize query string: ...\") from axum's query deserializer, not the page's usual JSON error envelope."),
             ])
             .response(
@@ -213,11 +236,8 @@ fn recipes() -> ApiSection {
                  YAML frontmatter. The `.cook` and `.menu` extensions are optional in the path — \
                  the server tries the bare path first, then `.cook`, then `.menu`.",
             )
-            .params(vec![param(
+            .params(vec![path_param(
                 "path",
-                "path",
-                "string",
-                true,
                 "Recipe path relative to the recipe directory.",
             )])
             .response(
@@ -244,11 +264,8 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
                  there returns a 500 whose message talks about permissions even when the \
                  real cause is the missing directory.",
             )
-            .params(vec![param(
+            .params(vec![path_param(
                 "path",
-                "path",
-                "string",
-                true,
                 "Recipe path relative to the recipe directory.",
             )])
             .request(
@@ -274,11 +291,8 @@ Mix the @flour{200%g} and @water{120%ml}.
                 "Delete a recipe file",
                 "Permanently removes the file from disk. There is no undo and no trash.",
             )
-            .params(vec![param(
+            .params(vec![path_param(
                 "path",
-                "path",
-                "string",
-                true,
                 "Recipe path relative to the recipe directory. The `.cook` extension is \
                  optional — the same bare → `.cook` → `.menu` resolution as the raw endpoint \
                  applies here too.",
@@ -299,11 +313,8 @@ Mix the @flour{200%g} and @water{120%ml}.
                  live. The `image` field returned by `GET /api/recipes/*path` is already a URL \
                  into this route.",
             )
-            .params(vec![param(
+            .params(vec![path_param(
                 "path",
-                "path",
-                "string",
-                true,
                 "Asset path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.jpg`.",
             )]),
         ],
@@ -351,8 +362,8 @@ mod tests {
     /// This does not, and cannot, see `.nest_service("/api/static", ...)` on
     /// the *outer* router in `src/server/mod.rs` — it isn't a `.route(` call
     /// and isn't inside `api()`. That endpoint is documented and exempted by
-    /// hand via a `NOT_ROUTER_REGISTERED` allowlist (see Task 3); the
-    /// omission here is deliberate, not a gap in this scan.
+    /// hand via the `NOT_ROUTER_REGISTERED` allowlist below; the omission
+    /// here is deliberate, not a gap in this scan.
     fn router_paths(source: &str) -> BTreeSet<String> {
         const MARKER: &str = ".route(";
 
@@ -362,24 +373,23 @@ mod tests {
         // braces inside string literals/comments — acceptable because api()
         // contains neither; if it ever breaks, the body comes back
         // truncated or missing and the path set is short or empty — which
-        // `extracts_wrapped_routes_from_the_real_router` catches
-        // immediately, and `no_documented_path_is_stale` catches again once
-        // Task 3 lands.
+        // `extracts_wrapped_routes_from_the_real_router` and
+        // `no_documented_path_is_stale` both catch.
         let Some(body) = api_body(source) else {
             return BTreeSet::new();
         };
 
         // Routes registered in a merged or nested sub-router are invisible
         // to a textual scan of api()'s body. Rather than under-report them
-        // silently — which would let `every_router_path_is_documented` pass
-        // vacuously — refuse to run at all.
+        // silently — which would let the completeness check (added with the
+        // sync section) pass vacuously — refuse to run at all.
         for shape in [".merge(", ".nest(", ".nest_service("] {
             assert!(
                 !body.contains(shape),
                 "api() uses `{shape}` — routes registered in the merged/nested router are \
-                 invisible to this scan, so `every_router_path_is_documented` would pass \
-                 vacuously for them. Teach `router_paths` to follow it, or document those \
-                 paths via NOT_ROUTER_REGISTERED."
+                 invisible to this scan, so the completeness check (added with the sync \
+                 section) would pass vacuously for them. Teach `router_paths` to follow it, \
+                 or document those paths via NOT_ROUTER_REGISTERED."
             );
         }
 
@@ -614,5 +624,38 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
                  remove the stale exemption"
             );
         }
+    }
+
+    /// `param()` takes two consecutive free-text `&str`s (`kind`, `type_name`)
+    /// out of small closed vocabularies. A swapped or misspelled `kind` like
+    /// `param("scale", "string", "query", false, ...)` compiles cleanly and
+    /// silently renders "In: string / Type: query" — the same
+    /// silent-degradation class `all_methods_are_known_verbs` guards against.
+    #[test]
+    fn all_param_kinds_are_known() {
+        const KNOWN: &[&str] = &["path", "query", "body"];
+        for section in sections() {
+            for endpoint in section.endpoints {
+                for p in endpoint.params {
+                    assert!(
+                        KNOWN.contains(&p.kind.as_str()),
+                        "unknown param kind {:?} on {} {}",
+                        p.kind,
+                        endpoint.method,
+                        endpoint.path
+                    );
+                }
+            }
+        }
+    }
+
+    /// `id` doubles as the anchor target and the TOC href; a duplicate would
+    /// silently break navigation to the second section rather than fail
+    /// loudly.
+    #[test]
+    fn section_ids_are_unique() {
+        let ids: Vec<String> = sections().iter().map(|s| s.id.clone()).collect();
+        let unique: BTreeSet<&String> = ids.iter().collect();
+        assert_eq!(ids.len(), unique.len(), "duplicate section id in {ids:?}");
     }
 }

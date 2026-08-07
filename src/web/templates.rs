@@ -47,6 +47,42 @@ mod tr_tests {
     }
 }
 
+#[cfg(test)]
+mod inline_code_tests {
+    use super::filters::inline_code;
+
+    #[test]
+    fn wraps_backticked_spans() {
+        assert_eq!(
+            inline_code("the `recipe` key").unwrap(),
+            "the <code>recipe</code> key"
+        );
+    }
+
+    #[test]
+    fn escapes_html_outside_and_inside_code() {
+        assert_eq!(
+            inline_code("a <b> and `<i>`").unwrap(),
+            "a &lt;b&gt; and <code>&lt;i&gt;</code>"
+        );
+    }
+
+    #[test]
+    fn passes_through_text_with_no_backticks() {
+        assert_eq!(inline_code("plain text").unwrap(), "plain text");
+    }
+
+    #[test]
+    fn unmatched_backtick_does_not_panic() {
+        // Odd backtick count: `split` still alternates segments by position,
+        // so the trailing segment after the lone backtick is treated as
+        // "inside code" and gets wrapped rather than dropped. Still valid,
+        // balanced HTML — just not what the author meant — and, critically,
+        // no panic.
+        assert_eq!(inline_code("one `two").unwrap(), "one <code>two</code>");
+    }
+}
+
 mod filters {
     use askama::Result;
     use url::Url;
@@ -56,6 +92,30 @@ mod filters {
             .ok()
             .and_then(|u| u.host_str().map(String::from))
             .unwrap_or_else(|| url.to_string()))
+    }
+
+    /// Render Markdown-style `inline code` spans as `<code>` elements.
+    ///
+    /// The API docs describe payload keys and content types in prose, and
+    /// backticks carry real meaning there. Askama would otherwise print them
+    /// literally.
+    ///
+    /// Escapes every segment itself, so the result is safe to pass through
+    /// `|safe`. Callers MUST use `|safe` or the markup will be double-escaped
+    /// and shown as text.
+    pub fn inline_code(s: &str) -> Result<String> {
+        let mut out = String::with_capacity(s.len());
+        for (i, segment) in s.split('`').enumerate() {
+            let escaped = askama::filters::escape(askama::Html, segment)?.to_string();
+            if i % 2 == 1 {
+                out.push_str("<code>");
+                out.push_str(&escaped);
+                out.push_str("</code>");
+            } else {
+                out.push_str(&escaped);
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -649,6 +709,10 @@ pub struct ParamDoc {
 }
 
 /// One documented API endpoint.
+///
+/// Constructed via private builder helpers in `web::api_docs` (not part of
+/// this type's public surface) — `method_classes` below is the only method
+/// kept here.
 #[cfg(feature = "server")]
 pub struct EndpointDoc {
     pub method: String,
