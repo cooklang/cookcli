@@ -304,7 +304,7 @@ checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
  "axum-core",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-util",
  "http",
@@ -359,6 +359,12 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "base64"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b25655df2c3cdd83c5e5b293b88acd880332b2ddadd7c30ac43144fdc0033da9"
 
 [[package]]
 name = "base64ct"
@@ -622,7 +628,7 @@ dependencies = [
  "askama_axum",
  "assert_cmd",
  "axum",
- "base64",
+ "base64 0.23.0",
  "camino",
  "chrono",
  "clap",
@@ -725,7 +731,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03fecc46f29238d296b2d6add57ac6d60aa2eea68cdabb8655d8b5167d2dd0a2"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.22.1",
  "config",
  "env_logger",
  "html-escape",
@@ -785,7 +791,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8edded9ebd94251c1a9aef56428722934a63d298e310469b7e7514cdb619bfc4"
 dependencies = [
  "async-stream",
- "base64",
+ "base64 0.22.1",
  "diesel",
  "diesel_migrations",
  "env_logger",
@@ -1848,7 +1854,7 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-util",
@@ -3024,7 +3030,7 @@ version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-core",
@@ -5031,7 +5037,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba6063ff82cdbd9a765add16d369abe81e520f836054e997c2db217ceca40c0"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "ed25519-dalek",
  "thiserror 2.0.18",
 ]

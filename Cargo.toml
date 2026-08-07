@@ -65,7 +65,7 @@ axum = { version = "0.7", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 # bundled_units carries the unit database (quantity scaling, unit normalisation).
 # We rely on it in `cook recipe`, but never declared it: it was reaching us only
 # via feature unification from cooklang-language-server / cooklang-reports, which
