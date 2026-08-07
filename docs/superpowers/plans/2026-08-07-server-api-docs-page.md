@@ -32,6 +32,34 @@ An earlier draft of this section claimed all payloads were captured from a live 
 
 This is a reference document for people writing API clients. Its only value is being true; a plausible-looking payload that does not match the server is worse than no documentation, because it will be believed.
 
+### Expected clippy dead-code warnings until Task 10
+
+Nothing calls `sections()` until Task 10 wires it into the `/api-docs` handler, so `cargo clippy --all-targets` reports dead-code warnings on the `bin "cook"` target for the whole authoring surface. As of Task 3 the baseline is exactly these 9:
+
+```
+function `ep` is never used
+function `inline_code` is never used
+function `param` is never used
+function `path_param` is never used
+function `recipes` is never used
+function `section` is never used
+function `sections` is never used
+method `method_classes` is never used
+struct `ApiSection` is never constructed
+```
+
+Do **not** silence these with a blanket `#[allow(dead_code)]` — that would also hide genuinely new dead code introduced in Tasks 4-9, which is the opposite of what we want.
+
+Instead, each of Tasks 4-9 must confirm the list has not *grown*:
+
+```bash
+cargo clippy --all-targets 2>&1 \
+  | grep -oE "(function|method|struct|associated function) \`[a-zA-Z_]+\` is never (used|constructed)" \
+  | sort -u
+```
+
+New section functions (`menus`, `pantry`, …) will each add one line while they are unreferenced, then disappear once `sections()` returns them — so the list should stay at 9 if each task wires its section into `sections()` in the same commit. Anything else appearing is a real finding. Task 10 clears the remainder; Task 13 gates on a fully clean `cargo clippy --all-targets -- -D warnings`.
+
 **Repo conventions you must follow:**
 - Commit messages use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`). Release automation depends on this.
 - Before the final commit: `cargo fmt`, `cargo clippy`, `cargo test` must all pass cleanly.
