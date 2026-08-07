@@ -107,9 +107,9 @@ jobs:
 
     - name: Build application
       run: |
-        cargo build
         npm run build-css
         npm run build-js
+        cargo build
 
     - name: Cache Playwright browsers
       uses: actions/cache@v4
