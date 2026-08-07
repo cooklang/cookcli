@@ -441,7 +441,7 @@ fn router_paths(source: &str) -> BTreeSet<String> {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 8 tests pass.
+Expected: PASS, 0 failed.
 
 - [ ] **Step 5: Commit**
 
@@ -793,7 +793,7 @@ Add to the `#[cfg(test)] mod tests` block in `src/web/api_docs.rs`:
 - [ ] **Step 4: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
+Expected: PASS, 0 failed. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
 
 - [ ] **Step 5: Commit**
 
@@ -902,7 +902,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests, `no_documented_path_is_stale` now covering the two menu paths.
+Expected: PASS, 0 failed — `no_documented_path_is_stale` now covers the two menu paths.
 
 - [ ] **Step 4: Commit**
 
@@ -1147,7 +1147,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests.
+Expected: PASS, 0 failed.
 
 - [ ] **Step 4: Commit**
 
@@ -1333,7 +1333,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
+Expected: PASS, 0 failed. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
 
 - [ ] **Step 4: Commit**
 
@@ -1452,7 +1452,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests.
+Expected: PASS, 0 failed.
 
 - [ ] **Step 4: Commit**
 
@@ -1528,7 +1528,7 @@ pub fn sections() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 10 tests.
+Expected: PASS, 0 failed.
 
 - [ ] **Step 4: Commit**
 
@@ -1665,7 +1665,7 @@ Add to the `#[cfg(test)] mod tests` block:
 - [ ] **Step 4: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 11 tests.
+Expected: PASS, 0 failed.
 
 If `every_router_path_is_documented` fails, the named path exists in `src/server/mod.rs` but has no matching entry. Either a route was added since this plan was written, or a path string has a typo. Fix the doc entry rather than the assertion.
 
@@ -1687,7 +1687,7 @@ git checkout src/server/mod.rs
 ```
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 11 tests. This confirms the guard is real and not vacuously passing.
+Expected: PASS, 0 failed. This confirms the guard is real and not vacuously passing.
 
 - [ ] **Step 6: Commit**
 
@@ -2079,7 +2079,7 @@ Expected: no warnings. A likely one is `clippy::too_many_lines` on `shopping_lis
 - [ ] **Step 3: Full test suite**
 
 Run: `cargo test`
-Expected: all tests pass, including the 11 in `api_docs`.
+Expected: all tests pass, 0 failed. The `api_docs` module should contribute at least the extractor tests plus the two comparison tests.
 
 - [ ] **Step 4: Confirm the drift guard covers the real router**
 
