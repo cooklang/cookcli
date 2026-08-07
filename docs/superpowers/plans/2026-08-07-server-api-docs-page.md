@@ -110,21 +110,32 @@ pub struct ApiSection {
     pub endpoints: Vec<EndpointDoc>,
 }
 
-#[cfg(feature = "server")]
-#[derive(Template)]
-#[template(path = "api_docs.html")]
-pub struct ApiDocsTemplate {
-    pub active: String,
-    /// Fully-qualified API root, e.g. "http://localhost:9080/api".
-    pub base_url: String,
-    pub sections: Vec<ApiSection>,
-    pub tr: Tr,
-    pub prefix: String,
-    pub static_mode: bool,
-    pub repo_url: Option<String>,
-    pub features: FeatureFlags,
-}
 ```
+
+**`ApiDocsTemplate` is deliberately NOT added here.** It carries `#[derive(Template)] #[template(path = "api_docs.html")]`, and Askama resolves that path at compile time — adding it before `templates/api_docs.html` exists breaks the build. It moves to Task 10, alongside the template file it needs.
+
+- [ ] **Step 1b: Let Tailwind see Rust source**
+
+`method_classes()` above is the first place in this repo that names Tailwind classes from Rust. `tailwind.config.js` only scans `./templates/` and `./static/`, so those class names get purged from the compiled CSS and every method badge renders unstyled. Add the glob:
+
+```js
+  content: [
+    "./templates/**/*.{html,js}",
+    "./static/**/*.{html,js}",
+    "./src/**/*.rs",
+  ],
+```
+
+Then rebuild and prove it:
+
+```bash
+make css
+for c in bg-blue-100 bg-green-100 bg-amber-100 text-amber-800 text-red-800; do
+  printf "%-16s %s\n" "$c" "$(grep -c "\.$c" static/css/output.css)"
+done
+```
+
+Every count must be non-zero. `static/css/output.css` is gitignored, so only the config change is committed.
 
 - [ ] **Step 2: Register the module in `src/web/mod.rs`**
 
@@ -147,14 +158,18 @@ pub mod api_docs;
 ```rust
 //! Content for the `/api-docs` page.
 //!
-//! Every entry here was verified against a running server. When you add or
-//! change an API route in `src/server/mod.rs`, update this file — the
-//! `router_and_docs_agree` test at the bottom will fail until you do.
+//! Verify each entry against a running server before adding it — the examples
+//! here are meant to be real payloads, not plausible ones.
+//!
+//! When you add or change an API route in `src/server/mod.rs`, update this
+//! file: the `every_router_path_is_documented` test fails until the new route
+//! has an entry, and `no_documented_path_is_stale` fails if an entry names a
+//! route that no longer exists.
 
 use crate::web::templates::ApiSection;
 
 /// The full API reference, in display order.
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     Vec::new()
 }
 ```
@@ -162,7 +177,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 4: Verify it compiles**
 
 Run: `cargo check`
-Expected: finishes with no errors. A `dead_code` warning about `api_docs` is expected at this point and disappears in Task 9.
+Expected: finishes with no errors. `dead_code` warnings about the new types are expected at this point and clear in Task 10.
 
 - [ ] **Step 5: Commit**
 
@@ -307,7 +322,7 @@ git commit -m "feat(server): extract router paths from source for API doc drift 
 
 - [ ] **Step 1: Add the builder helpers**
 
-In `src/web/api_docs.rs`, **replace** the existing `use crate::web::templates::ApiSection;` line with the block below (one `use` statement, not two — `cargo fmt` will not merge them for you), placing it above `pub fn api_docs()`:
+In `src/web/api_docs.rs`, **replace** the existing `use crate::web::templates::ApiSection;` line with the block below (one `use` statement, not two — `cargo fmt` will not merge them for you), placing it above `pub fn sections()`:
 
 ```rust
 use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
@@ -371,10 +386,10 @@ Note: the `impl EndpointDoc` block here is separate from the one in `templates.r
 
 - [ ] **Step 2: Add the Recipes section**
 
-Replace the body of `pub fn api_docs()` with:
+Replace the body of `pub fn sections()` with:
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![recipes()]
 }
 
@@ -597,11 +612,29 @@ Add to the `#[cfg(test)] mod tests` block in `src/web/api_docs.rs`:
     const NOT_ROUTER_REGISTERED: &[&str] = &["/api/static/*path"];
 
     fn documented_paths() -> BTreeSet<String> {
-        api_docs()
+        sections()
             .iter()
             .flat_map(|s| s.endpoints.iter())
             .map(|e| e.path.clone())
             .collect()
+    }
+
+    /// `EndpointDoc::method_classes` falls back to a gray badge for any method
+    /// it doesn't recognise, so a typo like "Get" degrades silently rather than
+    /// failing. Across 33 hand-written entries that is worth guarding.
+    #[test]
+    fn all_methods_are_known_verbs() {
+        const KNOWN: &[&str] = &["GET", "POST", "PUT", "DELETE"];
+        for section in sections() {
+            for endpoint in section.endpoints {
+                assert!(
+                    KNOWN.contains(&endpoint.method.as_str()),
+                    "unknown HTTP method {:?} on {}",
+                    endpoint.method,
+                    endpoint.path
+                );
+            }
+        }
     }
 
     #[test]
@@ -623,7 +656,7 @@ Add to the `#[cfg(test)] mod tests` block in `src/web/api_docs.rs`:
 - [ ] **Step 4: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
+Expected: PASS — 6 tests. If `no_documented_path_is_stale` fails, a path string in the Recipes section does not match the router literal exactly (check `*path` vs `*file` and the `raw` segment).
 
 - [ ] **Step 5: Commit**
 
@@ -721,10 +754,10 @@ fn menus() -> ApiSection {
 
 - [ ] **Step 2: Register the section**
 
-Change `pub fn api_docs()` to:
+Change `pub fn sections()` to:
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![recipes(), menus()]
 }
 ```
@@ -732,7 +765,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests, `no_documented_path_is_stale` now covering the two menu paths.
+Expected: PASS — 6 tests, `no_documented_path_is_stale` now covering the two menu paths.
 
 - [ ] **Step 4: Commit**
 
@@ -969,7 +1002,7 @@ fn shopping_list() -> ApiSection {
 - [ ] **Step 2: Register the section**
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![recipes(), menus(), shopping_list()]
 }
 ```
@@ -977,7 +1010,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests.
+Expected: PASS — 6 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1155,7 +1188,7 @@ fn pantry() -> ApiSection {
 - [ ] **Step 2: Register the section**
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![recipes(), menus(), shopping_list(), pantry()]
 }
 ```
@@ -1163,7 +1196,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
+Expected: PASS — 6 tests. Both `PUT` and `DELETE` on `/api/pantry/:section/:name` map to the one router path, which the `BTreeSet` handles.
 
 - [ ] **Step 4: Commit**
 
@@ -1268,7 +1301,7 @@ fn search_and_stats() -> ApiSection {
 - [ ] **Step 2: Register the section**
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![
         recipes(),
         menus(),
@@ -1282,7 +1315,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests.
+Expected: PASS — 6 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1343,7 +1376,7 @@ data: {"file":"ShoppingList"}
 - [ ] **Step 2: Register the section**
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![
         recipes(),
         menus(),
@@ -1358,7 +1391,7 @@ pub fn api_docs() -> Vec<ApiSection> {
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test --lib api_docs`
-Expected: PASS — 5 tests.
+Expected: PASS — 6 tests.
 
 - [ ] **Step 4: Commit**
 
@@ -1461,7 +1494,7 @@ fn sync() -> ApiSection {
 - [ ] **Step 2: Register the section**
 
 ```rust
-pub fn api_docs() -> Vec<ApiSection> {
+pub fn sections() -> Vec<ApiSection> {
     vec![
         recipes(),
         menus(),
@@ -1713,7 +1746,7 @@ async fn api_docs_page(
         // Rendered so integrators can copy a working URL rather than a
         // relative path. `Host` reflects however the client reached us.
         base_url: format!("http://{host}{}/api", state.url_prefix),
-        sections: crate::web::api_docs::api_docs(),
+        sections: crate::web::api_docs::sections(),
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
@@ -1909,7 +1942,7 @@ Expected: no warnings. A likely one is `clippy::too_many_lines` on `shopping_lis
 - [ ] **Step 3: Full test suite**
 
 Run: `cargo test`
-Expected: all tests pass, including the 6 in `api_docs`.
+Expected: all tests pass, including the 7 in `api_docs`.
 
 - [ ] **Step 4: Confirm the drift guard covers the real router**
 
