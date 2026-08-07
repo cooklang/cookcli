@@ -34,7 +34,7 @@ jobs:
     - name: Install Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -99,7 +99,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -165,7 +165,7 @@ jobs:
     - name: Install Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -217,7 +217,7 @@ jobs:
     - name: Install Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
