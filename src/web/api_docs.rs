@@ -9,15 +9,277 @@
 //! route that no longer exists. `extracts_wrapped_routes_from_the_real_router`
 //! guards the extractor itself today, ahead of those two tests landing.
 
-use crate::web::templates::ApiSection;
+use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
+
+fn section(id: &str, title: &str, description: &str, endpoints: Vec<EndpointDoc>) -> ApiSection {
+    ApiSection {
+        id: id.to_string(),
+        title: title.to_string(),
+        description: description.to_string(),
+        endpoints,
+    }
+}
+
+fn ep(method: &str, path: &str, summary: &str, description: &str) -> EndpointDoc {
+    EndpointDoc {
+        method: method.to_string(),
+        path: path.to_string(),
+        summary: summary.to_string(),
+        description: description.to_string(),
+        params: Vec::new(),
+        request_example: None,
+        response_example: None,
+        feature: None,
+    }
+}
+
+fn param(name: &str, kind: &str, type_name: &str, required: bool, description: &str) -> ParamDoc {
+    ParamDoc {
+        name: name.to_string(),
+        kind: kind.to_string(),
+        required,
+        type_name: type_name.to_string(),
+        description: description.to_string(),
+    }
+}
+
+impl EndpointDoc {
+    fn params(mut self, params: Vec<ParamDoc>) -> Self {
+        self.params = params;
+        self
+    }
+
+    fn request(mut self, json: &str) -> Self {
+        self.request_example = Some(json.trim().to_string());
+        self
+    }
+
+    fn response(mut self, json: &str) -> Self {
+        self.response_example = Some(json.trim().to_string());
+        self
+    }
+
+    fn requires(mut self, feature: &str) -> Self {
+        self.feature = Some(feature.to_string());
+        self
+    }
+}
 
 /// The full API reference, in display order.
 pub fn sections() -> Vec<ApiSection> {
-    Vec::new()
+    vec![recipes()]
+}
+
+fn recipes() -> ApiSection {
+    section(
+        "recipes",
+        "Recipes",
+        "Browse, read, write and delete `.cook` files under the server's recipe directory. \
+         Paths are relative to that directory and may include subdirectories.",
+        vec![
+            ep(
+                "GET",
+                "/api/recipes",
+                "List every recipe as a directory tree",
+                "Returns the recipe tree rooted at the server's base path. Directories \
+                 become `children` entries; a node with a `recipe` field is a file. \
+                 Menus (`.menu`) appear in the same tree as recipes.",
+            )
+            .response(
+                r#"
+{
+  "children": {
+    "2 Day Plan": {
+      "children": {},
+      "name": "2 Day Plan",
+      "path": "/absolute/path/to/seed/2 Day Plan.menu",
+      "recipe": {
+        "metadata": { "servings": 2 },
+        "source": {
+          "path": "/absolute/path/to/seed/2 Day Plan.menu",
+          "source_type": "Path"
+        }
+      }
+    }
+  }
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/recipes/*path",
+                "Read one parsed recipe",
+                "Parses the recipe and returns its ingredients, cookware, timers and steps. \
+                 `grouped_ingredients` aggregates repeated ingredients and indexes back into \
+                 `ingredients`. The `image` field is a URL under `/api/static/` when the recipe \
+                 has a title image, otherwise null.",
+            )
+            .params(vec![
+                param("path", "path", "string", true, "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`."),
+                param("scale", "query", "number", false, "Scaling factor applied during parsing. Defaults to 1."),
+            ])
+            .response(
+                r#"
+{
+  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "scale": 2.0,
+  "recipe": {
+    "metadata": {
+      "map": {
+        "author": "CookCLI Team",
+        "servings": 4,
+        "description": "Simple crepes that are perfect for a lazy weekend breakfast."
+      }
+    },
+    "ingredients": [
+      {
+        "name": "eggs",
+        "alias": null,
+        "note": null,
+        "modifiers": "",
+        "quantity": {
+          "scalable": true,
+          "unit": null,
+          "value": { "type": "number", "value": { "type": "regular", "value": 6.0 } }
+        },
+        "reference": null
+      }
+    ],
+    "grouped_ingredients": [
+      {
+        "index": 0,
+        "quantities": [
+          {
+            "scalable": true,
+            "unit": null,
+            "value": { "type": "number", "value": { "type": "regular", "value": 6.0 } }
+          }
+        ]
+      }
+    ],
+    "cookware": [],
+    "timers": [],
+    "sections": [
+      {
+        "content": [
+          {
+            "type": "step",
+            "value": {
+              "items": [
+                { "type": "text", "value": "Crack the " },
+                { "type": "ingredient", "index": 0 },
+                { "type": "text", "value": " into a blender." }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/recipes/raw/*path",
+                "Read the unparsed Cooklang source",
+                "Returns the file's text verbatim with content type `text/plain`, including \
+                 YAML frontmatter. The `.cook` and `.menu` extensions are optional in the path — \
+                 the server tries the bare path first, then `.cook`, then `.menu`.",
+            )
+            .params(vec![param(
+                "path",
+                "path",
+                "string",
+                true,
+                "Recipe path relative to the recipe directory.",
+            )])
+            .response(
+                r#"
+---
+servings: 2
+tags: breakfast, quick
+author: CookCLI Team
+---
+
+Crack the @eggs{6} into a blender.
+"#,
+            ),
+            ep(
+                "PUT",
+                "/api/recipes/*path",
+                "Create or overwrite a recipe",
+                "The request body is the raw Cooklang source as `text/plain` — not JSON. \
+                 Writes are atomic (temp file plus rename). If the file does not exist yet, \
+                 it is created with a `.cook` extension.",
+            )
+            .params(vec![param(
+                "path",
+                "path",
+                "string",
+                true,
+                "Recipe path relative to the recipe directory.",
+            )])
+            .request(
+                r#"
+---
+title: New Recipe
+---
+
+Mix the @flour{200%g} and @water{120%ml}.
+"#,
+            )
+            .response(
+                r#"
+{
+  "status": "success",
+  "path": "Breakfast/New Recipe.cook"
+}
+"#,
+            ),
+            ep(
+                "DELETE",
+                "/api/recipes/*path",
+                "Delete a recipe file",
+                "Permanently removes the file from disk. There is no undo and no trash.",
+            )
+            .params(vec![param(
+                "path",
+                "path",
+                "string",
+                true,
+                "Recipe path relative to the recipe directory.",
+            )])
+            .response(
+                r#"
+{
+  "status": "success",
+  "path": "Breakfast/Old Recipe.cook"
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/static/*path",
+                "Fetch a recipe asset",
+                "Serves files straight from the recipe directory — this is where recipe images \
+                 live. The `image` field returned by `GET /api/recipes/*path` is already a URL \
+                 into this route.",
+            )
+            .params(vec![param(
+                "path",
+                "path",
+                "string",
+                true,
+                "Asset path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.jpg`.",
+            )]),
+        ],
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::collections::BTreeSet;
 
     /// The text of `api()`'s body, braces included, or `None` if it can't be
@@ -261,5 +523,51 @@ fn api(_s: &A) -> R {
 fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
 "#;
         let _ = router_paths(MERGED);
+    }
+
+    /// Paths that are documented but are not registered via `.route(...)`
+    /// inside `api()`. Currently just the asset service, which is mounted
+    /// with `.nest_service("/api/static", ...)` on the outer router.
+    const NOT_ROUTER_REGISTERED: &[&str] = &["/api/static/*path"];
+
+    fn documented_paths() -> BTreeSet<String> {
+        sections()
+            .iter()
+            .flat_map(|s| s.endpoints.iter())
+            .map(|e| e.path.clone())
+            .collect()
+    }
+
+    /// `EndpointDoc::method_classes` falls back to a gray badge for any method
+    /// it doesn't recognise, so a typo like "Get" degrades silently rather than
+    /// failing. Across 33 hand-written entries that is worth guarding.
+    #[test]
+    fn all_methods_are_known_verbs() {
+        const KNOWN: &[&str] = &["GET", "POST", "PUT", "DELETE"];
+        for section in sections() {
+            for endpoint in section.endpoints {
+                assert!(
+                    KNOWN.contains(&endpoint.method.as_str()),
+                    "unknown HTTP method {:?} on {}",
+                    endpoint.method,
+                    endpoint.path
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_documented_path_is_stale() {
+        let router = router_paths(include_str!("../server/mod.rs"));
+        for path in documented_paths() {
+            if NOT_ROUTER_REGISTERED.contains(&path.as_str()) {
+                continue;
+            }
+            assert!(
+                router.contains(&path),
+                "{path} is documented in api_docs.rs but no longer exists in the router. \
+                 Remove or correct the doc entry."
+            );
+        }
     }
 }
