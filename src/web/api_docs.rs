@@ -367,13 +367,16 @@ fn menus() -> ApiSection {
                  is dropped — only structured references and ingredients are returned. Returns \
                  400 if the path is not a menu file, 404 if it does not exist. The response \
                  below is trimmed to the first of this menu's two `sections`; the second \
-                 follows the same shape. A `recipe_reference`'s `scale` is the raw target \
-                 taken from the menu's `{...}` notation — the unit is not applied, so \
-                 `{10%servings}` below yields `10.0`, not the resolved multiplier of `5.0` \
-                 that `POST /api/shopping_list/add_menu` actually stores. If you need a real \
-                 scale factor, `add_menu` is the authority, not this field. `?scale` compounds \
-                 onto it too — `?scale=2` on this menu yields `40.0`, not `20.0` — so treat \
-                 `recipe_reference.scale` as unreliable whenever a query scale is present.",
+                 follows the same shape. A `recipe_reference`'s `scale` is a ready-to-use \
+                 multiplier for the referenced recipe, resolved from the menu's `{...}` \
+                 notation per the Cooklang spec: a bare `{2}` is a raw multiplier, \
+                 `{3%servings}` targets servings against the referenced recipe's own \
+                 `servings` metadata, any other unit targets its `yield`, and `{}` means \
+                 1. The example below shows `5.0` because the menu asks for \
+                 `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` \
+                 query multiplies these, so `?scale=2` yields `10.0`. \
+                 `POST /api/shopping_list/add_menu` resolves references identically, so the \
+                 two endpoints always agree.",
             )
             .params(vec![
                 path_param(
@@ -407,7 +410,7 @@ fn menus() -> ApiSection {
               "kind": "recipe_reference",
               "name": "./Breakfast/Easy Pancakes",
               "path": "./Breakfast/Easy Pancakes.cook",
-              "scale": 10.0
+              "scale": 5.0
             },
             { "kind": "ingredient", "name": "maple syrup", "quantity": "2", "unit": "tbsp" },
             { "kind": "ingredient", "name": "coffee", "quantity": "1", "unit": "c" }
@@ -421,7 +424,7 @@ fn menus() -> ApiSection {
               "kind": "recipe_reference",
               "name": "./lamb-chops",
               "path": "./lamb-chops.cook",
-              "scale": null
+              "scale": 1.0
             },
             { "kind": "ingredient", "name": "bread", "quantity": "2", "unit": "slices" },
             { "kind": "ingredient", "name": "butter", "quantity": "1", "unit": "tbsp" }
@@ -435,7 +438,7 @@ fn menus() -> ApiSection {
               "kind": "recipe_reference",
               "name": "./Neapolitan Pizza",
               "path": "./Neapolitan Pizza.cook",
-              "scale": null
+              "scale": 1.0
             },
             { "kind": "ingredient", "name": "soy sauce", "quantity": "1", "unit": "tbsp" }
           ]
