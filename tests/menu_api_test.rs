@@ -74,7 +74,19 @@ fn write_fixture(dir: &TempDir) {
     .unwrap();
 }
 
+/// `free_port` only reserves a port long enough to learn its number, so with
+/// several tests booting servers at once another one can claim it first. The
+/// server exits 1 on a bound port, so retry with a fresh one.
 async fn start_server() -> ServerGuard {
+    for _ in 0..5 {
+        if let Some(server) = try_start_server().await {
+            return server;
+        }
+    }
+    panic!("could not start cook server on a free port after 5 attempts");
+}
+
+async fn try_start_server() -> Option<ServerGuard> {
     let dir = TempDir::new().expect("temp dir");
     write_fixture(&dir);
 
@@ -94,12 +106,13 @@ async fn start_server() -> ServerGuard {
     let client = reqwest::Client::new();
     let url = guard.url("/api/menus");
     for _ in 0..200 {
-        if let Some(status) = guard.child.try_wait().expect("poll server") {
-            panic!("cook server exited early with {status}");
+        if guard.child.try_wait().expect("poll server").is_some() {
+            // Port was taken between reserving and binding it.
+            return None;
         }
         if let Ok(resp) = client.get(&url).send().await {
             if resp.status().is_success() {
-                return guard;
+                return Some(guard);
             }
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -108,7 +121,9 @@ async fn start_server() -> ServerGuard {
 }
 
 /// The `scale` of every `recipe_reference` in the menu, in document order.
-async fn reference_scales(server: &ServerGuard, query: &str) -> Vec<Option<f64>> {
+/// `scale` is always a number — never null — so a missing/!number value here
+/// is itself a failure.
+async fn reference_scales(server: &ServerGuard, query: &str) -> Vec<f64> {
     let url = server.url(&format!("/api/menus/Plan.menu{query}"));
     let body: Value = reqwest::get(&url)
         .await
@@ -124,7 +139,11 @@ async fn reference_scales(server: &ServerGuard, query: &str) -> Vec<Option<f64>>
         for meal in section["meals"].as_array().expect("meals") {
             for item in meal["items"].as_array().expect("items") {
                 if item["kind"] == "recipe_reference" {
-                    scales.push(item["scale"].as_f64());
+                    scales.push(
+                        item["scale"]
+                            .as_f64()
+                            .unwrap_or_else(|| panic!("scale was not a number: {}", item["scale"])),
+                    );
                 }
             }
         }
@@ -139,7 +158,7 @@ async fn servings_reference_resolves_against_recipe_servings() {
 
     // `@./Servings Recipe{10%servings}` against `servings: 2` is a ×5 scale,
     // not the raw target of 10.
-    assert_eq!(scales[0], Some(5.0));
+    assert_eq!(scales[0], 5.0);
 }
 
 /// Regression test: the query scale used to be applied twice — once by the
@@ -151,8 +170,8 @@ async fn servings_reference_is_not_scaled_twice() {
     let at_one = reference_scales(&server, "?scale=1").await;
     let at_two = reference_scales(&server, "?scale=2").await;
 
-    assert_eq!(at_one[0], Some(5.0));
-    assert_eq!(at_two[0], Some(10.0), "?scale=2 must be exactly double");
+    assert_eq!(at_one[0], 5.0);
+    assert_eq!(at_two[0], 10.0, "?scale=2 must be exactly double");
 }
 
 #[tokio::test]
@@ -161,18 +180,19 @@ async fn bare_reference_is_a_raw_multiplier() {
 
     // `@./Servings Recipe{2}` has no unit, so 2 is the multiplier itself and
     // the recipe's `servings: 2` is irrelevant.
-    assert_eq!(reference_scales(&server, "?scale=1").await[1], Some(2.0));
-    assert_eq!(reference_scales(&server, "?scale=2").await[1], Some(4.0));
+    assert_eq!(reference_scales(&server, "?scale=1").await[1], 2.0);
+    assert_eq!(reference_scales(&server, "?scale=2").await[1], 4.0);
 }
 
+/// `@./Servings Recipe{}` carries no target of its own, so it is ×1 — but the
+/// menu scale still applies to it, which is what `add_menu` stores for the same
+/// reference. This used to report null, losing the menu scale entirely.
 #[tokio::test]
-async fn reference_without_quantity_has_no_scale() {
+async fn reference_without_quantity_uses_the_menu_scale() {
     let server = start_server().await;
 
-    // `@./Servings Recipe{}` carries no target, so the API reports null rather
-    // than inventing a multiplier. Pinning the pre-existing behaviour.
-    assert_eq!(reference_scales(&server, "?scale=1").await[2], None);
-    assert_eq!(reference_scales(&server, "?scale=2").await[2], None);
+    assert_eq!(reference_scales(&server, "?scale=1").await[2], 1.0);
+    assert_eq!(reference_scales(&server, "?scale=2").await[2], 2.0);
 }
 
 /// The parser normalises units while scaling (2250 ml becomes 2.25 l), so
@@ -183,21 +203,35 @@ async fn reference_without_quantity_has_no_scale() {
 async fn yield_reference_survives_unit_normalisation_under_scaling() {
     let server = start_server().await;
 
-    assert_eq!(reference_scales(&server, "?scale=1").await[3], Some(1.0));
-    assert_eq!(reference_scales(&server, "?scale=3").await[3], Some(3.0));
+    assert_eq!(reference_scales(&server, "?scale=1").await[3], 1.0);
+    assert_eq!(reference_scales(&server, "?scale=3").await[3], 3.0);
 }
 
-/// `GET /api/menus` and `POST /api/shopping_list/add_menu` must agree: both
-/// resolve references through the same `reference_scale_factor`.
-#[tokio::test]
-async fn add_menu_stores_the_same_factors_the_menu_api_reports() {
-    let server = start_server().await;
-    let list_path = server.dir.path().join(".shopping-list");
+/// Factors stored in `.shopping-list`, in file order. A bare `./Name` line is
+/// factor 1; `./Name{n}` is factor n. Only top-level (two-space) entries.
+fn stored_factors(list: &str) -> Vec<f64> {
+    list.lines()
+        .filter(|l| l.starts_with("  ") && !l.starts_with("    "))
+        .map(|l| {
+            let l = l.trim();
+            match l.rsplit_once('{') {
+                Some((_, rest)) => rest
+                    .trim_end_matches('}')
+                    .parse()
+                    .unwrap_or_else(|_| panic!("unparseable factor in {l:?}")),
+                None => 1.0,
+            }
+        })
+        .collect()
+}
 
-    let client = reqwest::Client::new();
-    let resp = client
+async fn post_add_menu(server: &ServerGuard, scale: f64) -> String {
+    let list_path = server.dir.path().join(".shopping-list");
+    let _ = std::fs::remove_file(&list_path);
+
+    let resp = reqwest::Client::new()
         .post(server.url("/api/shopping_list/add_menu"))
-        .json(&serde_json::json!({ "path": "Plan.menu", "scale": 1.0 }))
+        .json(&serde_json::json!({ "path": "Plan.menu", "scale": scale }))
         .send()
         .await
         .expect("add_menu request");
@@ -207,9 +241,17 @@ async fn add_menu_stores_the_same_factors_the_menu_api_reports() {
         resp.status()
     );
 
-    let stored = std::fs::read_to_string(&list_path).expect("read .shopping-list");
+    std::fs::read_to_string(&list_path).expect("read .shopping-list")
+}
+
+/// The exact `.shopping-list` bytes `add_menu` writes. Pinned so a future
+/// refactor cannot quietly change what gets stored.
+#[tokio::test]
+async fn add_menu_stores_the_expected_shopping_list() {
+    let server = start_server().await;
+
     assert_eq!(
-        stored,
+        post_add_menu(&server, 1.0).await,
         "./Plan.menu\n  \
          ./Servings Recipe{5}\n  \
          ./Servings Recipe{2}\n  \
@@ -217,27 +259,76 @@ async fn add_menu_stores_the_same_factors_the_menu_api_reports() {
          ./Yield Recipe\n"
     );
 
-    // A menu scale multiplies every stored factor.
-    std::fs::remove_file(&list_path).expect("clear .shopping-list");
-    let resp = client
-        .post(server.url("/api/shopping_list/add_menu"))
-        .json(&serde_json::json!({ "path": "Plan.menu", "scale": 3.0 }))
-        .send()
-        .await
-        .expect("add_menu request");
-    assert!(
-        resp.status().is_success(),
-        "add_menu returned {}",
-        resp.status()
-    );
-
-    let stored = std::fs::read_to_string(&list_path).expect("read .shopping-list");
+    // A menu scale multiplies every stored factor, including the `{}` one.
     assert_eq!(
-        stored,
+        post_add_menu(&server, 3.0).await,
         "./Plan.menu{3}\n  \
          ./Servings Recipe{15}\n  \
          ./Servings Recipe{6}\n  \
          ./Servings Recipe{3}\n  \
          ./Yield Recipe{3}\n"
     );
+}
+
+/// `GET /api/menus` and `POST /api/shopping_list/add_menu` must agree on every
+/// reference, including the `{}` one — they share `reference_scale_factor`.
+#[tokio::test]
+async fn add_menu_and_the_menu_api_report_identical_factors() {
+    let server = start_server().await;
+
+    for scale in [1.0, 2.0, 3.0] {
+        let from_api = reference_scales(&server, &format!("?scale={scale}")).await;
+        let from_store = stored_factors(&post_add_menu(&server, scale).await);
+
+        assert_eq!(
+            from_api.len(),
+            4,
+            "expected 4 references from the API at scale {scale}"
+        );
+        assert_eq!(
+            from_api, from_store,
+            "menu API and add_menu disagreed at scale {scale}"
+        );
+    }
+}
+
+/// The HTML menu page (also the `cook build web` static export) renders the
+/// same factors the API reports. It used to compute them independently, and
+/// wrongly. A x1 badge is suppressed as visual noise, so absence of a badge
+/// means exactly 1.0.
+#[tokio::test]
+async fn html_menu_page_agrees_with_the_menu_api() {
+    let server = start_server().await;
+
+    // Every reference link, paired with the badge following it (if any).
+    let re = regex::Regex::new(
+        r#"/recipe/(?:[^"?]*?)"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span class="text-sm text-gray-500">\(×([0-9.]+)\)</span>)?"#,
+    )
+    .unwrap();
+
+    for (scale, expected) in [
+        (1.0, vec![5.0, 2.0, 1.0, 1.0]),
+        (2.0, vec![10.0, 4.0, 2.0, 2.0]),
+    ] {
+        let html = reqwest::get(server.url(&format!("/recipe/Plan.menu?scale={scale}")))
+            .await
+            .expect("request menu page")
+            .error_for_status()
+            .expect("menu page succeeded")
+            .text()
+            .await
+            .expect("menu page body");
+
+        let rendered: Vec<f64> = re
+            .captures_iter(&html)
+            .map(|c| c.get(1).map_or(1.0, |m| m.as_str().parse().unwrap()))
+            .collect();
+
+        assert_eq!(rendered, expected, "HTML menu page at scale {scale}");
+        assert_eq!(
+            rendered,
+            reference_scales(&server, &format!("?scale={scale}")).await,
+            "HTML page and menu API disagreed at scale {scale}"
+        );
+    }
 }

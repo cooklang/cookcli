@@ -5,6 +5,7 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
+use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use anyhow::Result;
@@ -790,6 +791,24 @@ fn build_menu_template_inner(
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
         .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
 
+    // Recipe references need the quantity *as authored*, not the scaled one:
+    // the parser normalises units while scaling (750 ml x 3 becomes 2.25 l),
+    // which would break the yield-unit comparison in `reference_scale_factor`.
+    // Loose ingredients still come from the scaled parse above. Ingredient
+    // indices are identical between the two parses - scaling rewrites
+    // quantities in place without touching the ingredient list.
+    let unscaled = if scale == 1.0 {
+        std::sync::Arc::clone(&recipe)
+    } else {
+        crate::util::parse_recipe_from_entry(&entry, 1.0)
+            .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?
+    };
+
+    // Referenced recipes are resolved from disk to read their `servings` /
+    // `yield` metadata. Menus repeat references, so memoise per build.
+    let mut ref_info_cache: std::collections::HashMap<String, RecipeInfo> =
+        std::collections::HashMap::new();
+
     // Get the image path if available
     let image_path = entry.title_image().clone().and_then(|img_path| {
         if img_path.starts_with("http://") || img_path.starts_with("https://") {
@@ -873,16 +892,6 @@ fn build_menu_template_inner(
                             if let Some(ing) = recipe.ingredients.get(*index) {
                                 // Check if this is a recipe reference using the reference field
                                 if let Some(ref recipe_ref) = ing.reference {
-                                    // This is a recipe reference
-                                    let recipe_scale =
-                                        ing.quantity.as_ref().and_then(|q| match q.value() {
-                                            cooklang::Value::Number(n) => Some(n.value()),
-                                            _ => None,
-                                        });
-
-                                    // Apply menu scaling to the recipe reference
-                                    let final_scale = recipe_scale.map(|s| s * scale);
-
                                     // Build the full path from components
                                     // For web URLs - always use forward slash
                                     let name = if recipe_ref.components.is_empty() {
@@ -895,9 +904,37 @@ fn build_menu_template_inner(
                                         )
                                     };
 
+                                    let authored_quantity = unscaled
+                                        .ingredients
+                                        .get(*index)
+                                        .and_then(|i| i.quantity.as_ref());
+
+                                    // Same resolution the menu JSON API and
+                                    // `add_menu` use, so all three agree.
+                                    let factor = match authored_quantity {
+                                        Some(quantity) => {
+                                            let lookup =
+                                                recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+                                            let info = ref_info_cache
+                                                .entry(lookup.clone())
+                                                .or_insert_with(|| {
+                                                    ref_info_or_default(base_path, &lookup, &name)
+                                                });
+                                            reference_scale_factor(Some(quantity), info, &name)
+                                                * scale
+                                        }
+                                        // No lookup needed: the factor is 1.0
+                                        // whatever the referenced recipe says.
+                                        None => scale,
+                                    };
+
+                                    // Display-only: a x1 badge on every
+                                    // unscaled reference would be pure noise,
+                                    // so suppress it. The number shown, when
+                                    // shown, is the same one the API reports.
                                     step_items.push(MenuSectionItem::RecipeReference {
                                         name,
-                                        scale: final_scale,
+                                        scale: (factor != 1.0).then_some(factor),
                                     });
                                 } else {
                                     // Regular ingredient

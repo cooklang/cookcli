@@ -1,8 +1,8 @@
-use super::common::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::server::{
     shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
     AppState,
 };
+use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::{extract_ingredients, PARSER};
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};

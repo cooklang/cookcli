@@ -35,6 +35,7 @@ pub mod cooklang_to_md;
 pub mod cooklang_to_schema;
 pub mod cooklang_to_typst;
 pub mod format;
+pub mod menu_scale;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
