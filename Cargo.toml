@@ -72,8 +72,8 @@ base64 = { version = "0.23", optional = true }
 # depend on cooklang with default features. Declare it where it is actually used.
 cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.6.1", default-features = false }
-cooklang-import = { version = "0.9.3", optional = true }
-cooklang-sync-client = { version = "0.4.11", optional = true }
+cooklang-import = { version = "0.9.14", optional = true }
+cooklang-sync-client = { version = "0.5.0", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = { version = "0.2.4", optional = true }
 cooklang-reports = { version = "0.5.1" }
