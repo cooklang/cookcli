@@ -560,6 +560,9 @@ async function writeToClipboard(text) {
     textarea.style.top = '-1000px';
     document.body.appendChild(textarea);
     textarea.select();
+    // iOS Safari ignores `select()` on a readonly textarea; it needs an
+    // explicit range. Harmless everywhere else.
+    textarea.setSelectionRange(0, text.length);
     try {
         if (!document.execCommand('copy')) {
             throw new Error('execCommand("copy") returned false');

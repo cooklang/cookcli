@@ -63,14 +63,20 @@ test.describe('Copy shopping list to clipboard', () => {
 
     // Easy Pancakes contributes eggs, flour, milk, sea salt and butter. Each
     // is a bare line — no bullet, no checkbox — under its aisle heading.
-    expect(text).toMatch(/^eggs 3$/m);
+    //
+    // Names are the aisle's *common* names, not the ones written in the .cook
+    // file: aisle.conf maps `egg | eggs` and `salt | sea salt`, and the copy
+    // reuses the same aggregated payload the page renders from.
+    expect(text).toMatch(/^egg 3$/m);
     expect(text).toMatch(/^flour 125 g$/m);
     expect(text).toMatch(/^milk 250 ml$/m);
+    // Two quantities of the same ingredient stay on one line.
+    expect(text).toMatch(/^salt 1 tbsp, pinch$/m);
 
     // Aisle headings are present and are not themselves item lines.
     const headings = lines.filter((line, i) => line !== '' && lines[i - 1] === '' && i > 1);
-    expect(headings.length).toBeGreaterThan(0);
-    expect(headings).not.toContain('eggs 3');
+    expect(headings).toContain('milk and dairy');
+    expect(headings).not.toContain('egg 3');
   });
 
   test('leaves out items that are already ticked off', async ({ page }) => {
@@ -80,16 +86,28 @@ test.describe('Copy shopping list to clipboard', () => {
     const helpers = new TestHelpers(page);
     await helpers.goToShoppingList();
 
-    const eggs = page.locator('input[data-ingredient-name="eggs"]');
-    await expect(eggs).toBeVisible({ timeout: 10_000 });
-    await eggs.check();
-
     const copyButton = page.locator('#copy-list-button');
+    await expect(copyButton).toBeVisible({ timeout: 10_000 });
+
+    // Establish that the item IS in the copy before ticking it off — otherwise
+    // the negative assertion below would also pass if the name were simply
+    // wrong (which is how an earlier revision of this test fooled itself).
+    await copyButton.click();
+    await expect(copyButton).toHaveText(/copied/i);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^egg 3$/m);
+
+    // `egg` is the aisle common name for the recipe's `eggs`; the checkbox is
+    // keyed on the displayed name.
+    const egg = page.locator('input[data-ingredient-name="egg"]');
+    await expect(egg).toBeVisible();
+    await egg.check();
+
+    await expect(copyButton).toHaveText(/^copy$/i);
     await copyButton.click();
     await expect(copyButton).toHaveText(/copied/i);
 
     const text = await page.evaluate(() => navigator.clipboard.readText());
-    expect(text).not.toMatch(/^eggs 3$/m);
+    expect(text).not.toMatch(/^egg 3$/m);
     // Unchecked items are untouched.
     expect(text).toMatch(/^flour 125 g$/m);
   });
