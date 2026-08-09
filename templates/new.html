@@ -9,7 +9,7 @@
     {% if let Some(err) = error %}
     <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
         <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
             <p class="text-red-700">{{ err }}</p>
@@ -31,7 +31,7 @@
                     pattern="[a-zA-Z0-9_/ -]+"
                     placeholder="{{ tr.t("new-recipe-placeholder") }}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
-                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none{% if error.is_some() %} border-red-300{% endif %}"
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-hidden{% if error.is_some() %} border-red-300{% endif %}"
                 >
                 <span class="text-gray-500">.cook</span>
             </div>

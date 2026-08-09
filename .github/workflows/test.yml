@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
 
@@ -32,9 +32,9 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -72,7 +72,7 @@ jobs:
 
     - name: Upload snapshot diffs
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: snapshot-diffs
         path: tests/snapshots/*.snap.new
@@ -84,7 +84,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
 
@@ -97,9 +97,9 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -107,12 +107,12 @@ jobs:
 
     - name: Build application
       run: |
-        cargo build
         npm run build-css
         npm run build-js
+        cargo build
 
     - name: Cache Playwright browsers
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ hashFiles('package-lock.json') }}
@@ -124,7 +124,7 @@ jobs:
       run: npm test
 
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report
@@ -132,7 +132,7 @@ jobs:
         retention-days: 30
 
     - name: Upload test videos
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: failure()
       with:
         name: test-videos
@@ -150,7 +150,7 @@ jobs:
         os: [macos-latest, windows-latest]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
 
@@ -163,9 +163,9 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -193,7 +193,7 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
 
@@ -206,7 +206,7 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Cache tarpaulin
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cargo/bin/cargo-tarpaulin
         key: tarpaulin-${{ hashFiles('**/Cargo.lock') }}
@@ -215,9 +215,9 @@ jobs:
       run: which cargo-tarpaulin || cargo install cargo-tarpaulin
 
     - name: Install Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install npm dependencies
@@ -233,7 +233,7 @@ jobs:
       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
 
     - name: Upload coverage to codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       with:
         file: ./cobertura.xml
         fail_ci_if_error: false

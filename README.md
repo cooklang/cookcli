@@ -205,8 +205,9 @@ cd CookCLI
 # Install frontend dependencies
 npm install
 
-# Build CSS (required for web UI)
+# Build CSS and JS (required for web UI; the build fails without them)
 npm run build-css
+npm run build-js
 
 # Build the CLI with web UI
 cargo build --release

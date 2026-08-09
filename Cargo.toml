@@ -4,7 +4,7 @@ version = "0.32.1"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
-include = ["/src", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static", "/seed", "/locales"]
+include = ["/src", "/build.rs", "/Cargo.toml", "/Cargo.lock", "/README.md", "/templates", "/static", "/seed", "/locales"]
 repository = "https://github.com/cooklang/cookcli"
 homepage = "https://cooklang.org"
 keywords = ["cooklang", "recipes", "cli", "cooking"]
@@ -65,7 +65,7 @@ axum = { version = "0.7", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 # bundled_units carries the unit database (quantity scaling, unit normalisation).
 # We rely on it in `cook recipe`, but never declared it: it was reaching us only
 # via feature unification from cooklang-language-server / cooklang-reports, which
@@ -90,7 +90,10 @@ open = { version = "5.3", optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 rust-embed = "8"
-self_update = { version = "0.41", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "rustls"], optional = true }
+# "reqwest" selects the HTTP backend: since 0.44 it is a feature in its own right,
+# and "rustls" only configures TLS on an already-enabled backend ("reqwest?/rustls"),
+# so without it the crate compiles with no `http_client::get`.
+self_update = { version = "0.44", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "reqwest", "rustls"], optional = true }
 serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -101,9 +104,9 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = { version = "0.7", optional = true }
 thiserror = { version = "2", optional = true }
-toml = "0.9.5"
+toml = "1.1.3"
 tower = { version = "0.5", features = ["util"], optional = true }
-tower-http = { version = "0.5", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
 tower-lsp = { version = "0.20", optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
