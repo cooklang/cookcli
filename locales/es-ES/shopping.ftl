@@ -26,3 +26,6 @@ shopping-failed-to-generate = Error al generar la lista de compras
 shopping-failed-to-add = Error al agregar a la lista de compras
 shopping-error = Error
 shopping-print = Imprimir
+shopping-copy = Copiar
+shopping-copied = ¡Copiado!
+shopping-copy-failed = Error al copiar

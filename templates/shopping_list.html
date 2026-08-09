@@ -11,6 +11,9 @@
             <div id="selected-recipes" class="space-y-2 mb-4">
             </div>
             <div class="space-y-2 mb-6">
+                <button id="copy-list-button" onclick="copyList()" class="hidden w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all">
+                    {{ tr.t("shopping-copy") }}
+                </button>
                 <button onclick="clearList()" class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
                     {{ tr.t("shopping-clear-all") }}
                 </button>
@@ -52,6 +55,10 @@
 
 <script>
 let shoppingList = [];
+
+// Last payload rendered by displayShoppingList(), kept so the copy button can
+// rebuild the list as plain text without re-fetching.
+let lastListData = null;
 
 // Escape a string for safe interpolation into HTML text or a double-quoted
 // attribute value. Recipe names/paths come from filenames — a recipe called
@@ -109,6 +116,8 @@ function renderSelectedRecipes() {
     if (shoppingList.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>';
         document.getElementById('list-content').innerHTML = '<p class="text-gray-500">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
+        lastListData = null;
+        updateCopyButtonVisibility();
         return;
     }
 
@@ -412,6 +421,9 @@ function displayShoppingList(data) {
     // Populate checked set from server response
     checkedItems = new Set((data.checked || []).map(n => n.toLowerCase()));
 
+    lastListData = data;
+    updateCopyButtonVisibility();
+
     let html = '';
 
     // Display items to buy (organized by aisle)
@@ -504,6 +516,96 @@ function formatQuantities(quantities) {
 // Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
 
+// Render the current list as plain text for pasting into a notes app: a title
+// line, then one block per aisle category — the category name followed by one
+// bare `name qty` line per item. Items already ticked off are left out, and a
+// category that empties out is dropped with them. Returns '' when there is
+// nothing left to buy.
+function buildPlainTextList() {
+    const categories = (lastListData && lastListData.categories) || [];
+    const blocks = [];
+
+    for (const category of categories) {
+        const lines = (category.items || [])
+            .filter(item => !checkedItems.has(String(item.name).toLowerCase()))
+            .map(item => {
+                const quantities = formatQuantities(item.quantities);
+                return quantities ? `${item.name} ${quantities}` : item.name;
+            });
+        if (lines.length > 0) {
+            blocks.push([category.category, ...lines].join('\n'));
+        }
+    }
+
+    if (blocks.length === 0) {
+        return '';
+    }
+    return [{{ tr.t("shopping-title")|json|safe }}, ...blocks].join('\n\n') + '\n';
+}
+
+async function writeToClipboard(text) {
+    // `navigator.clipboard` only exists on secure origins, and the server is
+    // routinely reached over plain http from a phone on the same network —
+    // exactly the case this button is for. Fall back to the legacy path there.
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    // Off-screen rather than hidden: `display: none` elements can't be selected.
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-1000px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    // iOS Safari ignores `select()` on a readonly textarea; it needs an
+    // explicit range. Harmless everywhere else.
+    textarea.setSelectionRange(0, text.length);
+    try {
+        if (!document.execCommand('copy')) {
+            throw new Error('execCommand("copy") returned false');
+        }
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
+
+let copyLabelTimer = null;
+
+async function copyList() {
+    const button = document.getElementById('copy-list-button');
+    const text = buildPlainTextList();
+
+    if (!text) {
+        showError({{ tr.t("shopping-no-items")|json|safe }});
+        return;
+    }
+
+    hideError();
+    try {
+        await writeToClipboard(text);
+        button.textContent = {{ tr.t("shopping-copied")|json|safe }};
+    } catch (error) {
+        console.error('Failed to copy shopping list:', error);
+        button.textContent = {{ tr.t("shopping-copy-failed")|json|safe }};
+    }
+
+    clearTimeout(copyLabelTimer);
+    copyLabelTimer = setTimeout(() => {
+        button.textContent = {{ tr.t("shopping-copy")|json|safe }};
+    }, 1500);
+}
+
+// Hide the button whenever there is nothing to copy — an empty list, or every
+// item already ticked off.
+function updateCopyButtonVisibility() {
+    const button = document.getElementById('copy-list-button');
+    if (!button) return;
+    button.classList.toggle('hidden', buildPlainTextList() === '');
+}
+
 async function toggleItem(itemId, checked, ingredientName) {
     const storageKey = ingredientName || itemId;
     const endpoint = checked ? 'check' : 'uncheck';
@@ -531,6 +633,7 @@ async function toggleItem(itemId, checked, ingredientName) {
     }
 
     applyCheckedStyle(itemId, checked);
+    updateCopyButtonVisibility();
 }
 
 function applyCheckedStyle(itemId, checked) {
