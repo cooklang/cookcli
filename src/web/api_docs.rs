@@ -1039,11 +1039,11 @@ fn pantry() -> ApiSection {
                 "/api/pantry/:section/:name",
                 "Update an item",
                 "Only the fields present in the body are changed; omitted fields keep their \
-                 current values. Returns 404 if the section does not exist, but **not** if the \
-                 name inside it doesn't match anything — that case still rewrites the file \
-                 (a no-op) and responds `200` with a success message naming the item that was \
-                 never found. If more than one item in the section shares the target name, \
-                 only the first one is updated.",
+                 current values. Returns 404 if the section does not exist. A name that \
+                 matches nothing inside a valid section does not 404 — that case still \
+                 rewrites the file (a no-op) and responds `200` with a success message \
+                 naming the item that was never found. If more than one item in the section \
+                 shares the target name, only the first one is updated.",
             )
             .params(vec![
                 path_param("section", "Section containing the item."),
@@ -1679,6 +1679,42 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
     /// `param("scale", "string", "query", false, ...)` compiles cleanly and
     /// silently renders "In: string / Type: query" — the same
     /// silent-degradation class `all_methods_are_known_verbs` guards against.
+    /// The page renders prose through the `inline_code` filter, which handles
+    /// backtick spans and nothing else. Markdown emphasis written in a
+    /// description reaches the reader as literal asterisks or underscores —
+    /// caught once in a `PUT /api/pantry/:section/:name` description that
+    /// shipped `**not**` to the page. Automated output checks missed it
+    /// because the markup is valid HTML; only looking at the page revealed it.
+    #[test]
+    fn descriptions_contain_no_unsupported_markdown() {
+        fn check(field: &str, text: &str, where_: &str) {
+            for marker in ["**", "__"] {
+                assert!(
+                    !text.contains(marker),
+                    "{where_} {field} contains Markdown emphasis {marker:?}, which the \
+                     inline_code filter does not render — it will show as literal \
+                     characters. Rephrase, or use backticks for inline code."
+                );
+            }
+        }
+
+        for section in sections() {
+            check("description", &section.description, &section.title);
+            for e in section.endpoints {
+                let where_ = format!("{} {}", e.method, e.path);
+                check("summary", &e.summary, &where_);
+                check("description", &e.description, &where_);
+                for p in e.params {
+                    check(
+                        &format!("param {:?} description", p.name),
+                        &p.description,
+                        &where_,
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn all_param_kinds_are_known() {
         const KNOWN: &[&str] = &["path", "query", "body"];
