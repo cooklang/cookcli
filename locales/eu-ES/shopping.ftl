@@ -26,3 +26,6 @@ shopping-failed-to-generate = Errorea erosketa zerrenda sortzerakoan
 shopping-failed-to-add = Errorea erosketa zerrendara gehitzerakoan
 shopping-error = Errorea
 shopping-print = Inprimatu
+shopping-copy = Kopiatu
+shopping-copied = Kopiatuta!
+shopping-copy-failed = Errorea kopiatzerakoan

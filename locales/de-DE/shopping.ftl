@@ -26,3 +26,6 @@ shopping-failed-to-generate = Einkaufsliste konnte nicht erstellt werden
 shopping-failed-to-add = Hinzufügen zur Einkaufsliste fehlgeschlagen
 shopping-error = Fehler
 shopping-print = Drucken
+shopping-copy = Kopieren
+shopping-copied = Kopiert!
+shopping-copy-failed = Kopieren fehlgeschlagen
