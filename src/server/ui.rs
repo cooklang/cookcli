@@ -41,6 +41,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
+        .route("/api-docs", get(api_docs_page))
 }
 
 async fn recipes_page(
@@ -548,6 +549,26 @@ async fn preferences_page(
         sync_logged_in,
         sync_email,
         sync_syncing,
+        prefix: state.url_prefix.clone(),
+        static_mode: false,
+        repo_url: None,
+        features,
+    }
+}
+
+async fn api_docs_page(
+    State(state): State<Arc<AppState>>,
+    Host(host): Host,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+) -> impl askama_axum::IntoResponse {
+    ApiDocsTemplate {
+        active: "preferences".to_string(),
+        // Rendered so integrators can copy a working URL rather than a
+        // relative path. `Host` reflects however the client reached us.
+        base_url: format!("http://{host}{}/api", state.url_prefix),
+        sections: crate::web::api_docs::sections(),
+        tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
         repo_url: None,

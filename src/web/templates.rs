@@ -754,3 +754,18 @@ pub struct ApiSection {
     pub description: String,
     pub endpoints: Vec<EndpointDoc>,
 }
+
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "api_docs.html")]
+pub struct ApiDocsTemplate {
+    pub active: String,
+    /// Fully-qualified API root, e.g. "http://localhost:9080/api".
+    pub base_url: String,
+    pub sections: Vec<ApiSection>,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+}
