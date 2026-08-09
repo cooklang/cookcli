@@ -99,7 +99,7 @@ impl EndpointDoc {
 
 /// The full API reference, in display order.
 pub fn sections() -> Vec<ApiSection> {
-    vec![recipes(), menus(), shopping_list()]
+    vec![recipes(), menus(), shopping_list(), pantry()]
 }
 
 fn recipes() -> ApiSection {
@@ -907,6 +907,224 @@ fn shopping_list() -> ApiSection {
                  longer in it. Refuses to compact (500) if any recipe fails to parse, rather \
                  than wiping checks based on a partial ingredient set. Responds `200 OK` with \
                  an empty body.",
+            ),
+        ],
+    )
+}
+
+fn pantry() -> ApiSection {
+    section(
+        "pantry",
+        "Pantry",
+        "Reads and writes `pantry.conf`, a TOML file of what you already have at home. \
+         Quantities are typically `VALUE%UNIT`, e.g. `250%g`, but the field is just a string — \
+         `unlim` and plain counts like `12` appear untouched in the seed data. Every endpoint \
+         here returns 404 when no pantry file is configured.",
+        vec![
+            ep(
+                "GET",
+                "/api/pantry",
+                "Read the whole pantry",
+                "Top-level keys are section names — you choose them; `fridge`, `garden`, \
+                 `pantry` and `spice rack` are just conventions used by the seed data. A bare \
+                 `key = \"value\"` line at the top of the TOML file, outside any `[section]` \
+                 header, is not an error: it is folded into a section literally named \
+                 `general`, which is why it appears below even though `pantry.conf` never \
+                 writes `[general]` itself. Item fields other than `name` are all optional and \
+                 present only when set. The response below is trimmed to two sections of the \
+                 seed pantry's five (`pantry` and `spice rack` also exist, with the same shape) \
+                 to keep this example short.",
+            )
+            .response(
+                r#"
+{
+  "fridge": [
+    { "name": "butter", "expire": "2026-04-15", "quantity": "250%g" },
+    { "name": "eggs", "bought": "2026-03-07", "quantity": "12" },
+    { "name": "milk", "quantity": "2%l" },
+    { "name": "parmesan cheese", "quantity": "200%g" },
+    { "name": "sour cream", "quantity": "200%ml" }
+  ],
+  "garden": [
+    { "name": "fresh basil", "quantity": "unlim" },
+    { "name": "fresh oregano", "quantity": "unlim" },
+    { "name": "thyme", "quantity": "unlim" }
+  ],
+  "general": [
+    { "name": "water", "quantity": "unlim" }
+  ]
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/pantry/add",
+                "Add an item",
+                "Creates the section if it does not exist. The response claims success and \
+                 reports a distinct item was appended even when the section already has an \
+                 item of that name — but every write round-trips through a TOML serializer \
+                 that keys each section's items by name, so a second item sharing a name with \
+                 an existing one in the same section silently replaces it on disk rather than \
+                 coexisting. Verified: adding `dup` twice with different quantities to a fresh \
+                 section leaves exactly one `dup` item, with the second call's quantity.",
+            )
+            .params(vec![
+                param(
+                    "section",
+                    "body",
+                    "string",
+                    true,
+                    "Section to add the item to.",
+                ),
+                param("name", "body", "string", true, "Item name."),
+                param(
+                    "quantity",
+                    "body",
+                    "string",
+                    false,
+                    "Amount as `VALUE%UNIT`, or any other string such as `unlim`.",
+                ),
+                param(
+                    "bought",
+                    "body",
+                    "string",
+                    false,
+                    "Purchase date. Accepts `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`, \
+                     `MM/DD/YYYY`, `YYYY.MM.DD` or `DD-MM-YYYY`.",
+                ),
+                param(
+                    "expire",
+                    "body",
+                    "string",
+                    false,
+                    "Expiry date, same accepted formats as `bought`.",
+                ),
+                param(
+                    "low",
+                    "body",
+                    "string",
+                    false,
+                    "Threshold below which the item counts as running low. Compared against \
+                     `quantity` only when both share the same unit; see \
+                     `GET /api/pantry/depleted`.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "section": "fridge",
+  "name": "yogurt",
+  "quantity": "1%l",
+  "low": "2%l"
+}
+"#,
+            )
+            .response(
+                r#"
+{
+  "success": true,
+  "message": "Added yogurt to fridge"
+}
+"#,
+            ),
+            ep(
+                "PUT",
+                "/api/pantry/:section/:name",
+                "Update an item",
+                "Only the fields present in the body are changed; omitted fields keep their \
+                 current values. Returns 404 if the section does not exist, but **not** if the \
+                 name inside it doesn't match anything — that case still rewrites the file \
+                 (a no-op) and responds `200` with a success message naming the item that was \
+                 never found. If more than one item in the section shares the target name, \
+                 only the first one is updated.",
+            )
+            .params(vec![
+                path_param("section", "Section containing the item."),
+                path_param("name", "Item name."),
+                param("quantity", "body", "string", false, "New amount."),
+                param("bought", "body", "string", false, "New purchase date."),
+                param("expire", "body", "string", false, "New expiry date."),
+                param("low", "body", "string", false, "New low threshold."),
+            ])
+            .request(
+                r#"
+{ "quantity": "500%g" }
+"#,
+            )
+            .response(
+                r#"
+{
+  "success": true,
+  "message": "Updated butter in fridge"
+}
+"#,
+            ),
+            ep(
+                "DELETE",
+                "/api/pantry/:section/:name",
+                "Remove an item",
+                "The section is deleted too if it becomes empty. Returns 404 if the section \
+                 does not exist, but — like `PUT` — responds `200` with a success message even \
+                 when no item in the section actually has that name; nothing is removed and the \
+                 file is rewritten unchanged.",
+            )
+            .params(vec![
+                path_param("section", "Section containing the item."),
+                path_param("name", "Item name."),
+            ])
+            .response(
+                r#"
+{
+  "success": true,
+  "message": "Removed butter from fridge"
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/pantry/expiring",
+                "List items expiring soon",
+                "Sorted most urgent first. `days_remaining` goes negative for items that have \
+                 already expired, and those are always included regardless of the window — the \
+                 seed pantry's `butter` (`expire = \"2026-04-15\"`) is already expired relative \
+                 to today, so it shows up even with the default 7-day window.",
+            )
+            .params(vec![param(
+                "days",
+                "query",
+                "number",
+                false,
+                "Look-ahead window in days. Defaults to 7. Negative values return 400.",
+            )])
+            .response(
+                r#"
+[
+  {
+    "section": "fridge",
+    "name": "butter",
+    "expire": "2026-04-15",
+    "days_remaining": -116
+  }
+]
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/pantry/depleted",
+                "List items running low",
+                "An item counts as low when its `quantity` has fallen to or below its `low` \
+                 threshold and the two share the same unit. Returns `[]` against the unmodified \
+                 seed pantry, which has no `low` field set on anything.",
+            )
+            // Captured against a temporarily-added item (fridge/yogurt, quantity "1%l",
+            // low "2%l"), then removed — the seed pantry itself has no low items. Shape
+            // matches DepletedItemResponse in src/server/handlers/pantry.rs exactly.
+            .response(
+                r#"
+[
+  { "section": "fridge", "name": "yogurt", "low": "2%l" }
+]
+"#,
             ),
         ],
     )
