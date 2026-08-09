@@ -2,6 +2,7 @@ use crate::server::{
     shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
     AppState,
 };
+use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::{extract_ingredients, PARSER};
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
@@ -433,61 +434,6 @@ pub struct AddMenuRequest {
     pub scale: f64,
 }
 
-/// Information about a referenced recipe needed to convert a menu's
-/// `{target%unit}` into a storage multiplier for `.shopping-list`.
-#[derive(Default)]
-struct RecipeInfo {
-    sub_refs: Vec<String>,
-    /// Numeric `servings` metadata. The cooklang API only exposes this as
-    /// `u32`, so fractional defaults like `servings: 1.5` appear as `None`
-    /// and fall back to raw-multiplier mode.
-    default_servings: Option<u32>,
-    /// Parsed `yield` metadata (value, unit) if present and well-formed,
-    /// e.g. `yield: 500%ml` → `Some((500.0, "ml"))`.
-    default_yield: Option<(f64, String)>,
-}
-
-/// Parse the `yield` metadata format `"VALUE%UNIT"` (e.g. `"500%ml"`) into
-/// its numeric value and unit.
-fn parse_yield(s: &str) -> Option<(f64, String)> {
-    let (value, unit) = s.split_once('%')?;
-    let value = value.trim().parse::<f64>().ok()?;
-    let unit = unit.trim();
-    if unit.is_empty() {
-        return None;
-    }
-    Some((value, unit.to_string()))
-}
-
-fn resolve_recipe_info(base_path: &Utf8PathBuf, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
-    let entry = crate::util::get_recipe(base_path, recipe_path)?;
-    let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
-
-    let mut sub_refs = Vec::new();
-    for ingredient in &recipe.ingredients {
-        if let Some(ref recipe_ref) = ingredient.reference {
-            let path = if recipe_ref.components.is_empty() {
-                recipe_ref.name.clone()
-            } else {
-                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
-            };
-            sub_refs.push(path);
-        }
-    }
-    let default_servings = recipe.metadata.servings().and_then(|s| s.as_number());
-    let default_yield = recipe
-        .metadata
-        .get("yield")
-        .and_then(|v| v.as_str())
-        .and_then(parse_yield);
-
-    Ok(RecipeInfo {
-        sub_refs,
-        default_servings,
-        default_yield,
-    })
-}
-
 /// Add all recipe references from a menu to the shopping list as a single
 /// plan entry with recipes nested inside.
 pub async fn add_menu_to_shopping_list(
@@ -543,78 +489,15 @@ pub async fn add_menu_to_shopping_list(
             };
 
             // Convert `{target%unit}` on the menu reference into a scale
-            // multiplier for `.shopping-list`. Per the Cooklang spec
-            // (conventions.md §"Scaling Referenced Recipes") the unit
-            // decides how `target` is interpreted:
-            //
-            //   - no unit     → raw multiplier (`{2}` = ×2)
-            //   - `servings`  → target servings; factor = target / default_servings
-            //   - other unit  → target yield;    factor = target / default_yield_value
-            //                   (only if the units match — no conversion)
+            // multiplier for `.shopping-list`. The menu was parsed at 1.0
+            // above, so `ingredient.quantity` is the quantity as authored,
+            // which is what `reference_scale_factor` requires.
             //
             // Storing a raw multiplier without this conversion was the bug:
             // e.g. a 2-serving recipe referenced as `{3%servings}` got stored
             // as `{3}` and scaled to 6 servings instead of 3.
-            let recipe_factor = match ingredient.quantity.as_ref() {
-                Some(q) => {
-                    let value = match q.value() {
-                        cooklang::quantity::Value::Number(n) => Some(n.value()),
-                        _ => None,
-                    };
-                    match (value, q.unit()) {
-                        // Non-numeric quantity (e.g. `{some%servings}`): no
-                        // target to scale against, so use identity.
-                        (None, _) => 1.0,
-                        (Some(v), None) => v,
-                        (Some(target), Some(unit))
-                            if unit.eq_ignore_ascii_case("servings")
-                                || unit.eq_ignore_ascii_case("serving") =>
-                        {
-                            match info.default_servings {
-                                Some(base) if base > 0 => target / base as f64,
-                                _ => {
-                                    tracing::warn!(
-                                        "Recipe '{}' has no numeric servings metadata; \
-                                         treating {} servings as a raw multiplier",
-                                        ref_display,
-                                        target
-                                    );
-                                    target
-                                }
-                            }
-                        }
-                        (Some(target), Some(unit)) => match &info.default_yield {
-                            Some((base, base_unit))
-                                if base_unit.eq_ignore_ascii_case(unit) && *base > 0.0 =>
-                            {
-                                target / base
-                            }
-                            Some((_, base_unit)) => {
-                                tracing::warn!(
-                                    "Recipe '{}' yield unit '{}' does not match \
-                                     reference unit '{}'; treating {} as a raw multiplier",
-                                    ref_display,
-                                    base_unit,
-                                    unit,
-                                    target
-                                );
-                                target
-                            }
-                            None => {
-                                tracing::warn!(
-                                    "Recipe '{}' has no yield metadata to scale \
-                                     against '{}'; treating {} as a raw multiplier",
-                                    ref_display,
-                                    unit,
-                                    target
-                                );
-                                target
-                            }
-                        },
-                    }
-                }
-                None => 1.0,
-            };
+            let recipe_factor =
+                reference_scale_factor(ingredient.quantity.as_ref(), &info, &ref_display);
             let final_scale = recipe_factor * menu_scale;
             let sub_refs = info.sub_refs;
 
@@ -645,40 +528,4 @@ pub async fn add_menu_to_shopping_list(
         })?;
 
     Ok(StatusCode::OK)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_yield;
-
-    #[test]
-    fn parse_yield_basic() {
-        assert_eq!(parse_yield("500%ml"), Some((500.0, "ml".to_string())));
-    }
-
-    #[test]
-    fn parse_yield_decimal() {
-        assert_eq!(parse_yield("1.5%l"), Some((1.5, "l".to_string())));
-    }
-
-    #[test]
-    fn parse_yield_trims_whitespace() {
-        assert_eq!(parse_yield(" 250 % g "), Some((250.0, "g".to_string())));
-    }
-
-    #[test]
-    fn parse_yield_missing_unit() {
-        assert_eq!(parse_yield("500%"), None);
-        assert_eq!(parse_yield("500"), None);
-    }
-
-    #[test]
-    fn parse_yield_missing_value() {
-        assert_eq!(parse_yield("%ml"), None);
-    }
-
-    #[test]
-    fn parse_yield_non_numeric_value() {
-        assert_eq!(parse_yield("abc%ml"), None);
-    }
 }

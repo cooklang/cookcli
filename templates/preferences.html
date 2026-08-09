@@ -148,6 +148,15 @@
         <div class="bg-gray-50 p-4 rounded-sm">
             <h2 class="text-lg font-semibold mb-3">Documentation & Resources</h2>
             <div class="space-y-2 text-sm">
+                {% if !static_mode %}
+                <div>
+                    <a href="{{ prefix }}/api-docs"
+                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                        🔌 Server API
+                    </a>
+                    <span class="text-gray-600 ml-2">- HTTP endpoints for building integrations</span>
+                </div>
+                {% endif %}
                 <div>
                     <a href="https://cooklang.org/cli/" target="_blank" rel="noopener noreferrer"
                        class="text-orange-700 hover:text-orange-800 hover:underline font-medium">

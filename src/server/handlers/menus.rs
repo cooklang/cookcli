@@ -1,5 +1,6 @@
 use super::common::{check_path, json_error};
 use crate::server::AppState;
+use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -9,6 +10,7 @@ use camino::Utf8PathBuf;
 use cooklang_find::RecipeTree;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
@@ -98,7 +100,9 @@ pub enum MenuMealItem {
     RecipeReference {
         name: String,
         path: Option<String>,
-        scale: Option<f64>,
+        /// Multiplier for the referenced recipe. Always present: a reference
+        /// with no `{...}` target is ×1 before the menu scale is applied.
+        scale: f64,
     },
     #[serde(rename = "ingredient")]
     Ingredient {
@@ -175,6 +179,28 @@ pub async fn get_menu(
             json_error(format!("Failed to parse menu: {e}")),
         )
     })?;
+
+    // Recipe references need the quantity *as authored*, not the scaled one:
+    // the parser normalises units while scaling (750 ml × 3 becomes 2.25 l),
+    // which would break the yield-unit comparison in `reference_scale_factor`.
+    // Loose ingredients still come from the scaled parse above. Ingredient
+    // indices are identical between the two parses — scaling rewrites
+    // quantities in place without touching the ingredient list.
+    let unscaled = if scale == 1.0 {
+        Arc::clone(&recipe)
+    } else {
+        crate::util::parse_recipe_from_entry(&entry, 1.0).map_err(|e| {
+            tracing::error!("Failed to parse menu: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error(format!("Failed to parse menu: {e}")),
+            )
+        })?
+    };
+
+    // Referenced recipes are resolved from disk to read their `servings` /
+    // `yield` metadata. Menus repeat references, so memoise per request.
+    let mut ref_info_cache: HashMap<String, RecipeInfo> = HashMap::new();
 
     // Build metadata as a JSON object
     let metadata = if recipe.metadata.map.is_empty() {
@@ -269,13 +295,6 @@ pub async fn get_menu(
 
                             if let Some(ing) = recipe.ingredients.get(*index) {
                                 if let Some(ref recipe_ref) = ing.reference {
-                                    let recipe_scale =
-                                        ing.quantity.as_ref().and_then(|q| match q.value() {
-                                            cooklang::Value::Number(n) => Some(n.value()),
-                                            _ => None,
-                                        });
-                                    let final_scale = recipe_scale.map(|s| s * scale);
-
                                     let name = if recipe_ref.components.is_empty() {
                                         recipe_ref.name.clone()
                                     } else {
@@ -284,6 +303,37 @@ pub async fn get_menu(
                                             recipe_ref.components.join("/"),
                                             recipe_ref.name
                                         )
+                                    };
+
+                                    let authored_quantity = unscaled
+                                        .ingredients
+                                        .get(*index)
+                                        .and_then(|i| i.quantity.as_ref());
+
+                                    // The factor comes from the authored
+                                    // quantity, so the menu scale still has to
+                                    // be applied here. A reference with no
+                                    // target (`@foo{}`) is ×1 before scaling,
+                                    // which is what `add_menu` stores for it.
+                                    let final_scale = match authored_quantity {
+                                        Some(quantity) => {
+                                            let lookup =
+                                                recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+                                            let info = ref_info_cache
+                                                .entry(lookup.clone())
+                                                .or_insert_with(|| {
+                                                    ref_info_or_default(
+                                                        &state.base_path,
+                                                        &lookup,
+                                                        &name,
+                                                    )
+                                                });
+                                            reference_scale_factor(Some(quantity), info, &name)
+                                                * scale
+                                        }
+                                        // No lookup needed: the factor is 1.0
+                                        // whatever the referenced recipe says.
+                                        None => scale,
                                     };
 
                                     // Build the .cook path for the reference
@@ -415,7 +465,7 @@ enum LineItem {
     RecipeRef {
         name: String,
         path: Option<String>,
-        scale: Option<f64>,
+        scale: f64,
     },
     Ingredient {
         name: String,
