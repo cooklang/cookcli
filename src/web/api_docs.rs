@@ -105,6 +105,7 @@ pub fn sections() -> Vec<ApiSection> {
         shopping_list(),
         pantry(),
         search_and_stats(),
+        realtime(),
     ]
 }
 
@@ -1221,6 +1222,49 @@ fn search_and_stats() -> ApiSection {
   "message": "Recipes will be refreshed from disk on next request"
 }
 "#,
+            ),
+        ],
+    )
+}
+
+fn realtime() -> ApiSection {
+    section(
+        "realtime",
+        "Realtime",
+        "Long-lived connections. Neither of these returns a normal JSON response.",
+        vec![
+            ep(
+                "GET",
+                "/api/shopping_list/events",
+                "Server-sent events for shopping list changes",
+                "Emits a `change` event whenever `.shopping-list` or `.shopping-checked` is \
+                 modified on disk — including by another client or by the `cook` CLI. The \
+                 event's `file` field is `\"list\"` or `\"checked\"`, naming which file changed \
+                 (captured live below by editing the shopping list in a second shell while \
+                 connected). It is not a snapshot of what changed, so the intended pattern is \
+                 to re-fetch the list on each event rather than to apply a diff. A `ping` \
+                 keep-alive comment is sent every 30 seconds. If the filesystem watcher failed \
+                 to start, the stream still connects and returns 200 but never emits an event.",
+            )
+            .response(
+                r#"
+event: change
+data: {"file":"list"}
+
+event: change
+data: {"file":"checked"}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/ws/lsp",
+                "Language server bridge (websocket)",
+                "Upgrades to a websocket (verified: a plain WebSocket handshake against this \
+                 path returns `101 Switching Protocols`) that bridges to a `cook lsp` \
+                 subprocess, providing diagnostics and completions to the built-in editor. \
+                 Messages are Language Server Protocol messages framed with `Content-Length` \
+                 headers exactly as LSP over stdio would be — see the LSP specification for the \
+                 format. Not a REST endpoint and not usable with a plain HTTP client.",
             ),
         ],
     )
