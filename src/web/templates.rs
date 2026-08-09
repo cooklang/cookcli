@@ -47,7 +47,7 @@ mod tr_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod inline_code_tests {
     use super::filters::inline_code;
 
@@ -103,6 +103,12 @@ mod filters {
     /// Escapes every segment itself, so the result is safe to pass through
     /// `|safe`. Callers MUST use `|safe` or the markup will be double-escaped
     /// and shown as text.
+    ///
+    /// Only `api_docs.html` uses this filter, and that template is server-only,
+    /// so the filter is gated too — `src/web/` still compiles without the
+    /// `server` feature for the static-site export, and an ungated filter would
+    /// be dead code in that build.
+    #[cfg(feature = "server")]
     pub fn inline_code(s: &str) -> Result<String> {
         let mut out = String::with_capacity(s.len());
         for (i, segment) in s.split('`').enumerate() {
