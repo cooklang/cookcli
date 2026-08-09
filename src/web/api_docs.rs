@@ -99,7 +99,13 @@ impl EndpointDoc {
 
 /// The full API reference, in display order.
 pub fn sections() -> Vec<ApiSection> {
-    vec![recipes(), menus(), shopping_list(), pantry()]
+    vec![
+        recipes(),
+        menus(),
+        shopping_list(),
+        pantry(),
+        search_and_stats(),
+    ]
 }
 
 fn recipes() -> ApiSection {
@@ -1124,6 +1130,96 @@ fn pantry() -> ApiSection {
 [
   { "section": "fridge", "name": "yogurt", "low": "2%l" }
 ]
+"#,
+            ),
+        ],
+    )
+}
+
+fn search_and_stats() -> ApiSection {
+    section(
+        "search-stats",
+        "Search & Stats",
+        "Collection-wide queries.",
+        vec![
+            ep(
+                "GET",
+                "/api/search",
+                "Full-text recipe search",
+                "Matches against recipe names and content. Menus are searched alongside \
+                 recipes. `q` is required: omitting it entirely returns a plain-text 400 from \
+                 axum's query deserializer (`Failed to deserialize query string: missing field \
+                 \\`q\\``), not the page's usual JSON error envelope — the same shape as the \
+                 `scale` parameter's failure mode on `GET /api/recipes/*path`. A present but \
+                 empty `q=` is not rejected, though: it matches everything and returns the \
+                 whole collection.",
+            )
+            .params(vec![param(
+                "q",
+                "query",
+                "string",
+                true,
+                "Search term. Omitting the parameter returns 400; an empty value matches \
+                 everything.",
+            )])
+            .response(
+                r#"
+[
+  { "name": "Neapolitan Pizza", "path": "Neapolitan Pizza.cook" },
+  { "name": "Pizza Dough", "path": "Shared/Pizza Dough.cook" },
+  { "name": "2 Day Plan", "path": "2 Day Plan.menu" },
+  { "name": "Weekly Plan", "path": "Weekly Plan.menu" }
+]
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/stats",
+                "Collection counts",
+                "Pantry counts are all zero when no pantry file is configured, or when it fails \
+                 to read or parse. `pantry_expiring_count` uses a fixed 7-day window regardless \
+                 of what `GET /api/pantry/expiring?days=` would be called with.",
+            )
+            .response(
+                r#"
+{
+  "recipe_count": 12,
+  "menu_count": 2,
+  "pantry_item_count": 29,
+  "pantry_expiring_count": 1,
+  "pantry_depleted_count": 0
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/reload",
+                "Reload recipes (no-op)",
+                "Kept for client compatibility. The server reads from disk on every request, \
+                 so there is no cache to clear and this endpoint does nothing besides log and \
+                 return this fixed response.",
+            )
+            .response(
+                r#"
+{
+  "status": "success",
+  "message": "Recipes will be refreshed from disk on next request"
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/reload",
+                "Reload recipes (no-op)",
+                "Identical to the GET form; both verbs are registered on the same route and \
+                 accepted.",
+            )
+            .response(
+                r#"
+{
+  "status": "success",
+  "message": "Recipes will be refreshed from disk on next request"
+}
 "#,
             ),
         ],
