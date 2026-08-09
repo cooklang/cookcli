@@ -90,7 +90,6 @@ impl EndpointDoc {
         self
     }
 
-    #[expect(dead_code, reason = "first used by the sync section, which lands last")]
     fn requires(mut self, feature: &str) -> Self {
         self.feature = Some(feature.to_string());
         self
@@ -106,6 +105,7 @@ pub fn sections() -> Vec<ApiSection> {
         pantry(),
         search_and_stats(),
         realtime(),
+        sync(),
     ]
 }
 
@@ -1270,6 +1270,93 @@ data: {"file":"checked"}
     )
 }
 
+fn sync() -> ApiSection {
+    section(
+        "sync",
+        "Sync",
+        "Sign in to CookCloud and sync recipes across devices. These four endpoints exist \
+         only when CookCLI is built with the `sync` feature, which is on by default — the \
+         badge on each entry marks that. Because the router is read as source text \
+         (`include_str!`), they are documented unconditionally rather than silently \
+         disappearing from this page in a build that lacks the feature. Authentication uses \
+         an OAuth device-code flow: start a login, show the user the code, then poll status \
+         until it completes.",
+        vec![
+            ep(
+                "GET",
+                "/api/sync/status",
+                "Current sync and login state",
+                "`pending_login` is non-null while a device-code login is in progress; poll \
+                 this endpoint to detect completion. `expires_in_secs` counts down to when the \
+                 pending login expires. Captured live against a fresh server with no session.",
+            )
+            .requires("sync")
+            .response(
+                r#"
+{
+  "logged_in": false,
+  "email": null,
+  "syncing": false,
+  "pending_login": null
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/sync/login",
+                "Start a device-code login",
+                "Illustrative response — derived field-by-field from `LoginResponse` in \
+                 `src/server/handlers/sync.rs`, not captured from a completed cook.md \
+                 exchange (that needs real network and credentials, which this reference was \
+                 not authenticated against). Show `user_code` to the user and send them to \
+                 `verification_uri`, or open `verification_uri_complete`, which pre-fills the \
+                 code. Takes no request body. Returns 400 if already logged in, 409 if a \
+                 login is already in progress, and 502 if cook.md is unreachable — the 502 \
+                 path was verified live, by calling this endpoint with no network reachable: \
+                 it returned `502` with `{\"error\": \"cook.md unreachable: ...\"}`.",
+            )
+            .requires("sync")
+            .response(
+                r#"
+{
+  "user_code": "ABCD-EFGH",
+  "verification_uri": "https://cook.md/device",
+  "verification_uri_complete": "https://cook.md/device?code=ABCD-EFGH",
+  "expires_in_secs": 900
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/sync/cancel_login",
+                "Abandon a pending login",
+                "`cancelled` is false when there was no login in progress — captured live \
+                 against a fresh server with nothing pending. Takes no request body.",
+            )
+            .requires("sync")
+            .response(
+                r#"
+{ "cancelled": false }
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/sync/logout",
+                "Sign out and stop syncing",
+                "Clears the stored session and halts the background sync task. Always \
+                 responds `200` with `{\"ok\": true}`, even when no session exists — captured \
+                 live against a fresh server with no session file. Takes no request body.",
+            )
+            .requires("sync")
+            .response(
+                r#"
+{ "ok": true }
+"#,
+            ),
+        ],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1559,6 +1646,18 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
                 router.contains(&path),
                 "{path} is documented in api_docs.rs but no longer exists in the router. \
                  Remove or correct the doc entry."
+            );
+        }
+    }
+
+    #[test]
+    fn every_router_path_is_documented() {
+        let documented = documented_paths();
+        for path in router_paths(include_str!("../server/mod.rs")) {
+            assert!(
+                documented.contains(&path),
+                "{path} is registered in the router but missing from api_docs.rs. \
+                 Add a doc entry for it."
             );
         }
     }
