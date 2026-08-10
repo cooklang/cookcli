@@ -3372,6 +3372,26 @@ grep -n "PARSER\.\|cooklang::parse\|IngredientList::new\|parse_lenient" \
 
 Expected: no matches. Every hit is logic that belongs in core and did not move.
 
+- [ ] **Step 1b: Delete the duplicated config resolution from the CLI**
+
+The strangler pattern leaves `cookcli` and `cookcli-core` both defining config resolution. By this point there are **three** copies, and drift between two of them is the bug Task 2 exists to repair — `src/main.rs`'s `Context::aisle()` falls back to the platform config directory while `src/lib.rs`'s does not, and the `lib.rs` copy is the one the current tests exercise.
+
+Delete, once every command goes through core:
+
+- `src/main.rs`'s `Context` struct, its `aisle()`/`pantry()`/`base_path()` methods, and its `global_file_path` (`main.rs:102-137` and `main.rs:185-191` at the time of writing).
+- `src/main.rs`'s `APP_NAME`, `LOCAL_CONFIG_DIR`, `AUTO_AISLE`, `AUTO_PANTRY` constants.
+- `src/lib.rs`'s divergent `Context` and its `global_file_path`.
+
+Replace both with `cookcli_core::Context`, constructed via `Context::discover(base_path)` in `configure_context()` so the CLI keeps its ambient-discovery behaviour. `Context::to_core()` (added in Task 5) becomes unnecessary and should go too.
+
+```bash
+grep -rn "struct Context\|global_file_path\|AUTO_AISLE\|AUTO_PANTRY\|LOCAL_CONFIG_DIR" src/
+```
+
+Expected afterwards: no matches outside imports of the core types.
+
+Keep the CLI's `resolve_to_absolute_path` + `is_dir` validation in `configure_context()`. Core deliberately does neither, and dropping that check would change CLI behaviour for a bad `--base-path`.
+
 - [ ] **Step 2: Confirm core's dependency tree is small**
 
 ```bash
@@ -3530,6 +3550,7 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 - [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean.
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.
 - [ ] No command module in `src/` contains parsing or aggregation logic.
+- [ ] `src/main.rs`'s and `src/lib.rs`'s duplicate `Context` and `global_file_path` are deleted; the CLI uses `cookcli_core::Context` exclusively.
 - [ ] `cargo publish -p cookcli-core --dry-run` succeeds.
 - [ ] `.github/workflows/release.yaml` publishes `cookcli-core` before `cookcli`, and release-please's behaviour with the new workspace has been verified rather than assumed.
 
