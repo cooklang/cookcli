@@ -65,6 +65,21 @@ Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour
 - **`#[serde(default)]` is redundant next to `skip_serializing_if` on `Option<T>`** — serde's derive already maps a missing field to `None`. It is genuinely required for non-`Option` fields (e.g. `skip_serializing_if = "Vec::is_empty"` on a `Vec`). Do not apply it reflexively.
 - **`#[non_exhaustive]` on public output structs too, not just enums.** `Diagnostic` and `Location` carry it so fields can be added without a breaking release. Consumers read these; they do not construct them.
 
+### Re-examine moved code as published API
+
+Task 4 moved 2,800 lines faithfully and still shipped three API problems, all the same mistake: **code that was fine as a private CLI helper is not automatically fine as `pub` on crates.io.** It shipped `paper_size: &str` next to a brand-new `PaperSize` enum, ~130 lines of untested `Serialize`-deriving markdown configuration frozen into semver, and a `format_number` that loses the sign of negative inputs.
+
+A faithful move is necessary but not sufficient. For every item a task makes public, ask:
+
+- **Is this the right type?** A `&str` where an enum exists is a bug a consumer will hit and the CLI never will.
+- **Does anything test it?** Untested public surface is a promise you have not checked. If nothing calls it, prefer `pub(crate)` — that is reversible; publishing is not.
+- **Does it deriving `Serialize` pin a wire format?** That is semver too.
+- **Does its behaviour hold outside the CLI's input range?** The CLI never passes a negative quantity. A library consumer will.
+
+When in doubt, `pub(crate)` it and let a real consumer ask.
+
+**The task that orphans a dependency removes it.** Task 4 left four dead deps in the root manifest after moving their only users.
+
 ### Prove your tests bite — mutation testing is mandatory
 
 **Tasks 2 and 3 each shipped tests that passed while asserting nothing.** Task 2's `new_touches_nothing` stayed green when `new` was replaced with `discover`. Task 3's suite survived five of six mutations, including one that inverted the severity mapping the module exists to perform. Both were caught only in review.
