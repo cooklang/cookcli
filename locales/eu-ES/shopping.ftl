@@ -29,3 +29,6 @@ shopping-print = Inprimatu
 shopping-copy = Kopiatu
 shopping-copied = Kopiatuta!
 shopping-copy-failed = Errorea kopiatzerakoan
+shopping-copy-options = Kopiatzeko aukerak
+shopping-copy-include-aisles = Sailen izenak sartu
+shopping-copy-include-amounts = Kopuruak sartu

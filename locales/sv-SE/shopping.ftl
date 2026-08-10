@@ -29,3 +29,6 @@ shopping-print = Skriv ut
 shopping-copy = Kopiera
 shopping-copied = Kopierad!
 shopping-copy-failed = Kopiering misslyckades
+shopping-copy-options = Kopieringsalternativ
+shopping-copy-include-aisles = Inkludera hyllnamn
+shopping-copy-include-amounts = Inkludera mängder

@@ -8,15 +8,7 @@
     <div class="lg:w-2/5 xl:w-1/3">
         <div class="bg-white rounded-2xl shadow-lg p-6 sticky top-6">
             <h3 class="font-bold text-lg mb-3 text-orange-600">{{ tr.t("shopping-selected-recipes") }}</h3>
-            <div id="selected-recipes" class="space-y-2 mb-4">
-            </div>
-            <div class="space-y-2 mb-6">
-                <button id="copy-list-button" onclick="copyList()" class="hidden w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all">
-                    {{ tr.t("shopping-copy") }}
-                </button>
-                <button onclick="clearList()" class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
-                    {{ tr.t("shopping-clear-all") }}
-                </button>
+            <div id="selected-recipes" class="space-y-2 mb-6">
             </div>
 
             <!-- Pantry items section -->
@@ -44,6 +36,46 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
+                </button>
+            </div>
+        </div>
+        <!-- Heading and list actions share a row; the heading lives here rather
+             than in the JS-rendered list so the buttons stay put while the list
+             below them re-renders. -->
+        <div id="shopping-list-header" class="hidden flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 class="text-2xl font-bold text-orange-700">{{ tr.t("shopping-title") }}</h2>
+            <div class="flex items-center gap-2">
+                <!-- Split button: the left half copies, the right half opens the
+                     checkboxes that decide what the copied text contains. -->
+                <div id="copy-list-group" class="hidden relative">
+                    <div class="flex">
+                        <button id="copy-list-button" onclick="copyList()" class="px-4 py-2 bg-orange-600 text-white rounded-l-lg hover:bg-orange-700 transition-all">
+                            {{ tr.t("shopping-copy") }}
+                        </button>
+                        <button id="copy-options-toggle" type="button" onclick="toggleCopyOptions()"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="copy-options-menu"
+                            aria-label="{{ tr.t("shopping-copy-options") }}"
+                            class="px-3 py-2 bg-orange-600 text-white rounded-r-lg border-l border-orange-500 hover:bg-orange-700 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="copy-options-menu" class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1">
+                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox" id="copy-option-aisles" onchange="onCopyOptionChange()"
+                                class="w-4 h-4 text-orange-600 rounded-sm focus:ring-orange-500">
+                            <span>{{ tr.t("shopping-copy-include-aisles") }}</span>
+                        </label>
+                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox" id="copy-option-amounts" onchange="onCopyOptionChange()"
+                                class="w-4 h-4 text-orange-600 rounded-sm focus:ring-orange-500">
+                            <span>{{ tr.t("shopping-copy-include-amounts") }}</span>
+                        </label>
+                    </div>
+                </div>
+                <button onclick="clearList()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
+                    {{ tr.t("shopping-clear-all") }}
                 </button>
             </div>
         </div>
@@ -112,6 +144,12 @@ async function loadShoppingList() {
 
 function renderSelectedRecipes() {
     const container = document.getElementById('selected-recipes');
+
+    // The heading and its buttons live in the same row, so the row follows the
+    // selection rather than the generated items: with recipes selected but
+    // every ingredient in the pantry there is nothing to copy, yet Clear All
+    // still has to be reachable.
+    setHeaderVisible(shoppingList.length > 0);
 
     if (shoppingList.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>';
@@ -428,7 +466,6 @@ function displayShoppingList(data) {
 
     // Display items to buy (organized by aisle)
     if (data.categories && data.categories.length > 0) {
-        html += '<h2 class="text-2xl font-bold mb-4 text-orange-700">' + escHtml({{ tr.t("shopping-title")|json|safe }}) + '</h2>';
         html += data.categories.map(category => `
             <div class="mb-6 bg-white rounded-lg p-4 shadow-xs">
                 <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
@@ -516,11 +553,67 @@ function formatQuantities(quantities) {
 // Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
 
-// Render the current list as plain text for pasting into a notes app: a title
-// line, then one block per aisle category — the category name followed by one
-// bare `name qty` line per item. Items already ticked off are left out, and a
-// category that empties out is dropped with them. Returns '' when there is
-// nothing left to buy.
+// What the copy button puts on the clipboard. Persisted so the choice survives
+// a reload — this is a per-device preference, not list state, so it stays in
+// localStorage rather than on the server.
+const COPY_OPTIONS_KEY = 'shopping-copy-options';
+let copyOptions = { aisles: true, amounts: true };
+
+function loadCopyOptions() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(COPY_OPTIONS_KEY));
+        if (stored && typeof stored === 'object') {
+            // Anything that isn't an explicit `false` keeps the default — a
+            // half-written or older payload degrades to "include everything".
+            copyOptions = {
+                aisles: stored.aisles !== false,
+                amounts: stored.amounts !== false,
+            };
+        }
+    } catch (error) {
+        // Malformed JSON, or localStorage blocked entirely (Safari private
+        // browsing). Defaults are fine.
+        console.error('Failed to read copy options:', error);
+    }
+
+    document.getElementById('copy-option-aisles').checked = copyOptions.aisles;
+    document.getElementById('copy-option-amounts').checked = copyOptions.amounts;
+}
+
+function onCopyOptionChange() {
+    copyOptions = {
+        aisles: document.getElementById('copy-option-aisles').checked,
+        amounts: document.getElementById('copy-option-amounts').checked,
+    };
+    try {
+        localStorage.setItem(COPY_OPTIONS_KEY, JSON.stringify(copyOptions));
+    } catch (error) {
+        console.error('Failed to save copy options:', error);
+    }
+}
+
+function toggleCopyOptions() {
+    const menu = document.getElementById('copy-options-menu');
+    const open = menu.classList.toggle('hidden') === false;
+    document.getElementById('copy-options-toggle').setAttribute('aria-expanded', String(open));
+}
+
+function closeCopyOptions() {
+    document.getElementById('copy-options-menu').classList.add('hidden');
+    document.getElementById('copy-options-toggle').setAttribute('aria-expanded', 'false');
+}
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('#copy-list-group')) {
+        closeCopyOptions();
+    }
+});
+
+// Render the current list as plain text for pasting into a notes app: one block
+// per aisle category — the category name followed by one bare `name qty` line
+// per item — or a single flat block when aisle names are switched off. Items
+// already ticked off are left out, and a category that empties out is dropped
+// with them. Returns '' when there is nothing left to buy.
 function buildPlainTextList() {
     const categories = (lastListData && lastListData.categories) || [];
     const blocks = [];
@@ -529,18 +622,20 @@ function buildPlainTextList() {
         const lines = (category.items || [])
             .filter(item => !checkedItems.has(String(item.name).toLowerCase()))
             .map(item => {
-                const quantities = formatQuantities(item.quantities);
+                const quantities = copyOptions.amounts ? formatQuantities(item.quantities) : '';
                 return quantities ? `${item.name} ${quantities}` : item.name;
             });
         if (lines.length > 0) {
-            blocks.push([category.category, ...lines].join('\n'));
+            blocks.push(copyOptions.aisles ? [category.category, ...lines].join('\n') : lines.join('\n'));
         }
     }
 
     if (blocks.length === 0) {
         return '';
     }
-    return [{{ tr.t("shopping-title")|json|safe }}, ...blocks].join('\n\n') + '\n';
+    // Blank lines separate aisle blocks; without headings there is nothing to
+    // separate, so the categories run together as one list.
+    return blocks.join(copyOptions.aisles ? '\n\n' : '\n') + '\n';
 }
 
 async function writeToClipboard(text) {
@@ -598,12 +693,28 @@ async function copyList() {
     }, 1500);
 }
 
+// `hidden` and `flex` are both display utilities, so the row has to swap
+// between them rather than just dropping `hidden`.
+function setHeaderVisible(visible) {
+    const header = document.getElementById('shopping-list-header');
+    if (!header) return;
+    header.classList.toggle('hidden', !visible);
+    header.classList.toggle('flex', visible);
+    if (!visible) {
+        closeCopyOptions();
+    }
+}
+
 // Hide the button whenever there is nothing to copy — an empty list, or every
 // item already ticked off.
 function updateCopyButtonVisibility() {
-    const button = document.getElementById('copy-list-button');
-    if (!button) return;
-    button.classList.toggle('hidden', buildPlainTextList() === '');
+    const group = document.getElementById('copy-list-group');
+    if (!group) return;
+    const empty = buildPlainTextList() === '';
+    group.classList.toggle('hidden', empty);
+    if (empty) {
+        closeCopyOptions();
+    }
 }
 
 async function toggleItem(itemId, checked, ingredientName) {
@@ -661,6 +772,7 @@ function loadCheckedStates() {
     });
 }
 
+loadCopyOptions();
 loadShoppingList();
 
 // Subscribe to server-pushed change events so sync pulls, other-tab edits,
