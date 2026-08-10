@@ -28,6 +28,15 @@ pub struct Span {
     pub end: usize,
 }
 
+impl From<std::ops::Range<usize>> for Span {
+    fn from(range: std::ops::Range<usize>) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+        }
+    }
+}
+
 /// Where in a source file a diagnostic applies.
 ///
 /// Both fields are optional: a diagnostic about a configuration file as a whole
@@ -92,6 +101,16 @@ impl Diagnostic {
         location.file = Some(file.into());
         self
     }
+
+    /// Attach a source span to this diagnostic, keeping any file already set.
+    pub fn at_span(mut self, span: impl Into<Span>) -> Self {
+        let location = self.location.get_or_insert(Location {
+            file: None,
+            span: None,
+        });
+        location.span = Some(span.into());
+        self
+    }
 }
 
 #[cfg(test)]
@@ -141,6 +160,33 @@ mod tests {
             Some("soup.cook")
         );
         assert_eq!(location.span, Some(Span { start: 12, end: 20 }));
+    }
+
+    #[test]
+    fn at_span_attaches_location() {
+        let d = Diagnostic::error("bad quantity").at_span(12..20);
+        let location = d.location.expect("location set");
+        assert_eq!(location.span, Some(Span { start: 12, end: 20 }));
+        assert_eq!(location.file, None);
+    }
+
+    #[test]
+    fn at_span_preserves_an_existing_file() {
+        let d = Diagnostic::error("boom")
+            .at_file("soup.cook")
+            .at_span(Span { start: 3, end: 7 });
+
+        let location = d.location.expect("location set");
+        assert_eq!(
+            location.file.as_deref().map(|p| p.as_str()),
+            Some("soup.cook")
+        );
+        assert_eq!(location.span, Some(Span { start: 3, end: 7 }));
+    }
+
+    #[test]
+    fn span_converts_from_a_range() {
+        assert_eq!(Span::from(4..9), Span { start: 4, end: 9 });
     }
 
     #[test]

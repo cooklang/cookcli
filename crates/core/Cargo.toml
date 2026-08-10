@@ -13,6 +13,9 @@ categories = ["parser-implementations"]
 # manifest always describes what the crate actually uses.
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
+# `bundled_units` carries the unit database that quantity scaling depends on.
+# Keep this declaration in step with the root manifest's.
+cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
 directories = "6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

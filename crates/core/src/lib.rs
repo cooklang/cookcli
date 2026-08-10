@@ -14,12 +14,14 @@ pub mod context;
 pub mod diagnostic;
 pub mod error;
 pub mod outcome;
+pub mod parser;
 pub mod source;
 
 pub use context::{global_config_path, Context};
 pub use diagnostic::{Diagnostic, Location, Severity, Span};
 pub use error::CoreError;
 pub use outcome::Outcome;
+pub use parser::{parse_recipe, parse_recipe_at, PARSER};
 pub use source::{ConfigSource, RecipeSource};
 
 /// Convenience alias for core results.

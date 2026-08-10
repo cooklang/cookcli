@@ -718,6 +718,7 @@ name = "cookcli-core"
 version = "0.1.0"
 dependencies = [
  "camino",
+ "cooklang",
  "directories",
  "serde",
  "serde_json",
