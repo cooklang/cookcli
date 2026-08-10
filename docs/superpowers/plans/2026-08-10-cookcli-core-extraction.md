@@ -34,15 +34,21 @@ Nothing in this plan touches the web UI, so once the assets are present they sta
 
 `tests/` contains 4,216 lines driving the real binary through `assert_cmd`, plus 22 insta snapshots in `tests/snapshots/`. **These files are not modified by this plan**, with two exceptions, both stated explicitly where they occur (Task 6 adds characterization snapshots; Task 10 is a deliberate behaviour fix).
 
-**Measured baseline on `feat/cookcli-core-library` at `0c3feb3`:**
+### Two numbers, two meanings
 
-```
-296 passed; 0 failed; 26 ignored
-```
+The repository root is *both* the workspace root and a member package, so Cargo scopes bare commands to `cookcli` alone. That gives two distinct figures, and you must check both:
 
-- `cargo test` must be green with **296 passing** at the end of every task.
+| Command | Scope | Baseline | Meaning |
+|---|---|---|---|
+| `cargo test` | `cookcli` only | `296 passed; 0 failed; 26 ignored` | **The CLI behaviour contract.** Must not move, except Task 6 (→ 310). |
+| `cargo test --workspace` | `cookcli` + `cookcli-core` | `306` after Task 1 | Everything, including core's unit tests. Grows every task. |
+
+Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour, regardless of what core's tests say.
+
+**This bites in CI.** `cargo test`, `cargo clippy` and `cargo fmt` at the root all skip `cookcli-core` entirely, so core's tests would run nowhere. `.github/workflows/test.yml` was updated in Task 1 to use `--workspace` (and `cargo fmt --all`) for exactly this reason. If you add a crate, check CI actually runs its tests.
+
 - **Never run `cargo insta accept`.** If a snapshot fails, you introduced a behaviour change — find it and fix the code, not the snapshot. The only exception is Task 6, which creates new snapshots deliberately.
-- `cargo fmt` and `cargo clippy` must be clean before every commit (repository rule from `CLAUDE.md`).
+- `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` must be clean before every commit (repository rule from `CLAUDE.md`).
 
 ### The coverage hole you must know about
 
