@@ -28,3 +28,6 @@ playwright/.cache/
 
 # insta rejects pending snapshots as .snap.new
 *.snap.new
+
+# Git worktrees for isolated feature work
+.worktrees/
