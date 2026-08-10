@@ -61,8 +61,10 @@ pub enum CoreError {
     /// A file could not be read or written.
     ///
     /// There is deliberately no `From<std::io::Error>`: every call site must
-    /// name the path it was working on.
-    #[error("failed to read {path}")]
+    /// name the path it was working on. The message stays neutral between
+    /// reading and writing, because the variant covers both; the specific
+    /// failure is in `source`.
+    #[error("i/o error on {path}")]
     Io {
         /// The file being accessed.
         path: Utf8PathBuf,
@@ -78,6 +80,23 @@ mod tests {
 
     fn display(error: &CoreError) -> String {
         error.to_string()
+    }
+
+    /// Stops compiling when a `CoreError` variant is added or removed.
+    ///
+    /// `every_display_is_a_single_line` below has to list its inputs by hand,
+    /// so it cannot notice a new variant on its own. When this match breaks,
+    /// add the variant here *and* to that test's `errors` array — do not just
+    /// add a `_ => {}` arm.
+    fn _all_variants_are_covered(e: &CoreError) {
+        match e {
+            CoreError::RecipeNotFound { .. }
+            | CoreError::Parse { .. }
+            | CoreError::Config { .. }
+            | CoreError::Render { .. }
+            | CoreError::CircularReference { .. }
+            | CoreError::Io { .. } => {}
+        }
     }
 
     #[test]
@@ -110,7 +129,20 @@ mod tests {
         for error in &errors {
             let rendered = display(error);
             assert!(!rendered.contains('\n'), "multi-line Display: {rendered:?}");
-            assert!(!rendered.ends_with(char::is_whitespace));
+            assert!(
+                !rendered.ends_with(char::is_whitespace),
+                "trailing whitespace: {rendered:?}"
+            );
+
+            // Lowercase, so it reads correctly mid-sentence in an error chain.
+            // A rendering may open with a path or another interpolated value,
+            // so judge the first cased letter rather than the first character.
+            if let Some(c) = rendered.chars().find(|c| c.is_alphabetic()) {
+                assert!(
+                    !c.is_uppercase(),
+                    "Display starts with an uppercase word: {rendered:?}"
+                );
+            }
         }
     }
 
@@ -148,7 +180,7 @@ mod tests {
             path: Utf8PathBuf::from("/etc/pantry.conf"),
             source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
         };
-        assert_eq!(display(&error), "failed to read /etc/pantry.conf");
+        assert_eq!(display(&error), "i/o error on /etc/pantry.conf");
         assert!(std::error::Error::source(&error).is_some());
     }
 }

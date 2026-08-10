@@ -180,5 +180,15 @@ mod tests {
         let location = d.location.expect("location set");
         assert_eq!(location.file.as_deref().map(|p| p.as_str()), Some("a.cook"));
         assert_eq!(location.span, None);
+
+        let d: Diagnostic =
+            serde_json::from_str(r#"{"severity":"hint","message":"m","location":{}}"#).unwrap();
+        assert_eq!(
+            d.location,
+            Some(Location {
+                file: None,
+                span: None
+            })
+        );
     }
 }
