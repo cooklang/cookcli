@@ -16,6 +16,7 @@ pub mod error;
 pub mod format;
 pub mod outcome;
 pub mod parser;
+pub mod recipe;
 pub mod source;
 
 pub use context::{global_config_path, Context};

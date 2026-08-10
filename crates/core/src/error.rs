@@ -25,7 +25,10 @@ pub enum CoreError {
     /// A recipe failed to parse.
     #[error("failed to parse recipe '{name}'")]
     Parse {
-        /// The recipe that failed to parse.
+        /// How the recipe is identified in messages. Commands reading from
+        /// disk put the file's path here, so that it agrees with the location
+        /// `rendered` and the diagnostics point at; text parsed from memory
+        /// carries whatever name the caller supplied.
         name: String,
         /// The individual parse problems, for programmatic consumers.
         diagnostics: Vec<Diagnostic>,

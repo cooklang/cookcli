@@ -45,8 +45,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::warn;
 
-pub const RECIPE_SCALING_DELIMITER: char = ':';
-
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
     let content = entry.content().context("Failed to read recipe content")?;
@@ -105,10 +103,13 @@ where
     Ok(())
 }
 
+/// Split `name:factor` into its parts.
+///
+/// The one definition lives in `cookcli-core`; this wrapper keeps the CLI's
+/// remaining call sites (`report`, `extract_ingredients`) reading the same way
+/// until they move over too.
 pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, f64)> {
-    let (name, factor) = query.trim().rsplit_once(RECIPE_SCALING_DELIMITER)?;
-    let factor = factor.parse::<f64>().ok()?;
-    Some((name, factor))
+    cookcli_core::recipe::split_name_and_scale(query)
 }
 
 /// Resolves a path to an absolute path. If the input path is already absolute,

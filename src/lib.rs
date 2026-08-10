@@ -62,6 +62,18 @@ impl Context {
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
+
+    /// Build the core context, carrying over resolved aisle and pantry paths.
+    pub fn to_core(&self) -> cookcli_core::Context {
+        let mut core = cookcli_core::Context::new(self.base_path.clone());
+        if let Some(aisle) = self.aisle() {
+            core = core.with_aisle(cookcli_core::ConfigSource::Path(aisle));
+        }
+        if let Some(pantry) = self.pantry() {
+            core = core.with_pantry(cookcli_core::ConfigSource::Path(pantry));
+        }
+        core
+    }
 }
 
 const APP_NAME: &str = "cook";

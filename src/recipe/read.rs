@@ -37,11 +37,10 @@ use camino::Utf8PathBuf;
 use crate::{
     util::{
         format::{self, Style},
-        split_recipe_name_and_scaling_factor, write_to_output, PARSER,
+        write_to_output, PARSER,
     },
     Context,
 };
-use cooklang_find::RecipeEntry;
 
 #[derive(Debug, Args)]
 pub struct ReadArgs {
@@ -135,36 +134,47 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let mut scale = args.input.scale;
-
-    let (recipe, title) = if let Some(query) = args.input.recipe {
-        let (name, scaling_factor) = split_recipe_name_and_scaling_factor(query.as_str())
-            .map(|(name, factor)| (name, Some(factor)))
-            .unwrap_or((query.as_str(), None));
-
-        if let Some(scaling_factor) = scaling_factor {
-            scale = scaling_factor;
+    let source = match args.input.recipe {
+        Some(query) => cookcli_core::RecipeSource::Path(query),
+        None => {
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .context("Failed to read stdin")?;
+            cookcli_core::RecipeSource::Content {
+                text: buf,
+                name: "stdin".to_string(),
+            }
         }
-
-        let recipe_entry = cooklang_find::get_recipe(vec![ctx.base_path().clone()], name.into())
-            .map_err(|e| anyhow::anyhow!("Recipe not found: {}", e))?;
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
-        (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
-    } else {
-        // Read from stdin and create a RecipeEntry
-        let mut buf = String::new();
-        std::io::stdin()
-            .read_to_string(&mut buf)
-            .context("Failed to read stdin")?;
-
-        // Create a RecipeEntry from the stdin content
-        let recipe_entry = RecipeEntry::from_content(buf, Some("stdin".to_string()))
-            .context("Failed to create recipe entry from stdin")?;
-
-        // Use the same parsing function as for file-based recipes
-        let recipe = crate::util::parse_recipe_from_entry(&recipe_entry, scale)?;
-        (recipe, recipe_entry.name().clone().unwrap_or(String::new()))
     };
+
+    let outcome = cookcli_core::recipe::read(
+        &ctx.to_core(),
+        cookcli_core::recipe::ReadRequest {
+            source,
+            scale: args.input.scale,
+        },
+    )
+    .map_err(|e| match e {
+        // CoreError::Parse has a single-line Display by library convention.
+        // The CLI printed cooklang's full rendered report with source line
+        // context before this refactor, so re-attach it here.
+        cookcli_core::CoreError::Parse {
+            ref name,
+            ref rendered,
+            ..
+        } => anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}"),
+        other => other.into(),
+    })?;
+
+    for diagnostic in &outcome.diagnostics {
+        tracing::warn!("{}", diagnostic.message);
+    }
+
+    let recipe = outcome.value.recipe;
+    let title = outcome.value.title;
+    // The effective scale, which an inline `name:factor` may have overridden.
+    let scale = outcome.value.scale;
 
     let format = args.format.unwrap_or_else(|| match &args.output {
         Some(p) => match p.extension() {

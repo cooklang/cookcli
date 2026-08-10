@@ -719,6 +719,7 @@ dependencies = [
  "anstyle-yansi",
  "camino",
  "cooklang",
+ "cooklang-find",
  "directories",
  "humantime",
  "regex",
