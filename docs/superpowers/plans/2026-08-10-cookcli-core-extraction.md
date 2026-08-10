@@ -1424,7 +1424,31 @@ Replace the recipe-loading block at `src/recipe/read.rs:138-167` with a core cal
             source,
             scale: args.input.scale,
         },
-    )?;
+    )
+    .map_err(|e| match e {
+        // `CoreError::Parse` has a single-line Display, per library convention.
+        // The CLI printed cooklang's full rendered report with source line
+        // context before this refactor, so re-attach it here.
+        cookcli_core::CoreError::Parse {
+            ref name,
+            ref rendered,
+            ..
+        } => anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}"),
+        other => other.into(),
+    })?;
+
+    // CAUTION: the pre-refactor message came from `src/util/mod.rs:84-88` and
+    // interpolated the recipe *path*, not its title:
+    //
+    //     "Failed to parse recipe '{}'\n{}", recipe_path, error_details
+    //
+    // `CoreError::Parse.name` is populated from the recipe title. If they
+    // differ for a given input, make core carry the display path in `name`
+    // (or add a field) so this message is unchanged. Check against a real
+    // failing recipe before you conclude it matches:
+    //
+    //     printf 'Add @salt{1%%tsp to the pot.\n' > /tmp/broken.cook
+    //     cargo run -- recipe /tmp/broken.cook
 
     for diagnostic in &outcome.diagnostics {
         tracing::warn!("{}", diagnostic.message);
@@ -3375,7 +3399,39 @@ for diagnostic in &outcome.diagnostics {
 
 Add `readme = "README.md"` to `crates/core/Cargo.toml`.
 
-- [ ] **Step 5: Dry-run the publish**
+- [ ] **Step 5: Fix the release workflow to publish two crates**
+
+`.github/workflows/release.yaml:325` currently runs a bare:
+
+```yaml
+      - name: Publish | crates.io
+        run: cargo publish --allow-dirty
+```
+
+That publishes `cookcli` only. From Task 4 onward `cookcli` carries a `version` + `path` dependency on `cookcli-core`, and **crates.io rejects a package whose dependency is not published**. So the first release after this branch merges will fail unless core goes up first, and ordering matters — crates.io needs the dependency to exist before the dependent is uploaded.
+
+Replace with:
+
+```yaml
+      - name: Publish | crates.io (cookcli-core)
+        run: cargo publish -p cookcli-core --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish | crates.io (cookcli)
+        run: cargo publish -p cookcli --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+```
+
+Two things to check rather than assume:
+
+1. **Republishing an unchanged version fails.** If `cookcli-core` is already at `0.1.0` on crates.io and the release does not bump it, `cargo publish -p cookcli-core` errors and fails the job. Decide whether to tolerate that (`continue-on-error`, which risks masking real failures) or to gate the step on the version having changed. Prefer gating.
+2. **release-please and the new workspace.** `.github/workflows/release.yaml:34` uses `release-type: rust` with no config file. That strategy has workspace-specific behaviour and the `cargo-workspace` plugin is not configured, so it may now try to manage both crates' versions — or may keep managing only the root. Verify what it actually does on a dry run before merging; do not guess.
+
+**If you cannot verify (2) without an actual release, say so and flag it for the human** rather than shipping an untested release path.
+
+- [ ] **Step 6: Dry-run the publish**
 
 ```bash
 cargo publish -p cookcli-core --dry-run
@@ -3384,7 +3440,7 @@ cargo publish -p cookcli-core --dry-run
 Expected: packaging succeeds. Fix any `include`/`exclude` or missing-metadata
 complaints.
 
-- [ ] **Step 6: Check the API against the editor's existing surface**
+- [ ] **Step 7: Check the API against the editor's existing surface**
 
 The spec names this as the mitigation for designing the API against a single
 consumer. Read the editor's NAPI declarations:
@@ -3411,7 +3467,7 @@ Out of scope, and expected to have no equivalent: `parseMenu`, `startSync`,
 **If any in-scope row cannot be expressed, stop and report it.** That is a real
 API gap and it is far cheaper to fix now than after Spec 2 has started.
 
-- [ ] **Step 7: Final full verification**
+- [ ] **Step 8: Final full verification**
 
 ```bash
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test 2>&1 | tail -30
@@ -3419,7 +3475,7 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test 2>&
 
 Expected: all clean, counts at `passed=310 failed=0 ignored=26`.
 
-- [ ] **Step 8: Confirm no snapshot was silently accepted**
+- [ ] **Step 9: Confirm no snapshot was silently accepted**
 
 ```bash
 git diff main --stat -- tests/snapshots/ | grep -v shopping_list_characterization_test
@@ -3430,7 +3486,7 @@ Expected: empty output. The only snapshots this plan may add are Task 6's 14
 Task 10 was designed to be a stderr-only change, so no pre-existing snapshot
 should have moved; if one did, its commit message must explain why.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add -A
@@ -3448,6 +3504,7 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.
 - [ ] No command module in `src/` contains parsing or aggregation logic.
 - [ ] `cargo publish -p cookcli-core --dry-run` succeeds.
+- [ ] `.github/workflows/release.yaml` publishes `cookcli-core` before `cookcli`, and release-please's behaviour with the new workspace has been verified rather than assumed.
 
 ## Out of Scope (Spec 2)
 
