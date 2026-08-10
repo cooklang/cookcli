@@ -50,6 +50,18 @@ Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour
 - **Never run `cargo insta accept`.** If a snapshot fails, you introduced a behaviour change — find it and fix the code, not the snapshot. The only exception is Task 6, which creates new snapshots deliberately.
 - `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` must be clean before every commit (repository rule from `CLAUDE.md`).
 
+### Conventions established in Task 1
+
+`cookcli-core` is published to crates.io and consumed by the Cooklang editor (through a NAPI-RS addon) and CookBot, so its public surface is expensive to change. Task 1 settled these; follow them in every later task rather than re-deciding:
+
+- **Error `Display` is a single lowercase line, no trailing newline.** Loggers, `anyhow` chains and NAPI `Error.message` all assume it. Rich detail goes in a field — `CoreError::Parse.rendered` holds `cooklang`'s full report with source line context, and the **CLI must print that field explicitly** to preserve its output. `every_display_is_a_single_line` enforces this, with a compile-time guard that breaks when a variant is added.
+- **`#[non_exhaustive]` on every public enum.** Adding a variant must not be a breaking change.
+- **Every public item is documented.** `#![warn(missing_docs)]` is on; keep `cargo rustc -p cookcli-core --lib -- -W missing_docs` at zero.
+- **Errors name the resource they failed on.** `CoreError::Io` carries the path because `#[from]` was deliberately dropped — a bare "No such file or directory" is useless to an editor. Every new call site must say which path failed.
+- **`Err` vs `Ok`-with-error-diagnostics:** return `Err(CoreError)` when the command could not produce its value; return `Ok(Outcome)` carrying error-severity diagnostics when producing the value *is* the job and the errors are the payload. `recipe::read` cannot return an unparseable recipe, so it errors; `doctor::validate` reports broken recipes as data and must succeed. The rule is in the `Outcome` doc comment — read it before adding a command.
+- **Add dependencies when a task needs them, not up front.** The manifest is trimmed to what is actually referenced.
+- **`#[serde(default)]` is redundant next to `skip_serializing_if` on `Option<T>`** — serde's derive already maps a missing field to `None`. It is genuinely required for non-`Option` fields (e.g. `skip_serializing_if = "Vec::is_empty"` on a `Vec`). Do not apply it reflexively.
+
 ### The coverage hole you must know about
 
 **All 26 ignored tests are shopping-list tests.** Every one:
@@ -757,6 +769,21 @@ git commit -m "feat(core): add Context with opt-in configuration discovery"
 - Modify: `crates/core/src/lib.rs`
 
 This is the bridge between `cooklang`'s lenient parse report and core's `Diagnostic`. Today `src/util/mod.rs:59` (`parse_recipe_from_entry`) logs warnings through `warn!` and drops them. Core returns them.
+
+**This is the task that first populates `Location.span`.** Task 1 deliberately carried the field without a builder (YAGNI). Now that spans arrive, add the builder rather than mutating through the `Option` at call sites:
+
+```rust
+impl Diagnostic {
+    /// Attach a source span to this diagnostic.
+    pub fn at_span(mut self, span: Span) -> Self { /* mirror `at_file`'s get_or_insert */ }
+}
+
+impl From<std::ops::Range<usize>> for Span {
+    fn from(r: std::ops::Range<usize>) -> Self { Self { start: r.start, end: r.end } }
+}
+```
+
+`cooklang`'s spans are range-shaped, so the `From` impl removes a conversion at every call site. Without `at_span`, callers wanting both file and span end up writing `d.location.as_mut().unwrap().span = ...`, which is exactly the `get_or_insert` dance `at_file` already encapsulates.
 
 - [ ] **Step 1: Write the failing test**
 
