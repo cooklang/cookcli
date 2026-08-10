@@ -1,10 +1,19 @@
 //! Recipe output formatters.
 //!
 //! Each submodule renders a parsed [`cooklang::Recipe`] into one target
-//! format. The `print_*` functions take a [`std::io::Write`] so that large
-//! recipes stream without an intermediate allocation; the `*_to_string`
-//! wrappers here are for callers that want a `String` instead, such as the
-//! NAPI addon.
+//! format. The `print_*` functions write into a [`std::io::Write`], so a
+//! caller already holding a file or socket does not pay for a second copy of
+//! the whole document — though they do buffer a step or a table at a time
+//! internally. The `*_to_string` wrappers here are for callers that want a
+//! `String`, such as the NAPI addon.
+//!
+//! # Errors
+//!
+//! These functions return a bare [`std::io::Error`] rather than
+//! [`CoreError`](crate::CoreError). The only thing that can fail is the
+//! caller's own writer: the recipe is already parsed, and every field is
+//! optional, so there is nothing left to reject. `CoreError::Io` also wants a
+//! path, and a formatter has none.
 
 pub mod cooklang;
 pub mod human;
@@ -129,16 +138,10 @@ mod tests {
     }
 
     /// The whole point of [`Style`]: `Plain` must not leak escape codes, and
-    /// `Ansi` must not swallow them. Asserting only one direction would let a
-    /// formatter that ignores the flag entirely pass.
+    /// it must not lose anything else either. Both halves hold on every
+    /// platform — they say nothing about whether yansi chose to paint.
     #[test]
-    fn plain_strips_ansi_and_ansi_keeps_it() {
-        // Pin yansi's global condition so the colour *source* is deterministic
-        // regardless of the host's terminal support (on Windows yansi decides
-        // by probing the console). Only a test does this; the library never
-        // touches the global.
-        yansi::whenever(yansi::Condition::ALWAYS);
-
+    fn plain_is_ansi_with_the_escapes_removed() {
         let plain = human(Style::Plain);
         let coloured = human(Style::Ansi);
 
@@ -146,14 +149,24 @@ mod tests {
             !plain.contains('\u{1b}'),
             "Style::Plain must emit no escape codes: {plain:?}"
         );
-        assert!(
-            coloured.contains('\u{1b}'),
-            "Style::Ansi must emit escape codes: {coloured:?}"
-        );
         assert_eq!(
             plain,
             anstream::adapter::strip_str(&coloured).to_string(),
             "Plain must be exactly Ansi with the escapes removed, not different text"
+        );
+    }
+
+    /// The other direction: `Ansi` must not strip. yansi decides whether to
+    /// paint at all by probing the console, and off Windows that probe always
+    /// says yes; on Windows it can say no, which would make this assertion
+    /// about the host rather than about the code.
+    #[cfg(not(windows))]
+    #[test]
+    fn ansi_keeps_the_escape_codes() {
+        let coloured = human(Style::Ansi);
+        assert!(
+            coloured.contains('\u{1b}'),
+            "Style::Ansi must emit escape codes: {coloured:?}"
         );
     }
 

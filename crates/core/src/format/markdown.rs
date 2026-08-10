@@ -44,10 +44,14 @@ use serde::{Deserialize, Serialize};
 ///
 /// This implements [`Serialize`] and [`Deserialize`], so you can embed it in
 /// other configuration.
+///
+/// Crate-private for now: every toggle here is untested and only
+/// [`print_md`] uses it, with the defaults. Publishing it would pin both the
+/// API and the serde wire format before anything exercises either.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(default)]
 #[non_exhaustive]
-pub struct Options {
+pub(crate) struct Options {
     /// Show the tags in the markdown body
     ///
     /// They will apear just after the title.
@@ -56,13 +60,13 @@ pub struct Options {
     /// ```md
     /// #tag1 #tag2 #tag3
     /// ```
-    pub tags: bool,
+    pub(crate) tags: bool,
     /// Set the description style in the markdown body
     ///
     /// It will appear just after the tags (if its enabled and
     /// there are any tags; if not, after the title).
     #[serde(deserialize_with = "des_or_bool")]
-    pub description: DescriptionStyle,
+    pub(crate) description: DescriptionStyle,
     /// Make every step a regular paragraph
     ///
     /// A `cooklang` extensions allows to add paragraphs between steps. Because
@@ -72,21 +76,21 @@ pub struct Options {
     /// ```md
     /// 1\. Step.
     /// ```
-    pub escape_step_numbers: bool,
+    pub(crate) escape_step_numbers: bool,
     /// Display amounts in italics
     ///
     /// This will affect the ingredients list, cookware list and inline
     /// quantities such as temperature.
-    pub italic_amounts: bool,
+    pub(crate) italic_amounts: bool,
     /// Add the name of the recipe to the front-matter
     ///
     /// A key `name` in the metadata has preference over this.
     #[serde(deserialize_with = "des_or_bool")]
-    pub front_matter_name: FrontMatterName,
+    pub(crate) front_matter_name: FrontMatterName,
     /// Text to write in headings
-    pub heading: Headings,
+    pub(crate) heading: Headings,
     /// Text to write when an ingredient or cookware item is optional
-    pub optional_marker: String,
+    pub(crate) optional_marker: String,
 }
 
 impl Default for Options {
@@ -110,7 +114,7 @@ impl Default for Options {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
-pub enum DescriptionStyle {
+pub(crate) enum DescriptionStyle {
     /// Do not show the description in the body
     Hidden,
     /// Show as a blockquote
@@ -136,9 +140,9 @@ impl From<bool> for DescriptionStyle {
 /// Left constructible (no `#[non_exhaustive]`) because callers configure it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
-pub struct FrontMatterName(
+pub(crate) struct FrontMatterName(
     /// The key, or `None` to leave the name out of the front-matter.
-    pub Option<String>,
+    pub(crate) Option<String>,
 );
 
 impl Default for FrontMatterName {
@@ -162,21 +166,21 @@ impl From<bool> for FrontMatterName {
 /// `#[serde(default)]` fills in the headings a config file leaves out.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
-pub struct Headings {
+pub(crate) struct Headings {
     /// Heading for steps sections without name
     ///
     /// If found, `%n` is replaced by the section number.
-    pub section: String,
+    pub(crate) section: String,
     /// Ingredients section
-    pub ingredients: String,
+    pub(crate) ingredients: String,
     /// Cookware section
-    pub cookware: String,
+    pub(crate) cookware: String,
     /// Steps section
-    pub steps: String,
+    pub(crate) steps: String,
     /// Description section
     ///
     /// The description is only shown in a section if enabled.
-    pub description: String,
+    pub(crate) description: String,
 }
 
 impl Default for Headings {
@@ -232,7 +236,7 @@ pub fn print_md(
 ///
 /// The [`Options`] are used to further customize the output. See it's
 /// documentation to know about them.
-pub fn print_md_with_options(
+pub(crate) fn print_md_with_options(
     recipe: &Recipe,
     name: &str,
     scale: f64,
@@ -309,7 +313,7 @@ fn frontmatter(
     const FRONTMATTER_FENCE: &str = "---";
     writeln!(w, "{FRONTMATTER_FENCE}")?;
     serde_yaml::to_writer(&mut w, &map)
-        .map_err(|e| io::Error::other(format!("Failed to serialize frontmatter: {e}")))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     writeln!(w, "{FRONTMATTER_FENCE}\n")?;
     Ok(())
 }

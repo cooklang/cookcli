@@ -34,9 +34,11 @@ use std::io::Read;
 
 use camino::Utf8PathBuf;
 
-use crate::util::format::Style;
 use crate::{
-    util::{format, split_recipe_name_and_scaling_factor, write_to_output, PARSER},
+    util::{
+        format::{self, Style},
+        split_recipe_name_and_scaling_factor, write_to_output, PARSER,
+    },
     Context,
 };
 use cooklang_find::RecipeEntry;
@@ -192,7 +194,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let paper_size: format::PaperSize = args.paper_size.unwrap_or(PaperSizeArg::A4).into();
     let margin = args.margin.unwrap_or(2.5);
 
-    write_to_output(args.output.as_deref(), |writer| {
+    write_to_output(args.output.as_deref(), |mut writer| {
         match format {
             // `Style::Ansi` keeps the terminal colours the CLI has always
             // printed; `write_to_output` strips them again for file output.
@@ -202,7 +204,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 Style::Ansi,
-                writer,
+                &mut writer,
             )?,
             OutputFormat::Json => {
                 if args.pretty {
@@ -222,7 +224,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 writer,
-                paper_size.latex_name(),
+                paper_size,
                 margin,
             )?,
             OutputFormat::Typst => format::typst::print_typst(
@@ -231,7 +233,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 scale,
                 PARSER.converter(),
                 writer,
-                paper_size.typst_name(),
+                paper_size,
                 margin,
             )?,
             OutputFormat::Schema => format::schema::print_schema(

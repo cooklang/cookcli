@@ -1,5 +1,6 @@
 //! Format a recipe as a standalone Typst document.
 
+use crate::format::PaperSize;
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -9,16 +10,14 @@ use std::io;
 
 /// Write a complete Typst document for `recipe`.
 ///
-/// `paper_size` is a Typst paper name such as `a4`; see
-/// [`PaperSize::typst_name`](crate::format::PaperSize::typst_name). `margin`
-/// is in centimetres and is applied to all four sides.
+/// `margin` is in centimetres and is applied to all four sides.
 pub fn print_typst(
     recipe: &Recipe,
     name: &str,
     scale: f64,
     converter: &Converter,
     mut writer: impl io::Write,
-    paper_size: &str,
+    paper_size: PaperSize,
     margin: f64,
 ) -> io::Result<()> {
     write_document_header(&mut writer, paper_size, margin)?;
@@ -52,7 +51,12 @@ pub fn print_typst(
     Ok(())
 }
 
-fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> io::Result<()> {
+fn write_document_header(
+    w: &mut impl io::Write,
+    paper_size: PaperSize,
+    margin: f64,
+) -> io::Result<()> {
+    let paper_size = paper_size.typst_name();
     writeln!(
         w,
         r#"#set page(paper: "{paper_size}", margin: (left: {margin}cm, right: {margin}cm, top: {margin}cm, bottom: {margin}cm))"#

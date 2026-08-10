@@ -59,8 +59,6 @@ path = "src/main.rs"
 [dependencies]
 accept-language = "3"
 anstream = "0.6"
-anstyle = "1"
-anstyle-yansi = "2"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
 askama_axum = { version = "0.4", optional = true }
@@ -88,7 +86,6 @@ flate2 = "1"
 fluent = "0.16"
 futures-util = { version = "0.3", optional = true }
 fluent-templates = "0.10"
-humantime = "2"
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
@@ -105,7 +102,6 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 sys-locale = "0.3"
 tabular = { version = "0.2", features = ["ansi-cell"] }
-textwrap = { version = "0.16", features = ["terminal_size"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = { version = "0.7", optional = true }

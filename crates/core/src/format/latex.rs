@@ -1,5 +1,6 @@
 //! Format a recipe as a standalone LaTeX document.
 
+use crate::format::PaperSize;
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -9,16 +10,14 @@ use std::io;
 
 /// Write a complete LaTeX document for `recipe`.
 ///
-/// `paper_size` is a LaTeX paper name such as `a4paper`; see
-/// [`PaperSize::latex_name`](crate::format::PaperSize::latex_name). `margin`
-/// is in centimetres and is applied to all four sides.
+/// `margin` is in centimetres and is applied to all four sides.
 pub fn print_latex(
     recipe: &Recipe,
     name: &str,
     scale: f64,
     converter: &Converter,
     mut writer: impl io::Write,
-    paper_size: &str,
+    paper_size: PaperSize,
     margin: f64,
 ) -> io::Result<()> {
     write_document_header(&mut writer, paper_size, margin)?;
@@ -51,7 +50,12 @@ pub fn print_latex(
     Ok(())
 }
 
-fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> io::Result<()> {
+fn write_document_header(
+    w: &mut impl io::Write,
+    paper_size: PaperSize,
+    margin: f64,
+) -> io::Result<()> {
+    let paper_size = paper_size.latex_name();
     writeln!(w, r"\documentclass[11pt,{paper_size}]{{article}}")?;
     writeln!(w, r"\usepackage[utf8]{{inputenc}}")?;
     writeln!(w, r"\usepackage[T1]{{fontenc}}")?;

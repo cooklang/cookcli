@@ -67,7 +67,7 @@ fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> io::Result<()> {
     const FRONTMATTER_FENCE: &str = "---";
     writeln!(w, "{FRONTMATTER_FENCE}")?;
     serde_yaml::to_writer(&mut *w, &map)
-        .map_err(|e| io::Error::other(format!("Failed to serialize frontmatter: {e}")))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     writeln!(w, "{FRONTMATTER_FENCE}\n")?;
     Ok(())
 }
@@ -273,5 +273,220 @@ impl ComponentFormatter<'_> {
         if let Some(note) = self.note {
             write!(w, "({note})").unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // `super::*` already brings `std::fmt::Write` into scope for `write!`.
+    use crate::parser::parse_recipe;
+
+    /// Exercises the things this formatter can get wrong: multi-word names
+    /// (which need `{}` to stay one component), a note, an aliased name, an
+    /// ingredient with no quantity, cookware with and without an amount,
+    /// named and unnamed timers, several steps, a text block, and both an
+    /// unnamed and a named section.
+    ///
+    /// The long step is deliberate: it must wrap, and it places a multi-word
+    /// component near the wrap point, which is exactly what
+    /// [`component_word_separator`] exists to protect. Splitting
+    /// `@caster sugar{2%tbsp}` across two lines produces text that no longer
+    /// parses as one ingredient.
+    const FIXTURE: &str = "\
+---
+title: Round Trip
+servings: 4
+---
+
+Mix @plain flour{200%g} with @whole milk{250%ml} in a #large mixing bowl{} \
+and beat until the batter is completely smooth, then fold in @caster \
+sugar{2%tbsp} and a pinch of @fine sea salt{}.
+
+Simmer ~gently{10%minutes} in a #pan{2}, then rest ~{5%minutes}.
+
+> Rest the dough somewhere warm, covered.
+
+== Finishing ==
+
+Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
+";
+
+    /// A structural summary of everything this formatter has to preserve.
+    /// Comparing summaries rather than `Recipe` values keeps the failure
+    /// message readable and ignores spans, which legitimately move.
+    fn shape(recipe: &Recipe) -> String {
+        let mut s = String::new();
+        for i in &recipe.ingredients {
+            writeln!(
+                s,
+                "ingredient name={:?} alias={:?} qty={:?} note={:?} modifiers={:?}",
+                i.name,
+                i.alias,
+                i.quantity.as_ref().map(ToString::to_string),
+                i.note,
+                i.modifiers()
+            )
+            .unwrap();
+        }
+        for c in &recipe.cookware {
+            writeln!(
+                s,
+                "cookware name={:?} qty={:?} note={:?}",
+                c.name,
+                c.quantity.as_ref().map(ToString::to_string),
+                c.note
+            )
+            .unwrap();
+        }
+        for t in &recipe.timers {
+            writeln!(
+                s,
+                "timer name={:?} qty={:?}",
+                t.name,
+                t.quantity.as_ref().map(ToString::to_string)
+            )
+            .unwrap();
+        }
+        for section in &recipe.sections {
+            writeln!(s, "section name={:?}", section.name).unwrap();
+            for content in &section.content {
+                match content {
+                    cooklang::Content::Step(step) => writeln!(
+                        s,
+                        "  step {} text={:?}",
+                        step.number,
+                        step_text(recipe, step)
+                    )
+                    .unwrap(),
+                    cooklang::Content::Text(t) => writeln!(s, "  text {:?}", t.trim()).unwrap(),
+                }
+            }
+        }
+        s
+    }
+
+    /// The step as a reader sees it, with components replaced by their names.
+    /// Whitespace is collapsed because the formatter re-wraps steps, so line
+    /// breaks legitimately land in different places.
+    fn step_text(recipe: &Recipe, step: &Step) -> String {
+        let mut s = String::new();
+        for item in &step.items {
+            match item {
+                Item::Text { value } => s.push_str(value),
+                &Item::Ingredient { index } => {
+                    s.push_str(recipe.ingredients[index].display_name().as_ref())
+                }
+                &Item::Cookware { index } => s.push_str(&recipe.cookware[index].name),
+                &Item::Timer { index } => {
+                    let t = &recipe.timers[index];
+                    if let Some(name) = &t.name {
+                        s.push_str(name);
+                    }
+                    if let Some(q) = &t.quantity {
+                        write!(s, "{q}").unwrap();
+                    }
+                }
+                &Item::InlineQuantity { index } => {
+                    write!(s, "{}", recipe.inline_quantities[index]).unwrap()
+                }
+            }
+        }
+        s.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn format_to_string(recipe: &Recipe) -> String {
+        let mut buf = Vec::new();
+        print_cooklang(recipe, &mut buf).expect("formats");
+        String::from_utf8(buf).expect("utf-8")
+    }
+
+    /// The formatter's whole contract: what it writes must parse back into
+    /// the same recipe. This catches escaping, `{}` placement and wrapping
+    /// regressions in one assertion.
+    #[test]
+    fn output_reparses_into_an_equivalent_recipe() {
+        let original = parse_recipe(FIXTURE, "round trip", 1.0).expect("fixture parses");
+        assert!(
+            original.diagnostics.is_empty(),
+            "fixture should parse cleanly: {:?}",
+            original.diagnostics
+        );
+
+        let rendered = format_to_string(&original.value);
+        let reparsed = parse_recipe(&rendered, "round trip", 1.0)
+            .unwrap_or_else(|e| panic!("formatter emitted unparseable cooklang:\n{rendered}\n{e}"));
+        assert!(
+            reparsed.diagnostics.is_empty(),
+            "reparse warned: {:?}\n--- rendered ---\n{rendered}",
+            reparsed.diagnostics
+        );
+
+        assert_eq!(
+            shape(&original.value),
+            shape(&reparsed.value),
+            "round trip changed the recipe\n--- rendered ---\n{rendered}"
+        );
+    }
+
+    /// Formatting should be idempotent, so that rewriting a stored `.cook`
+    /// file does not churn it. **It is not** — this test documents a defect
+    /// that predates the move into this crate.
+    ///
+    /// A wrapped step whose break falls just after a component comes out with
+    /// a leading space, and that space is preserved in the step text, so each
+    /// pass adds another. Reproduced at the CLI: four runs of
+    /// `cook recipe X -f cooklang` indent the third line by 1, 2, 3 then 4
+    /// spaces.
+    ///
+    /// Cause: [`component_word_separator`] emits the component via
+    /// `Word::from`, whose `whitespace` field is empty, so the space that
+    /// follows it is handed to the *next* word and lands at the start of the
+    /// wrapped line instead of being dropped at the break.
+    ///
+    /// Ignored rather than deleted so the defect stays recorded, and rather
+    /// than fixed here because changing how steps wrap is a behaviour change,
+    /// not part of moving the formatter.
+    #[ignore = "known defect: wrapping accumulates a leading space per pass"]
+    #[test]
+    fn formatting_is_idempotent() {
+        let once = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        let twice = format_to_string(&parse_recipe(&once, "r", 1.0).unwrap().value);
+        assert_eq!(once, twice, "second format pass differed");
+    }
+
+    /// Metadata survives as YAML front-matter, not as the deprecated `>>`
+    /// syntax that would warn on reparse.
+    #[test]
+    fn metadata_round_trips_as_front_matter() {
+        let rendered = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        assert!(
+            rendered.starts_with("---\n"),
+            "expected YAML front-matter, got: {rendered}"
+        );
+        assert!(!rendered.contains(">> "), "must not emit `>>` metadata");
+
+        let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
+        assert_eq!(
+            reparsed.metadata.get("title").and_then(|v| v.as_str()),
+            Some("Round Trip")
+        );
+        assert_eq!(
+            reparsed.metadata.get("servings").and_then(|v| v.as_u64()),
+            Some(4)
+        );
+    }
+
+    /// A recipe with no metadata must not emit an empty front-matter block,
+    /// which would reparse as a stray text step.
+    #[test]
+    fn a_recipe_without_metadata_emits_no_front_matter() {
+        let rendered =
+            format_to_string(&parse_recipe("Boil @water{1%l}.\n", "r", 1.0).unwrap().value);
+        assert!(
+            !rendered.contains("---"),
+            "expected no front-matter fence: {rendered:?}"
+        );
+        assert_eq!(rendered.trim(), "Boil @water{1%l}.");
     }
 }
