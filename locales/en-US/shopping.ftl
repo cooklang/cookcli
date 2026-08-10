@@ -30,3 +30,6 @@ shopping-include-in-list = Include in shopping list
 shopping-copy = Copy
 shopping-copied = Copied!
 shopping-copy-failed = Copy failed
+shopping-copy-options = Copy options
+shopping-copy-include-aisles = Include aisle names
+shopping-copy-include-amounts = Include amounts

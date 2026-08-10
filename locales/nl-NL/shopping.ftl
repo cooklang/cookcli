@@ -29,3 +29,6 @@ shopping-print = Afdrukken
 shopping-copy = Kopiëren
 shopping-copied = Gekopieerd!
 shopping-copy-failed = Kopiëren mislukt
+shopping-copy-options = Kopieeropties
+shopping-copy-include-aisles = Schapnamen opnemen
+shopping-copy-include-amounts = Hoeveelheden opnemen

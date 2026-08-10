@@ -29,3 +29,6 @@ shopping-print = Imprimir
 shopping-copy = Copiar
 shopping-copied = ¡Copiado!
 shopping-copy-failed = Error al copiar
+shopping-copy-options = Opciones de copia
+shopping-copy-include-aisles = Incluir nombres de secciones
+shopping-copy-include-amounts = Incluir cantidades
