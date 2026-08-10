@@ -61,6 +61,21 @@ Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour
 - **`Err` vs `Ok`-with-error-diagnostics:** return `Err(CoreError)` when the command could not produce its value; return `Ok(Outcome)` carrying error-severity diagnostics when producing the value *is* the job and the errors are the payload. `recipe::read` cannot return an unparseable recipe, so it errors; `doctor::validate` reports broken recipes as data and must succeed. The rule is in the `Outcome` doc comment — read it before adding a command.
 - **Add dependencies when a task needs them, not up front.** The manifest is trimmed to what is actually referenced.
 - **`#[serde(default)]` is redundant next to `skip_serializing_if` on `Option<T>`** — serde's derive already maps a missing field to `None`. It is genuinely required for non-`Option` fields (e.g. `skip_serializing_if = "Vec::is_empty"` on a `Vec`). Do not apply it reflexively.
+- **`#[non_exhaustive]` on public output structs too, not just enums.** `Diagnostic` and `Location` carry it so fields can be added without a breaking release. Consumers read these; they do not construct them.
+
+### Prove your tests bite — mutation testing is mandatory
+
+**Tasks 2 and 3 each shipped tests that passed while asserting nothing.** Task 2's `new_touches_nothing` stayed green when `new` was replaced with `discover`. Task 3's suite survived five of six mutations, including one that inverted the severity mapping the module exists to perform. Both were caught only in review.
+
+The failure mode is consistent: assertions check *shape* (non-empty, differs, is-some) rather than *value*. `assert_ne!` on two `Debug` strings proves something changed, not that it changed correctly.
+
+Before reporting a task done, for each behaviour you claim to test:
+
+1. Break the behaviour deliberately in the source — invert a mapping, drop an argument, take only the first element, multiply by the wrong factor.
+2. Run the tests. **The relevant test must fail.**
+3. Revert, confirm green, and confirm `git status` is clean.
+
+Report which mutations you ran and that each failed in the right place. A test whose name states a property while its assertions cannot detect that property being violated is worse than no test — it is a claim of coverage that is not there.
 
 ### The coverage hole you must know about
 
