@@ -2,13 +2,33 @@
 
 use crate::diagnostic::Diagnostic;
 
-/// A command result paired with any non-fatal diagnostics produced along the way.
+/// A command result paired with any non-fatal diagnostics produced along the
+/// way.
 ///
 /// `cooklang` parses leniently: a recipe can parse successfully and still carry
 /// warnings. Consumers that do not care about diagnostics ignore the field.
+///
+/// # When a command returns `Err` and when it returns error diagnostics
+///
+/// An `Outcome` on the success path may still carry [`Severity::Error`]
+/// diagnostics. The rule commands follow is:
+///
+/// - Return `Err(CoreError)` when the command could not produce its value.
+///   `recipe::read` cannot return a recipe that failed to parse, so it returns
+///   `Err`.
+/// - Return `Ok(Outcome)` with error-severity diagnostics when producing the
+///   value *is* the job and the errors are the payload. `doctor::validate`
+///   reports broken recipes as data and must still succeed.
+///
+/// Callers that treat any error diagnostic as failure — a CI exit code, say —
+/// check [`has_errors`](Outcome::has_errors) in addition to the `Result`.
+///
+/// [`Severity::Error`]: crate::Severity::Error
 #[derive(Debug, Clone)]
 pub struct Outcome<T> {
+    /// What the command produced.
     pub value: T,
+    /// Problems found while producing it. May be empty.
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -31,7 +51,7 @@ impl<T> Outcome<T> {
         self.value
     }
 
-    /// True when any diagnostic has `Severity::Error`.
+    /// True when any diagnostic has [`Severity::Error`](crate::Severity::Error).
     pub fn has_errors(&self) -> bool {
         self.diagnostics
             .iter()

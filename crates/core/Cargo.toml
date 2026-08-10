@@ -9,19 +9,13 @@ homepage = "https://cooklang.org"
 keywords = ["cooklang", "recipes", "cooking"]
 categories = ["parser-implementations"]
 
+# Dependencies are added by the task that first needs them, so that this
+# manifest always describes what the crate actually uses.
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
-cooklang-find = { version = "0.6.1", default-features = false }
-cooklang-reports = "0.5.1"
-directories = "6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
-tabular = { version = "0.2", features = ["ansi-cell"] }
 thiserror = "2"
-tracing = "0.1"
-yansi = "1"
 
 [dev-dependencies]
 tempfile = "3"

@@ -718,18 +718,10 @@ name = "cookcli-core"
 version = "0.1.0"
 dependencies = [
  "camino",
- "cooklang",
- "cooklang-find",
- "cooklang-reports",
- "directories",
  "serde",
  "serde_json",
- "serde_yaml",
- "tabular",
  "tempfile",
  "thiserror 2.0.19",
- "tracing",
- "yansi",
 ]
 
 [[package]]
