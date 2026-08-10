@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "crates/core"]
+
 [package]
 name = "cookcli"
 version = "0.32.1"
