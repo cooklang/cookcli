@@ -1,3 +1,8 @@
+//! Human-friendly rendering of quantity numbers.
+//!
+//! Used by the web UI and menu handlers, where `0.5` should read as `1/2`
+//! rather than as a float.
+
 /// Formats a floating-point number as a human-readable string with fractions
 /// Based on the approach from cooklang-rs/bindings/src/lib.rs
 pub fn format_number(value: f64) -> String {

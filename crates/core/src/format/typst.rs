@@ -1,4 +1,5 @@
-use anyhow::Result;
+//! Format a recipe as a standalone Typst document.
+
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -6,6 +7,11 @@ use cooklang::{
 };
 use std::io;
 
+/// Write a complete Typst document for `recipe`.
+///
+/// `paper_size` is a Typst paper name such as `a4`; see
+/// [`PaperSize::typst_name`](crate::format::PaperSize::typst_name). `margin`
+/// is in centimetres and is applied to all four sides.
 pub fn print_typst(
     recipe: &Recipe,
     name: &str,
@@ -14,7 +20,7 @@ pub fn print_typst(
     mut writer: impl io::Write,
     paper_size: &str,
     margin: f64,
-) -> Result<()> {
+) -> io::Result<()> {
     write_document_header(&mut writer, paper_size, margin)?;
 
     writeln!(writer)?;
@@ -46,7 +52,7 @@ pub fn print_typst(
     Ok(())
 }
 
-fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> Result<()> {
+fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) -> io::Result<()> {
     writeln!(
         w,
         r#"#set page(paper: "{paper_size}", margin: (left: {margin}cm, right: {margin}cm, top: {margin}cm, bottom: {margin}cm))"#
@@ -76,7 +82,7 @@ fn write_document_header(w: &mut impl io::Write, paper_size: &str, margin: f64) 
     Ok(())
 }
 
-fn write_document_footer(w: &mut impl io::Write) -> Result<()> {
+fn write_document_footer(w: &mut impl io::Write) -> io::Result<()> {
     writeln!(w)?;
     writeln!(w, r"#v(1fr)")?;
     writeln!(w, r"#set align(center)")?;
@@ -86,7 +92,7 @@ fn write_document_footer(w: &mut impl io::Write) -> Result<()> {
     Ok(())
 }
 
-fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
+fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> io::Result<()> {
     writeln!(w)?;
     writeln!(w, "// BEGIN_TITLE")?;
     let escaped_name = escape_typst(name);
@@ -103,14 +109,14 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> Result<()> {
     Ok(())
 }
 
-fn write_description(w: &mut impl io::Write, description: &str) -> Result<()> {
+fn write_description(w: &mut impl io::Write, description: &str) -> io::Result<()> {
     writeln!(w, "// DESCRIPTION: {}", description.replace('\n', " "))?;
     writeln!(w, r#"#quote[_"{}"_]"#, escape_typst(description))?;
     writeln!(w)?;
     Ok(())
 }
 
-fn write_tags(w: &mut impl io::Write, tags: &[String]) -> Result<()> {
+fn write_tags(w: &mut impl io::Write, tags: &[String]) -> io::Result<()> {
     if !tags.is_empty() {
         writeln!(w, "// TAGS: {}", tags.join(", "))?;
         write!(w, r"*Tags:* ")?;
@@ -126,7 +132,7 @@ fn write_tags(w: &mut impl io::Write, tags: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
+fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     let mut metadata_items = Vec::new();
 
     if let Some(servings) = recipe.metadata.servings() {
@@ -184,7 +190,11 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
     Ok(())
 }
 
-fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -> Result<()> {
+fn write_ingredients(
+    w: &mut impl io::Write,
+    recipe: &Recipe,
+    converter: &Converter,
+) -> io::Result<()> {
     if recipe.ingredients.is_empty() {
         return Ok(());
     }
@@ -247,7 +257,11 @@ fn write_ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Conver
     Ok(())
 }
 
-fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -> Result<()> {
+fn write_cookware(
+    w: &mut impl io::Write,
+    recipe: &Recipe,
+    converter: &Converter,
+) -> io::Result<()> {
     if recipe.cookware.is_empty() {
         return Ok(());
     }
@@ -282,7 +296,7 @@ fn write_cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter
     Ok(())
 }
 
-fn write_instructions(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
+fn write_instructions(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     writeln!(w, r"== Instructions")?;
     writeln!(w)?;
 
@@ -298,7 +312,7 @@ fn write_section(
     section: &Section,
     recipe: &Recipe,
     num: usize,
-) -> Result<()> {
+) -> io::Result<()> {
     if section.name.is_some() || recipe.sections.len() > 1 {
         if let Some(name) = &section.name {
             writeln!(w, r"=== {}", escape_typst(name))?;
@@ -328,7 +342,7 @@ fn write_section(
     Ok(())
 }
 
-fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
+fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()> {
     write!(w, r"+ ")?;
 
     for item in &step.items {

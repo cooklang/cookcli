@@ -28,32 +28,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod cooklang_to_cooklang;
-pub mod cooklang_to_human;
-pub mod cooklang_to_latex;
-pub mod cooklang_to_md;
-pub mod cooklang_to_schema;
-pub mod cooklang_to_typst;
-pub mod format;
 pub mod menu_scale;
+
+// The formatters and the parser now live in `cookcli-core`. Re-exported here
+// so the rest of the CLI keeps reaching them as `crate::util::format::..` and
+// `crate::util::PARSER`. Core is the single definition of `PARSER`; the copy
+// that used to live here was byte-for-byte the same parser configuration.
+pub use cookcli_core::format;
+pub use cookcli_core::parser::PARSER;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang::{
-    ingredient_list::IngredientList, quantity::Value, Converter, CooklangParser, Extensions, Recipe,
-};
+use cooklang::{ingredient_list::IngredientList, quantity::Value, Converter, Recipe};
 use cooklang_find::RecipeEntry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use tracing::warn;
 
 pub const RECIPE_SCALING_DELIMITER: char = ':';
-
-pub static PARSER: LazyLock<CooklangParser> = LazyLock::new(|| {
-    // Use no extensions but with default converter for basic unit support
-    CooklangParser::new(Extensions::empty(), Converter::default())
-});
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {

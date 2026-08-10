@@ -34,8 +34,9 @@ use std::io::Read;
 
 use camino::Utf8PathBuf;
 
+use crate::util::format::Style;
 use crate::{
-    util::{split_recipe_name_and_scaling_factor, write_to_output, PARSER},
+    util::{format, split_recipe_name_and_scaling_factor, write_to_output, PARSER},
     Context,
 };
 use cooklang_find::RecipeEntry;
@@ -79,7 +80,7 @@ pub struct ReadArgs {
     ///
     /// Has no effect on other formats.
     #[arg(short = 'p', long, value_enum)]
-    paper_size: Option<PaperSize>,
+    paper_size: Option<PaperSizeArg>,
 
     /// Page margin in centimeters for LaTeX and Typst output (default: 2.5)
     ///
@@ -88,30 +89,27 @@ pub struct ReadArgs {
     margin: Option<f64>,
 }
 
+/// Clap's view of [`format::PaperSize`].
+///
+/// The paper names themselves live in `cookcli-core`, which must not depend on
+/// clap; this enum exists only to derive [`ValueEnum`], and its variants must
+/// stay in step with core's so that `--paper-size` keeps accepting the same
+/// values.
 #[derive(Debug, Clone, Copy, ValueEnum)]
-enum PaperSize {
+enum PaperSizeArg {
     A4,
     Letter,
     A5,
     Legal,
 }
 
-impl PaperSize {
-    fn latex_name(self) -> &'static str {
-        match self {
-            PaperSize::A4 => "a4paper",
-            PaperSize::Letter => "letterpaper",
-            PaperSize::A5 => "a5paper",
-            PaperSize::Legal => "legalpaper",
-        }
-    }
-
-    fn typst_name(self) -> &'static str {
-        match self {
-            PaperSize::A4 => "a4",
-            PaperSize::Letter => "us-letter",
-            PaperSize::A5 => "a5",
-            PaperSize::Legal => "us-legal",
+impl From<PaperSizeArg> for format::PaperSize {
+    fn from(value: PaperSizeArg) -> Self {
+        match value {
+            PaperSizeArg::A4 => format::PaperSize::A4,
+            PaperSizeArg::Letter => format::PaperSize::Letter,
+            PaperSizeArg::A5 => format::PaperSize::A5,
+            PaperSizeArg::Legal => format::PaperSize::Legal,
         }
     }
 }
@@ -191,16 +189,19 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
         }
     }
 
-    let paper_size = args.paper_size.unwrap_or(PaperSize::A4);
+    let paper_size: format::PaperSize = args.paper_size.unwrap_or(PaperSizeArg::A4).into();
     let margin = args.margin.unwrap_or(2.5);
 
     write_to_output(args.output.as_deref(), |writer| {
         match format {
-            OutputFormat::Human => crate::util::cooklang_to_human::print_human(
+            // `Style::Ansi` keeps the terminal colours the CLI has always
+            // printed; `write_to_output` strips them again for file output.
+            OutputFormat::Human => format::human::print_human(
                 &recipe,
                 &title,
                 scale,
                 PARSER.converter(),
+                Style::Ansi,
                 writer,
             )?,
             OutputFormat::Json => {
@@ -210,18 +211,12 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                     serde_json::to_writer(writer, &recipe)?;
                 }
             }
-            OutputFormat::Cooklang => {
-                crate::util::cooklang_to_cooklang::print_cooklang(&recipe, writer)?
-            }
+            OutputFormat::Cooklang => format::cooklang::print_cooklang(&recipe, writer)?,
             OutputFormat::Yaml => serde_yaml::to_writer(writer, &recipe)?,
-            OutputFormat::Markdown => crate::util::cooklang_to_md::print_md(
-                &recipe,
-                &title,
-                scale,
-                PARSER.converter(),
-                writer,
-            )?,
-            OutputFormat::Latex => crate::util::cooklang_to_latex::print_latex(
+            OutputFormat::Markdown => {
+                format::markdown::print_md(&recipe, &title, scale, PARSER.converter(), writer)?
+            }
+            OutputFormat::Latex => format::latex::print_latex(
                 &recipe,
                 &title,
                 scale,
@@ -230,7 +225,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 paper_size.latex_name(),
                 margin,
             )?,
-            OutputFormat::Typst => crate::util::cooklang_to_typst::print_typst(
+            OutputFormat::Typst => format::typst::print_typst(
                 &recipe,
                 &title,
                 scale,
@@ -239,7 +234,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
                 paper_size.typst_name(),
                 margin,
             )?,
-            OutputFormat::Schema => crate::util::cooklang_to_schema::print_schema(
+            OutputFormat::Schema => format::schema::print_schema(
                 &recipe,
                 &title,
                 scale,

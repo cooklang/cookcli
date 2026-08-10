@@ -1,8 +1,16 @@
-use anyhow::{Context, Result};
+//! Format a recipe as [schema.org/Recipe](https://schema.org/Recipe) JSON-LD.
+//!
+//! This is the shape search engines read, so the field names are fixed by the
+//! vocabulary rather than chosen here.
+
 use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
 use std::io;
 
+/// Write `recipe` as a schema.org `Recipe` JSON-LD object.
+///
+/// `pretty` indents the JSON. Nothing here can fail except the write itself,
+/// which `serde_json` reports as the underlying [`io::Error`].
 pub fn print_schema(
     recipe: &Recipe,
     name: &str,
@@ -10,25 +18,21 @@ pub fn print_schema(
     converter: &Converter,
     writer: impl io::Write,
     pretty: bool,
-) -> Result<()> {
-    let schema = create_schema_object(recipe, name, scale, converter)?;
+) -> io::Result<()> {
+    let schema = create_schema_object(recipe, name, scale, converter);
 
     if pretty {
-        serde_json::to_writer_pretty(writer, &schema)
-            .context("Failed to write Schema.org JSON-LD")?;
+        serde_json::to_writer_pretty(writer, &schema)?;
     } else {
-        serde_json::to_writer(writer, &schema).context("Failed to write Schema.org JSON-LD")?;
+        serde_json::to_writer(writer, &schema)?;
     }
 
     Ok(())
 }
 
-fn create_schema_object(
-    recipe: &Recipe,
-    name: &str,
-    scale: f64,
-    converter: &Converter,
-) -> Result<Value> {
+/// Build the JSON-LD object. Infallible: every field is optional, and a
+/// missing or unparseable one is simply left out.
+fn create_schema_object(recipe: &Recipe, name: &str, scale: f64, converter: &Converter) -> Value {
     let mut schema = json!({
         "@context": "https://schema.org",
         "@type": "Recipe",
@@ -87,25 +91,25 @@ fn create_schema_object(
     }
 
     // Add timing information
-    add_time_fields(&mut schema, recipe)?;
+    add_time_fields(&mut schema, recipe);
 
     // Add nutrition information if present
-    add_nutrition_info(&mut schema, recipe)?;
+    add_nutrition_info(&mut schema, recipe);
 
     // Add ingredients
-    let ingredients = create_ingredients_list(recipe, converter)?;
+    let ingredients = create_ingredients_list(recipe, converter);
     if !ingredients.is_empty() {
         schema["recipeIngredient"] = json!(ingredients);
     }
 
     // Add cookware as tools
-    let tools = create_tools_list(recipe, converter)?;
+    let tools = create_tools_list(recipe, converter);
     if !tools.is_empty() {
         schema["tool"] = json!(tools);
     }
 
     // Add instructions
-    let instructions = create_instructions_list(recipe)?;
+    let instructions = create_instructions_list(recipe);
     if !instructions.is_empty() {
         schema["recipeInstructions"] = json!(instructions);
     }
@@ -130,21 +134,21 @@ fn create_schema_object(
         }
     }
 
-    Ok(schema)
+    schema
 }
 
-fn add_time_fields(schema: &mut Value, recipe: &Recipe) -> Result<()> {
+fn add_time_fields(schema: &mut Value, recipe: &Recipe) {
     // Get prep time from metadata
     if let Some(prep_time_val) = recipe.metadata.get("prep time") {
         if let Some(prep_time_str) = prep_time_val.as_str() {
-            schema["prepTime"] = json!(format_iso_duration(prep_time_str)?);
+            schema["prepTime"] = json!(format_iso_duration(prep_time_str));
         }
     }
 
     // Get cook time from metadata
     if let Some(cook_time_val) = recipe.metadata.get("cook time") {
         if let Some(cook_time_str) = cook_time_val.as_str() {
-            schema["cookTime"] = json!(format_iso_duration(cook_time_str)?);
+            schema["cookTime"] = json!(format_iso_duration(cook_time_str));
         }
     }
 
@@ -162,31 +166,29 @@ fn add_time_fields(schema: &mut Value, recipe: &Recipe) -> Result<()> {
         }
         schema["totalTime"] = json!(format!("PT{}M", total_minutes));
     }
-
-    Ok(())
 }
 
-fn format_iso_duration(time_str: &str) -> Result<String> {
+fn format_iso_duration(time_str: &str) -> String {
     // Convert time strings like "30 minutes" or "1 hour" to ISO 8601 duration format
     // This is a simplified implementation
     let lower = time_str.to_lowercase();
 
     if lower.contains("hour") {
         if let Some(hours) = extract_number(&lower) {
-            return Ok(format!("PT{hours}H"));
+            return format!("PT{hours}H");
         }
     } else if lower.contains("min") {
         if let Some(minutes) = extract_number(&lower) {
-            return Ok(format!("PT{minutes}M"));
+            return format!("PT{minutes}M");
         }
     }
 
     // Fallback: assume minutes if just a number
     if let Some(minutes) = extract_number(&lower) {
-        return Ok(format!("PT{minutes}M"));
+        return format!("PT{minutes}M");
     }
 
-    Ok("PT0M".to_string())
+    "PT0M".to_string()
 }
 
 fn extract_number(s: &str) -> Option<i32> {
@@ -197,7 +199,7 @@ fn extract_number(s: &str) -> Option<i32> {
         .ok()
 }
 
-fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) -> Result<()> {
+fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) {
     let mut nutrition = json!({
         "@type": "NutritionInformation"
     });
@@ -260,11 +262,9 @@ fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) -> Result<()> {
     if has_nutrition {
         schema["nutrition"] = nutrition;
     }
-
-    Ok(())
 }
 
-fn create_ingredients_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<String>> {
+fn create_ingredients_list(recipe: &Recipe, converter: &Converter) -> Vec<String> {
     let mut ingredients = Vec::new();
 
     for entry in recipe.group_ingredients(converter) {
@@ -294,10 +294,10 @@ fn create_ingredients_list(recipe: &Recipe, converter: &Converter) -> Result<Vec
         ingredients.push(ingredient_text);
     }
 
-    Ok(ingredients)
+    ingredients
 }
 
-fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<String>> {
+fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Vec<String> {
     let mut tools = Vec::new();
 
     for item in recipe.group_cookware(converter) {
@@ -323,7 +323,7 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Result<Vec<Strin
         tools.push(tool_text);
     }
 
-    Ok(tools)
+    tools
 }
 
 fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize) -> Value {
@@ -417,7 +417,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
     instruction
 }
 
-fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
+fn create_instructions_list(recipe: &Recipe) -> Vec<Value> {
     let mut instructions = Vec::new();
     // Step position is global across all sections, consistent with Google's
     // structured data examples for Recipe.
@@ -450,5 +450,5 @@ fn create_instructions_list(recipe: &Recipe) -> Result<Vec<Value>> {
         }
     }
 
-    Ok(instructions)
+    instructions
 }

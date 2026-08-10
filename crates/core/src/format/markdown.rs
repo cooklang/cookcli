@@ -32,7 +32,6 @@
 
 use std::{fmt::Write, io};
 
-use anyhow::{Context, Result};
 use cooklang::{
     convert::Converter,
     metadata::Metadata,
@@ -104,8 +103,13 @@ impl Default for Options {
     }
 }
 
+/// Where, if anywhere, the recipe description appears in the body
+///
+/// Deserializes from a bool too: `true` is the default style, `false` is
+/// [`Hidden`](DescriptionStyle::Hidden).
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum DescriptionStyle {
     /// Do not show the description in the body
     Hidden,
@@ -126,9 +130,16 @@ impl From<bool> for DescriptionStyle {
     }
 }
 
+/// The front-matter key the recipe name is written under, if any
+///
+/// Deserializes from a bool too: `true` is `name`, `false` writes no key.
+/// Left constructible (no `#[non_exhaustive]`) because callers configure it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
-pub struct FrontMatterName(pub Option<String>);
+pub struct FrontMatterName(
+    /// The key, or `None` to leave the name out of the front-matter.
+    pub Option<String>,
+);
 
 impl Default for FrontMatterName {
     fn default() -> Self {
@@ -145,6 +156,10 @@ impl From<bool> for FrontMatterName {
     }
 }
 
+/// The text used for each generated heading
+///
+/// Left constructible (no `#[non_exhaustive]`) because callers configure it;
+/// `#[serde(default)]` fills in the headings a config file leaves out.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Headings {
@@ -205,7 +220,7 @@ pub fn print_md(
     scale: f64,
     converter: &Converter,
     writer: impl io::Write,
-) -> Result<()> {
+) -> io::Result<()> {
     print_md_with_options(recipe, name, scale, &Options::default(), converter, writer)
 }
 
@@ -224,9 +239,8 @@ pub fn print_md_with_options(
     opts: &Options,
     converter: &Converter,
     mut writer: impl io::Write,
-) -> Result<()> {
-    frontmatter(&mut writer, &recipe.metadata, name, opts)
-        .context("Failed to write frontmatter")?;
+) -> io::Result<()> {
+    frontmatter(&mut writer, &recipe.metadata, name, opts)?;
 
     writeln!(
         writer,
@@ -237,18 +251,17 @@ pub fn print_md_with_options(
         } else {
             "".to_string()
         }
-    )
-    .context("Failed to write title")?;
+    )?;
 
     if opts.tags {
         if let Some(tags) = recipe.metadata.tags() {
             for (i, tag) in tags.iter().enumerate() {
-                write!(writer, "#{tag}").context("Failed to write tag")?;
+                write!(writer, "#{tag}")?;
                 if i < tags.len() - 1 {
-                    write!(writer, " ").context("Failed to write tag separator")?;
+                    write!(writer, " ")?;
                 }
             }
-            writeln!(writer, "\n").context("Failed to write newline after tags")?;
+            writeln!(writer, "\n")?;
         }
     }
 
@@ -258,22 +271,20 @@ pub fn print_md_with_options(
             DescriptionStyle::Blockquote => {
                 print_wrapped_with_options(&mut writer, desc, |o| {
                     o.initial_indent("> ").subsequent_indent("> ")
-                })
-                .context("Failed to write description as blockquote")?;
-                writeln!(writer).context("Failed to write newline after description")?;
+                })?;
+                writeln!(writer)?;
             }
             DescriptionStyle::Heading => {
-                writeln!(writer, "## {}\n", opts.heading.description)
-                    .context("Failed to write description heading")?;
-                print_wrapped(&mut writer, desc).context("Failed to write description")?;
-                writeln!(writer).context("Failed to write newline after description")?;
+                writeln!(writer, "## {}\n", opts.heading.description)?;
+                print_wrapped(&mut writer, desc)?;
+                writeln!(writer)?;
             }
         }
     }
 
-    ingredients(&mut writer, recipe, converter, opts).context("Failed to write ingredients")?;
-    cookware(&mut writer, recipe, opts, converter).context("Failed to write cookware")?;
-    sections(&mut writer, recipe, opts).context("Failed to write sections")?;
+    ingredients(&mut writer, recipe, converter, opts)?;
+    cookware(&mut writer, recipe, opts, converter)?;
+    sections(&mut writer, recipe, opts)?;
 
     Ok(())
 }
@@ -283,7 +294,7 @@ fn frontmatter(
     metadata: &Metadata,
     name: &str,
     opts: &Options,
-) -> Result<()> {
+) -> io::Result<()> {
     if metadata.map.is_empty() {
         return Ok(());
     }
@@ -296,9 +307,10 @@ fn frontmatter(
     }
 
     const FRONTMATTER_FENCE: &str = "---";
-    writeln!(w, "{FRONTMATTER_FENCE}").context("Failed to write frontmatter start")?;
-    serde_yaml::to_writer(&mut w, &map).context("Failed to serialize frontmatter")?;
-    writeln!(w, "{FRONTMATTER_FENCE}\n").context("Failed to write frontmatter end")?;
+    writeln!(w, "{FRONTMATTER_FENCE}")?;
+    serde_yaml::to_writer(&mut w, &map)
+        .map_err(|e| io::Error::other(format!("Failed to serialize frontmatter: {e}")))?;
+    writeln!(w, "{FRONTMATTER_FENCE}\n")?;
     Ok(())
 }
 
@@ -307,13 +319,12 @@ fn ingredients(
     recipe: &Recipe,
     converter: &Converter,
     opts: &Options,
-) -> Result<()> {
+) -> io::Result<()> {
     if recipe.ingredients.is_empty() {
         return Ok(());
     }
 
-    writeln!(w, "## {}\n", opts.heading.ingredients)
-        .context("Failed to write ingredients header")?;
+    writeln!(w, "## {}\n", opts.heading.ingredients)?;
 
     for entry in recipe.group_ingredients(converter) {
         let ingredient = entry.ingredient;
@@ -322,13 +333,12 @@ fn ingredients(
             continue;
         }
 
-        write!(w, "- ").context("Failed to write ingredient bullet")?;
+        write!(w, "- ")?;
         if !entry.quantity.is_empty() {
             if opts.italic_amounts {
-                write!(w, "*{}* ", entry.quantity)
-                    .context("Failed to write italicized quantity")?;
+                write!(w, "*{}* ", entry.quantity)?;
             } else {
-                write!(w, "{} ", entry.quantity).context("Failed to write quantity")?;
+                write!(w, "{} ", entry.quantity)?;
             }
         }
 
@@ -342,23 +352,21 @@ fn ingredients(
                 path,
                 sep,
                 ingredient.name
-            )
-            .context("Failed to write reference")?;
+            )?;
         } else {
-            write!(w, "{}", ingredient.display_name())
-                .context("Failed to write ingredient name")?;
+            write!(w, "{}", ingredient.display_name())?;
         }
 
         if ingredient.modifiers().is_optional() {
-            write!(w, " {}", opts.optional_marker).context("Failed to write optional marker")?;
+            write!(w, " {}", opts.optional_marker)?;
         }
 
         if let Some(note) = &ingredient.note {
-            write!(w, " ({note})").context("Failed to write ingredient note")?;
+            write!(w, " ({note})")?;
         }
-        writeln!(w).context("Failed to write newline after ingredient")?;
+        writeln!(w)?;
     }
-    writeln!(w).context("Failed to write newline after ingredients")?;
+    writeln!(w)?;
 
     Ok(())
 }
@@ -368,43 +376,42 @@ fn cookware(
     recipe: &Recipe,
     opts: &Options,
     converter: &Converter,
-) -> Result<()> {
+) -> io::Result<()> {
     if recipe.cookware.is_empty() {
         return Ok(());
     }
 
-    writeln!(w, "## {}\n", opts.heading.cookware).context("Failed to write cookware header")?;
+    writeln!(w, "## {}\n", opts.heading.cookware)?;
     for item in recipe.group_cookware(converter) {
         let cw = item.cookware;
-        write!(w, "- ").context("Failed to write cookware bullet")?;
+        write!(w, "- ")?;
         if !item.quantity.is_empty() {
             if opts.italic_amounts {
-                write!(w, "*{}* ", item.quantity).context("Failed to write italicized amount")?;
+                write!(w, "*{}* ", item.quantity)?;
             } else {
-                write!(w, "{} ", item.quantity).context("Failed to write amount")?;
+                write!(w, "{} ", item.quantity)?;
             }
         }
-        write!(w, "{}", cw.display_name()).context("Failed to write cookware name")?;
+        write!(w, "{}", cw.display_name())?;
 
         if cw.modifiers().is_optional() {
-            write!(w, " {}", opts.optional_marker).context("Failed to write optional marker")?;
+            write!(w, " {}", opts.optional_marker)?;
         }
 
         if let Some(note) = &cw.note {
-            write!(w, " ({note})").context("Failed to write cookware note")?;
+            write!(w, " ({note})")?;
         }
-        writeln!(w).context("Failed to write newline after cookware")?;
+        writeln!(w)?;
     }
 
-    writeln!(w).context("Failed to write newline after cookware list")?;
+    writeln!(w)?;
     Ok(())
 }
 
-fn sections(w: &mut impl io::Write, recipe: &Recipe, opts: &Options) -> Result<()> {
-    writeln!(w, "## {}\n", opts.heading.steps).context("Failed to write steps header")?;
+fn sections(w: &mut impl io::Write, recipe: &Recipe, opts: &Options) -> io::Result<()> {
+    writeln!(w, "## {}\n", opts.heading.steps)?;
     for (idx, section) in recipe.sections.iter().enumerate() {
-        w_section(w, section, recipe, idx + 1, opts)
-            .context(format!("Failed to write section {}", idx + 1))?;
+        w_section(w, section, recipe, idx + 1, opts)?;
     }
     Ok(())
 }
@@ -415,38 +422,35 @@ fn w_section(
     recipe: &Recipe,
     num: usize,
     opts: &Options,
-) -> Result<()> {
+) -> io::Result<()> {
     if section.name.is_some() || recipe.sections.len() > 1 {
         if let Some(name) = &section.name {
-            writeln!(w, "### {name}\n").context("Failed to write section name")?;
+            writeln!(w, "### {name}\n")?;
         } else {
             let s = opts.heading.section.replace("%n", &num.to_string());
-            writeln!(w, "### {s}\n").context("Failed to write section number")?;
+            writeln!(w, "### {s}\n")?;
         }
     }
     for content in &section.content {
         match content {
-            cooklang::Content::Step(step) => {
-                w_step(w, step, recipe, opts).context("Failed to write step")?
-            }
+            cooklang::Content::Step(step) => w_step(w, step, recipe, opts)?,
             cooklang::Content::Text(text) => {
                 // Check if this is a list bullet item
                 if text.trim() == "-" {
                     // Add extra newline for list separation
-                    writeln!(w).context("Failed to write newline for list bullet")?
+                    writeln!(w)?
                 } else {
                     // Format as a note with blockquote style
-                    writeln!(w, "> **Note:** {}", text.trim())
-                        .context("Failed to write text content")?
+                    writeln!(w, "> **Note:** {}", text.trim())?
                 }
             }
         };
-        writeln!(w).context("Failed to write newline after content")?;
+        writeln!(w)?;
     }
     Ok(())
 }
 
-fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) -> Result<()> {
+fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) -> io::Result<()> {
     let mut step_str = step.number.to_string();
     if opts.escape_step_numbers {
         step_str.push_str("\\. ")
@@ -475,43 +479,41 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
                 if let Some(name) = &t.name {
-                    write!(&mut step_str, "({name})").context("Failed to write timer name")?;
+                    write!(&mut step_str, "({name})").expect("writing to a String is infallible");
                 }
                 if let Some(quantity) = &t.quantity {
-                    write!(&mut step_str, "{quantity}")
-                        .context("Failed to write timer quantity")?;
+                    write!(&mut step_str, "{quantity}").expect("writing to a String is infallible");
                 }
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
                 if opts.italic_amounts {
-                    write!(&mut step_str, "*{q}*")
-                        .context("Failed to write italicized inline quantity")?;
+                    write!(&mut step_str, "*{q}*").expect("writing to a String is infallible");
                 } else {
-                    write!(&mut step_str, "{q}").context("Failed to write inline quantity")?;
+                    write!(&mut step_str, "{q}").expect("writing to a String is infallible");
                 }
             }
         }
     }
-    print_wrapped(w, &step_str).context("Failed to write wrapped step")?;
+    print_wrapped(w, &step_str)?;
     Ok(())
 }
 
-fn print_wrapped(w: &mut impl io::Write, text: &str) -> Result<()> {
+fn print_wrapped(w: &mut impl io::Write, text: &str) -> io::Result<()> {
     print_wrapped_with_options(w, text, |o| o)
 }
 
 static TERM_WIDTH: std::sync::LazyLock<usize> =
     std::sync::LazyLock::new(|| textwrap::termwidth().min(80));
 
-fn print_wrapped_with_options<F>(w: &mut impl io::Write, text: &str, f: F) -> Result<()>
+fn print_wrapped_with_options<F>(w: &mut impl io::Write, text: &str, f: F) -> io::Result<()>
 where
     F: FnOnce(textwrap::Options) -> textwrap::Options,
 {
     let options = f(textwrap::Options::new(*TERM_WIDTH));
     let lines = textwrap::wrap(text, options);
     for line in lines {
-        writeln!(w, "{line}").context("Failed to write wrapped line")?;
+        writeln!(w, "{line}")?;
     }
     Ok(())
 }

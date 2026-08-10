@@ -30,9 +30,12 @@
 
 //! Format a recipe for humans to read
 //!
-//! This will always write ansi colours. Use something like
-//! [`anstream`](https://docs.rs/anstream) to remove them if needed.
+//! Colour is chosen by the [`Style`] passed to [`print_human`]. The rendering
+//! code always paints; when the caller asks for [`Style::Plain`] the escape
+//! codes are removed at the writer, so the two outputs differ only by the
+//! escapes.
 
+use crate::format::Style;
 use std::{collections::HashMap, io, time::Duration};
 
 use cooklang::{
@@ -127,24 +130,79 @@ mod style {
 }
 use style::styles;
 
-pub type Result<T = ()> = std::result::Result<T, io::Error>;
+type Result<T = ()> = std::result::Result<T, io::Error>;
 
+/// Write a recipe as the text `cook recipe` prints.
+///
+/// `name` is the title to show, `scale` is appended to it when it is not
+/// `1.0`, and `converter` supplies the units used to group quantities.
+///
+/// `writer` is `&mut dyn` rather than a generic: `anstream::StripStream` only
+/// accepts inner writers from a sealed list, which includes `dyn Write` but
+/// not an arbitrary type parameter. Concrete writers (`&mut Vec<u8>`,
+/// `&mut File`, ...) still coerce at the call site.
 pub fn print_human(
     recipe: &Recipe,
     name: &str,
     scale: f64,
     converter: &Converter,
-    mut writer: impl std::io::Write,
-) -> Result {
-    let w = &mut writer;
+    style: Style,
+    writer: &mut dyn std::io::Write,
+) -> std::io::Result<()> {
+    // Strip at the writer rather than reaching for yansi's global switch: a
+    // library must not mutate process-wide state that its callers share.
+    let mut plain;
+    let mut coloured;
+    let mut w: &mut dyn std::io::Write = if style.is_ansi() {
+        coloured = writer;
+        &mut coloured
+    } else {
+        plain = StripWriter::new(writer);
+        &mut plain
+    };
 
-    header(w, recipe, name, scale)?;
-    metadata(w, recipe, converter)?;
-    ingredients(w, recipe, converter)?;
-    cookware(w, recipe, converter)?;
-    steps(w, recipe)?;
+    header(&mut w, recipe, name, scale)?;
+    metadata(&mut w, recipe, converter)?;
+    ingredients(&mut w, recipe, converter)?;
+    cookware(&mut w, recipe, converter)?;
+    steps(&mut w, recipe)?;
 
     Ok(())
+}
+
+/// A writer that drops ANSI escape sequences on their way through.
+///
+/// `anstream::StripStream` would do this, but it only accepts inner writers
+/// from a sealed list whose `dyn Write` entry is implicitly `'static`, and the
+/// writer here is borrowed. This wraps anstream's escape-sequence state
+/// machine directly instead, so a sequence split across two `write` calls is
+/// still removed.
+struct StripWriter<'w> {
+    inner: &'w mut dyn io::Write,
+    state: anstream::adapter::StripBytes,
+}
+
+impl<'w> StripWriter<'w> {
+    fn new(inner: &'w mut dyn io::Write) -> Self {
+        Self {
+            inner,
+            state: anstream::adapter::StripBytes::default(),
+        }
+    }
+}
+
+impl io::Write for StripWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        for printable in self.state.strip_next(buf) {
+            self.inner.write_all(printable)?;
+        }
+        // The whole buffer was consumed: what was not forwarded was escapes.
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 fn header(w: &mut impl io::Write, recipe: &Recipe, name: &str, scale: f64) -> Result {

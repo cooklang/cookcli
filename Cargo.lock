@@ -664,6 +664,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
+ "cookcli-core",
  "cooklang",
  "cooklang-find",
  "cooklang-import",
@@ -717,14 +718,23 @@ dependencies = [
 name = "cookcli-core"
 version = "0.1.0"
 dependencies = [
+ "anstream 0.6.21",
+ "anstyle",
+ "anstyle-yansi",
  "camino",
  "cooklang",
  "directories",
+ "humantime",
+ "regex",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "tabular",
  "tempfile",
+ "textwrap",
  "thiserror 2.0.19",
  "tracing",
+ "yansi",
 ]
 
 [[package]]

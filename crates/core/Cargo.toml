@@ -12,15 +12,28 @@ categories = ["parser-implementations"]
 # Dependencies are added by the task that first needs them, so that this
 # manifest always describes what the crate actually uses.
 [dependencies]
+# Strips ANSI escape codes at the writer, so that `format::Style::Plain` can be
+# honoured without touching yansi's global colour switch.
+anstream = "0.6"
+anstyle = "1"
+anstyle-yansi = "2"
 camino = { version = "1", features = ["serde1"] }
 # `bundled_units` carries the unit database that quantity scaling depends on.
 # Keep this declaration in step with the root manifest's.
 cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
 directories = "6"
+humantime = "2"
+regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
+# `ansi-cell` lets the human formatter measure column widths ignoring escapes.
+tabular = { version = "0.2", features = ["ansi-cell"] }
+# `terminal_size` backs `textwrap::termwidth()`, which sets the wrap width.
+textwrap = { version = "0.16", features = ["terminal_size"] }
 thiserror = "2"
 tracing = "0.1"
+yansi = "1"
 
 [dev-dependencies]
 tempfile = "3"

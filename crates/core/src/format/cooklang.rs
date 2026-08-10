@@ -32,7 +32,6 @@
 
 use std::{fmt::Write, io};
 
-use anyhow::{Context, Result};
 use cooklang::{
     metadata::Metadata,
     model::{Item, Section, Step},
@@ -42,17 +41,21 @@ use cooklang::{
 };
 use regex::Regex;
 
-pub fn print_cooklang(recipe: &Recipe, mut writer: impl io::Write) -> Result<()> {
+/// Write `recipe` back out as Cooklang source.
+///
+/// Metadata is emitted as YAML front-matter; steps are re-wrapped to the
+/// terminal width without breaking a component across lines.
+pub fn print_cooklang(recipe: &Recipe, mut writer: impl io::Write) -> io::Result<()> {
     let w = &mut writer;
 
-    metadata(w, &recipe.metadata).context("Failed to write metadata")?;
-    writeln!(w).context("Failed to write newline")?;
-    sections(w, recipe).context("Failed to write sections")?;
+    metadata(w, &recipe.metadata)?;
+    writeln!(w)?;
+    sections(w, recipe)?;
 
     Ok(())
 }
 
-fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> Result<()> {
+fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> io::Result<()> {
     // TODO if the recipe has been scaled and multiple servings are defined
     // it can lead to the recipe not parsing.
     if metadata.map.is_empty() {
@@ -62,15 +65,16 @@ fn metadata(w: &mut impl io::Write, metadata: &Metadata) -> Result<()> {
     let map = metadata.map.clone();
 
     const FRONTMATTER_FENCE: &str = "---";
-    writeln!(w, "{FRONTMATTER_FENCE}").context("Failed to write frontmatter start")?;
-    serde_yaml::to_writer(&mut *w, &map).context("Failed to serialize frontmatter")?;
-    writeln!(w, "{FRONTMATTER_FENCE}\n").context("Failed to write frontmatter end")?;
+    writeln!(w, "{FRONTMATTER_FENCE}")?;
+    serde_yaml::to_writer(&mut *w, &map)
+        .map_err(|e| io::Error::other(format!("Failed to serialize frontmatter: {e}")))?;
+    writeln!(w, "{FRONTMATTER_FENCE}\n")?;
     Ok(())
 }
 
-fn sections(w: &mut impl io::Write, recipe: &Recipe) -> Result<()> {
+fn sections(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     for (index, section) in recipe.sections.iter().enumerate() {
-        w_section(w, section, recipe, index).context("Failed to write section")?;
+        w_section(w, section, recipe, index)?;
     }
     Ok(())
 }
@@ -80,27 +84,23 @@ fn w_section(
     section: &Section,
     recipe: &Recipe,
     index: usize,
-) -> Result<()> {
+) -> io::Result<()> {
     if let Some(name) = &section.name {
-        writeln!(w, "== {name} ==").context("Failed to write section name")?;
+        writeln!(w, "== {name} ==")?;
     } else if index > 0 {
-        writeln!(w, "====").context("Failed to write section separator")?;
+        writeln!(w, "====")?;
     }
     for content in &section.content {
         match content {
-            cooklang::Content::Step(step) => {
-                w_step(w, step, recipe).context("Failed to write step")?
-            }
-            cooklang::Content::Text(text) => {
-                w_text_block(w, text).context("Failed to write text block")?
-            }
+            cooklang::Content::Step(step) => w_step(w, step, recipe)?,
+            cooklang::Content::Text(text) => w_text_block(w, text)?,
         }
-        writeln!(w).context("Failed to write newline")?;
+        writeln!(w)?;
     }
     Ok(())
 }
 
-fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
+fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()> {
     let mut step_str = String::new();
     for item in &step.items {
         match item {
@@ -157,8 +157,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
-                write!(&mut step_str, "{}", q.value())
-                    .context("Failed to write inline quantity")?;
+                write!(&mut step_str, "{}", q.value()).expect("writing to a String is infallible");
                 if let Some(u) = q.unit() {
                     step_str.push_str(u);
                 }
@@ -170,12 +169,12 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> Result<()> {
         .word_separator(textwrap::WordSeparator::Custom(component_word_separator));
     let lines = textwrap::wrap(step_str.trim(), options);
     for line in lines {
-        writeln!(w, "{line}").context("Failed to write step line")?;
+        writeln!(w, "{line}")?;
     }
     Ok(())
 }
 
-fn w_text_block(w: &mut impl io::Write, text: &str) -> Result<()> {
+fn w_text_block(w: &mut impl io::Write, text: &str) -> io::Result<()> {
     let width = textwrap::termwidth().min(80);
     let indent = "> ";
     let options = textwrap::Options::new(width)
@@ -183,7 +182,7 @@ fn w_text_block(w: &mut impl io::Write, text: &str) -> Result<()> {
         .subsequent_indent(indent);
     let lines = textwrap::wrap(text.trim(), options);
     for line in lines {
-        writeln!(w, "{line}").context("Failed to write text block line")?;
+        writeln!(w, "{line}")?;
     }
     Ok(())
 }

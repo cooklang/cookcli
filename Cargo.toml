@@ -80,6 +80,9 @@ cooklang-sync-client = { version = "0.5.0", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
 cooklang-language-server = { version = "0.2.4", optional = true }
 cooklang-reports = { version = "0.5.1" }
+# `version` + `path`: local builds use the workspace copy, the published crate
+# resolves from crates.io.
+cookcli-core = { version = "0.1.0", path = "crates/core" }
 directories = "6"
 flate2 = "1"
 fluent = "0.16"
