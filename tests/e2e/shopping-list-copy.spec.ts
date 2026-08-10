@@ -57,10 +57,6 @@ test.describe('Copy shopping list to clipboard', () => {
     const text = await page.evaluate(() => navigator.clipboard.readText());
     const lines = text.split('\n');
 
-    // Title, blank line, then the first aisle group.
-    expect(lines[0]).toBe('Shopping List');
-    expect(lines[1]).toBe('');
-
     // Easy Pancakes contributes eggs, flour, milk, sea salt and butter. Each
     // is a bare line — no bullet, no checkbox — under its aisle heading.
     //
@@ -73,10 +69,14 @@ test.describe('Copy shopping list to clipboard', () => {
     // Two quantities of the same ingredient stay on one line.
     expect(text).toMatch(/^salt 1 tbsp, pinch$/m);
 
-    // Aisle headings are present and are not themselves item lines.
-    const headings = lines.filter((line, i) => line !== '' && lines[i - 1] === '' && i > 1);
+    // Aisle headings are present and are not themselves item lines. A heading
+    // opens the text or follows the blank line that closes the previous group.
+    const headings = lines.filter((line, i) => line !== '' && (i === 0 || lines[i - 1] === ''));
     expect(headings).toContain('milk and dairy');
     expect(headings).not.toContain('egg 3');
+
+    // The list is what it starts with — no title line to delete after pasting.
+    expect(lines[0]).not.toMatch(/shopping list/i);
   });
 
   test('leaves out items that are already ticked off', async ({ page }) => {
@@ -110,6 +110,76 @@ test.describe('Copy shopping list to clipboard', () => {
     expect(text).not.toMatch(/^egg 3$/m);
     // Unchecked items are untouched.
     expect(text).toMatch(/^flour 125 g$/m);
+  });
+
+  test('drops the amounts when the amounts option is off', async ({ page }) => {
+    fs.writeFileSync(LIST_FILE, './Breakfast/Easy Pancakes\n');
+    fs.writeFileSync(CHECKED_FILE, '');
+
+    const helpers = new TestHelpers(page);
+    await helpers.goToShoppingList();
+
+    const copyButton = page.locator('#copy-list-button');
+    await expect(copyButton).toBeVisible({ timeout: 10_000 });
+
+    await page.locator('#copy-options-toggle').click();
+    await page.locator('#copy-option-amounts').uncheck();
+    await copyButton.click();
+    await expect(copyButton).toHaveText(/copied/i);
+
+    const text = await page.evaluate(() => navigator.clipboard.readText());
+    // Bare names, and no trailing space where the quantity used to sit.
+    expect(text).toMatch(/^egg$/m);
+    expect(text).toMatch(/^flour$/m);
+    expect(text).not.toMatch(/125 g/);
+    // Aisle headings are a separate option and stay put.
+    expect(text).toMatch(/^milk and dairy$/m);
+  });
+
+  test('drops the aisle headings when the aisle option is off', async ({ page }) => {
+    fs.writeFileSync(LIST_FILE, './Breakfast/Easy Pancakes\n');
+    fs.writeFileSync(CHECKED_FILE, '');
+
+    const helpers = new TestHelpers(page);
+    await helpers.goToShoppingList();
+
+    const copyButton = page.locator('#copy-list-button');
+    await expect(copyButton).toBeVisible({ timeout: 10_000 });
+
+    await page.locator('#copy-options-toggle').click();
+    await page.locator('#copy-option-aisles').uncheck();
+    await copyButton.click();
+    await expect(copyButton).toHaveText(/copied/i);
+
+    const text = await page.evaluate(() => navigator.clipboard.readText());
+    expect(text).not.toMatch(/^milk and dairy$/m);
+    // Items keep their amounts, and run together as one block: with no headings
+    // left there is nothing for a blank line to separate.
+    expect(text).toMatch(/^flour 125 g$/m);
+    expect(text.trimEnd()).not.toContain('\n\n');
+  });
+
+  test('remembers the copy options across a reload', async ({ page }) => {
+    fs.writeFileSync(LIST_FILE, './Breakfast/Easy Pancakes\n');
+    fs.writeFileSync(CHECKED_FILE, '');
+
+    const helpers = new TestHelpers(page);
+    await helpers.goToShoppingList();
+
+    await expect(page.locator('#copy-list-button')).toBeVisible({ timeout: 10_000 });
+
+    // Both options default on for a browser that has never set them.
+    await page.locator('#copy-options-toggle').click();
+    await expect(page.locator('#copy-option-aisles')).toBeChecked();
+    await expect(page.locator('#copy-option-amounts')).toBeChecked();
+
+    await page.locator('#copy-option-amounts').uncheck();
+
+    await helpers.goToShoppingList();
+    await expect(page.locator('#copy-list-button')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#copy-options-toggle').click();
+    await expect(page.locator('#copy-option-amounts')).not.toBeChecked();
+    await expect(page.locator('#copy-option-aisles')).toBeChecked();
   });
 
   test('hides the copy button when there is nothing to buy', async ({ page }) => {
