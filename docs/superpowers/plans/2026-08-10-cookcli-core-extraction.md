@@ -14,6 +14,22 @@
 
 ---
 
+## Prerequisite: compiled front-end assets
+
+`build.rs` hard-fails without `static/css/output.css` and `static/js/editor.bundle.js`. Both are generated and gitignored, so **a fresh clone or a fresh git worktree cannot build at all** until they exist:
+
+```
+error: missing compiled front-end assets:
+  - static/css/output.css  (generate with: npm run build-css)
+  - static/js/editor.bundle.js  (generate with: npm run build-js)
+```
+
+Produce them with `npm install && npm run build-css && npm run build-js`, or copy them from an existing checkout of the same commit — they are pure build products of `static/css/input.css`, `tailwind.config.js` and the JS sources, so copying is safe when those inputs match.
+
+Nothing in this plan touches the web UI, so once the assets are present they stay valid for every task.
+
+---
+
 ## Critical Constraint: The Test Suite Is The Contract — Except For Shopping Lists
 
 `tests/` contains 4,216 lines driving the real binary through `assert_cmd`, plus 22 insta snapshots in `tests/snapshots/`. **These files are not modified by this plan**, with two exceptions, both stated explicitly where they occur (Task 6 adds characterization snapshots; Task 10 is a deliberate behaviour fix).
