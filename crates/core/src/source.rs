@@ -1,7 +1,7 @@
 //! Input sources. Core never touches the filesystem unless handed a path.
 
 use crate::CoreError;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 
 /// Where a recipe comes from.
 ///
@@ -62,7 +62,7 @@ impl ConfigSource {
     }
 
     /// The path this source reads from, when it is path-backed.
-    pub fn path(&self) -> Option<&Utf8PathBuf> {
+    pub fn path(&self) -> Option<&Utf8Path> {
         match self {
             ConfigSource::Path(p) => Some(p),
             _ => None,
@@ -97,7 +97,7 @@ mod tests {
 
         let source = ConfigSource::Path(utf8.clone());
         assert_eq!(source.read().unwrap().as_deref(), Some("[dairy]\nmilk"));
-        assert_eq!(source.path(), Some(&utf8));
+        assert_eq!(source.path(), Some(utf8.as_path()));
     }
 
     #[test]

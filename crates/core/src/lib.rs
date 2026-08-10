@@ -16,7 +16,7 @@ pub mod error;
 pub mod outcome;
 pub mod source;
 
-pub use context::{global_file_path, Context};
+pub use context::{global_config_path, Context};
 pub use diagnostic::{Diagnostic, Location, Severity, Span};
 pub use error::CoreError;
 pub use outcome::Outcome;
