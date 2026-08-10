@@ -31,7 +31,25 @@ pub enum CoreError {
         diagnostics: Vec<Diagnostic>,
         /// The parser's own multi-line report with source line context, which
         /// the CLI prints verbatim. Not part of `Display`.
+        ///
+        /// Always free of ANSI escape codes, so it is safe to write to a file
+        /// or send over a wire. Callers wanting colour for a terminal should
+        /// re-render with [`render_report`](crate::parser::render_report) and
+        /// `ansi: true`.
         rendered: String,
+    },
+
+    /// A scaling factor was not a finite number.
+    ///
+    /// Only NaN and infinity are rejected. Zero and negative factors are
+    /// accepted, because the CLI accepts them and this crate must not change
+    /// that behaviour. NaN is worth catching because a missing JavaScript
+    /// argument arrives as `undefined`, which becomes NaN across NAPI and
+    /// would otherwise silently produce NaN quantities.
+    #[error("scale factor must be finite, but was {scale}")]
+    InvalidScale {
+        /// The rejected factor.
+        scale: f64,
     },
 
     /// A configuration could not be understood.
@@ -92,6 +110,7 @@ mod tests {
         match e {
             CoreError::RecipeNotFound { .. }
             | CoreError::Parse { .. }
+            | CoreError::InvalidScale { .. }
             | CoreError::Config { .. }
             | CoreError::Render { .. }
             | CoreError::CircularReference { .. }
@@ -110,6 +129,7 @@ mod tests {
                 diagnostics: vec![Diagnostic::error("bad quantity")],
                 rendered: "line 1\nline 2\n".to_string(),
             },
+            CoreError::InvalidScale { scale: f64::NAN },
             CoreError::Config {
                 path: None,
                 message: "unknown section".to_string(),

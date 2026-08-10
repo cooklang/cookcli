@@ -21,7 +21,16 @@ pub use context::{global_config_path, Context};
 pub use diagnostic::{Diagnostic, Location, Severity, Span};
 pub use error::CoreError;
 pub use outcome::Outcome;
-pub use parser::{parse_recipe, parse_recipe_at, PARSER};
+pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};
+
+/// The `cooklang` crate this library was built against.
+///
+/// [`parse_recipe`] returns a [`cooklang::Recipe`] and [`PARSER`] is a
+/// [`cooklang::CooklangParser`], so those types are part of this crate's public
+/// surface. Re-exporting lets consumers name them without adding their own
+/// `cooklang` dependency, which could otherwise resolve to a different
+/// version and fail to unify.
+pub use cooklang;
 pub use source::{ConfigSource, RecipeSource};
 
 /// Convenience alias for core results.

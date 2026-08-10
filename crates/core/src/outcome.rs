@@ -62,7 +62,7 @@ impl<T> Outcome<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::{Diagnostic, Severity};
+    use crate::diagnostic::Diagnostic;
 
     #[test]
     fn new_has_no_diagnostics() {
@@ -74,37 +74,20 @@ mod tests {
 
     #[test]
     fn has_errors_detects_error_severity() {
-        let outcome = Outcome::with_diagnostics(
-            (),
-            vec![Diagnostic {
-                severity: Severity::Warning,
-                message: "just a warning".to_string(),
-                location: None,
-            }],
-        );
+        let outcome = Outcome::with_diagnostics((), vec![Diagnostic::warning("just a warning")]);
         assert!(!outcome.has_errors());
 
-        let outcome = Outcome::with_diagnostics(
-            (),
-            vec![Diagnostic {
-                severity: Severity::Error,
-                message: "a real error".to_string(),
-                location: None,
-            }],
-        );
+        let outcome = Outcome::with_diagnostics((), vec![Diagnostic::error("a real error")]);
         assert!(outcome.has_errors());
+
+        // A hint is not an error either.
+        let outcome = Outcome::with_diagnostics((), vec![Diagnostic::hint("a hint")]);
+        assert!(!outcome.has_errors());
     }
 
     #[test]
     fn into_value_discards_diagnostics() {
-        let outcome = Outcome::with_diagnostics(
-            "hello",
-            vec![Diagnostic {
-                severity: Severity::Hint,
-                message: "hint".to_string(),
-                location: None,
-            }],
-        );
+        let outcome = Outcome::with_diagnostics("hello", vec![Diagnostic::hint("hint")]);
         assert_eq!(outcome.into_value(), "hello");
     }
 }

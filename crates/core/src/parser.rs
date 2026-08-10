@@ -8,7 +8,7 @@ use crate::{CoreError, Diagnostic, Location, Outcome, Severity, Span};
 use camino::Utf8Path;
 use cooklang::{
     error::{SourceDiag, SourceReport},
-    Converter, CooklangParser, Extensions, Recipe, RecipeResult,
+    Converter, CooklangParser, Extensions, Recipe,
 };
 use std::sync::LazyLock;
 
@@ -24,6 +24,11 @@ pub static PARSER: LazyLock<CooklangParser> =
 ///
 /// Returns [`CoreError::Parse`] when the recipe has errors, since no recipe can
 /// be produced in that case. Warnings come back in the [`Outcome`].
+///
+/// # Scale
+///
+/// `scale` must be finite; NaN and infinity give [`CoreError::InvalidScale`].
+/// Zero and negative factors are *accepted*, matching what the CLI does today.
 pub fn parse_recipe(text: &str, name: &str, scale: f64) -> Result<Outcome<Recipe>, CoreError> {
     parse_recipe_at(text, name, scale, None)
 }
@@ -39,40 +44,52 @@ pub fn parse_recipe_at(
     scale: f64,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    let parsed = PARSER.parse(text);
-    let diagnostics = collect_diagnostics(parsed.report(), file);
-
-    if parsed.report().has_errors() {
-        let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
-        return Err(CoreError::Parse {
-            name: name.to_string(),
-            diagnostics,
-            rendered: render_report(&parsed, &display_path, text, false),
-        });
+    if !scale.is_finite() {
+        return Err(CoreError::InvalidScale { scale });
     }
 
-    let (mut recipe, _) = parsed
-        .into_result()
-        .expect("report has no errors, so a recipe is present");
-    recipe.scale(scale, PARSER.converter());
+    let parsed = PARSER.parse(text);
+    let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
+    let parse_error = |report: &SourceReport| CoreError::Parse {
+        name: name.to_string(),
+        diagnostics: collect_diagnostics(report, file),
+        rendered: render_report(report, &display_path, text, false),
+    };
 
-    Ok(Outcome::with_diagnostics(recipe, diagnostics))
+    if parsed.report().has_errors() {
+        return Err(parse_error(parsed.report()));
+    }
+    let diagnostics = collect_diagnostics(parsed.report(), file);
+
+    match parsed.into_result() {
+        Ok((mut recipe, _)) => {
+            recipe.scale(scale, PARSER.converter());
+            Ok(Outcome::with_diagnostics(recipe, diagnostics))
+        }
+        // `into_result` fails when `is_valid()` is false, which is
+        // `has_output() && !has_errors()`. We have just ruled out errors, but
+        // cooklang does not promise output is present, so this arm is
+        // reachable in principle. Returning beats panicking: this crate is
+        // called from a NAPI addon, where a panic crosses into JavaScript.
+        Err(report) => Err(parse_error(&report)),
+    }
 }
 
 /// Render a parse report the way the CLI prints it, with source line context.
 ///
-/// `ansi` controls colour. The CLI passes `true` for terminal output.
+/// `ansi` controls colour. The CLI passes `true` for terminal output; the
+/// report stored in [`CoreError::Parse`] is always rendered with `false`.
+///
+/// Takes the report rather than the parse result so that it also renders
+/// reports from metadata-only parses.
 pub fn render_report(
-    parsed: &RecipeResult,
+    report: &SourceReport,
     display_path: &str,
     content: &str,
     ansi: bool,
 ) -> String {
     let mut buf = Vec::new();
-    parsed
-        .report()
-        .write(display_path, content, ansi, &mut buf)
-        .ok();
+    report.write(display_path, content, ansi, &mut buf).ok();
     String::from_utf8_lossy(&buf).into_owned()
 }
 
@@ -98,6 +115,9 @@ fn convert_diagnostic(diag: &SourceDiag, file: Option<&Utf8Path>) -> Diagnostic 
         severity,
         message: diag.message.to_string(),
         location: location_for(file, span),
+        // Often a ready-to-apply replacement, which is exactly the payload
+        // the CLI's `warn!` used to discard.
+        hints: diag.hints.iter().map(|h| h.to_string()).collect(),
     }
 }
 
@@ -120,8 +140,26 @@ fn location_for(file: Option<&Utf8Path>, span: Option<Span>) -> Option<Location>
 mod tests {
     use super::*;
     use crate::diagnostic::{Severity, Span};
+    use cooklang::quantity::Value;
 
     const GOOD: &str = "Boil @water{2%cups} for ~{5%minutes}.\n";
+
+    /// The numeric value of an ingredient's quantity, ignoring its unit.
+    ///
+    /// Asserting on the value rather than the formatted quantity matters:
+    /// cooklang re-fits units when scaling, so `2 cups` can render as `4 c`
+    /// and a string comparison would be testing the formatter, not the maths.
+    fn quantity_value(recipe: &Recipe, index: usize) -> f64 {
+        match recipe.ingredients[index]
+            .quantity
+            .as_ref()
+            .expect("ingredient has a quantity")
+            .value()
+        {
+            Value::Number(n) => n.value(),
+            other => panic!("expected a numeric quantity, got {other:?}"),
+        }
+    }
 
     #[test]
     fn parses_a_clean_recipe_without_diagnostics() {
@@ -131,13 +169,46 @@ mod tests {
     }
 
     #[test]
-    fn scaling_multiplies_quantities() {
-        let single = parse_recipe(GOOD, "simple", 1.0).unwrap().into_value();
-        let double = parse_recipe(GOOD, "simple", 2.0).unwrap().into_value();
+    fn scaling_multiplies_quantities_by_exactly_the_factor() {
+        // GOOD declares `@water{2%cups}`.
+        assert_eq!(
+            quantity_value(&parse_recipe(GOOD, "s", 1.0).unwrap().value, 0),
+            2.0
+        );
+        assert_eq!(
+            quantity_value(&parse_recipe(GOOD, "s", 2.0).unwrap().value, 0),
+            4.0
+        );
+        assert_eq!(
+            quantity_value(&parse_recipe(GOOD, "s", 0.5).unwrap().value, 0),
+            1.0
+        );
+    }
 
-        let one = format!("{:?}", single.ingredients[0].quantity);
-        let two = format!("{:?}", double.ingredients[0].quantity);
-        assert_ne!(one, two, "scaling should change the quantity");
+    #[test]
+    fn non_finite_scale_is_rejected() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            match parse_recipe(GOOD, "simple", bad) {
+                Err(CoreError::InvalidScale { scale }) => {
+                    assert_eq!(scale.is_nan(), bad.is_nan());
+                }
+                other => panic!("expected InvalidScale for {bad}, got {other:?}"),
+            }
+        }
+    }
+
+    /// Zero and negative scale are accepted, because the CLI accepts them.
+    /// Rejecting them would be a behaviour change smuggled into a refactor.
+    #[test]
+    fn zero_and_negative_scale_are_accepted() {
+        assert_eq!(
+            quantity_value(&parse_recipe(GOOD, "s", 0.0).unwrap().value, 0),
+            0.0
+        );
+        assert_eq!(
+            quantity_value(&parse_recipe(GOOD, "s", -1.0).unwrap().value, 0),
+            -2.0
+        );
     }
 
     #[test]
@@ -145,13 +216,90 @@ mod tests {
         // Deprecated `>>` metadata parses successfully but warns.
         let text = ">> title: Old Style\n\nBoil @water{}.\n";
         let outcome = parse_recipe(text, "old", 1.0).expect("parses despite warning");
+
+        // Every diagnostic must be a Warning — not merely "at least one is",
+        // which would still hold if errors were mislabelled as warnings.
+        assert!(!outcome.diagnostics.is_empty(), "expected a diagnostic");
+        for d in &outcome.diagnostics {
+            assert_eq!(
+                d.severity,
+                Severity::Warning,
+                "deprecated syntax is a warning, got {d:?}"
+            );
+        }
+        assert!(!outcome.has_errors());
+    }
+
+    /// Pins the severity mapping in both directions at once, so that inverting
+    /// it cannot pass. Also pins that *every* diagnostic is converted, not
+    /// just the first.
+    #[test]
+    fn every_error_is_converted_with_error_severity() {
+        // Two empty ingredient names: two errors, at two distinct spans.
+        let text = "Add @{1%tsp} and @{2%tsp} to the pot.\n";
+        let Err(CoreError::Parse { diagnostics, .. }) = parse_recipe(text, "broken", 1.0) else {
+            panic!("expected a parse error");
+        };
+
+        assert_eq!(
+            diagnostics.len(),
+            2,
+            "both errors must survive: {diagnostics:?}"
+        );
+        for d in &diagnostics {
+            assert_eq!(
+                d.severity,
+                Severity::Error,
+                "cooklang error must map to Error"
+            );
+        }
+
+        let spans: Vec<_> = diagnostics
+            .iter()
+            .map(|d| d.location.as_ref().unwrap().span.unwrap())
+            .collect();
+        assert_eq!(
+            spans,
+            vec![Span { start: 5, end: 5 }, Span { start: 18, end: 18 }],
+            "each diagnostic keeps its own span, in source order"
+        );
+    }
+
+    /// `labels` is ordered most- to least-important, so the *first* is the
+    /// primary location. Taking the last would underline the wrong text.
+    #[test]
+    fn the_first_label_wins_when_a_diagnostic_has_several() {
+        let text = ">> title: A\n>> title: B\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "dup", 1.0).expect("parses");
+
+        let duplicate = outcome
+            .diagnostics
+            .iter()
+            .find(|d| d.message.contains("duplicate") || d.message.contains("Duplicate"))
+            .unwrap_or(&outcome.diagnostics[0]);
+
+        assert_eq!(
+            duplicate.location.as_ref().unwrap().span,
+            Some(Span { start: 2, end: 11 }),
+            "expected the first label's span, not a later one: {duplicate:?}"
+        );
+    }
+
+    /// Hints are quick fixes, and the CLI's `warn!` threw them away.
+    #[test]
+    fn hints_are_captured() {
+        let text = ">> title: A\n>> title: B\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "dup", 1.0).expect("parses");
+
+        let hints: Vec<&String> = outcome.diagnostics.iter().flat_map(|d| &d.hints).collect();
         assert!(
-            outcome
-                .diagnostics
-                .iter()
-                .any(|d| d.severity == Severity::Warning),
-            "expected a warning diagnostic, got {:?}",
+            !hints.is_empty(),
+            "expected at least one hint, got {:?}",
             outcome.diagnostics
+        );
+        assert!(
+            hints.iter().any(|h| h.contains("---")),
+            "expected a ready-to-apply frontmatter fix, got {hints:?}"
         );
     }
 
@@ -166,8 +314,14 @@ mod tests {
                 rendered,
             }) => {
                 assert_eq!(name, "broken");
-                assert!(!diagnostics.is_empty());
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].severity, Severity::Error);
                 assert!(!rendered.is_empty(), "rendered report should be populated");
+                // The stored report is documented as ANSI-free.
+                assert!(
+                    !rendered.contains('\u{1b}'),
+                    "CoreError::Parse.rendered must carry no escape codes: {rendered:?}"
+                );
             }
             other => panic!("expected CoreError::Parse, got {other:?}"),
         }
@@ -254,7 +408,7 @@ mod tests {
     fn render_report_includes_the_display_path_and_source_context() {
         let text = "Add @{1%tsp} to the pot.\n";
         let parsed = PARSER.parse(text);
-        let rendered = render_report(&parsed, "recipes/broken.cook", text, false);
+        let rendered = render_report(parsed.report(), "recipes/broken.cook", text, false);
 
         assert!(
             rendered.contains("recipes/broken.cook"),
@@ -263,6 +417,37 @@ mod tests {
         assert!(
             rendered.contains("Add @{1%tsp} to the pot."),
             "report should quote the source line: {rendered}"
+        );
+    }
+
+    #[test]
+    fn render_report_honours_the_ansi_flag() {
+        let text = "Add @{1%tsp} to the pot.\n";
+        let parsed = PARSER.parse(text);
+
+        let plain = render_report(parsed.report(), "broken.cook", text, false);
+        let coloured = render_report(parsed.report(), "broken.cook", text, true);
+
+        assert!(
+            !plain.contains('\u{1b}'),
+            "ansi=false must produce no escape codes: {plain:?}"
+        );
+        assert!(
+            coloured.contains('\u{1b}'),
+            "ansi=true must produce escape codes: {coloured:?}"
+        );
+    }
+
+    /// `render_report` takes a report, not a parse result, so it also serves
+    /// metadata-only parses.
+    #[test]
+    fn render_report_works_for_a_metadata_parse() {
+        let text = ">> title: Old Style\n\nBoil @water{}.\n";
+        let parsed = PARSER.parse_metadata(text);
+        let rendered = render_report(parsed.report(), "old.cook", text, false);
+        assert!(
+            rendered.contains("old.cook"),
+            "metadata report should render: {rendered}"
         );
     }
 }
