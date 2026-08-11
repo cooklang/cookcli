@@ -1,0 +1,10 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"--ignore-references\", \"main.cook\"])"
+---
+[dairy]
+butter 50 g
+[dry goods]
+rice   300 g
+[other]
+sauce

@@ -1,0 +1,15 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"main.cook\"])"
+---
+[produce]
+tomatoes     4
+garlic       3 cloves
+[dairy]
+butter       50 g
+[dry goods]
+rice         300 g
+[condiments]
+olive oil    1 tbsp
+[spices]
+black pepper 1 tsp

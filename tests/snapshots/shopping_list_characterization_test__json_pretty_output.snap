@@ -1,0 +1,181 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"-f\", \"json\", \"--pretty\", \"pasta.cook\", \"salad.cook\"])"
+---
+[
+  {
+    "category": "produce",
+    "items": [
+      {
+        "name": "tomatoes",
+        "quantity": [
+          {
+            "unit": null,
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 5.0
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "lettuce",
+        "quantity": [
+          {
+            "unit": "head",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 1.0
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "garlic",
+        "quantity": [
+          {
+            "unit": "cloves",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 2.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dairy",
+    "items": [
+      {
+        "name": "milk",
+        "quantity": [
+          {
+            "unit": "ml",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 1500.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dry goods",
+    "items": [
+      {
+        "name": "pasta",
+        "quantity": [
+          {
+            "unit": "g",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 200.0
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "flour",
+        "quantity": [
+          {
+            "unit": "c",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 1.0
+              }
+            }
+          },
+          {
+            "unit": "g",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 200.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "condiments",
+    "items": [
+      {
+        "name": "olive oil",
+        "quantity": [
+          {
+            "unit": "tbsp",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 3.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "spices",
+    "items": [
+      {
+        "name": "salt",
+        "quantity": [
+          {
+            "unit": "tsp",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 2.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "other",
+    "items": [
+      {
+        "name": "water",
+        "quantity": [
+          {
+            "unit": "l",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 2.0
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
