@@ -29,9 +29,13 @@ pub struct ReadRequest {
 pub struct ReadResult {
     /// The parsed, scaled recipe.
     pub recipe: Recipe,
-    /// The recipe's title: its metadata `title` when it has one, otherwise the
-    /// file stem for a path or the caller-supplied name for in-memory text.
-    /// Empty when none of those are known.
+    /// The title to display for the recipe: its metadata `title` when it
+    /// declares one, otherwise the file stem for a path or the caller-supplied
+    /// name for in-memory text. Empty when none of those are known.
+    ///
+    /// Formatters put this in markdown headings and in the `name` of
+    /// schema.org output, so it is the recipe's identity rather than a debug
+    /// label — see [`CoreError::Parse`]'s `name` for the latter.
     pub title: String,
     /// The factor the recipe was actually scaled by, which is
     /// [`ReadRequest::scale`] unless an inline `name:factor` suffix overrode
@@ -56,7 +60,8 @@ pub fn split_name_and_scale(query: &str) -> Option<(&str, f64)> {
 /// For a [`RecipeSource::Path`], the name is resolved against
 /// [`Context::base_path`] and may carry an inline `:factor` suffix, which
 /// overrides [`ReadRequest::scale`]. A [`RecipeSource::Content`] is parsed as
-/// given and never touches the filesystem.
+/// given and never touches the filesystem; its `name` is only a fallback for
+/// [`ReadResult::title`], used when the recipe declares no title of its own.
 ///
 /// # Errors
 ///
@@ -69,10 +74,19 @@ pub fn read(ctx: &Context, req: ReadRequest) -> Result<Outcome<ReadResult>, Core
     match req.source {
         RecipeSource::Content { text, name } => {
             let outcome = parse_recipe(&text, &name, req.scale)?;
+            // The recipe's own `title` wins over the caller's name, which is
+            // only a label for a buffer that may not have one. Skipping this
+            // would put "stdin" into `-f markdown` headings and the `name` of
+            // schema.org output.
+            let title = outcome
+                .value
+                .metadata
+                .title()
+                .map_or_else(|| name, ToOwned::to_owned);
             Ok(Outcome::with_diagnostics(
                 ReadResult {
                     recipe: outcome.value,
-                    title: name,
+                    title,
                     scale: req.scale,
                 },
                 outcome.diagnostics,
@@ -212,13 +226,16 @@ mod tests {
 
         assert_eq!(
             outcome.value.title, "buffer",
-            "the caller's name is the title"
+            "with no title of its own, the recipe falls back to the caller's name"
         );
         assert_eq!(outcome.value.recipe.ingredients.len(), 2);
         assert_eq!(quantity_value(&outcome.value.recipe, 0), 2.0);
     }
 
-    /// The metadata title beats the file stem, and the supplied name.
+    /// The metadata title beats the caller's name and the file stem alike.
+    ///
+    /// This is what reaches `-f markdown` headings and the `name` of
+    /// schema.org output, so a fallback leaking through here corrupts them.
     #[test]
     fn a_metadata_title_wins_over_the_fallback_name() {
         let ctx = Context::new(Utf8PathBuf::from("/nonexistent"));
@@ -233,9 +250,10 @@ mod tests {
             ),
         )
         .expect("reads");
-        // Content titles come from the caller, not the metadata, because the
-        // caller is the only one who knows what to call an unsaved buffer.
-        assert_eq!(outcome.value.title, "buffer");
+        assert_eq!(
+            outcome.value.title, "Proper Title",
+            "the recipe's own title must beat the caller's label"
+        );
 
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(

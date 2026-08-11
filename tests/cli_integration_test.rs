@@ -231,7 +231,12 @@ fn test_cli_nonexistent_recipe() {
         .arg("read")
         .arg("nonexistent.cook")
         .assert()
-        .failure();
+        .failure()
+        // The wording is user-facing text, pinned so a refactor cannot quietly
+        // reword it.
+        .stderr(predicate::str::contains(
+            "Recipe not found: nonexistent.cook",
+        ));
 }
 
 #[test]

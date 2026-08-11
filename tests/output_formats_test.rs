@@ -353,3 +353,80 @@ fn test_ingredients_only_output() {
         .stdout(predicate::str::contains("water"))
         .stdout(predicate::str::contains("pasta")); // Should contain ingredient names
 }
+
+/// Recipe text piped in on stdin.
+///
+/// The recipe is written to a file only so the test source stays readable; the
+/// command receives it on stdin and never learns the path.
+const STDIN_RECIPE_WITH_TITLE: &str = "---\ntitle: Fancy Pasta\nservings: 4\n---\n\
+                                       Boil @water{2%cups} and add @pasta{200%g}.\n";
+
+/// Characterization test: `cook recipe` with no path reads stdin, and the
+/// recipe's own metadata title — not the internal "stdin" placeholder — is
+/// what gets displayed.
+#[test]
+fn test_stdin_recipe_uses_its_metadata_title() {
+    Command::cargo_bin("cook")
+        .unwrap()
+        .arg("recipe")
+        .arg("read")
+        .write_stdin(STDIN_RECIPE_WITH_TITLE)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Fancy Pasta"))
+        .stdout(predicate::str::contains("stdin").not());
+}
+
+/// The same title has to reach structured output, where a placeholder would
+/// silently corrupt the document rather than just look wrong.
+#[test]
+fn test_stdin_recipe_title_reaches_structured_output() {
+    let schema = Command::cargo_bin("cook")
+        .unwrap()
+        .args(["recipe", "read", "-f", "jsonld", "--pretty"])
+        .write_stdin(STDIN_RECIPE_WITH_TITLE)
+        .output()
+        .unwrap();
+    assert!(schema.status.success());
+    let json: JsonValue = serde_json::from_slice(&schema.stdout).expect("Invalid JSON-LD output");
+    assert_eq!(json["name"], JsonValue::from("Fancy Pasta"));
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args(["recipe", "read", "-f", "md"])
+        .write_stdin(STDIN_RECIPE_WITH_TITLE)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("# Fancy Pasta"))
+        .stdout(predicate::str::contains("# stdin").not());
+}
+
+/// Only when the recipe declares no title does the placeholder show through.
+#[test]
+fn test_stdin_recipe_without_a_title_falls_back_to_stdin() {
+    Command::cargo_bin("cook")
+        .unwrap()
+        .arg("recipe")
+        .arg("read")
+        .write_stdin("Boil @water{2%cups}.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("stdin"))
+        .stdout(predicate::str::contains("water"));
+}
+
+/// The `name:factor` suffix is reported back in the human header. Only the
+/// JSON form of scaling was covered, which serialises the recipe alone and so
+/// pins neither the title nor the `@ N` label.
+#[test]
+fn test_human_output_labels_inline_scaling() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["recipe", "read", "simple.cook:3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Simple Recipe @ 3"));
+}

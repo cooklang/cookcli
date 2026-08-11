@@ -27,7 +27,10 @@ Boil for ~{5%minutes}."#,
         .arg("read")
         .arg("malformed.cook")
         .assert()
-        .success(); // Parser should be lenient
+        .success() // Parser should be lenient
+        // Warnings say which recipe they came from, which is what makes them
+        // actionable once a command reads more than one.
+        .stderr(predicate::str::contains("Recipe 'malformed':"));
 }
 
 #[test]

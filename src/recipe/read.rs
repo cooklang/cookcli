@@ -155,8 +155,9 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             scale: args.input.scale,
         },
     )
+    // Core errors render as a single lowercase line by library convention.
+    // These two are user-facing CLI text, so restore the wording verbatim.
     .map_err(|e| match e {
-        // CoreError::Parse has a single-line Display by library convention.
         // The CLI printed cooklang's full rendered report with source line
         // context before this refactor, so re-attach it here.
         cookcli_core::CoreError::Parse {
@@ -164,17 +165,28 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
             ref rendered,
             ..
         } => anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}"),
+        cookcli_core::CoreError::RecipeNotFound { ref name } => {
+            anyhow::anyhow!("Recipe not found: {name}")
+        }
         other => other.into(),
     })?;
-
-    for diagnostic in &outcome.diagnostics {
-        tracing::warn!("{}", diagnostic.message);
-    }
 
     let recipe = outcome.value.recipe;
     let title = outcome.value.title;
     // The effective scale, which an inline `name:factor` may have overridden.
     let scale = outcome.value.scale;
+
+    // Attribute each warning to the recipe it came from, as the shared parsing
+    // helper used to. Core keeps diagnostics structured; naming them is the
+    // CLI's job. `Diagnostic::location` also carries the file, which commands
+    // reading many recipes at once may prefer.
+    for diagnostic in &outcome.diagnostics {
+        if title.is_empty() {
+            tracing::warn!("{}", diagnostic.message);
+        } else {
+            tracing::warn!("Recipe '{}': {}", title, diagnostic.message);
+        }
+    }
 
     let format = args.format.unwrap_or_else(|| match &args.output {
         Some(p) => match p.extension() {
