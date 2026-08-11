@@ -40,10 +40,13 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`290 passed; 0 failed; 26 ignored`** from Task 4 onward | **The CLI behaviour contract.** Must not move, except Task 6 (→ 304). |
+| `cargo test` | `cookcli` only | **`294 passed; 0 failed; 26 ignored`** from Task 5 onward | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
+
+**Task 5 raised it 290 → 294**, deliberately: it added four CLI tests covering stdin, which had *no* coverage at all (`grep stdin tests/` was empty) and where a real regression had slipped through — piped recipes lost their metadata title, corrupting `-f md` headings and `-f jsonld` `name` fields. When a task adds CLI tests, say so and state the new expected number.
+
 
 Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour, regardless of what core's tests say.
 
@@ -569,7 +572,7 @@ Expected: all tests in `outcome`, `diagnostic` and `source` pass. Roughly 11 tes
 cargo build && cargo test 2>&1 | tail -20
 ```
 
-Expected: `passed=290 failed=0 ignored=26` (Task 6 has not run yet). `cookcli` does not depend on `cookcli-core` yet, so nothing about its behaviour can have changed.
+Expected: `passed=294 failed=0 ignored=26` (Task 6 has not run yet). `cookcli` does not depend on `cookcli-core` yet, so nothing about its behaviour can have changed.
 
 - [ ] **Step 10: Format, lint, commit**
 
@@ -1226,7 +1229,7 @@ OutputFormat::Human => cookcli_core::format::human::print_human(
 cargo build && cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=290 failed=0 ignored=26` (Task 6 has not run yet). The snapshot tests
+Expected: `passed=294 failed=0 ignored=26` (Task 6 has not run yet). The snapshot tests
 `test_recipe_human_output`, `test_recipe_markdown_output`, `test_recipe_json_output`,
 `test_recipe_yaml_output`, `test_scaled_recipe_output` and
 `test_recipe_with_references_output` are the ones that would catch a formatting
@@ -1544,7 +1547,7 @@ In both `src/main.rs` and `src/lib.rs`, add to `impl Context`:
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=290 failed=0 ignored=26` (Task 6 has not run yet). `tests/recipe_test.rs`, `tests/output_formats_test.rs`, `tests/schema_output_test.rs` and the recipe snapshots are the relevant guards.
+Expected: `passed=294 failed=0 ignored=26` (Task 6 has not run yet). `tests/recipe_test.rs`, `tests/output_formats_test.rs`, `tests/schema_output_test.rs` and the recipe snapshots are the relevant guards.
 
 One behaviour to check by hand, because the tests may not cover it:
 
@@ -1798,7 +1801,7 @@ Read all 14. You are looking for empty snapshots or output that shows the comman
 cargo test 2>&1 | grep -E "^test result:" | awk '{p+=$4; f+=$6; i+=$8} END {print "passed="p" failed="f" ignored="i}'
 ```
 
-Expected: `passed=304 failed=0 ignored=26`. From here on, **304** is the number every later task must hold.
+Expected: `passed=308 failed=0 ignored=26`. From here on, **308** is the number every later task must hold.
 
 - [ ] **Step 7: Commit**
 
@@ -2256,7 +2259,7 @@ The `--pantry` read-failure case at `src/shopping_list.rs:265` currently hard-er
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`.
+Expected: `passed=308 failed=0 ignored=26`.
 
 The 14 `shopping_list_characterization_test` snapshots from Task 6 are the guards — `tests/shopping_list_test.rs` and the three `shopping_list_*` snapshots in `snapshot_test.rs` are all `#[ignore]`d and will not catch anything.
 
@@ -2451,7 +2454,7 @@ The quoting and the use of the *relative* path are load-bearing — `tests/snaps
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`, with `search_output`, `search_output_windows` and `search_results_snapshot` passing unchanged.
+Expected: `passed=308 failed=0 ignored=26`, with `search_output`, `search_output_windows` and `search_results_snapshot` passing unchanged.
 
 - [ ] **Step 8: Format, lint, commit**
 
@@ -2771,7 +2774,7 @@ The summary block after the tree walk (`src/doctor.rs:520` onward) keeps its exa
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`. `doctor_validate_output` and
+Expected: `passed=308 failed=0 ignored=26`. `doctor_validate_output` and
 `doctor_validate_output_snapshot` are the strict guards here — they pin the exact
 rendered diagnostics. If they fail, the most likely cause is the `ansi` argument
 to `render_report`: `src/doctor.rs:486` calls `report().print(path, content, true)`,
@@ -2837,7 +2840,7 @@ information on stderr; it must not change the list itself.
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`, no snapshot changes. `assert_cmd` snapshots capture stdout, so a stderr-only change cannot move them.
+Expected: `passed=308 failed=0 ignored=26`, no snapshot changes. `assert_cmd` snapshots capture stdout, so a stderr-only change cannot move them.
 
 **If a snapshot does change:** stop. That means stdout moved, which is not what this task is for. Investigate before proceeding, and do not accept the snapshot without writing the reason into the commit message.
 
@@ -3047,7 +3050,7 @@ write path in core and have it take the target path from
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`. `tests/pantry_test.rs` is 1,062 lines and is the guard.
+Expected: `passed=308 failed=0 ignored=26`. `tests/pantry_test.rs` is 1,062 lines and is the guard.
 
 - [ ] **Step 8: Format, lint, commit**
 
@@ -3269,7 +3272,7 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
 cargo test 2>&1 | tail -30
 ```
 
-Expected: `passed=304 failed=0 ignored=26`.
+Expected: `passed=308 failed=0 ignored=26`.
 
 - [ ] **Step 8: Format, lint, commit**
 
@@ -3377,7 +3380,7 @@ Existing `use` statements in `src/server/handlers/shopping_list.rs` and
 cargo test -p cookcli-core && cargo test 2>&1 | tail -30
 ```
 
-Expected: core tests pass; full suite at `passed=304 failed=0 ignored=26`. `tests/e2e/` and the
+Expected: core tests pass; full suite at `passed=308 failed=0 ignored=26`. `tests/e2e/` and the
 server integration tests exercise the store through HTTP.
 
 - [ ] **Step 7: Format, lint, commit**
@@ -3552,7 +3555,7 @@ API gap and it is far cheaper to fix now than after Spec 2 has started.
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test 2>&1 | tail -30
 ```
 
-Expected: all clean, counts at `passed=304 failed=0 ignored=26`.
+Expected: all clean, counts at `passed=308 failed=0 ignored=26`.
 
 - [ ] **Step 9: Confirm no snapshot was silently accepted**
 
@@ -3577,7 +3580,7 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 ## Definition of Done
 
 - [ ] `crates/core` exists with the six commands, the store, formatters, and its own unit tests.
-- [ ] `cargo test` reports `304 passed; 0 failed; 26 ignored`.
+- [ ] `cargo test` reports `308 passed; 0 failed; 26 ignored`.
 - [ ] `tests/snapshots/` is unchanged from `main` apart from Task 6's 14 new `shopping_list_characterization_test__*.snap` files.
 - [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean.
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.
