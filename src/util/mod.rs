@@ -106,12 +106,13 @@ where
 /// Present a `cookcli-core` error in the CLI's own wording.
 ///
 /// Core renders errors as a single lowercase line, by library convention, and
-/// keeps its long-form parse report in a field. These are user-facing strings
-/// the CLI has always printed, so restore them here — in one place, because
-/// every command that reads recipes surfaces the same two errors.
+/// keeps its long-form parse report in a field. Capitalising for the terminal
+/// is this boundary's job, so every message the user sees reads the same way —
+/// and it happens in one place, because every command that reads recipes
+/// surfaces the same handful of errors.
 ///
-/// Anything else converts as-is, which keeps `source` attached so anyhow can
-/// print the underlying cause.
+/// Anything not named here converts as-is. That keeps `source` attached so
+/// anyhow prints the underlying cause, at the cost of a lowercase first line.
 pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
     use cookcli_core::CoreError;
     match error {
@@ -119,6 +120,13 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
             anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}")
         }
         CoreError::RecipeNotFound { name } => anyhow::anyhow!("Recipe not found: {name}"),
+        // Attach the wording to the underlying `io::Error` rather than to the
+        // `CoreError`, so the chain reads `Failed to read recipe 'x' / Caused
+        // by: Permission denied` instead of repeating core's own line between
+        // the two.
+        CoreError::Io { path, source } => {
+            anyhow::Error::new(source).context(format!("Failed to read recipe '{path}'"))
+        }
         other => other.into(),
     }
 }

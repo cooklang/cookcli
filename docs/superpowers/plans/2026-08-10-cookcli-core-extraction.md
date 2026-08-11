@@ -40,12 +40,18 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`294 passed; 0 failed; 26 ignored`** from Task 5 onward | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
+| `cargo test` | `cookcli` only | **`297 passed; 0 failed; 26 ignored`** from Task 5 onward | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
 
-**Task 5 raised it 290 → 294**, deliberately: it added four CLI tests covering stdin, which had *no* coverage at all (`grep stdin tests/` was empty) and where a real regression had slipped through — piped recipes lost their metadata title, corrupting `-f md` headings and `-f jsonld` `name` fields. When a task adds CLI tests, say so and state the new expected number.
+**Task 5 raised it 290 → 297**, deliberately, in three steps:
+
+- **290 → 294**: four tests covering stdin, which had *no* coverage at all (`grep stdin tests/` was empty) and where a real regression had slipped through — piped recipes lost their metadata title, corrupting `-f md` headings and `-f jsonld` `name` fields.
+- **294 → 296**: the stdin parse-error path, and a test that a file and a buffer of the same bytes render the same document.
+- **296 → 297**: a recipe that exists but cannot be read must report the read failure, not "recipe not found".
+
+When a task adds CLI tests, say so and state the new expected number.
 
 
 Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour, regardless of what core's tests say.
@@ -1540,6 +1546,28 @@ In both `src/main.rs` and `src/lib.rs`, add to `impl Context`:
         core
     }
 ```
+
+### Behaviour change to record in the release notes
+
+Task 5 changed the title shown for recipes that declare one with the deprecated
+`>>` metadata syntax and are read **from a file**:
+
+```
+BEFORE:  cook recipe read -f md old.cook  →  name: old              (the file stem)
+AFTER:   cook recipe read -f md old.cook  →  name: Old Style Title  (what it declares)
+```
+
+The title rule used to be implemented twice against two different metadata
+parsers — the cooklang parser for text read from stdin, `cooklang-find`'s
+front-matter reader (YAML only) for files — so the *same bytes* produced
+different titles depending on how they arrived. Task 5 unified both on the
+recipe's own declared title, because a recipe that declares a title should show
+it, and because the alternative was leaving two parsers free to disagree on
+anything else in future. Piped input already behaved this way, so this brings
+files into line rather than inventing new behaviour.
+
+Only `>>`-titled recipes are affected; the parser already warns on that syntax,
+and YAML front matter is unchanged. No snapshot moved.
 
 - [ ] **Step 8: Run the full suite**
 

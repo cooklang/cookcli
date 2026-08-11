@@ -239,6 +239,32 @@ fn test_cli_nonexistent_recipe() {
         ));
 }
 
+/// A recipe that is present but cannot be read is *not* reported as missing —
+/// that would send the user looking for the wrong problem — and the underlying
+/// cause survives to the terminal.
+///
+/// A directory standing in for the file reproduces this on every platform,
+/// unlike permission bits, which root ignores and Windows does not have.
+#[test]
+fn test_cli_unreadable_recipe_reports_the_read_failure() {
+    let temp_dir = TempDir::new().unwrap();
+    std::fs::create_dir(temp_dir.path().join("unreadable.cook")).unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("recipe")
+        .arg("read")
+        .arg("unreadable.cook")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Failed to read recipe 'unreadable.cook'",
+        ))
+        .stderr(predicate::str::contains("Caused by"))
+        .stderr(predicate::str::contains("Recipe not found").not());
+}
+
 #[test]
 fn test_cli_recipe_from_subdirectory() {
     let temp_dir = common::setup_test_recipes().unwrap();
