@@ -21,7 +21,7 @@ RUN npm run build-css && npm run build-js
 # Build Rust binary without self-update feature
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/src/cookcli/target \
-    cargo build --release --no-default-features \
+    cargo build --release --no-default-features --features server \
     && cp target/release/cook /usr/local/bin/cook
 
 # --- Runtime stage ---
