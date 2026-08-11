@@ -103,6 +103,26 @@ where
     Ok(())
 }
 
+/// Present a `cookcli-core` error in the CLI's own wording.
+///
+/// Core renders errors as a single lowercase line, by library convention, and
+/// keeps its long-form parse report in a field. These are user-facing strings
+/// the CLI has always printed, so restore them here — in one place, because
+/// every command that reads recipes surfaces the same two errors.
+///
+/// Anything else converts as-is, which keeps `source` attached so anyhow can
+/// print the underlying cause.
+pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
+    use cookcli_core::CoreError;
+    match error {
+        CoreError::Parse { name, rendered, .. } => {
+            anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}")
+        }
+        CoreError::RecipeNotFound { name } => anyhow::anyhow!("Recipe not found: {name}"),
+        other => other.into(),
+    }
+}
+
 /// Split `name:factor` into its parts.
 ///
 /// The one definition lives in `cookcli-core`; this wrapper keeps the CLI's

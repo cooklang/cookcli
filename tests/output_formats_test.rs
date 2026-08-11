@@ -5,6 +5,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::Value as JsonValue;
 use std::fs;
+use tempfile::TempDir;
 
 #[test]
 fn test_recipe_json_output() {
@@ -429,4 +430,63 @@ fn test_human_output_labels_inline_scaling() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Simple Recipe @ 3"));
+}
+
+/// The parse-error path for stdin. Errors name the recipe's *path* so the
+/// caller can open what the report points at; text arriving on stdin has none,
+/// so it falls back to the placeholder. Success-case tests cannot see this,
+/// because the title takes over as soon as the recipe parses.
+#[test]
+fn test_stdin_parse_error_names_stdin_and_shows_the_report() {
+    Command::cargo_bin("cook")
+        .unwrap()
+        .arg("recipe")
+        .arg("read")
+        .write_stdin("Add @{1%tsp} to the pot.\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Failed to parse recipe 'stdin'"))
+        // The rendered report, with the offending source line quoted.
+        .stderr(predicate::str::contains("Add @{1%tsp} to the pot."))
+        .stderr(predicate::str::contains("Invalid ingredient name"));
+}
+
+/// A `>>`-titled file on disk is titled by what it declares, matching what the
+/// same bytes give when piped in. Before this, the two disagreed.
+#[test]
+fn test_deprecated_metadata_title_is_used_for_files_too() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("old.cook"),
+        ">> title: Declared Title\n\nBoil @water{1%cup}.\n",
+    )
+    .unwrap();
+
+    let from_file = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["recipe", "read", "-f", "md", "old.cook"])
+        .output()
+        .unwrap();
+    assert!(from_file.status.success());
+
+    let from_stdin = Command::cargo_bin("cook")
+        .unwrap()
+        .args(["recipe", "read", "-f", "md"])
+        .write_stdin(">> title: Declared Title\n\nBoil @water{1%cup}.\n")
+        .output()
+        .unwrap();
+    assert!(from_stdin.status.success());
+
+    assert!(
+        String::from_utf8(from_file.stdout.clone())
+            .unwrap()
+            .contains("# Declared Title"),
+        "file route should use the declared title"
+    );
+    assert_eq!(
+        String::from_utf8(from_file.stdout).unwrap(),
+        String::from_utf8(from_stdin.stdout).unwrap(),
+        "the same bytes must render the same document either way"
+    );
 }

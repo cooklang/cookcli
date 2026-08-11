@@ -1,25 +1,25 @@
 //! Reading and scaling a single recipe.
 
 use crate::{parse_recipe, parse_recipe_at, Context, CoreError, Outcome, RecipeSource};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::Recipe;
 
 /// The character separating a recipe name from an inline scaling factor.
 const SCALING_DELIMITER: char = ':';
-
-/// What a path-backed recipe with no resolvable path is called in messages.
-///
-/// Only reachable in principle: [`cooklang_find::get_recipe`] always returns a
-/// path-backed entry. Kept so that the rendering never says "recipe ''".
-const UNKNOWN_PATH: &str = "unknown";
 
 /// What to read, and at what scale.
 #[derive(Debug, Clone)]
 pub struct ReadRequest {
     /// The recipe to read.
     pub source: RecipeSource,
-    /// Scaling factor applied to all quantities. An inline `name:factor`
-    /// suffix on a [`RecipeSource::Path`] takes precedence over this.
+    /// Scaling factor applied to all quantities. Pass `1.0` to leave
+    /// quantities alone.
+    ///
+    /// This is the only scaling channel. CookCLI's `name:factor` argument
+    /// convention is a *command-line* spelling, not a property of a path, so
+    /// callers split it themselves with [`split_name_and_scale`] — otherwise
+    /// a path chosen from a file picker could pick up a scaling factor from
+    /// any directory that happens to end in `:2`.
     pub scale: f64,
 }
 
@@ -37,11 +37,15 @@ pub struct ReadResult {
     /// schema.org output, so it is the recipe's identity rather than a debug
     /// label — see [`CoreError::Parse`]'s `name` for the latter.
     pub title: String,
-    /// The factor the recipe was actually scaled by, which is
-    /// [`ReadRequest::scale`] unless an inline `name:factor` suffix overrode
-    /// it. Formatters need it to label the output, and it is the only place
-    /// the resolved value is visible.
-    pub scale: f64,
+    /// The file the recipe was read from, once resolved. `None` for
+    /// [`RecipeSource::Content`].
+    ///
+    /// A bare name like `pancakes` can resolve to any of several directories
+    /// and either extension, so the caller cannot reconstruct this. Callers
+    /// that watch, reveal or write back the file they just read need it, and
+    /// [`Diagnostic::location`](crate::Diagnostic::location) does not serve:
+    /// a clean recipe produces no diagnostics at all.
+    pub path: Option<Utf8PathBuf>,
 }
 
 /// Split a `name:factor` query into its parts.
@@ -49,6 +53,11 @@ pub struct ReadResult {
 /// `"pasta.cook:2"` becomes `("pasta.cook", 2.0)`. Returns `None` when there is
 /// no colon, or when what follows the last one is not a number — so a Windows
 /// path like `C:\recipes\pasta.cook` is left alone.
+///
+/// This is CookCLI's command-line convention for naming a recipe and a scaling
+/// factor in one argument. [`read`] deliberately does not apply it: callers
+/// that accept arguments in that form split them here and fill in
+/// [`ReadRequest::scale`] themselves.
 pub fn split_name_and_scale(query: &str) -> Option<(&str, f64)> {
     let (name, factor) = query.trim().rsplit_once(SCALING_DELIMITER)?;
     let factor = factor.parse::<f64>().ok()?;
@@ -57,79 +66,114 @@ pub fn split_name_and_scale(query: &str) -> Option<(&str, f64)> {
 
 /// Read a recipe, scale it, and report anything the parser had to say.
 ///
-/// For a [`RecipeSource::Path`], the name is resolved against
-/// [`Context::base_path`] and may carry an inline `:factor` suffix, which
-/// overrides [`ReadRequest::scale`]. A [`RecipeSource::Content`] is parsed as
-/// given and never touches the filesystem; its `name` is only a fallback for
-/// [`ReadResult::title`], used when the recipe declares no title of its own.
+/// A [`RecipeSource::Path`] is resolved against [`Context::base_path`], trying
+/// both `.cook` and `.menu` when the name carries no extension. A
+/// [`RecipeSource::Content`] is parsed as given and never touches the
+/// filesystem; its `name` is only a fallback for [`ReadResult::title`], used
+/// when the recipe declares no title of its own.
 ///
 /// # Errors
 ///
 /// - [`CoreError::RecipeNotFound`] if no file matches the given path or name.
-/// - [`CoreError::Io`] if the file is found but cannot be read.
+///   Reserved for genuine absence — a file that exists but cannot be opened is
+///   an [`CoreError::Io`], since telling a caller a file it can see is "not
+///   found" sends it looking for the wrong problem.
+/// - [`CoreError::Io`] if the file is found but cannot be read or its front
+///   matter cannot be understood. The underlying cause is in `source`.
 /// - [`CoreError::Parse`] if the recipe has parse errors. Its `name` is the
 ///   recipe's path, matching the file the `rendered` report points at.
-/// - [`CoreError::InvalidScale`] if the effective scale is not finite.
+/// - [`CoreError::InvalidScale`] if the scale is not finite.
 pub fn read(ctx: &Context, req: ReadRequest) -> Result<Outcome<ReadResult>, CoreError> {
     match req.source {
         RecipeSource::Content { text, name } => {
             let outcome = parse_recipe(&text, &name, req.scale)?;
-            // The recipe's own `title` wins over the caller's name, which is
-            // only a label for a buffer that may not have one. Skipping this
-            // would put "stdin" into `-f markdown` headings and the `name` of
-            // schema.org output.
-            let title = outcome
-                .value
-                .metadata
-                .title()
-                .map_or_else(|| name, ToOwned::to_owned);
+            let title = title_for(&outcome.value, || name);
             Ok(Outcome::with_diagnostics(
                 ReadResult {
                     recipe: outcome.value,
                     title,
-                    scale: req.scale,
+                    path: None,
                 },
                 outcome.diagnostics,
             ))
         }
-        RecipeSource::Path(query) => {
-            // An inline factor is the more specific instruction, so it wins.
-            let (name, scale) =
-                split_name_and_scale(query.as_str()).unwrap_or((query.as_str(), req.scale));
+        RecipeSource::Path(lookup) => {
+            let entry =
+                cooklang_find::get_recipe(vec![ctx.base_path().to_path_buf()], lookup.clone())
+                    .map_err(|e| fetch_error(e, &lookup))?;
 
-            let entry = cooklang_find::get_recipe(
-                vec![ctx.base_path().to_path_buf()],
-                Utf8PathBuf::from(name),
-            )
-            .map_err(|_| CoreError::RecipeNotFound {
-                name: name.to_string(),
-            })?;
-
+            // `get_recipe` only ever returns path-backed entries, but the type
+            // permits otherwise; fall back to what we looked up rather than
+            // inventing a placeholder path.
             let path = entry.path().cloned();
+            let display_path = path.clone().unwrap_or(lookup);
+
             let content = entry.content().map_err(|source| CoreError::Io {
-                path: path.clone().unwrap_or_else(|| UNKNOWN_PATH.into()),
-                source: match source {
-                    cooklang_find::RecipeEntryError::IoError(e) => e,
-                    other => std::io::Error::other(other.to_string()),
-                },
+                path: display_path.clone(),
+                source: entry_error(source),
             })?;
 
             // Diagnostics and the parse report name the file, not the title, so
             // that the caller can open what they point at.
-            let display_path = path
-                .as_ref()
-                .map_or_else(|| UNKNOWN_PATH.to_string(), |p| p.to_string());
-            let outcome = parse_recipe_at(&content, &display_path, scale, path.as_deref())?;
+            let outcome =
+                parse_recipe_at(&content, display_path.as_str(), req.scale, path.as_deref())?;
 
+            let title = title_for(&outcome.value, || entry.name().clone().unwrap_or_default());
             Ok(Outcome::with_diagnostics(
                 ReadResult {
                     recipe: outcome.value,
-                    title: entry.name().clone().unwrap_or_default(),
-                    scale,
+                    title,
+                    path,
                 },
                 outcome.diagnostics,
             ))
         }
+    }
+}
+
+/// The recipe's own declared title, or `fallback` when it declares none.
+///
+/// The one place the rule lives. It used to be applied twice — once from the
+/// parsed recipe and once from `cooklang-find`'s `entry.name()`, which reads
+/// YAML front matter only — so the same bytes produced different titles
+/// depending on whether they arrived by path or in memory.
+fn title_for(recipe: &Recipe, fallback: impl FnOnce() -> String) -> String {
+    recipe
+        .metadata
+        .title()
+        .map_or_else(fallback, ToOwned::to_owned)
+}
+
+/// Map a lookup failure onto the error that describes what actually happened.
+///
+/// Only `FetchError::InvalidPath` means the recipe is absent;
+/// the rest mean it was found and could not be opened or understood.
+fn fetch_error(error: cooklang_find::fetcher::FetchError, lookup: &Utf8Path) -> CoreError {
+    use cooklang_find::fetcher::FetchError;
+    match error {
+        FetchError::InvalidPath(name) => CoreError::RecipeNotFound {
+            name: name.to_string(),
+        },
+        FetchError::IoError(source) => CoreError::Io {
+            path: lookup.to_owned(),
+            source,
+        },
+        FetchError::RecipeEntryError(source) => CoreError::Io {
+            path: lookup.to_owned(),
+            source: entry_error(source),
+        },
+    }
+}
+
+/// Unwrap a `cooklang-find` entry error to the underlying [`std::io::Error`].
+///
+/// Its other variants are front matter problems rather than I/O; they keep
+/// their message as the source so nothing is lost, and travel as
+/// [`CoreError::Io`] because they too mean "found, but unusable".
+fn entry_error(error: cooklang_find::RecipeEntryError) -> std::io::Error {
+    match error {
+        cooklang_find::RecipeEntryError::IoError(e) => e,
+        other => std::io::Error::other(other.to_string()),
     }
 }
 
@@ -186,10 +230,18 @@ mod tests {
         let ReadResult {
             recipe,
             title,
-            scale,
+            path,
         } = outcome.value;
         assert_eq!(title, "simple", "title falls back to the file stem");
-        assert_eq!(scale, 1.0);
+        assert_eq!(
+            path.as_deref(),
+            Some(
+                camino::Utf8PathBuf::from_path_buf(dir.path().join("simple.cook"))
+                    .unwrap()
+                    .as_path()
+            ),
+            "the resolved file must be reported back"
+        );
         assert_eq!(recipe.ingredients.len(), 2);
         assert_eq!(recipe.ingredients[0].name, "water");
         assert_eq!(recipe.ingredients[1].name, "salt");
@@ -199,12 +251,20 @@ mod tests {
     }
 
     /// The extension is optional, exactly as in `cook recipe simple`.
+    ///
+    /// This is why [`ReadResult::path`] has to exist: `"simple"` alone does not
+    /// tell the caller which file was opened.
     #[test]
     fn a_bare_name_resolves_to_the_cook_file() {
         let dir = fixture_dir();
         let outcome = read(&ctx_for(&dir), path_request("simple", 1.0)).expect("reads");
         assert_eq!(outcome.value.title, "simple");
         assert_eq!(outcome.value.recipe.ingredients.len(), 2);
+        assert_eq!(
+            outcome.value.path.as_ref().and_then(|p| p.file_name()),
+            Some("simple.cook"),
+            "the extension the lookup chose must be reported back"
+        );
     }
 
     #[test]
@@ -230,6 +290,10 @@ mod tests {
         );
         assert_eq!(outcome.value.recipe.ingredients.len(), 2);
         assert_eq!(quantity_value(&outcome.value.recipe, 0), 2.0);
+        assert_eq!(
+            outcome.value.path, None,
+            "in-memory text has no file to report"
+        );
     }
 
     /// The metadata title beats the caller's name and the file stem alike.
@@ -265,6 +329,46 @@ mod tests {
         assert_eq!(outcome.value.title, "Proper Title");
     }
 
+    /// The same bytes must produce the same title whichever way they arrive.
+    ///
+    /// The two routes used to run through different metadata parsers — the
+    /// cooklang parser for `Content`, `cooklang-find`'s front-matter reader for
+    /// `Path` — so anything the two disagreed on silently forked. The `>>`
+    /// spelling is one such disagreement and stands in for the rest.
+    #[test]
+    fn a_path_and_a_buffer_of_the_same_bytes_agree_on_the_title() {
+        for text in [
+            "---\ntitle: Agreed\n---\nBoil @water{1%cup}.\n",
+            ">> title: Agreed\n\nBoil @water{1%cup}.\n",
+            "Boil @water{1%cup}.\n",
+        ] {
+            let dir = tempfile::TempDir::new().unwrap();
+            std::fs::write(dir.path().join("same.cook"), text).unwrap();
+            let from_path = read(&ctx_for(&dir), path_request("same.cook", 1.0))
+                .expect("reads")
+                .value
+                .title;
+
+            let from_memory = read(
+                &Context::new(Utf8PathBuf::from("/nonexistent")),
+                request(
+                    RecipeSource::Content {
+                        text: text.to_string(),
+                        // The same fallback the path route uses, so only a real
+                        // disagreement can make these differ.
+                        name: "same".to_string(),
+                    },
+                    1.0,
+                ),
+            )
+            .expect("reads")
+            .value
+            .title;
+
+            assert_eq!(from_path, from_memory, "titles diverged for {text:?}");
+        }
+    }
+
     #[test]
     fn missing_recipe_is_recipe_not_found() {
         let dir = fixture_dir();
@@ -274,8 +378,142 @@ mod tests {
         }
     }
 
+    /// A file that exists but cannot be opened is *not* "recipe not found".
+    ///
+    /// Reporting absence for a file the caller can see in its own tree sends it
+    /// looking for the wrong problem, and hides the permission error that
+    /// actually needs fixing. This also covers the only other route into
+    /// `CoreError::Io` here, since `get_recipe` fails before the entry exists.
     #[test]
-    fn the_request_scale_is_applied_when_there_is_no_inline_factor() {
+    #[cfg(unix)]
+    fn an_unreadable_recipe_is_an_io_error_not_a_missing_one() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Root ignores the permission bits, so there would be nothing to test.
+        if unsafe { libc_geteuid() } == 0 {
+            return;
+        }
+
+        let dir = fixture_dir();
+        let path = dir.path().join("simple.cook");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let result = read(&ctx_for(&dir), path_request("simple.cook", 1.0));
+
+        // Restore before asserting, so a failure does not leave an
+        // undeletable temporary directory behind.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        match result {
+            Err(CoreError::Io {
+                path: reported,
+                source,
+            }) => {
+                assert_eq!(reported.file_name(), Some("simple.cook"));
+                assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
+            }
+            other => panic!("expected CoreError::Io, got {other:?}"),
+        }
+    }
+
+    // `geteuid` without taking a dependency on `libc` for one call.
+    #[cfg(unix)]
+    extern "C" {
+        #[link_name = "geteuid"]
+        fn libc_geteuid() -> u32;
+    }
+
+    /// The other way a recipe can be present but unusable, and the one that
+    /// needs no permission bits — so it runs everywhere, including as root and
+    /// on Windows. Covers `fetch_error`'s `RecipeEntryError` arm.
+    #[test]
+    fn a_directory_named_like_a_recipe_is_an_io_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join("adir.cook")).unwrap();
+
+        match read(&ctx_for(&dir), path_request("adir.cook", 1.0)) {
+            Err(CoreError::Io { path, .. }) => {
+                assert_eq!(path.file_name(), Some("adir.cook"));
+            }
+            other => panic!("expected CoreError::Io, got {other:?}"),
+        }
+    }
+
+    /// Pins all three lookup outcomes, including the one `get_recipe` does not
+    /// currently produce: only genuine absence may be reported as absence.
+    /// Going through `read` alone would leave `FetchError::IoError` unpinned,
+    /// so any future `cooklang-find` that starts returning it would silently
+    /// take the wrong branch.
+    #[test]
+    fn only_a_missing_file_maps_to_recipe_not_found() {
+        use cooklang_find::fetcher::FetchError;
+        let lookup = Utf8Path::new("recipes/pancakes.cook");
+
+        let absent = fetch_error(
+            FetchError::InvalidPath(Utf8PathBuf::from("pancakes.cook")),
+            lookup,
+        );
+        assert!(
+            matches!(absent, CoreError::RecipeNotFound { ref name } if name == "pancakes.cook"),
+            "an absent file is not found, got {absent:?}"
+        );
+
+        let unreadable = fetch_error(
+            FetchError::IoError(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "denied",
+            )),
+            lookup,
+        );
+        match unreadable {
+            CoreError::Io { path, source } => {
+                assert_eq!(path, lookup);
+                assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
+            }
+            other => panic!("an unreadable file is an I/O error, got {other:?}"),
+        }
+
+        let unusable = fetch_error(
+            FetchError::RecipeEntryError(cooklang_find::RecipeEntryError::MetadataError(
+                "bad front matter".to_string(),
+            )),
+            lookup,
+        );
+        match unusable {
+            CoreError::Io { path, source } => {
+                assert_eq!(path, lookup);
+                assert!(source.to_string().contains("bad front matter"));
+            }
+            other => panic!("an unusable file is an I/O error, got {other:?}"),
+        }
+    }
+
+    /// `entry_error` is the shared mapping used both when the lookup fails and
+    /// when a later read does. Reaching the latter needs the file to become
+    /// unreadable *between* two reads, which cannot be arranged without a race,
+    /// so pin the mapping directly instead.
+    #[test]
+    fn entry_errors_keep_their_io_kind_and_never_lose_their_message() {
+        let io = entry_error(cooklang_find::RecipeEntryError::IoError(
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        ));
+        assert_eq!(
+            io.kind(),
+            std::io::ErrorKind::PermissionDenied,
+            "an I/O cause must keep its kind, so callers can match on it"
+        );
+
+        let other = entry_error(cooklang_find::RecipeEntryError::MetadataError(
+            "bad front matter".to_string(),
+        ));
+        assert!(
+            other.to_string().contains("bad front matter"),
+            "a non-I/O cause must keep its message: {other}"
+        );
+    }
+
+    #[test]
+    fn the_request_scale_is_applied() {
         let dir = fixture_dir();
         // `simple.cook` declares `@water{2%cups}`.
         let outcome = read(&ctx_for(&dir), path_request("simple.cook", 3.0)).expect("reads");
@@ -284,27 +522,26 @@ mod tests {
         assert_eq!(quantity_value(&outcome.value.recipe, 0), 1.0);
     }
 
+    /// `read` takes a path, not a query string: a `:factor` suffix is part of
+    /// the name it looks for, so the file simply is not there.
+    ///
+    /// Splitting inside `read` would mean a path from a file picker could pick
+    /// up a scaling factor from any segment ending in `:<number>`. Callers that
+    /// accept CookCLI's argument spelling call [`split_name_and_scale`] first.
     #[test]
-    fn inline_scale_overrides_the_request() {
+    fn an_inline_factor_is_not_interpreted_as_scaling() {
         let dir = fixture_dir();
-        // Request 1.0, inline 3: the inline factor must win, so `@water{2%cups}`
-        // becomes 6 cups. The `:3` must also come off the name, or the lookup
-        // would not find the file at all.
-        let outcome = read(&ctx_for(&dir), path_request("simple.cook:3", 1.0)).expect("reads");
-        assert_eq!(quantity_value(&outcome.value.recipe, 0), 6.0);
-        assert_eq!(outcome.value.title, "simple");
-        // Reported back, because formatters label the output with it.
-        assert_eq!(outcome.value.scale, 3.0);
+        match read(&ctx_for(&dir), path_request("simple.cook:3", 1.0)) {
+            Err(CoreError::RecipeNotFound { name }) => assert_eq!(name, "simple.cook:3"),
+            other => panic!("expected RecipeNotFound, got {other:?}"),
+        }
 
-        // And the other way round, so that a test asserting only "not 2.0"
-        // cannot pass by accident: request 3.0, inline 1.
-        let outcome = read(&ctx_for(&dir), path_request("simple.cook:1", 3.0)).expect("reads");
-        assert_eq!(quantity_value(&outcome.value.recipe, 0), 2.0);
-        assert_eq!(outcome.value.scale, 1.0);
+        // And the split, applied by the caller, gets the scaling it asked for.
+        let (name, factor) = split_name_and_scale("simple.cook:3").expect("splits");
+        let outcome = read(&ctx_for(&dir), path_request(name, factor)).expect("reads");
+        assert_eq!(quantity_value(&outcome.value.recipe, 0), 6.0);
     }
 
-    /// The request scale is ignored for in-memory text only if we forget it,
-    /// so pin it: `Content` has no inline suffix to fall back on.
     #[test]
     fn content_is_scaled_by_the_request() {
         let ctx = Context::new(Utf8PathBuf::from("/nonexistent"));
@@ -320,12 +557,11 @@ mod tests {
         )
         .expect("reads");
         assert_eq!(quantity_value(&outcome.value.recipe, 0), 5.0);
-        assert_eq!(outcome.value.scale, 2.5);
     }
 
-    /// A colon in a path is not a scaling factor unless a number follows it.
+    /// A colon in a filename is just a character, and reaches the lookup intact.
     #[test]
-    fn a_non_numeric_suffix_is_part_of_the_name() {
+    fn a_colon_in_a_filename_is_part_of_the_name() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("odd:name.cook"), "Boil @water{2%cups}.\n").unwrap();
         let outcome = read(&ctx_for(&dir), path_request("odd:name.cook", 2.0)).expect("reads");
@@ -371,10 +607,10 @@ mod tests {
         .unwrap();
 
         let outcome = read(&ctx_for(&dir), path_request("old.cook", 1.0)).expect("parses");
-        // The title falls back to the file stem: `cooklang-find` reads titles
-        // from YAML frontmatter only, and this recipe uses the deprecated
-        // `>>` syntax. That is pre-existing CLI behaviour, pinned here.
-        assert_eq!(outcome.value.title, "old");
+        // The declared title, even in the deprecated `>>` spelling that
+        // `cooklang-find`'s front-matter reader does not understand. Reading
+        // the same bytes from memory must give the same answer.
+        assert_eq!(outcome.value.title, "Old Style");
         assert!(!outcome.diagnostics.is_empty(), "expected a diagnostic");
         for d in &outcome.diagnostics {
             assert_eq!(d.severity, crate::Severity::Warning, "got {d:?}");

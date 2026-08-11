@@ -37,7 +37,7 @@ use camino::Utf8PathBuf;
 use crate::{
     util::{
         format::{self, Style},
-        write_to_output, PARSER,
+        split_recipe_name_and_scaling_factor, write_to_output, PARSER,
     },
     Context,
 };
@@ -134,58 +134,48 @@ enum OutputFormat {
 }
 
 pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
-    let source = match args.input.recipe {
-        Some(query) => cookcli_core::RecipeSource::Path(query),
+    // `name:factor` is this CLI's argument spelling, so it is unpicked here
+    // rather than in core, which takes the factor as its own field.
+    let (source, scale) = match args.input.recipe {
+        Some(query) => match split_recipe_name_and_scaling_factor(query.as_str()) {
+            Some((name, factor)) => (
+                cookcli_core::RecipeSource::Path(Utf8PathBuf::from(name)),
+                factor,
+            ),
+            None => (cookcli_core::RecipeSource::Path(query), args.input.scale),
+        },
         None => {
             let mut buf = String::new();
             std::io::stdin()
                 .read_to_string(&mut buf)
                 .context("Failed to read stdin")?;
-            cookcli_core::RecipeSource::Content {
-                text: buf,
-                name: "stdin".to_string(),
-            }
+            (
+                cookcli_core::RecipeSource::Content {
+                    text: buf,
+                    name: "stdin".to_string(),
+                },
+                args.input.scale,
+            )
         }
     };
 
     let outcome = cookcli_core::recipe::read(
-        &ctx.to_core(),
-        cookcli_core::recipe::ReadRequest {
-            source,
-            scale: args.input.scale,
-        },
+        // `cook recipe` reads neither aisle nor pantry, so it asks for no
+        // configuration rather than making `Context` go looking for some.
+        &cookcli_core::Context::new(ctx.base_path().clone()),
+        cookcli_core::recipe::ReadRequest { source, scale },
     )
-    // Core errors render as a single lowercase line by library convention.
-    // These two are user-facing CLI text, so restore the wording verbatim.
-    .map_err(|e| match e {
-        // The CLI printed cooklang's full rendered report with source line
-        // context before this refactor, so re-attach it here.
-        cookcli_core::CoreError::Parse {
-            ref name,
-            ref rendered,
-            ..
-        } => anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}"),
-        cookcli_core::CoreError::RecipeNotFound { ref name } => {
-            anyhow::anyhow!("Recipe not found: {name}")
-        }
-        other => other.into(),
-    })?;
+    .map_err(crate::util::cli_error)?;
 
     let recipe = outcome.value.recipe;
     let title = outcome.value.title;
-    // The effective scale, which an inline `name:factor` may have overridden.
-    let scale = outcome.value.scale;
 
     // Attribute each warning to the recipe it came from, as the shared parsing
     // helper used to. Core keeps diagnostics structured; naming them is the
     // CLI's job. `Diagnostic::location` also carries the file, which commands
     // reading many recipes at once may prefer.
     for diagnostic in &outcome.diagnostics {
-        if title.is_empty() {
-            tracing::warn!("{}", diagnostic.message);
-        } else {
-            tracing::warn!("Recipe '{}': {}", title, diagnostic.message);
-        }
+        tracing::warn!("Recipe '{}': {}", title, diagnostic.message);
     }
 
     let format = args.format.unwrap_or_else(|| match &args.output {
