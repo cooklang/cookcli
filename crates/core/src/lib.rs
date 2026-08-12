@@ -13,10 +13,12 @@
 pub mod context;
 pub mod diagnostic;
 pub mod error;
+pub mod find;
 pub mod format;
 pub mod outcome;
 pub mod parser;
 pub mod recipe;
+pub mod shopping_list;
 pub mod source;
 
 pub use context::{global_config_path, Context};
@@ -34,6 +36,13 @@ pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};
 /// `cooklang` dependency, which could otherwise resolve to a different
 /// version and fail to unify.
 pub use cooklang;
+
+/// The `cooklang-find` crate this library was built against.
+///
+/// [`find::get_recipe`] returns a [`cooklang_find::RecipeEntry`], so that type
+/// is part of this crate's public surface. Re-exported for the same reason as
+/// [`cooklang`] above.
+pub use cooklang_find;
 pub use source::{ConfigSource, RecipeSource};
 
 /// Convenience alias for core results.

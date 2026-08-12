@@ -135,6 +135,15 @@ impl Context {
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
+
+    /// The `cookcli-core` view of this context, for commands that delegate.
+    ///
+    /// Delegates to `Context::discover`, which applies the same search order as
+    /// [`Self::aisle`] and [`Self::pantry`] above — local `config/` first, then
+    /// the global configuration directory — rather than repeating it here.
+    pub fn to_core(&self) -> cookcli_core::Context {
+        cookcli_core::Context::discover(self.base_path.clone())
+    }
 }
 
 fn configure_context() -> Result<Context> {

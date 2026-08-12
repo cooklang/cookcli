@@ -3,14 +3,14 @@ use crate::server::{
     AppState,
 };
 use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
-use crate::util::{extract_ingredients, PARSER};
+use crate::util::PARSER;
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
 use camino::Utf8PathBuf;
+use cookcli_core::shopping_list::{extract_ingredients, ExtractOptions, ScaledRecipe};
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
 use serde_json;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -26,23 +26,22 @@ pub async fn shopping_list(
     axum::extract::Json(payload): axum::extract::Json<Vec<RecipeRequest>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut list = IngredientList::new();
-    let mut seen = BTreeMap::new();
+    let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
     for entry in payload {
-        let recipe_with_scale = if let Some(scale) = entry.scale {
-            format!("{}:{}", entry.recipe, scale)
-        } else {
-            entry.recipe
+        let recipe = ScaledRecipe {
+            name: entry.recipe,
+            scale: entry.scale.unwrap_or(1.0),
         };
 
-        extract_ingredients(
-            &recipe_with_scale,
+        let diagnostics = extract_ingredients(
+            &core_ctx,
+            &recipe,
+            &ExtractOptions {
+                ignore_references: false,
+                included_references: entry.included_references.as_deref(),
+            },
             &mut list,
-            &mut seen,
-            &state.base_path,
-            PARSER.converter(),
-            false,
-            entry.included_references.as_deref(),
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
@@ -51,6 +50,10 @@ pub async fn shopping_list(
                 Json(serde_json::json!({ "error": e.to_string() })),
             )
         })?;
+
+        for diagnostic in diagnostics {
+            tracing::warn!("Recipe '{}': {}", recipe.name, diagnostic.message);
+        }
     }
 
     // Load aisle configuration with lenient parsing
@@ -383,43 +386,40 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load()?;
     let mut list = IngredientList::new();
+    let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
-    // `extract_ingredients` uses `seen` to detect circular references
-    // *within a single recipe tree*. The shopping list may legitimately
-    // contain the same recipe multiple times (e.g. duplicate entries from
-    // the legacy format), so we reset `seen` per top-level entry —
-    // otherwise the second occurrence is misreported as a cycle and we'd
-    // skip the compact, leaving stale checks in place.
+    // Each entry is aggregated independently: the shopping list may
+    // legitimately contain the same recipe more than once (e.g. duplicate
+    // entries from the legacy format), and that is not a cycle.
+    let mut add = |path: &str, scale: f64, included: Option<&[String]>| -> anyhow::Result<()> {
+        extract_ingredients(
+            &core_ctx,
+            &ScaledRecipe {
+                name: path.to_string(),
+                scale,
+            },
+            &ExtractOptions {
+                ignore_references: false,
+                included_references: included,
+            },
+            &mut list,
+        )
+        .with_context(|| format!("aggregating ingredients for {path} at scale {scale}"))?;
+        Ok(())
+    };
+
     for item in &items {
         if let Some(recipes) = &item.recipes {
             // Menu/plan entry — expand each nested recipe.
             for recipe in recipes {
-                let mut seen = BTreeMap::new();
-                let scaled = format!("{}:{}", recipe.path, recipe.scale);
-                extract_ingredients(
-                    &scaled,
-                    &mut list,
-                    &mut seen,
-                    &state.base_path,
-                    PARSER.converter(),
-                    false,
+                add(
+                    &recipe.path,
+                    recipe.scale,
                     recipe.included_references.as_deref(),
-                )
-                .with_context(|| format!("aggregating ingredients for {scaled}"))?;
+                )?;
             }
         } else {
-            let mut seen = BTreeMap::new();
-            let scaled = format!("{}:{}", item.path, item.scale);
-            extract_ingredients(
-                &scaled,
-                &mut list,
-                &mut seen,
-                &state.base_path,
-                PARSER.converter(),
-                false,
-                item.included_references.as_deref(),
-            )
-            .with_context(|| format!("aggregating ingredients for {scaled}"))?;
+            add(&item.path, item.scale, item.included_references.as_deref())?;
         }
     }
 

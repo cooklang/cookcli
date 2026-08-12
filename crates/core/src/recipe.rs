@@ -1,7 +1,10 @@
 //! Reading and scaling a single recipe.
 
-use crate::{parse_recipe, parse_recipe_at, Context, CoreError, Outcome, RecipeSource};
-use camino::{Utf8Path, Utf8PathBuf};
+use crate::{
+    find::{entry_error, fetch_error},
+    parse_recipe, parse_recipe_at, Context, CoreError, Outcome, RecipeSource,
+};
+use camino::Utf8PathBuf;
 use cooklang::Recipe;
 
 /// The character separating a recipe name from an inline scaling factor.
@@ -142,39 +145,6 @@ fn title_for(recipe: &Recipe, fallback: impl FnOnce() -> String) -> String {
         .metadata
         .title()
         .map_or_else(fallback, ToOwned::to_owned)
-}
-
-/// Map a lookup failure onto the error that describes what actually happened.
-///
-/// Only `FetchError::InvalidPath` means the recipe is absent;
-/// the rest mean it was found and could not be opened or understood.
-fn fetch_error(error: cooklang_find::fetcher::FetchError, lookup: &Utf8Path) -> CoreError {
-    use cooklang_find::fetcher::FetchError;
-    match error {
-        FetchError::InvalidPath(name) => CoreError::RecipeNotFound {
-            name: name.to_string(),
-        },
-        FetchError::IoError(source) => CoreError::Io {
-            path: lookup.to_owned(),
-            source,
-        },
-        FetchError::RecipeEntryError(source) => CoreError::Io {
-            path: lookup.to_owned(),
-            source: entry_error(source),
-        },
-    }
-}
-
-/// Unwrap a `cooklang-find` entry error to the underlying [`std::io::Error`].
-///
-/// Its other variants are front matter problems rather than I/O; they keep
-/// their message as the source so nothing is lost, and travel as
-/// [`CoreError::Io`] because they too mean "found, but unusable".
-fn entry_error(error: cooklang_find::RecipeEntryError) -> std::io::Error {
-    match error {
-        cooklang_find::RecipeEntryError::IoError(e) => e,
-        other => std::io::Error::other(other.to_string()),
-    }
 }
 
 #[cfg(test)]
@@ -437,79 +407,6 @@ mod tests {
             }
             other => panic!("expected CoreError::Io, got {other:?}"),
         }
-    }
-
-    /// Pins all three lookup outcomes, including the one `get_recipe` does not
-    /// currently produce: only genuine absence may be reported as absence.
-    /// Going through `read` alone would leave `FetchError::IoError` unpinned,
-    /// so any future `cooklang-find` that starts returning it would silently
-    /// take the wrong branch.
-    #[test]
-    fn only_a_missing_file_maps_to_recipe_not_found() {
-        use cooklang_find::fetcher::FetchError;
-        let lookup = Utf8Path::new("recipes/pancakes.cook");
-
-        let absent = fetch_error(
-            FetchError::InvalidPath(Utf8PathBuf::from("pancakes.cook")),
-            lookup,
-        );
-        assert!(
-            matches!(absent, CoreError::RecipeNotFound { ref name } if name == "pancakes.cook"),
-            "an absent file is not found, got {absent:?}"
-        );
-
-        let unreadable = fetch_error(
-            FetchError::IoError(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "denied",
-            )),
-            lookup,
-        );
-        match unreadable {
-            CoreError::Io { path, source } => {
-                assert_eq!(path, lookup);
-                assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
-            }
-            other => panic!("an unreadable file is an I/O error, got {other:?}"),
-        }
-
-        let unusable = fetch_error(
-            FetchError::RecipeEntryError(cooklang_find::RecipeEntryError::MetadataError(
-                "bad front matter".to_string(),
-            )),
-            lookup,
-        );
-        match unusable {
-            CoreError::Io { path, source } => {
-                assert_eq!(path, lookup);
-                assert!(source.to_string().contains("bad front matter"));
-            }
-            other => panic!("an unusable file is an I/O error, got {other:?}"),
-        }
-    }
-
-    /// `entry_error` is the shared mapping used both when the lookup fails and
-    /// when a later read does. Reaching the latter needs the file to become
-    /// unreadable *between* two reads, which cannot be arranged without a race,
-    /// so pin the mapping directly instead.
-    #[test]
-    fn entry_errors_keep_their_io_kind_and_never_lose_their_message() {
-        let io = entry_error(cooklang_find::RecipeEntryError::IoError(
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
-        ));
-        assert_eq!(
-            io.kind(),
-            std::io::ErrorKind::PermissionDenied,
-            "an I/O cause must keep its kind, so callers can match on it"
-        );
-
-        let other = entry_error(cooklang_find::RecipeEntryError::MetadataError(
-            "bad front matter".to_string(),
-        ));
-        assert!(
-            other.to_string().contains("bad front matter"),
-            "a non-I/O cause must keep its message: {other}"
-        );
     }
 
     #[test]

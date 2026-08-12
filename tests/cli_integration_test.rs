@@ -258,9 +258,7 @@ fn test_cli_unreadable_recipe_reports_the_read_failure() {
         .arg("unreadable.cook")
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "Failed to read recipe 'unreadable.cook'",
-        ))
+        .stderr(predicate::str::contains("Failed to read 'unreadable.cook'"))
         .stderr(predicate::str::contains("Caused by"))
         .stderr(predicate::str::contains("Recipe not found").not());
 }

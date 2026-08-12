@@ -21,6 +21,7 @@ pub mod latex;
 pub mod markdown;
 pub mod number;
 pub mod schema;
+pub mod shopping_list;
 pub mod typst;
 
 use ::cooklang::{convert::Converter, Recipe};

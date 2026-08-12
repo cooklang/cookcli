@@ -62,6 +62,25 @@ impl Context {
     pub fn base_path(&self) -> &Utf8PathBuf {
         &self.base_path
     }
+
+    /// The `cookcli-core` view of this context, for commands that delegate.
+    ///
+    /// Unlike `main.rs`'s copy this cannot delegate to `Context::discover`:
+    /// the `aisle` and `pantry` above look only in the local `config/`
+    /// directory and never at the global one, so discovery would give the
+    /// integration tests that use this `Context` different configuration from
+    /// the rest of the crate. That divergence is
+    /// <https://github.com/cooklang/cookcli/issues/417>; until it is resolved
+    /// this reproduces it deliberately.
+    pub fn to_core(&self) -> cookcli_core::Context {
+        let source = |path: Option<Utf8PathBuf>| match path {
+            Some(path) => cookcli_core::ConfigSource::Path(path),
+            None => cookcli_core::ConfigSource::None,
+        };
+        cookcli_core::Context::new(self.base_path.clone())
+            .with_aisle(source(self.aisle()))
+            .with_pantry(source(self.pantry()))
+    }
 }
 
 const APP_NAME: &str = "cook";

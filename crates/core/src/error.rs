@@ -79,6 +79,21 @@ pub enum CoreError {
         chain: String,
     },
 
+    /// A recipe reference could not be expanded into its ingredients.
+    ///
+    /// The referenced recipe was found and parsed; what failed was working out
+    /// how much of it the referring recipe wants — an unusable quantity on the
+    /// reference, or a target the referenced recipe cannot be scaled to.
+    /// Absence and parse failures are [`CoreError::RecipeNotFound`] and
+    /// [`CoreError::Parse`] as usual.
+    #[error("cannot expand recipe reference '{name}': {message}")]
+    Reference {
+        /// The referenced recipe, as it is spelled in the referring recipe.
+        name: String,
+        /// What went wrong.
+        message: String,
+    },
+
     /// A file could not be read or written.
     ///
     /// There is deliberately no `From<std::io::Error>`: every call site must
@@ -117,6 +132,7 @@ mod tests {
             | CoreError::Config { .. }
             | CoreError::Render { .. }
             | CoreError::CircularReference { .. }
+            | CoreError::Reference { .. }
             | CoreError::Io { .. } => {}
         }
     }
@@ -142,6 +158,10 @@ mod tests {
             },
             CoreError::CircularReference {
                 chain: "a -> b -> a".to_string(),
+            },
+            CoreError::Reference {
+                name: "./sauce".to_string(),
+                message: "unit mismatch (expected ml, got g)".to_string(),
             },
             CoreError::Io {
                 path: Utf8PathBuf::from("config/aisle.conf"),

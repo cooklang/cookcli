@@ -39,9 +39,8 @@ pub use cookcli_core::parser::PARSER;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang::{ingredient_list::IngredientList, quantity::Value, Converter, Recipe};
+use cooklang::Recipe;
 use cooklang_find::RecipeEntry;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -121,11 +120,17 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
         }
         CoreError::RecipeNotFound { name } => anyhow::anyhow!("Recipe not found: {name}"),
         // Attach the wording to the underlying `io::Error` rather than to the
-        // `CoreError`, so the chain reads `Failed to read recipe 'x' / Caused
-        // by: Permission denied` instead of repeating core's own line between
-        // the two.
+        // `CoreError`, so the chain reads `Failed to read 'x' / Caused by:
+        // Permission denied` instead of repeating core's own line between the
+        // two.
+        //
+        // Deliberately does not say *what* was being read: `CoreError::Io`
+        // carries a path and no notion of the kind of file, and the commands
+        // that surface it read aisle and pantry configuration as well as
+        // recipes. Naming a `config/pantry.conf` a recipe would send the user
+        // looking in the wrong place.
         CoreError::Io { path, source } => {
-            anyhow::Error::new(source).context(format!("Failed to read recipe '{path}'"))
+            anyhow::Error::new(source).context(format!("Failed to read '{path}'"))
         }
         other => other.into(),
     }
@@ -134,8 +139,8 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
 /// Split `name:factor` into its parts.
 ///
 /// The one definition lives in `cookcli-core`; this wrapper keeps the CLI's
-/// remaining call sites (`report`, `extract_ingredients`) reading the same way
-/// until they move over too.
+/// remaining call sites (`report`, `shopping_list`) reading the same way until
+/// they move over too.
 pub fn split_recipe_name_and_scaling_factor(query: &str) -> Option<(&str, f64)> {
     cookcli_core::recipe::split_name_and_scale(query)
 }
@@ -173,244 +178,12 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
         })
 }
 
-pub fn extract_ingredients(
-    entry: &str,
-    list: &mut IngredientList,
-    seen: &mut BTreeMap<String, usize>,
-    base_path: &Utf8PathBuf,
-    converter: &Converter,
-    ignore_references: bool,
-    // `None` = include all references; `Some(&[..])` = include only these.
-    included_references: Option<&[String]>,
-) -> Result<()> {
-    if seen.contains_key(entry) {
-        return Err(anyhow::anyhow!(
-            "Circular dependency found: {} -> {}",
-            seen.keys().cloned().collect::<Vec<_>>().join(" -> "),
-            entry
-        ));
-    }
-
-    seen.insert(entry.to_string(), seen.len());
-
-    // split into name and servings
-    let (name, scaling_factor) =
-        split_recipe_name_and_scaling_factor(entry).unwrap_or((entry, 1.0));
-
-    let recipe_entry =
-        get_recipe(base_path, name).with_context(|| format!("Failed to find recipe '{name}'"))?;
-    let recipe = parse_recipe_from_entry(&recipe_entry, scaling_factor)?;
-    let ref_indices = list.add_recipe(&recipe, converter, ignore_references);
-
-    tracing::debug!(
-        "ignore_references = {}, ref_indices.len() = {}",
-        ignore_references,
-        ref_indices.len()
-    );
-    if !ignore_references {
-        for ref_index in ref_indices {
-            let ingredient = &recipe.ingredients[ref_index];
-            let reference = ingredient.reference.as_ref().unwrap();
-
-            // Build the display-style path (matches what the template shows)
-            let ref_display_path = if reference.components.is_empty() {
-                reference.name.clone()
-            } else {
-                format!("{}/{}", reference.components.join("/"), reference.name)
-            };
-
-            // If the caller specified which references to include, skip others.
-            // Normalize by stripping "./" prefix so paths from the shopping list
-            // file (without "./") match display paths (which may have "./").
-            if let Some(included) = included_references {
-                fn strip_dot_slash(s: &str) -> &str {
-                    s.strip_prefix("./").unwrap_or(s)
-                }
-                if !included
-                    .iter()
-                    .any(|r| strip_dot_slash(r) == strip_dot_slash(&ref_display_path))
-                {
-                    tracing::debug!(
-                        "Skipping reference '{}' — not in included_references",
-                        ref_display_path
-                    );
-                    continue;
-                }
-            }
-
-            let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
-
-            let ref_entry = get_recipe(base_path, &ref_path).with_context(|| {
-                format!(
-                    "Failed to find referenced recipe '{}' from '{}'",
-                    ref_path,
-                    recipe_entry
-                        .path()
-                        .map(|p| p.to_string())
-                        .unwrap_or_else(|| name.to_string())
-                )
-            })?;
-
-            // Parse and scale the recipe based on the quantity specification
-            let ref_recipe = match ingredient.quantity.as_ref() {
-                Some(quantity) => {
-                    let target_value = match quantity.value() {
-                        Value::Number(num) => num
-                            .to_string()
-                            .parse::<f64>()
-                            .map_err(|_| anyhow::anyhow!("Invalid numeric value: {}", num))?,
-                        _ => {
-                            return Err(anyhow::anyhow!(
-                                "Invalid quantity value for referenced recipe: {}",
-                                ingredient.name
-                            ));
-                        }
-                    };
-
-                    let content = ref_entry
-                        .content()
-                        .context("Failed to read recipe content")?;
-                    let parsed = PARSER.parse(&content);
-
-                    // Check for parsing errors and format them with line context
-                    if parsed.report().has_errors() {
-                        let mut error_output = Vec::new();
-                        parsed
-                            .report()
-                            .write(&ref_path, &content, false, &mut error_output)
-                            .ok();
-                        let error_details = String::from_utf8_lossy(&error_output);
-                        return Err(anyhow::anyhow!(
-                            "Failed to parse referenced recipe '{}'\n{}",
-                            ref_path,
-                            error_details
-                        ));
-                    }
-
-                    let (mut recipe, _warnings) =
-                        parsed.into_result().expect("already checked for errors");
-
-                    // Use the new scale_to_target function
-                    tracing::debug!(
-                        "Scaling recipe '{}' to target {} {}",
-                        ref_path,
-                        target_value,
-                        quantity.unit().unwrap_or("(no unit)")
-                    );
-                    recipe
-                        .scale_to_target(target_value, quantity.unit(), PARSER.converter())
-                        .context(format!(
-                            "Failed to scale recipe '{}' with target {} {}",
-                            ref_path,
-                            target_value,
-                            quantity.unit().unwrap_or("(no unit)")
-                        ))?;
-
-                    // Don't apply additional CLI scaling when using scale_to_target
-                    // The target value already accounts for the scaling
-
-                    Arc::new(recipe)
-                }
-                None => {
-                    // No quantity specified, use CLI scaling only
-                    parse_recipe_from_entry(&ref_entry, scaling_factor)?
-                }
-            };
-
-            // Find ingredients with references that need to be processed
-            let mut nested_refs = Vec::new();
-            for (index, ingredient) in ref_recipe.ingredients.iter().enumerate() {
-                if ingredient.reference.is_some() {
-                    nested_refs.push(index);
-                }
-            }
-
-            // Process nested references recursively
-            tracing::debug!("Found {} nested references to process", nested_refs.len());
-            for nested_index in nested_refs {
-                let nested_ingredient = &ref_recipe.ingredients[nested_index];
-                tracing::debug!("Processing nested ingredient: {:?}", nested_ingredient.name);
-                if let Some(nested_ref) = &nested_ingredient.reference {
-                    // Build the full path for the nested reference
-                    let nested_path = if nested_ref.components.is_empty() {
-                        nested_ref.name.clone()
-                    } else {
-                        let sep = std::path::MAIN_SEPARATOR.to_string();
-                        format!(
-                            ".{}{}{}{}",
-                            sep,
-                            nested_ref.components.join(&sep),
-                            sep,
-                            nested_ref.name
-                        )
-                    };
-
-                    // Get the nested recipe to check its servings metadata
-                    let nested_entry_path = get_recipe(base_path, &nested_path)?;
-                    let nested_content = nested_entry_path
-                        .content()
-                        .context("Failed to read nested recipe")?;
-                    let (nested_recipe, _) = PARSER
-                        .parse(&nested_content)
-                        .into_result()
-                        .context("Failed to parse nested recipe")?;
-
-                    // For nested references, we need to handle scaling properly based on units
-                    if let Some(quantity) = &nested_ingredient.quantity {
-                        if quantity.unit() == Some("servings") {
-                            // This is a servings-based reference
-                            // The quantity value is the target number of servings we need
-                            if let Value::Number(target_servings) = quantity.value() {
-                                // We need to scale the nested recipe to produce target_servings
-                                let mut scaled_nested = nested_recipe;
-                                let target = target_servings.to_string().parse().unwrap_or(1.0);
-                                tracing::debug!("Scaling nested recipe to {} servings", target);
-                                scaled_nested
-                                    .scale_to_target(target, Some("servings"), PARSER.converter())
-                                    .context("Failed to scale nested recipe")?;
-
-                                // Now add this properly scaled nested recipe's ingredients
-                                // Pass false to exclude references - they will be handled recursively
-                                list.add_recipe(&Arc::new(scaled_nested), converter, false);
-                            }
-                        } else {
-                            // For non-servings units, treat the quantity as a regular scaling factor
-                            // This handles cases like "2 cups" of something
-                            if let Value::Number(num) = quantity.value() {
-                                let scaling = num.to_string().parse().unwrap_or(1.0);
-                                let mut scaled_nested = nested_recipe;
-                                scaled_nested.scale(scaling, PARSER.converter());
-                                list.add_recipe(&Arc::new(scaled_nested), converter, false);
-                            }
-                        }
-                    } else {
-                        // No quantity specified, use scale 1.0
-                        list.add_recipe(&Arc::new(nested_recipe), converter, false);
-                    }
-                }
-            }
-
-            // Now add the non-reference ingredients from the recipe
-            // We need to do this AFTER processing nested references to avoid duplicates
-            // Pass false to exclude references since we've already expanded them
-            list.add_recipe(&ref_recipe, converter, false);
-        }
-    }
-
-    seen.remove(entry);
-
-    Ok(())
-}
-
-pub fn get_recipe(base_path: &Utf8PathBuf, name: &str) -> Result<RecipeEntry> {
-    // Remove ./ prefix if present before passing to cooklang_find
-    // The cooklang-find library doesn't expect the ./ prefix
-    let clean_name = name.strip_prefix("./").unwrap_or(name);
-
-    Ok(cooklang_find::get_recipe(
-        vec![base_path.clone()],
-        clean_name.into(),
-    )?)
+/// Resolve a recipe name or path to a file, in CLI wording.
+///
+/// The lookup itself lives in `cookcli-core`; this wrapper only translates the
+/// error, so the remaining CLI call sites read the same way as before.
+pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry> {
+    cookcli_core::find::get_recipe(base_path, name).map_err(cli_error)
 }
 
 #[cfg(test)]

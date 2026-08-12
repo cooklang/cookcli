@@ -39,7 +39,7 @@ pub fn parse_yield(s: &str) -> Option<(f64, String)> {
 }
 
 pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
-    let entry = crate::util::get_recipe(&base_path.to_path_buf(), recipe_path)?;
+    let entry = crate::util::get_recipe(base_path, recipe_path)?;
     let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
 
     let mut sub_refs = Vec::new();

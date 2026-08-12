@@ -48,6 +48,24 @@ pub fn parse_recipe_at(
         return Err(CoreError::InvalidScale { scale });
     }
 
+    let mut outcome = parse_unscaled(text, name, file)?;
+    outcome.value.scale(scale, PARSER.converter());
+    Ok(outcome)
+}
+
+/// Parse recipe text and collect diagnostics, without scaling it.
+///
+/// Deliberately separate from `parse_recipe_at(.., 1.0, ..)`:
+/// [`cooklang::Recipe::scale`] re-fits units even at a factor of one, so
+/// `1500 ml` comes back as `1.5 l`. "Scale by one" and "do not scale" are
+/// therefore different operations, and shopping-list reference expansion needs
+/// the latter — it applies its own `scale_to_target` afterwards, and a fit in
+/// between would change the numbers the user sees.
+pub(crate) fn parse_unscaled(
+    text: &str,
+    name: &str,
+    file: Option<&Utf8Path>,
+) -> Result<Outcome<Recipe>, CoreError> {
     let parsed = PARSER.parse(text);
     let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
     let parse_error = |report: &SourceReport| CoreError::Parse {
@@ -62,10 +80,7 @@ pub fn parse_recipe_at(
     let diagnostics = collect_diagnostics(parsed.report(), file);
 
     match parsed.into_result() {
-        Ok((mut recipe, _)) => {
-            recipe.scale(scale, PARSER.converter());
-            Ok(Outcome::with_diagnostics(recipe, diagnostics))
-        }
+        Ok((recipe, _)) => Ok(Outcome::with_diagnostics(recipe, diagnostics)),
         // `into_result` fails when `is_valid()` is false, which is
         // `has_output() && !has_errors()`. We have just ruled out errors, but
         // cooklang does not promise output is present, so this arm is
@@ -182,6 +197,30 @@ mod tests {
         assert_eq!(
             quantity_value(&parse_recipe(GOOD, "s", 0.5).unwrap().value, 0),
             1.0
+        );
+    }
+
+    /// The reason `parse_unscaled` exists: scaling by one is not a no-op,
+    /// because it re-fits units. Anything that must not disturb the authored
+    /// quantities has to skip the scale call, not pass `1.0`.
+    #[test]
+    fn scaling_by_one_refits_units_but_not_scaling_leaves_them_alone() {
+        let text = "Pour @milk{1500%ml}.\n";
+
+        let scaled = parse_recipe(text, "milk", 1.0).expect("parses").value;
+        let quantity = scaled.ingredients[0].quantity.as_ref().unwrap();
+        assert_eq!(
+            (quantity.value().to_string(), quantity.unit()),
+            ("1.5".to_string(), Some("l")),
+            "scale(1.0) refits 1500 ml to 1.5 l"
+        );
+
+        let untouched = parse_unscaled(text, "milk", None).expect("parses").value;
+        let quantity = untouched.ingredients[0].quantity.as_ref().unwrap();
+        assert_eq!(
+            (quantity.value().to_string(), quantity.unit()),
+            ("1500".to_string(), Some("ml")),
+            "parse_unscaled must leave the authored quantity alone"
         );
     }
 
