@@ -18,6 +18,7 @@ pub mod format;
 pub mod outcome;
 pub mod parser;
 pub mod recipe;
+pub mod search;
 pub mod shopping_list;
 pub mod source;
 

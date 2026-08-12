@@ -40,7 +40,7 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`312 passed; 0 failed; 26 ignored`** on unix, **311 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
+| `cargo test` | `cookcli` only | **`313 passed; 0 failed; 26 ignored`** on unix, **312 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
@@ -53,7 +53,9 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 When a task adds CLI tests, say so and state the new expected number.
 
-**The number is platform-dependent from Task 7 onward.** `test_cli_unreadable_pantry_is_fatal_only_when_named_explicitly` is `#[cfg(unix)]`, so Windows compiles one fewer test: **312 on unix, 311 on Windows**. CI runs `windows-latest` in its cross-platform matrix (`.github/workflows/test.yml`), so do not treat a Windows 311 as a regression.
+**The number is platform-dependent from Task 7 onward.** `test_cli_unreadable_pantry_is_fatal_only_when_named_explicitly` is `#[cfg(unix)]`, so Windows compiles one fewer test: **313 on unix, 312 on Windows**. CI runs `windows-latest` in its cross-platform matrix (`.github/workflows/test.yml`), so do not treat a Windows 312 as a regression.
+
+**Task 8 raised it 312 → 313.** `cook search` joins its terms with a space before searching, and nothing tested that: the existing multi-term test searched `oil garlic`, both of which appear in the same recipe, so it passed with the trailing terms discarded. `test_cli_search_uses_every_term_not_just_the_first` searches a term that matches nothing followed by one that does.
 
 
 Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour, regardless of what core's tests say.

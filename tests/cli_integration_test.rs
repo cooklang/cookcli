@@ -110,6 +110,26 @@ fn test_cli_search_multiple_terms() {
         .stdout(predicate::str::contains("sauce.cook"));
 }
 
+/// Every term is searched, not just the first.
+///
+/// The terms above both appear in `sauce.cook`, so that test still passes if
+/// the trailing ones are dropped on the way to the search. Here the first term
+/// matches nothing, so the recipe can only be found by the second.
+#[test]
+fn test_cli_search_uses_every_term_not_just_the_first() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("search")
+        .arg("kohlrabi")
+        .arg("garlic")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sauce.cook"));
+}
+
 #[test]
 fn test_cli_doctor_validate() {
     let temp_dir = common::setup_test_recipes().unwrap();

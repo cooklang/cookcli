@@ -95,6 +95,22 @@ pub enum CoreError {
         message: String,
     },
 
+    /// A directory could not be searched.
+    ///
+    /// Distinct from [`CoreError::Io`] because nothing was read: the search
+    /// root itself could not be turned into something searchable, so the walk
+    /// never started. A root whose name contains glob syntax — `notes[2024]` —
+    /// is the way to reach this, since `cooklang-find` builds its file pattern
+    /// by joining onto the root without escaping it. Reporting that as a failed
+    /// read would send the user looking at permissions.
+    #[error("cannot search '{base_dir}': {message}")]
+    Search {
+        /// The directory that could not be searched.
+        base_dir: Utf8PathBuf,
+        /// What went wrong with it.
+        message: String,
+    },
+
     /// A file could not be read or written.
     ///
     /// There is deliberately no `From<std::io::Error>`: every call site must
@@ -133,6 +149,7 @@ mod tests {
             | CoreError::Config { .. }
             | CoreError::Render { .. }
             | CoreError::Reference { .. }
+            | CoreError::Search { .. }
             | CoreError::Io { .. } => {}
         }
     }
@@ -159,6 +176,10 @@ mod tests {
             CoreError::Reference {
                 name: "./sauce".to_string(),
                 message: "unit mismatch (expected ml, got g)".to_string(),
+            },
+            CoreError::Search {
+                base_dir: Utf8PathBuf::from("/recipes/notes[2024]"),
+                message: "Pattern syntax error near position 20".to_string(),
             },
             CoreError::Io {
                 path: Utf8PathBuf::from("config/aisle.conf"),
