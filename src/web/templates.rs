@@ -761,6 +761,32 @@ pub struct ApiSection {
     pub endpoints: Vec<EndpointDoc>,
 }
 
+/// A labelled line of prose: either a "Before you start" fact or a status
+/// code and what it means.
+#[cfg(feature = "server")]
+pub struct ApiNote {
+    pub label: String,
+    pub text: String,
+}
+
+/// The fixed prose opening the API reference — connection facts and the error
+/// contract.
+///
+/// Data rather than markup in `api_docs.html` so `web::api_docs_md` renders
+/// the same words into `docs/api.md` instead of keeping a second copy that
+/// drifts. The base URL is deliberately absent: the page derives it from the
+/// request host, and the markdown export has no host to derive it from.
+#[cfg(feature = "server")]
+pub struct ApiPreamble {
+    pub intro: String,
+    pub notes: Vec<ApiNote>,
+    pub error_intro: String,
+    /// The error envelope, as a literal JSON body.
+    pub error_example: String,
+    /// Status codes, labelled by code.
+    pub error_codes: Vec<ApiNote>,
+}
+
 #[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "api_docs.html")]
@@ -768,6 +794,7 @@ pub struct ApiDocsTemplate {
     pub active: String,
     /// Fully-qualified API root, e.g. "http://localhost:9080/api".
     pub base_url: String,
+    pub preamble: ApiPreamble,
     pub sections: Vec<ApiSection>,
     pub tr: Tr,
     pub prefix: String,

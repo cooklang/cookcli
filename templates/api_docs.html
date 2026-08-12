@@ -6,7 +6,7 @@
 <div class="max-w-5xl">
     <h1 class="text-2xl font-bold mb-2">Server API</h1>
     <p class="text-gray-600 dark:text-gray-400 mb-6">
-        HTTP endpoints for building integrations against this CookCLI server.
+        {{ preamble.intro }}
     </p>
 
     <!-- Ground rules -->
@@ -17,22 +17,12 @@
                 <span class="font-medium">Base URL:</span>
                 <code class="ml-2 px-2 py-0.5 rounded bg-white dark:bg-gray-900 font-mono">{{ base_url }}</code>
             </div>
+            {% for n in preamble.notes %}
             <div>
-                <span class="font-medium">Authentication:</span>
-                <span class="ml-2">None. Anyone who can reach the server can read and modify your recipes — think twice before using <code class="font-mono">--host</code> on an untrusted network.</span>
+                <span class="font-medium">{{ n.label }}:</span>
+                <span class="ml-2">{{ n.text|inline_code|safe }}</span>
             </div>
-            <div>
-                <span class="font-medium">CORS:</span>
-                <span class="ml-2">All origins are allowed, for the methods GET, POST, PUT and DELETE.</span>
-            </div>
-            <div>
-                <span class="font-medium">Request size limit:</span>
-                <span class="ml-2">1 MB.</span>
-            </div>
-            <div>
-                <span class="font-medium">Content type:</span>
-                <span class="ml-2">JSON in and out, except where noted — raw recipe text is <code class="font-mono">text/plain</code>.</span>
-            </div>
+            {% endfor %}
         </div>
     </div>
 
@@ -40,13 +30,13 @@
     <div class="bg-gray-50 dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 mb-8">
         <h2 class="text-lg font-semibold mb-3">Errors</h2>
         <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
-            Every failure returns the same shape, with the status code carrying the meaning:
+            {{ preamble.error_intro }}
         </p>
-        <pre class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs overflow-x-auto font-mono">{ "error": "Recipe not found: Nope.cook" }</pre>
+        <pre class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs overflow-x-auto font-mono">{{ preamble.error_example }}</pre>
         <ul class="mt-3 text-sm space-y-1 text-gray-700 dark:text-gray-300">
-            <li><span class="font-mono font-medium">400</span> — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.</li>
-            <li><span class="font-mono font-medium">404</span> — the recipe, menu, or pantry section does not exist, or no pantry file is configured.</li>
-            <li><span class="font-mono font-medium">500</span> — the server could not read or write a file.</li>
+            {% for c in preamble.error_codes %}
+            <li><span class="font-mono font-medium">{{ c.label }}</span> — {{ c.text|inline_code|safe }}</li>
+            {% endfor %}
         </ul>
     </div>
 

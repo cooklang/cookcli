@@ -39,6 +39,15 @@ pub mod templates;
 #[cfg(feature = "server")]
 pub mod api_docs;
 
+/// The same reference, rendered to the Markdown checked in as `docs/api.md`.
+///
+/// Only `tests/api_docs_md_test.rs` calls this. The `cook` binary declares its
+/// own copy of this module tree and never reaches the renderer, so without the
+/// allow every helper in here is dead code in that build.
+#[cfg(feature = "server")]
+#[allow(dead_code)]
+pub mod api_docs_md;
+
 /// Static assets (CSS, JS, icons) embedded into the binary at compile time.
 #[derive(RustEmbed)]
 #[folder = "static/"]
