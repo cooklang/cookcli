@@ -2,8 +2,7 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 use cooklang_find::build_tree;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::collections::BTreeSet;
 use tracing::warn;
 
 use crate::{util::parse_recipe_from_entry, Context};
@@ -422,130 +421,52 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
 }
 
 fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
-    let base_path = args.base_path.as_ref().unwrap_or(ctx.base_path());
+    let base_path = args
+        .base_path
+        .clone()
+        .unwrap_or_else(|| ctx.base_path().clone());
 
-    // Build the recipe tree
-    let tree = build_tree(base_path)?;
+    let report = cookcli_core::doctor::validate(
+        &ctx.to_core(),
+        cookcli_core::doctor::ValidateRequest {
+            base_dir: Some(base_path.clone()),
+            // This report is going straight to a terminal.
+            style: cookcli_core::Style::Ansi,
+        },
+    )
+    .map_err(crate::util::cli_error)?
+    .into_value();
 
-    // Statistics
-    let mut total_recipes = 0;
-    let mut recipes_with_errors = 0;
-    let mut recipes_with_warnings = 0;
-    let mut total_errors = 0;
-    let mut total_warnings = 0;
-
-    // Track recipe references for validation
-    let mut recipe_references = BTreeMap::new();
-
-    // Validate recipes and collect references
-    fn validate_recipes(
-        tree: &cooklang_find::RecipeTree,
-        base_path: &Utf8PathBuf,
-        stats: &mut (usize, usize, usize, usize, usize),
-        recipe_refs: &mut BTreeMap<String, Vec<String>>,
-    ) {
-        if let Some(entry) = &tree.recipe {
-            stats.0 += 1; // total_recipes
-
-            let recipe_name = entry.name().as_deref().unwrap_or("unknown");
-            let recipe_path = entry
-                .path()
-                .cloned()
-                .unwrap_or_else(|| base_path.join(recipe_name));
-            let relative_path = if let Ok(stripped) = recipe_path.strip_prefix(base_path) {
-                stripped
-            } else {
-                &recipe_path
-            };
-
-            // Try to read and parse the recipe
-            match fs::read_to_string(&recipe_path) {
-                Ok(content) => {
-                    // Parse with our configured parser to get all errors and warnings
-                    let parsed = crate::util::PARSER.parse(&content);
-
-                    let errors: Vec<_> = parsed.report().errors().collect();
-                    let warnings: Vec<_> = parsed.report().warnings().collect();
-
-                    let has_errors = !errors.is_empty();
-                    let has_warnings = !warnings.is_empty();
-
-                    if has_errors || has_warnings {
-                        println!("\n📄 {relative_path}");
-
-                        if has_errors {
-                            stats.1 += 1; // recipes_with_errors
-                            stats.3 += errors.len(); // total_errors
-                        }
-
-                        if has_warnings {
-                            stats.2 += 1; // recipes_with_warnings
-                            stats.4 += warnings.len(); // total_warnings
-                        }
-
-                        // Print formatted errors/warnings with line context
-                        parsed
-                            .report()
-                            .print(relative_path.as_str(), &content, true)
-                            .ok();
-                    }
-
-                    // Collect recipe references
-                    if let Some(recipe) = parsed.output() {
-                        let mut refs = Vec::new();
-                        for ingredient in &recipe.ingredients {
-                            if let Some(reference) = &ingredient.reference {
-                                // Get the full path of the reference
-                                let ref_path = if reference.components.is_empty() {
-                                    reference.name.clone()
-                                } else {
-                                    reference.path("/")
-                                };
-                                refs.push(ref_path);
-                            }
-                        }
-                        if !refs.is_empty() {
-                            recipe_refs.insert(relative_path.to_string(), refs);
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("\n📄 {relative_path}");
-                    println!("  ❌ Error: Failed to read file: {e}");
-                    stats.1 += 1; // recipes_with_errors
-                    stats.3 += 1; // total_errors
-                }
-            }
+    for recipe in &report.recipes {
+        if recipe.diagnostics.is_empty() {
+            continue;
         }
+        println!("\n📄 {}", recipe.path);
 
-        // Recursively check children
-        for subtree in tree.children.values() {
-            validate_recipes(subtree, base_path, stats, recipe_refs);
+        if recipe.rendered.is_empty() {
+            // A recipe core could not read has no source to quote, so there is
+            // nothing rendered for it. Print what it did say instead.
+            for diagnostic in &recipe.diagnostics {
+                println!("  ❌ Error: {}", diagnostic.message);
+            }
+        } else {
+            print!("{}", recipe.rendered);
         }
     }
 
-    let mut stats = (
-        total_recipes,
-        recipes_with_errors,
-        recipes_with_warnings,
-        total_errors,
-        total_warnings,
-    );
-    validate_recipes(&tree, base_path, &mut stats, &mut recipe_references);
-    (
-        total_recipes,
-        recipes_with_errors,
-        recipes_with_warnings,
-        total_errors,
-        total_warnings,
-    ) = stats;
+    let total_recipes = report.total_recipes();
+    let recipes_with_errors = report.recipes_with_errors();
+    let recipes_with_warnings = report.recipes_with_warnings();
+    let mut total_errors = report.total_errors();
+    let total_warnings = report.total_warnings();
 
     // Check recipe references using cooklang_find::get_recipe
+    let recipe_references = report.references();
     if !recipe_references.is_empty() {
         println!("\n=== Recipe References ===");
         let mut missing_refs = false;
 
-        for (recipe_path, refs) in &recipe_references {
+        for (recipe_path, refs) in recipe_references {
             let mut missing_in_recipe = Vec::new();
 
             for reference in refs {

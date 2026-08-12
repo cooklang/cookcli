@@ -119,6 +119,13 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
             anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}")
         }
         CoreError::RecipeNotFound { name } => anyhow::anyhow!("Recipe not found: {name}"),
+        // Named here only for the capital letter: the variant carries no
+        // source, so nothing is lost by converting it to a message. `cook
+        // doctor validate` is what makes this reachable — a missing or
+        // mistyped `--base-path` fails before the walk starts.
+        CoreError::Search { base_dir, message } => {
+            anyhow::anyhow!("Cannot search '{base_dir}': {message}")
+        }
         // Attach the wording to the underlying `io::Error` rather than to the
         // `CoreError`, so the chain reads `Failed to read 'x' / Caused by:
         // Permission denied` instead of repeating core's own line between the

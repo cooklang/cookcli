@@ -12,6 +12,7 @@
 
 pub mod context;
 pub mod diagnostic;
+pub mod doctor;
 pub mod error;
 pub mod find;
 pub mod format;

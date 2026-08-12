@@ -109,7 +109,10 @@ pub fn render_report(
 }
 
 /// Convert every entry of a `cooklang` report into a [`Diagnostic`].
-fn collect_diagnostics(report: &SourceReport, file: Option<&Utf8Path>) -> Vec<Diagnostic> {
+pub(crate) fn collect_diagnostics(
+    report: &SourceReport,
+    file: Option<&Utf8Path>,
+) -> Vec<Diagnostic> {
     report
         .iter()
         .map(|diag| convert_diagnostic(diag, file))
