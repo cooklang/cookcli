@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.33.1](https://github.com/cooklang/cookcli/compare/v0.33.0...v0.33.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **ci:** build Linux glibc binary against an older glibc ([#426](https://github.com/cooklang/cookcli/issues/426)) ([7f01da2](https://github.com/cooklang/cookcli/commit/7f01da24e1180806e0720f56b59193c2a255af12)), closes [#420](https://github.com/cooklang/cookcli/issues/420)
+* **docker:** add server feature for docker image ([#422](https://github.com/cooklang/cookcli/issues/422)) ([0aa7263](https://github.com/cooklang/cookcli/commit/0aa7263e6dfca1039d4fcd3cf4ff8ab61aac6ab7))
+
 ## [0.33.0](https://github.com/cooklang/cookcli/compare/v0.32.1...v0.33.0) (2026-08-10)
 
 
