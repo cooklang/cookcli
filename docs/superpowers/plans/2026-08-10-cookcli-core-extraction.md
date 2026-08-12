@@ -40,7 +40,7 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`297 passed; 0 failed; 26 ignored`** from Task 5 onward | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
+| `cargo test` | `cookcli` only | **`312 passed; 0 failed; 26 ignored`** on unix, **311 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
@@ -52,6 +52,8 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 - **296 → 297**: a recipe that exists but cannot be read must report the read failure, not "recipe not found".
 
 When a task adds CLI tests, say so and state the new expected number.
+
+**The number is platform-dependent from Task 7 onward.** `test_cli_unreadable_pantry_is_fatal_only_when_named_explicitly` is `#[cfg(unix)]`, so Windows compiles one fewer test: **312 on unix, 311 on Windows**. CI runs `windows-latest` in its cross-platform matrix (`.github/workflows/test.yml`), so do not treat a Windows 311 as a regression.
 
 
 Keeping them separate is useful: if `cargo test` moves you changed CLI behaviour, regardless of what core's tests say.
