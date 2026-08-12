@@ -1,4 +1,4 @@
-//! Pantry queries: the read half of `cook pantry`.
+//! `cook pantry`: what is in stock, and changing it.
 //!
 //! [`load`] reads the configuration [`Context::pantry`] points at — a file, or
 //! text an editor is holding — and the queries answer questions about it:
@@ -9,14 +9,50 @@
 //! [`plan`] is the odd one out: it answers "what should I stock?" by looking at
 //! the recipe collection alone, and never reads the pantry at all.
 //!
-//! Nothing here writes. Adding, removing and updating items still lives in the
-//! CLI.
+//! [`add`], [`remove`] and [`update`] change the pantry and write it back.
+//! They are the only functions in this crate that write to a file the user
+//! owns, so read [`write_atomically`] and **[what a write keeps and what it
+//! throws away](#what-a-write-keeps-and-what-it-throws-away)** before calling
+//! them.
+//!
+//! # What a write keeps and what it throws away
+//!
+//! There is no editing in place. Every change re-parses the whole
+//! configuration into `cooklang`'s model, applies itself, and serialises that
+//! model back over the file — so anything the model does not carry is gone the
+//! first time anything is added, removed or updated. What survives:
+//!
+//! - Section order, item order within a section, and every item's name,
+//!   `quantity`, `bought`, `expire` and `low`.
+//! - Items written above the first section header. They are read into a
+//!   section called `general` and written back above the first header rather
+//!   than under a `[general]` one — except that they can only be written as
+//!   `name = "quantity"`, so a `general` item's `bought`, `expire` and `low`
+//!   do not survive, and one with no quantity comes back with an empty one.
+//! - Non-ASCII names, which are quoted as TOML requires.
+//!
+//! What does not:
+//!
+//! - **Comments.** Every one, wherever it is.
+//! - **Layout**: blank lines, indentation, the choice between `x = "1%kg"` and
+//!   `x = { quantity = "1%kg" }`, and a section written as an array of items
+//!   (`fridge = ["milk"]`), which comes back as a `[fridge]` table.
+//! - **Attributes `cooklang` does not model**, and attributes whose value is
+//!   not a string — `quantity = 2` rather than `quantity = "2"`. Both are
+//!   dropped, the first with a warning in [`Outcome::diagnostics`], the second
+//!   silently.
+//! - **A section literally named `general`**, whose items are moved to the top
+//!   of the file and lose every attribute but `quantity`, as above.
+//!
+//! None of this is new — it is what `cook pantry add` has always done — but a
+//! consumer editing a file a person also hand-writes should know it, and may
+//! prefer to apply changes to the text itself.
 
 use crate::{
     diagnostic::Severity,
     find::tree_error,
     parser::{collect_diagnostics, parse_unscaled},
-    Context, CoreError, Diagnostic, Outcome,
+    ConfigSource, Context, CoreError, Diagnostic, Outcome,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{Local, NaiveDate};
@@ -729,6 +765,429 @@ fn most_wanted(missing: &[BTreeSet<String>]) -> Option<String> {
         .into_iter()
         .max_by_key(|&(name, count)| (count, Reverse(name)))
         .map(|(name, _)| name.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// add, remove, update
+// ---------------------------------------------------------------------------
+
+/// An item to add to the pantry.
+///
+/// Not `#[non_exhaustive]`: consumers construct this. `..Default::default()`
+/// keeps a literal working if it grows a field.
+#[derive(Debug, Clone, Default)]
+pub struct AddRequest {
+    /// The section to add it under, matched and written exactly as given —
+    /// unlike [`ListRequest::section`], case counts, so adding to `Dairy` when
+    /// the file says `dairy` makes a second section.
+    pub section: String,
+    /// The ingredient's name.
+    pub name: String,
+    /// How much is in stock, as pantry files write it: `"500%g"`, `"2"`.
+    pub quantity: Option<String>,
+    /// When it was bought.
+    pub bought: Option<String>,
+    /// When it expires. See [`expiring`] for the spellings that can be read
+    /// back as a date.
+    pub expire: Option<String>,
+    /// The quantity at or below which it counts as low.
+    pub low: Option<String>,
+}
+
+/// Which item to take out of the pantry.
+///
+/// Not `#[non_exhaustive]`: consumers construct this.
+#[derive(Debug, Clone, Default)]
+pub struct RemoveRequest {
+    /// The section holding it, matched exactly.
+    pub section: String,
+    /// The item's name, matched exactly.
+    pub name: String,
+}
+
+/// What to change about an item already in the pantry.
+///
+/// Not `#[non_exhaustive]`: consumers construct this. At least one attribute
+/// must be set; see [`update`].
+#[derive(Debug, Clone, Default)]
+pub struct UpdateRequest {
+    /// The section holding it, matched exactly.
+    pub section: String,
+    /// The item's name, matched exactly. Not changed by an update — remove and
+    /// add to rename.
+    pub name: String,
+    /// The new quantity, or `None` to leave it as it is.
+    pub quantity: Option<String>,
+    /// The new bought date, or `None` to leave it as it is.
+    pub bought: Option<String>,
+    /// The new expiry date, or `None` to leave it as it is.
+    pub expire: Option<String>,
+    /// The new low-stock threshold, or `None` to leave it as it is.
+    pub low: Option<String>,
+}
+
+/// Add an item to the pantry and write it back.
+///
+/// The section is created if the file has no such section, and the file itself
+/// is created if there is none — under `<base_path>/config/pantry.conf`, which
+/// is where [`Context::discover`] looks first. That is the one case where this
+/// crate invents a path rather than being told one.
+///
+/// Returns the pantry as it now stands on disk, so a caller need not read it
+/// back, together with any warnings from parsing what was there before.
+///
+/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
+/// first**: comments and formatting in the existing file are lost.
+///
+/// # Errors
+///
+/// - [`CoreError::ReadOnlyConfig`] if the context carries the pantry inline.
+///   There is nowhere to write it, and inventing a path would put an editor's
+///   unsaved buffer on someone's disk.
+/// - [`CoreError::PantryEdit`] if the section already holds an item of that
+///   name, compared exactly. Nothing is written; [`update`] is how an item is
+///   changed.
+/// - [`CoreError::Config`] if the existing file cannot be parsed at all, and
+///   [`CoreError::Io`] if it cannot be read or the new one cannot be written.
+pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    let path = path_to_create(ctx)?;
+    let (mut conf, diagnostics) = read_conf_or_empty(&path)?;
+
+    let items = conf.sections.entry(req.section.clone()).or_default();
+    if items.iter().any(|item| item.name() == req.name) {
+        return Err(CoreError::PantryEdit {
+            message: format!(
+                "item '{}' already exists in section '{}'",
+                req.name, req.section
+            ),
+        });
+    }
+    items.push(new_item(&req));
+
+    save(&path, &mut conf)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
+}
+
+/// Take an item out of the pantry and write it back.
+///
+/// A section left with no items is removed too, because `cooklang` drops empty
+/// sections when it reads a file and keeping one would not survive the next
+/// read anyway.
+///
+/// Returns the pantry as it now stands on disk, and any warnings from parsing
+/// what was there before.
+///
+/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
+/// first**: comments and formatting in the existing file are lost.
+///
+/// # Errors
+///
+/// - [`CoreError::MissingConfig`] if the context carries no pantry: there is
+///   nothing to take an item out of. Unlike [`add`], this does not create one.
+/// - [`CoreError::ReadOnlyConfig`] if it carries the pantry inline.
+/// - [`CoreError::PantryEdit`] if there is no such section, or no such item in
+///   it. Nothing is written.
+/// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
+///   written.
+pub fn remove(ctx: &Context, req: RemoveRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    let path = path_to_edit(ctx)?;
+    let (mut conf, diagnostics) = read_conf(&path)?;
+
+    let items = conf
+        .sections
+        .get_mut(&req.section)
+        .ok_or_else(|| section_not_found(&req.section))?;
+    let before = items.len();
+    items.retain(|item| item.name() != req.name);
+    if items.len() == before {
+        return Err(item_not_found(&req.name, &req.section));
+    }
+    if items.is_empty() {
+        // `shift_remove`, not `swap_remove`: the remaining sections must keep
+        // the order the file wrote them in.
+        conf.sections.shift_remove(&req.section);
+    }
+
+    save(&path, &mut conf)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
+}
+
+/// Change an item already in the pantry and write it back.
+///
+/// Only the attributes set on the request are changed; the rest of the item is
+/// left as it was. There is no way to clear an attribute — `None` means "leave
+/// it", not "remove it" — so an item is cleared by removing and adding it.
+///
+/// Returns the pantry as it now stands on disk, and any warnings from parsing
+/// what was there before.
+///
+/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
+/// first**: comments and formatting in the existing file are lost.
+///
+/// # Errors
+///
+/// - [`CoreError::PantryEdit`] if the request sets no attribute at all, since
+///   that could only rewrite the file to what it already said; or if there is
+///   no such section, or no such item in it. Nothing is written.
+/// - [`CoreError::MissingConfig`] if the context carries no pantry, and
+///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
+/// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
+///   written.
+pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    // Checked before anything is read: an update of nothing is a mistake
+    // whether or not there is a pantry to make it in.
+    if req.quantity.is_none() && req.bought.is_none() && req.expire.is_none() && req.low.is_none() {
+        return Err(CoreError::PantryEdit {
+            message: format!(
+                "no attributes given to update on item '{}' in section '{}'",
+                req.name, req.section
+            ),
+        });
+    }
+
+    let path = path_to_edit(ctx)?;
+    let (mut conf, diagnostics) = read_conf(&path)?;
+
+    let items = conf
+        .sections
+        .get_mut(&req.section)
+        .ok_or_else(|| section_not_found(&req.section))?;
+    let item = items
+        .iter_mut()
+        .find(|item| item.name() == req.name)
+        .ok_or_else(|| item_not_found(&req.name, &req.section))?;
+
+    *item = cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+        name: item.name().to_string(),
+        // `or_else` on the request's value, so a set attribute wins and an
+        // unset one falls back to what the item already said. A `Simple` item
+        // has nothing to fall back to, and becomes one with attributes.
+        quantity: req
+            .quantity
+            .or_else(|| item.quantity().map(ToOwned::to_owned)),
+        bought: req.bought.or_else(|| item.bought().map(ToOwned::to_owned)),
+        expire: req.expire.or_else(|| item.expire().map(ToOwned::to_owned)),
+        low: req.low.or_else(|| item.low().map(ToOwned::to_owned)),
+    });
+
+    save(&path, &mut conf)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
+}
+
+/// The item [`add`] will write.
+///
+/// A request with no attributes builds a `Simple` item rather than one with
+/// four empty fields, because that is the shape `cooklang` normalises to when
+/// it reads a file back. Nothing observable turns on it — both serialise to
+/// `name = {}` and both read back identically — but a value this crate builds
+/// should hold the same invariant as one it parsed.
+fn new_item(req: &AddRequest) -> cooklang::pantry::PantryItem {
+    if req.quantity.is_none() && req.bought.is_none() && req.expire.is_none() && req.low.is_none() {
+        cooklang::pantry::PantryItem::Simple(req.name.clone())
+    } else {
+        cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+            name: req.name.clone(),
+            quantity: req.quantity.clone(),
+            bought: req.bought.clone(),
+            expire: req.expire.clone(),
+            low: req.low.clone(),
+        })
+    }
+}
+
+fn section_not_found(section: &str) -> CoreError {
+    CoreError::PantryEdit {
+        message: format!("section '{section}' not found"),
+    }
+}
+
+fn item_not_found(name: &str, section: &str) -> CoreError {
+    CoreError::PantryEdit {
+        message: format!("item '{name}' not found in section '{section}'"),
+    }
+}
+
+/// The file [`add`] writes, which need not exist yet.
+fn path_to_create(ctx: &Context) -> Result<Utf8PathBuf, CoreError> {
+    match ctx.pantry() {
+        ConfigSource::Path(path) => Ok(path.clone()),
+        // Named with `discover`'s own constants, so that the file this creates
+        // stays the one the next `discover` finds.
+        ConfigSource::None => Ok(ctx
+            .base_path()
+            .join(crate::context::LOCAL_CONFIG_DIR)
+            .join(crate::context::AUTO_PANTRY)),
+        ConfigSource::Inline(_) => Err(read_only()),
+    }
+}
+
+/// The file [`remove`] and [`update`] write, which must exist: there is
+/// nothing to take an item out of, or to change, without one.
+fn path_to_edit(ctx: &Context) -> Result<Utf8PathBuf, CoreError> {
+    match ctx.pantry() {
+        ConfigSource::Path(path) => Ok(path.clone()),
+        ConfigSource::None => Err(CoreError::MissingConfig {
+            kind: "pantry".to_string(),
+        }),
+        ConfigSource::Inline(_) => Err(read_only()),
+    }
+}
+
+fn read_only() -> CoreError {
+    CoreError::ReadOnlyConfig {
+        kind: "pantry".to_string(),
+    }
+}
+
+/// Read a pantry file into the model a change is applied to.
+///
+/// Separate from [`load`], which hands out this crate's own read-only
+/// [`PantryContents`]: a change needs `cooklang`'s own type, because that is
+/// what can be serialised back.
+fn read_conf(
+    path: &Utf8Path,
+) -> Result<(cooklang::pantry::PantryConf, Vec<Diagnostic>), CoreError> {
+    let text = std::fs::read_to_string(path).map_err(|source| CoreError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    parse_conf(path, &text)
+}
+
+/// As [`read_conf`], but an absent file is an empty pantry rather than an
+/// error — which is what lets [`add`] create one.
+///
+/// Missing is judged by the read failing rather than by asking whether the
+/// file exists first, so that nothing can delete it in between.
+fn read_conf_or_empty(
+    path: &Utf8Path,
+) -> Result<(cooklang::pantry::PantryConf, Vec<Diagnostic>), CoreError> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => parse_conf(path, &text),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+            Ok((cooklang::pantry::PantryConf::default(), Vec::new()))
+        }
+        Err(source) => Err(CoreError::Io {
+            path: path.to_owned(),
+            source,
+        }),
+    }
+}
+
+fn parse_conf(
+    path: &Utf8Path,
+    text: &str,
+) -> Result<(cooklang::pantry::PantryConf, Vec<Diagnostic>), CoreError> {
+    let parsed = cooklang::pantry::parse_lenient(text);
+    let diagnostics = collect_diagnostics(parsed.report(), Some(path));
+    match parsed.output() {
+        Some(conf) => Ok((conf.clone(), diagnostics)),
+        None => Err(CoreError::Config {
+            path: Some(path.to_owned()),
+            message: parse_failure(&diagnostics),
+        }),
+    }
+}
+
+/// Serialise the changed pantry over `path`.
+fn save(path: &Utf8Path, conf: &mut cooklang::pantry::PantryConf) -> Result<(), CoreError> {
+    // Serialising does not read the lookup index, but a `PantryConf` whose
+    // index disagrees with its sections is a trap for anything that later
+    // does, and rebuilding it costs nothing at this size.
+    conf.rebuild_index();
+    write_atomically(path, &cooklang::pantry::to_toml_string(conf))
+}
+
+/// Write `contents` to `path` so that a failure leaves the previous file
+/// intact.
+///
+/// Every change here re-serialises the *whole* pantry, so a write that failed
+/// half way — a full disk, a killed process — would replace someone's pantry
+/// with a truncated one rather than fail cleanly. Instead the new text goes to
+/// a temporary file beside the target and is renamed over it, which either
+/// happens completely or not at all.
+///
+/// Two details that keep a hand-managed configuration working:
+///
+/// - **Symlinks are followed.** An existing target is resolved to the file it
+///   names before anything is written, so a `config/pantry.conf` symlinked
+///   into a dotfiles repository is updated through the link rather than
+///   replaced by a regular file — and the temporary file lands on the same
+///   filesystem as the file it replaces, which rename requires.
+/// - **Permissions are carried over**, because a temporary file is created
+///   from the process umask, which may be more permissive than the pantry was.
+///
+/// A failure leaves no temporary file behind unless removing it fails too, and
+/// names the pantry as the caller gave it rather than wherever the symlinks
+/// and `..`s led — that is the file the caller knows about.
+fn write_atomically(path: &Utf8Path, contents: &str) -> Result<(), CoreError> {
+    let failed = |source: std::io::Error| CoreError::Io {
+        path: path.to_owned(),
+        source,
+    };
+    let target = path.canonicalize_utf8().unwrap_or_else(|_| path.to_owned());
+
+    // `parent` is empty for a bare relative filename, which is the current
+    // directory and needs no creating.
+    if let Some(parent) = target.parent().filter(|parent| !parent.as_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(failed)?;
+    }
+
+    // Named after the process, so two `cook`s writing the same pantry do not
+    // overwrite each other's half-written temporary file. They can still race
+    // over the pantry itself; last rename wins, and neither leaves it corrupt.
+    let name = target.file_name().unwrap_or("pantry.conf");
+    let temp = target.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+
+    let written = (|| -> std::io::Result<()> {
+        std::fs::write(&temp, contents)?;
+        if let Ok(metadata) = std::fs::metadata(&target) {
+            std::fs::set_permissions(&temp, metadata.permissions())?;
+        }
+        rename_replace(&temp, &target)
+    })();
+
+    if let Err(source) = written {
+        // Best effort. The pantry itself is untouched either way, which is the
+        // thing worth protecting.
+        let _ = std::fs::remove_file(&temp);
+        return Err(failed(source));
+    }
+    Ok(())
+}
+
+/// Move `from` onto `to`, replacing `to` if it is there.
+///
+/// A plain rename everywhere but Android, where libc implements `rename` with
+/// the `renameat2` syscall that Android's seccomp filter blocks: the process is
+/// killed with SIGSYS rather than handed an error, so the syscall has to be
+/// avoided rather than recovered from. The fallback there is copy then remove,
+/// which is *not* atomic — an interrupted pantry write on Android can still
+/// truncate the file.
+///
+/// The CLI carries the same workaround in `src/server/fs_atomic.rs`, where it
+/// also needs an async form for the web server. Duplicated rather than shared
+/// because this crate does not depend on that one; both cite
+/// <https://github.com/cooklang/cookcli/issues/349>.
+fn rename_replace(from: &Utf8Path, to: &Utf8Path) -> std::io::Result<()> {
+    #[cfg(target_os = "android")]
+    {
+        std::fs::copy(from, to)?;
+        std::fs::remove_file(from)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::fs::rename(from, to)
+    }
 }
 
 // ---------------------------------------------------------------------------

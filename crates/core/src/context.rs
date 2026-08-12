@@ -4,9 +4,9 @@ use crate::{ConfigSource, CoreError};
 use camino::{Utf8Path, Utf8PathBuf};
 
 const APP_NAME: &str = "cook";
-const LOCAL_CONFIG_DIR: &str = "config";
+pub(crate) const LOCAL_CONFIG_DIR: &str = "config";
 const AUTO_AISLE: &str = "aisle.conf";
-const AUTO_PANTRY: &str = "pantry.conf";
+pub(crate) const AUTO_PANTRY: &str = "pantry.conf";
 
 /// The configuration bundle every command operates against.
 ///

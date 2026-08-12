@@ -645,7 +645,9 @@ fn test_pantry_add_duplicate_errors() {
         .args(["pantry", "add", "pantry", "flour"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("already exists"));
+        .stderr(predicate::str::contains(
+            "Item 'flour' already exists in section 'pantry'",
+        ));
 }
 
 // ---------------------------------------------------------------------------
@@ -694,7 +696,9 @@ fn test_pantry_remove_nonexistent_item_errors() {
         .args(["pantry", "remove", "pantry", "nonexistent"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Item 'nonexistent' not found in section 'pantry'",
+        ));
 }
 
 #[test]
@@ -707,7 +711,9 @@ fn test_pantry_remove_nonexistent_section_errors() {
         .args(["pantry", "remove", "nosuchsection", "flour"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Section 'nosuchsection' not found",
+        ));
 }
 
 #[test]
@@ -787,7 +793,9 @@ fn test_pantry_update_nonexistent_item_errors() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Item 'nonexistent' not found in section 'pantry'",
+        ));
 }
 
 #[test]

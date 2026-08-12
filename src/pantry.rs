@@ -1,45 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
 use cookcli_core::pantry as core;
-use cooklang::pantry::PantryItem;
 use serde::Serialize;
 
 use crate::{util::cli_error, Context as AppContext};
-
-/// Read the pantry file for a command that is about to write it back.
-///
-/// The read-only subcommands go through `cookcli-core::pantry::load` instead;
-/// this stays because `add`, `remove` and `update` need the `PantryConf` itself
-/// to modify and re-serialise, which core does not hand out.
-fn load_pantry_conf(path: &camino::Utf8PathBuf) -> Result<cooklang::pantry::PantryConf> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read pantry file at {path}"))?;
-    let result = cooklang::pantry::parse_lenient(&content);
-    result.output().cloned().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to parse pantry configuration: {:?}",
-            result.report()
-        )
-    })
-}
-
-fn write_pantry_conf(
-    path: &camino::Utf8PathBuf,
-    conf: &cooklang::pantry::PantryConf,
-) -> Result<()> {
-    let content = cooklang::pantry::to_toml_string(conf);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {parent}"))?;
-    }
-    std::fs::write(path, content).with_context(|| format!("Failed to write pantry file at {path}"))
-}
-
-/// Return the pantry path, or a sensible default for creating a new file.
-fn pantry_path_or_default(ctx: &AppContext) -> camino::Utf8PathBuf {
-    ctx.pantry()
-        .unwrap_or_else(|| ctx.base_path().join("config").join("pantry.conf"))
-}
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -801,84 +765,41 @@ fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()
 }
 
 fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
-    let pantry_path = pantry_path_or_default(ctx);
-
-    // Load existing pantry or start fresh
-    let mut pantry_conf = if pantry_path.exists() {
-        load_pantry_conf(&pantry_path)?
-    } else {
-        cooklang::pantry::PantryConf::default()
-    };
-
-    // Build the new item
-    let new_item = if args.quantity.is_some()
-        || args.bought.is_some()
-        || args.expire.is_some()
-        || args.low.is_some()
-    {
-        PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+    core::add(
+        &ctx.to_core(),
+        core::AddRequest {
+            section: args.section.clone(),
             name: args.name.clone(),
             quantity: args.quantity,
             bought: args.bought,
             expire: args.expire,
             low: args.low,
-        })
-    } else {
-        PantryItem::Simple(args.name.clone())
-    };
+        },
+    )
+    .map_err(cli_error)?;
 
-    // Check for duplicates in the target section
-    let section_items = pantry_conf
-        .sections
-        .entry(args.section.clone())
-        .or_default();
-    if section_items.iter().any(|i| i.name() == args.name) {
-        anyhow::bail!(
-            "Item '{}' already exists in section '{}'. Use `pantry update` to change it.",
-            args.name,
-            args.section
-        );
-    }
-    section_items.push(new_item);
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Added '{}' to section '{}'.", args.name, args.section);
     Ok(())
 }
 
 fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+    core::remove(
+        &ctx.to_core(),
+        core::RemoveRequest {
+            section: args.section.clone(),
+            name: args.name.clone(),
+        },
+    )
+    .map_err(cli_error)?;
 
-    let items = pantry_conf
-        .sections
-        .get_mut(&args.section)
-        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
-
-    let before = items.len();
-    items.retain(|i| i.name() != args.name);
-    if items.len() == before {
-        anyhow::bail!(
-            "Item '{}' not found in section '{}'",
-            args.name,
-            args.section
-        );
-    }
-
-    if items.is_empty() {
-        pantry_conf.sections.shift_remove(&args.section);
-    }
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Removed '{}' from section '{}'.", args.name, args.section);
     Ok(())
 }
 
 fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
+    // Core refuses an update that sets nothing too, in the wording a library
+    // can use. Checked again here so that the message names the flags the user
+    // actually typed, which is the only thing this adds.
     if args.quantity.is_none()
         && args.bought.is_none()
         && args.expire.is_none()
@@ -887,52 +808,19 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
         anyhow::bail!("No attributes specified. Provide at least one of --quantity, --bought, --expire, --low.");
     }
 
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+    core::update(
+        &ctx.to_core(),
+        core::UpdateRequest {
+            section: args.section.clone(),
+            name: args.name.clone(),
+            quantity: args.quantity,
+            bought: args.bought,
+            expire: args.expire,
+            low: args.low,
+        },
+    )
+    .map_err(cli_error)?;
 
-    let items = pantry_conf
-        .sections
-        .get_mut(&args.section)
-        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
-
-    let item = items
-        .iter_mut()
-        .find(|i| i.name() == args.name)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Item '{}' not found in section '{}'",
-                args.name,
-                args.section
-            )
-        })?;
-
-    // Merge new values over existing attributes
-    let updated = match item {
-        PantryItem::Simple(name) => {
-            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-                name: name.clone(),
-                quantity: args.quantity,
-                bought: args.bought,
-                expire: args.expire,
-                low: args.low,
-            })
-        }
-        PantryItem::WithAttributes(attrs) => {
-            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-                name: attrs.name.clone(),
-                quantity: args.quantity.or_else(|| attrs.quantity.clone()),
-                bought: args.bought.or_else(|| attrs.bought.clone()),
-                expire: args.expire.or_else(|| attrs.expire.clone()),
-                low: args.low.or_else(|| attrs.low.clone()),
-            })
-        }
-    };
-    *item = updated;
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Updated '{}' in section '{}'.", args.name, args.section);
     Ok(())
 }

@@ -123,6 +123,10 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
         // variant carries no source, so nothing is lost by converting it to a
         // message.
         CoreError::MissingConfig { kind } => anyhow::anyhow!("No {kind} configuration found"),
+        // `cook pantry add/remove/update` refusing a change. Core words these
+        // lowercase like every other `CoreError`, and already names the item
+        // and section, so the only thing left is the capital letter.
+        CoreError::PantryEdit { message } => anyhow::anyhow!("{}", sentence_case(&message)),
         // Named here only for the capital letter: the variant carries no
         // source, so nothing is lost by converting it to a message. `cook
         // doctor validate` is what makes this reachable — a missing or
@@ -144,6 +148,18 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
             anyhow::Error::new(source).context(format!("Failed to read '{path}'"))
         }
         other => other.into(),
+    }
+}
+
+/// Capitalise the first character, leaving the rest alone.
+///
+/// `char`-wise rather than byte-wise, so a message opening with a non-ASCII
+/// letter is not cut in half.
+fn sentence_case(message: &str) -> String {
+    let mut chars = message.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 
@@ -200,6 +216,20 @@ pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Core hands over a lowercase line; this is the only thing the terminal
+    /// needs done to it, and it must not corrupt a message that opens with a
+    /// multi-byte character or have anything to trip over in an empty one.
+    #[test]
+    fn sentence_case_capitalises_only_the_first_character() {
+        assert_eq!(
+            sentence_case("item 'flour' not found in section 'pantry'"),
+            "Item 'flour' not found in section 'pantry'"
+        );
+        assert_eq!(sentence_case("äpple is gone"), "Äpple is gone");
+        assert_eq!(sentence_case("'quoted' first"), "'quoted' first");
+        assert_eq!(sentence_case(""), "");
+    }
 
     #[test]
     fn splits_recipe_with_numeric_scaling_factor() {

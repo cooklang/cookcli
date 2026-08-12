@@ -69,6 +69,24 @@ pub enum CoreError {
         kind: String,
     },
 
+    /// A command that changes a configuration was handed one it cannot write
+    /// back.
+    ///
+    /// Reached only through [`ConfigSource::Inline`](crate::ConfigSource):
+    /// an editor holding pantry text in a buffer has somewhere to put an edit,
+    /// but this crate has no idea where. Applying the change is the caller's
+    /// to do, or it can supply a
+    /// [`ConfigSource::Path`](crate::ConfigSource::Path) instead.
+    ///
+    /// Distinct from [`CoreError::MissingConfig`], which is having nothing to
+    /// change at all.
+    #[error("cannot write the {kind} configuration: it was supplied inline rather than as a file")]
+    ReadOnlyConfig {
+        /// Which configuration, as it is named to the user: `"pantry"` is the
+        /// only one anything returns today.
+        kind: String,
+    },
+
     /// A configuration could not be understood.
     #[error("invalid configuration{}: {message}", .path.as_ref().map(|p| format!(" at {p}")).unwrap_or_default())]
     Config {
@@ -76,6 +94,23 @@ pub enum CoreError {
         /// inline.
         path: Option<Utf8PathBuf>,
         /// What was wrong with it.
+        message: String,
+    },
+
+    /// A pantry could not be changed as asked.
+    ///
+    /// The file was read and understood; it is the change that does not apply
+    /// — adding an item that is already there, or naming an item or section
+    /// that is not. Distinct from [`CoreError::Config`], which is a file that
+    /// could not be read as a pantry at all, and from [`CoreError::Io`], which
+    /// is a file that could not be read or written.
+    ///
+    /// Nothing has been written when this is returned: every check runs before
+    /// the pantry is saved.
+    #[error("cannot change the pantry: {message}")]
+    PantryEdit {
+        /// What stopped the change, naming the item and section it was asked
+        /// about.
         message: String,
     },
 
@@ -161,7 +196,9 @@ mod tests {
             | CoreError::Parse { .. }
             | CoreError::InvalidScale { .. }
             | CoreError::MissingConfig { .. }
+            | CoreError::ReadOnlyConfig { .. }
             | CoreError::Config { .. }
+            | CoreError::PantryEdit { .. }
             | CoreError::Render { .. }
             | CoreError::Reference { .. }
             | CoreError::Search { .. }
@@ -184,9 +221,15 @@ mod tests {
             CoreError::MissingConfig {
                 kind: "pantry".to_string(),
             },
+            CoreError::ReadOnlyConfig {
+                kind: "pantry".to_string(),
+            },
             CoreError::Config {
                 path: None,
                 message: "unknown section".to_string(),
+            },
+            CoreError::PantryEdit {
+                message: "item 'flour' already exists in section 'pantry'".to_string(),
             },
             CoreError::Render {
                 message: "undefined variable".to_string(),

@@ -1047,3 +1047,1101 @@ fn a_collection_that_cannot_be_walked_fails_the_plan() {
         ),
     }
 }
+
+// ---------------------------------------------------------------------------
+// add, remove, update
+// ---------------------------------------------------------------------------
+
+/// Where `Context::discover` would put a pantry, and where `add` creates one.
+fn pantry_path(base: &Utf8Path) -> Utf8PathBuf {
+    base.join("config").join("pantry.conf")
+}
+
+/// A context whose pantry is a real file, which is the only kind that can be
+/// written.
+fn ctx_at(base: &Utf8Path) -> Context {
+    Context::new(base.to_owned()).with_pantry(ConfigSource::Path(pantry_path(base)))
+}
+
+/// A temporary directory holding `pantry`, and a context pointing at it.
+fn planted(pantry: &str) -> (tempfile::TempDir, Context) {
+    let dir = temp();
+    let base = base(&dir);
+    write(&pantry_path(&base), pantry);
+    let ctx = ctx_at(&base);
+    (dir, ctx)
+}
+
+fn read_back(ctx: &Context) -> String {
+    std::fs::read_to_string(ctx.pantry().path().expect("a file-backed pantry")).unwrap()
+}
+
+const SMALL: &str = "[pantry]\nflour = { quantity = \"1%kg\", low = \"200%g\" }\n";
+
+#[test]
+fn add_puts_a_new_item_at_the_end_of_an_existing_section() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let written = read_back(&ctx);
+    assert!(written.contains("sugar"), "{written}");
+    assert!(
+        written.find("flour") < written.find("sugar"),
+        "a new item goes after the ones already there\n{written}"
+    );
+}
+
+/// An item added with no attributes is written as an empty one, and reads
+/// back with nothing invented.
+#[test]
+fn add_without_attributes_writes_an_empty_item() {
+    let (_dir, ctx) = planted(SMALL);
+
+    let contents = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds")
+    .into_value();
+
+    let sugar = contents
+        .items()
+        .find(|item| item.name == "sugar")
+        .expect("sugar is in the returned pantry");
+    assert_eq!(sugar.quantity, None);
+    assert_eq!(sugar.expire, None);
+    assert!(
+        read_back(&ctx).contains("sugar = {}"),
+        "{}",
+        read_back(&ctx)
+    );
+}
+
+#[test]
+fn add_writes_every_attribute_it_is_given() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "dairy".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("2%l".to_string()),
+            bought: Some("2025-05-01".to_string()),
+            expire: Some("2025-12-01".to_string()),
+            low: Some("500%ml".to_string()),
+        },
+    )
+    .expect("adds");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let milk = reread
+        .items()
+        .find(|item| item.name == "milk")
+        .expect("milk survived the round trip");
+    assert_eq!(milk.section, "dairy");
+    assert_eq!(milk.quantity.as_deref(), Some("2%l"));
+    assert_eq!(milk.bought.as_deref(), Some("2025-05-01"));
+    assert_eq!(milk.expire.as_deref(), Some("2025-12-01"));
+    assert_eq!(milk.low.as_deref(), Some("500%ml"));
+}
+
+#[test]
+fn add_creates_a_section_the_file_does_not_have() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "spices".to_string(),
+            name: "cumin".to_string(),
+            quantity: Some("50%g".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert!(read_back(&ctx).contains("[spices]"));
+}
+
+/// Sections are matched exactly, so this makes a second one rather than
+/// adding to the first. Pinned because `list` filters case-insensitively and
+/// the difference is easy to trip over.
+#[test]
+fn add_matches_the_section_name_exactly() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "Pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let written = read_back(&ctx);
+    assert!(written.contains("[pantry]"), "{written}");
+    assert!(written.contains("[Pantry]"), "{written}");
+}
+
+#[test]
+fn add_creates_the_pantry_file_when_the_context_has_none() {
+    let dir = temp();
+    let base = base(&dir);
+    let ctx = Context::new(base.clone());
+    assert!(ctx.pantry().is_unset());
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "produce".to_string(),
+            name: "apples".to_string(),
+            quantity: Some("6".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let written = std::fs::read_to_string(pantry_path(&base)).expect("the file was created");
+    assert!(written.contains("apples"), "{written}");
+}
+
+#[test]
+fn add_refuses_an_item_the_section_already_holds() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+            quantity: Some("9%kg".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => assert_eq!(
+            message, "item 'flour' already exists in section 'pantry'",
+            "the message must name both the item and the section"
+        ),
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(
+        read_back(&ctx),
+        SMALL,
+        "a refused add must leave the file exactly as it was"
+    );
+}
+
+/// Item names are compared exactly too, so `Flour` and `flour` are two items
+/// in one section rather than a clash. TOML keeps them apart as keys, so this
+/// survives a round trip.
+#[test]
+fn add_matches_the_item_name_exactly() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "Flour".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("a differently cased name is not a duplicate");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    assert_eq!(names(&reread.sections[0].items), ["flour", "Flour"]);
+}
+
+/// The same name in another section is a different item.
+#[test]
+fn add_allows_the_same_name_in_a_different_section() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "baking".to_string(),
+            name: "flour".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    assert_eq!(
+        reread
+            .items()
+            .filter(|item| item.name == "flour")
+            .map(|item| item.section.as_str())
+            .collect::<Vec<_>>(),
+        ["pantry", "baking"]
+    );
+}
+
+#[test]
+fn remove_takes_the_item_out_and_leaves_the_rest() {
+    let (_dir, ctx) = planted("[pantry]\nflour = \"1%kg\"\nsugar = \"2%kg\"\n");
+
+    let contents = remove(
+        &ctx,
+        RemoveRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+        },
+    )
+    .expect("removes")
+    .into_value();
+
+    assert_eq!(names(&contents.sections[0].items), ["sugar"]);
+    let written = read_back(&ctx);
+    assert!(!written.contains("flour"), "{written}");
+    assert!(written.contains("sugar"), "{written}");
+}
+
+#[test]
+fn remove_deletes_a_section_it_empties_and_leaves_the_others_in_order() {
+    // Four sections, and the one removed is neither first nor second-to-last:
+    // with three, taking out the middle one would look right even if the last
+    // were swapped into its place.
+    let (_dir, ctx) = planted(
+        "[dairy]\nmilk = \"1%l\"\n\n[produce]\napple = \"5\"\n\n[bakery]\nbread = \"1\"\n\n[freezer]\npeas = \"1%kg\"\n",
+    );
+
+    remove(
+        &ctx,
+        RemoveRequest {
+            section: "produce".to_string(),
+            name: "apple".to_string(),
+        },
+    )
+    .expect("removes");
+
+    let written = read_back(&ctx);
+    assert!(!written.contains("[produce]"), "{written}");
+    let at = |needle: &str| written.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(
+        at("[dairy]") < at("[bakery]") && at("[bakery]") < at("[freezer]"),
+        "the sections that remain keep their order\n{written}"
+    );
+}
+
+#[test]
+fn remove_refuses_an_item_that_is_not_there() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match remove(
+        &ctx,
+        RemoveRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "item 'sugar' not found in section 'pantry'")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+#[test]
+fn remove_refuses_a_section_that_is_not_there() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match remove(
+        &ctx,
+        RemoveRequest {
+            section: "freezer".to_string(),
+            name: "flour".to_string(),
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "section 'freezer' not found")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+#[test]
+fn update_changes_only_the_attributes_it_is_given() {
+    let (_dir, ctx) = planted(SMALL);
+
+    update(
+        &ctx,
+        UpdateRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+            quantity: Some("2%kg".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("updates");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let flour = reread.items().next().expect("flour is still there");
+    assert_eq!(flour.quantity.as_deref(), Some("2%kg"), "the new quantity");
+    assert_eq!(
+        flour.low.as_deref(),
+        Some("200%g"),
+        "an attribute not named by the request is left alone"
+    );
+}
+
+#[test]
+fn update_gives_a_bare_item_its_first_attribute() {
+    let (_dir, ctx) = planted("[pantry]\nsugar = {}\n");
+
+    update(
+        &ctx,
+        UpdateRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            expire: Some("2025-12-31".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("updates");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let sugar = reread.items().next().expect("sugar is still there");
+    assert_eq!(sugar.expire.as_deref(), Some("2025-12-31"));
+    assert_eq!(sugar.quantity, None, "nothing else is invented");
+}
+
+#[test]
+fn update_refuses_a_request_that_sets_nothing() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match update(
+        &ctx,
+        UpdateRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => assert_eq!(
+            message,
+            "no attributes given to update on item 'flour' in section 'pantry'"
+        ),
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+/// Checked before the pantry is even resolved, so a request that sets nothing
+/// is refused for what it is rather than for having nowhere to go.
+#[test]
+fn update_refuses_a_request_that_sets_nothing_before_looking_for_a_pantry() {
+    let ctx = Context::new(Utf8PathBuf::from("/nowhere"));
+
+    assert!(matches!(
+        update(
+            &ctx,
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                ..Default::default()
+            },
+        ),
+        Err(CoreError::PantryEdit { .. })
+    ));
+}
+
+#[test]
+fn update_refuses_an_item_that_is_not_there() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match update(
+        &ctx,
+        UpdateRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            quantity: Some("1%kg".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "item 'sugar' not found in section 'pantry'")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+#[test]
+fn update_refuses_a_section_that_is_not_there() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match update(
+        &ctx,
+        UpdateRequest {
+            section: "freezer".to_string(),
+            name: "flour".to_string(),
+            quantity: Some("1%kg".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "section 'freezer' not found")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+/// A change lands in the section it names, not in whichever one happens to
+/// hold an item of that name.
+#[test]
+fn update_changes_the_item_in_the_section_it_names() {
+    let (_dir, ctx) = planted("[dairy]\nmilk = \"1%l\"\n\n[freezer]\nmilk = \"2%l\"\n");
+
+    update(
+        &ctx,
+        UpdateRequest {
+            section: "freezer".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("9%l".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("updates");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let quantities: Vec<_> = reread
+        .items()
+        .map(|item| (item.section.as_str(), item.quantity.as_deref()))
+        .collect();
+    assert_eq!(
+        quantities,
+        [("dairy", Some("1%l")), ("freezer", Some("9%l"))]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Where a change may and may not be written
+// ---------------------------------------------------------------------------
+
+/// Writing an editor's unsaved buffer to a path this crate made up would be
+/// worse than refusing, so all three refuse.
+#[test]
+fn nothing_writes_to_an_inline_pantry() {
+    let dir = temp();
+    let base = base(&dir);
+    let ctx = Context::new(base.clone()).with_pantry(ConfigSource::Inline(SMALL.to_string()));
+
+    let refused = |result: Result<Outcome<PantryContents>, CoreError>, what: &str| match result {
+        Err(CoreError::ReadOnlyConfig { kind }) => assert_eq!(kind, "pantry", "{what}"),
+        other => panic!(
+            "expected ReadOnlyConfig from {what}, got {:?}",
+            other.map(|o| o.value)
+        ),
+    };
+
+    refused(
+        add(
+            &ctx,
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                ..Default::default()
+            },
+        ),
+        "add",
+    );
+    refused(
+        remove(
+            &ctx,
+            RemoveRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+            },
+        ),
+        "remove",
+    );
+    refused(
+        update(
+            &ctx,
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                quantity: Some("2%kg".to_string()),
+                ..Default::default()
+            },
+        ),
+        "update",
+    );
+
+    assert!(
+        !base.join("config").exists(),
+        "a refused write must not leave a file behind"
+    );
+}
+
+/// `add` creates a pantry where there is none; the other two have nothing to
+/// change and say so.
+#[test]
+fn remove_and_update_need_a_pantry_that_exists() {
+    let dir = temp();
+    let ctx = Context::new(base(&dir));
+
+    for result in [
+        remove(
+            &ctx,
+            RemoveRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+            },
+        ),
+        update(
+            &ctx,
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                quantity: Some("2%kg".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        match result {
+            Err(CoreError::MissingConfig { kind }) => assert_eq!(kind, "pantry"),
+            other => panic!("expected MissingConfig, got {:?}", other.map(|o| o.value)),
+        }
+    }
+}
+
+/// A path-backed pantry that is not there is a different thing from no pantry
+/// at all: something named a file and it could not be read.
+#[test]
+fn removing_from_a_pantry_path_that_does_not_exist_is_an_io_error() {
+    let dir = temp();
+    let base = base(&dir);
+    let ctx = ctx_at(&base);
+
+    match remove(
+        &ctx,
+        RemoveRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+        },
+    ) {
+        Err(CoreError::Io { path, source }) => {
+            assert_eq!(path, pantry_path(&base));
+            assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+        }
+        other => panic!("expected Io, got {:?}", other.map(|o| o.value)),
+    }
+}
+
+#[test]
+fn a_pantry_that_cannot_be_parsed_stops_a_change() {
+    let (_dir, ctx) = planted("[unclosed\n");
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::Config { path, message }) => {
+            assert_eq!(path.as_deref(), ctx.pantry().path());
+            assert!(!message.is_empty());
+            assert!(!message.contains('\n'), "one line: {message:?}");
+        }
+        other => panic!("expected Config, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), "[unclosed\n", "nothing may be written");
+}
+
+// ---------------------------------------------------------------------------
+// What a write keeps, and what it throws away
+// ---------------------------------------------------------------------------
+
+/// Pins the loss documented on the module. Comments do not survive a change,
+/// because the file is re-serialised from a model that has never seen them.
+#[test]
+fn a_write_throws_away_comments_and_layout() {
+    let (_dir, ctx) =
+        planted("# my pantry\n\n[pantry]\n# staple\n  flour   =   \"1%kg\"   # a whole bag\n");
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert_eq!(
+        read_back(&ctx),
+        "[pantry]\nflour = { quantity = \"1%kg\" }\nsugar = {}\n",
+        "comments, indentation and the shorthand item shape are all rewritten; \
+         only what cooklang models survives"
+    );
+}
+
+/// An attribute `cooklang` does not model is dropped, and the caller is told
+/// so — the warning is the only sign that anything was lost.
+#[test]
+fn a_write_throws_away_attributes_cooklang_does_not_model() {
+    let (_dir, ctx) = planted("[pantry]\nflour = { quantity = \"1%kg\", shelf = \"top\" }\n");
+
+    let outcome = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning && d.message.contains("shelf")),
+        "the unknown attribute must be reported: {:?}",
+        outcome.diagnostics
+    );
+    let written = read_back(&ctx);
+    assert!(!written.contains("shelf"), "and it is gone\n{written}");
+    assert!(written.contains("1%kg"), "{written}");
+}
+
+/// An attribute whose value is not a string is dropped with no warning at all.
+#[test]
+fn a_write_throws_away_a_non_string_attribute_silently() {
+    let (_dir, ctx) = planted("[pantry]\nflour = { quantity = 2 }\n");
+
+    let outcome = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "nothing warns about this: {:?}",
+        outcome.diagnostics
+    );
+    let written = read_back(&ctx);
+    assert!(
+        !written.contains('2'),
+        "the quantity is gone all the same\n{written}"
+    );
+}
+
+#[test]
+fn a_write_keeps_section_and_item_order() {
+    let (_dir, ctx) = planted(
+        "[dairy]\nzucchini = \"2\"\napple = \"5\"\nmango = \"3\"\n\n[produce]\nleek = \"1\"\n\n[bakery]\nbread = \"1\"\n",
+    );
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "dairy".to_string(),
+            name: "banana".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let written = read_back(&ctx);
+    let at = |needle: &str| written.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(
+        at("zucchini") < at("apple") && at("apple") < at("mango") && at("mango") < at("banana"),
+        "items keep file order, with the new one last\n{written}"
+    );
+    assert!(
+        at("[dairy]") < at("[produce]") && at("[produce]") < at("[bakery]"),
+        "sections keep file order\n{written}"
+    );
+}
+
+/// Items above the first section header stay above it rather than being
+/// wrapped in a `[general]` section — but they can only be written as
+/// `name = "quantity"`, so everything else about them is lost.
+#[test]
+fn a_write_keeps_general_items_at_the_top_but_loses_their_other_attributes() {
+    let (_dir, ctx) = planted(
+        "salt = \"1%kg\"\n\n[dairy]\nmilk = { quantity = \"2%l\", expire = \"2025-12-01\" }\n",
+    );
+
+    // `salt` is a general item; give it an expiry, which cannot be written.
+    update(
+        &ctx,
+        UpdateRequest {
+            section: "general".to_string(),
+            name: "salt".to_string(),
+            expire: Some("2025-11-11".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("updates");
+
+    let written = read_back(&ctx);
+    assert!(
+        written.find("salt").unwrap() < written.find('[').unwrap(),
+        "a general item stays above the first section header\n{written}"
+    );
+    assert!(!written.contains("[general]"), "{written}");
+    assert!(
+        !written.contains("2025-11-11"),
+        "a general item's expiry cannot be written and is lost\n{written}"
+    );
+    assert!(
+        written.contains("2025-12-01"),
+        "a sectioned item's is not\n{written}"
+    );
+}
+
+/// A bare general item gains an empty quantity, because the only shape the
+/// top level can be written in is `name = "quantity"`.
+#[test]
+fn a_bare_general_item_comes_back_with_an_empty_quantity() {
+    let (_dir, ctx) = planted("salt = \"\"\n\n[dairy]\nmilk = \"1%l\"\n");
+
+    let contents = add(
+        &ctx,
+        AddRequest {
+            section: "dairy".to_string(),
+            name: "cheese".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds")
+    .into_value();
+
+    let salt = contents
+        .items()
+        .find(|item| item.name == "salt")
+        .expect("salt survived");
+    assert_eq!(
+        salt.quantity.as_deref(),
+        Some(""),
+        "not None, which is what a bare sectioned item gives"
+    );
+}
+
+/// A non-ASCII item name is not a bare TOML key, so a file that is going to
+/// hold one has to quote it — which `add` does, and a person writing the file
+/// by hand has to.
+#[test]
+fn a_name_that_is_not_a_bare_toml_key_has_to_be_quoted() {
+    let (_dir, ctx) = planted("[mejeri]\nsmörgås = \"1\"\n");
+
+    assert!(matches!(
+        add(
+            &ctx,
+            AddRequest {
+                section: "mejeri".to_string(),
+                name: "äpple".to_string(),
+                ..Default::default()
+            },
+        ),
+        Err(CoreError::Config { .. })
+    ));
+}
+
+/// A section written as an array of item names comes back as a table. The
+/// items survive; the syntax does not.
+#[test]
+fn a_section_written_as_an_array_comes_back_as_a_table() {
+    let (_dir, ctx) = planted("fridge = [\"milk\", \"eggs\"]\n");
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "butter".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let written = read_back(&ctx);
+    assert!(
+        written.contains("[fridge]"),
+        "the array became a section table\n{written}"
+    );
+    assert!(
+        !written.contains("[\"milk\""),
+        "and the array syntax is gone\n{written}"
+    );
+    assert_eq!(
+        names(&load(&ctx).expect("reads back").into_value().sections[0].items),
+        ["milk", "eggs", "butter"],
+        "the items themselves survive"
+    );
+}
+
+#[test]
+fn a_write_keeps_non_ascii_names() {
+    let (_dir, ctx) = planted("[mejeri]\n\"smörgås\" = \"1\"\n");
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "mejeri".to_string(),
+            name: "äpple".to_string(),
+            quantity: Some("3".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    assert_eq!(names(&reread.sections[0].items), ["smörgås", "äpple"]);
+}
+
+/// What the three return is what the file now says, so a caller need not read
+/// it back.
+#[test]
+fn a_change_returns_the_pantry_it_wrote() {
+    let (_dir, ctx) = planted(SMALL);
+
+    let returned = add(
+        &ctx,
+        AddRequest {
+            section: "dairy".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("1%l".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds")
+    .into_value();
+
+    assert_eq!(returned, load(&ctx).expect("reads back").into_value());
+}
+
+// ---------------------------------------------------------------------------
+// Writing the file itself
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_write_leaves_no_temporary_file_behind() {
+    let (_dir, ctx) = planted(SMALL);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let config = ctx.pantry().path().unwrap().parent().unwrap().to_owned();
+    let left: Vec<_> = std::fs::read_dir(&config)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, ["pantry.conf"], "only the pantry itself is left");
+}
+
+/// A pantry symlinked in from a dotfiles repository must be written through,
+/// not replaced by a regular file.
+#[cfg(unix)]
+#[test]
+fn a_write_follows_a_symlinked_pantry() {
+    let dir = temp();
+    let base = base(&dir);
+    let real = base.join("dotfiles").join("pantry.conf");
+    write(&real, SMALL);
+    std::fs::create_dir_all(base.join("config")).unwrap();
+    std::os::unix::fs::symlink(real.as_std_path(), pantry_path(&base).as_std_path()).unwrap();
+
+    let ctx = ctx_at(&base);
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert!(
+        std::fs::symlink_metadata(pantry_path(&base).as_std_path())
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the link itself must survive"
+    );
+    assert!(
+        std::fs::read_to_string(real.as_std_path())
+            .unwrap()
+            .contains("sugar"),
+        "and the change must land on the file it points at"
+    );
+}
+
+/// A temporary file is created from the process umask, which is usually more
+/// permissive than a pantry someone has locked down.
+#[cfg(unix)]
+#[test]
+fn a_write_keeps_the_pantry_file_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (_dir, ctx) = planted(SMALL);
+    let path = ctx.pantry().path().unwrap().to_owned();
+    std::fs::set_permissions(path.as_std_path(), std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let mode = std::fs::metadata(path.as_std_path())
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600, "the pantry must not become readable");
+}
+
+/// The property the whole write dance is for: whatever goes wrong, the pantry
+/// that was there is still there.
+///
+/// The failure is forced by making the directory unwritable, so the test can
+/// only run as a user the permission applies to — root is not one, and the
+/// probe below says so rather than the test quietly passing.
+#[cfg(unix)]
+#[test]
+fn a_failed_write_leaves_the_pantry_untouched() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (_dir, ctx) = planted(SMALL);
+    let config = ctx.pantry().path().unwrap().parent().unwrap().to_owned();
+
+    std::fs::set_permissions(config.as_std_path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let unwritable = std::fs::File::create(config.join("probe").as_std_path()).is_err();
+
+    let result = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    );
+
+    // Restore before asserting, so a failure does not also break the cleanup.
+    std::fs::set_permissions(config.as_std_path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    assert!(
+        unwritable,
+        "this test needs a user that a read-only directory applies to; \
+         running as root makes it prove nothing"
+    );
+    match result {
+        Err(CoreError::Io { path, .. }) => assert_eq!(path, *ctx.pantry().path().unwrap()),
+        other => panic!("expected Io, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "the pantry is exactly as it was");
+    let left: Vec<_> = std::fs::read_dir(config.as_std_path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, ["pantry.conf"], "and no temporary file is left");
+}
+
+/// A pantry that exists but cannot be read must stop the change. Treating an
+/// unreadable file as an empty one would replace it with a one-item pantry —
+/// the worst thing any of this can do.
+///
+/// Unreadable is arranged with a mode, so the test only means anything as a
+/// user that mode applies to; the probe says so rather than passing quietly
+/// under root.
+#[cfg(unix)]
+#[test]
+fn add_refuses_a_pantry_it_cannot_read_rather_than_replacing_it() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (_dir, ctx) = planted(SMALL);
+    let path = ctx.pantry().path().unwrap().to_owned();
+    std::fs::set_permissions(path.as_std_path(), std::fs::Permissions::from_mode(0o000)).unwrap();
+    let unreadable = std::fs::read_to_string(path.as_std_path()).is_err();
+
+    let result = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            ..Default::default()
+        },
+    );
+
+    std::fs::set_permissions(path.as_std_path(), std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    assert!(
+        unreadable,
+        "this test needs a user that a 000 file applies to; running as root \
+         makes it prove nothing"
+    );
+    match result {
+        Err(CoreError::Io { path: named, .. }) => assert_eq!(named, path),
+        other => panic!("expected Io, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "the pantry is exactly as it was");
+}
+
+/// [`write_atomically`] cleans up after itself when the rename fails, which is
+/// the one failure that happens after the temporary file exists.
+///
+/// Renaming a file onto a directory cannot succeed, which is a portable way to
+/// reach that branch — the pantry commands themselves stop earlier than this,
+/// because a directory cannot be read as a pantry either.
+#[test]
+fn a_write_that_fails_after_writing_its_temporary_file_still_removes_it() {
+    let dir = temp();
+    let base = base(&dir);
+    let target = base.join("a-directory");
+    std::fs::create_dir_all(target.join("child").as_std_path()).unwrap();
+
+    match write_atomically(&target, "contents") {
+        Err(CoreError::Io { path, .. }) => assert_eq!(path, target),
+        other => panic!("expected Io, got {other:?}"),
+    }
+
+    let left: Vec<_> = std::fs::read_dir(base.as_std_path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, ["a-directory"], "no temporary file is left behind");
+}
