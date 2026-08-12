@@ -2824,6 +2824,31 @@ git commit -m "refactor(doctor): delegate recipe validation to cookcli-core"
 
 ## Task 10: The aisle diagnostic behaviour fix
 
+> **RESOLVED BY TASK 7 — no separate work required.**
+>
+> This task was written on a false premise. The plan claimed a malformed
+> `aisle.conf` "logs a warning and silently falls back to `Default::default()`",
+> which is self-contradictory, and the second half is wrong: `main` already
+> emitted both the per-warning messages *and* an explicit
+> `"Aisle file parsing failed, using default configuration"` through `warn!`.
+> Nothing was silent from the CLI's point of view.
+>
+> The genuine gap was that the information was **only** a log line — unstructured,
+> and unreachable by a library consumer. Task 7 closed it: `shopping_list::generate`
+> returns those warnings as `Diagnostic`s in its `Outcome`, and the CLI prints them
+> to stderr with file attribution, which is strictly better than before:
+>
+> ```
+> BEFORE:  WARN Aisle configuration warning: Ingredient found before any category
+> AFTER:   WARN /path/to/config/aisle.conf: aisle configuration: Ingredient found before any category
+> ```
+>
+> Verified: stdout is unchanged (`characterize_malformed_aisle_config` is unmoved),
+> and the diagnostic appears on stderr at default verbosity.
+>
+> The steps below are left for the record. Do not execute them.
+
+
 **Files:**
 - Modify: `src/shopping_list.rs`
 - Modify: `tests/snapshots/` (only if a snapshot legitimately changes)
