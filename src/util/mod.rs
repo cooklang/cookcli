@@ -119,6 +119,10 @@ pub fn cli_error(error: cookcli_core::CoreError) -> anyhow::Error {
             anyhow::anyhow!("Failed to parse recipe '{name}'\n{rendered}")
         }
         CoreError::RecipeNotFound { name } => anyhow::anyhow!("Recipe not found: {name}"),
+        // Named here only for the wording `cook pantry` has always used. The
+        // variant carries no source, so nothing is lost by converting it to a
+        // message.
+        CoreError::MissingConfig { kind } => anyhow::anyhow!("No {kind} configuration found"),
         // Named here only for the capital letter: the variant carries no
         // source, so nothing is lost by converting it to a message. `cook
         // doctor validate` is what makes this reachable — a missing or

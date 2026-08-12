@@ -17,6 +17,7 @@ pub mod error;
 pub mod find;
 pub mod format;
 pub mod outcome;
+pub mod pantry;
 pub mod parser;
 pub mod recipe;
 pub mod search;

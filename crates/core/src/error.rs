@@ -55,6 +55,20 @@ pub enum CoreError {
         scale: f64,
     },
 
+    /// A command needed a configuration the context does not carry.
+    ///
+    /// Distinct from [`CoreError::Config`], which means one was supplied and
+    /// could not be understood. Not every command needs one:
+    /// `shopping_list::generate` treats an absent pantry as "subtract
+    /// nothing", where the pantry queries cannot, because the pantry is the
+    /// thing they report on.
+    #[error("no {kind} configuration")]
+    MissingConfig {
+        /// Which configuration is missing, as it is named to the user:
+        /// `"pantry"` is the only one anything returns today.
+        kind: String,
+    },
+
     /// A configuration could not be understood.
     #[error("invalid configuration{}: {message}", .path.as_ref().map(|p| format!(" at {p}")).unwrap_or_default())]
     Config {
@@ -146,6 +160,7 @@ mod tests {
             CoreError::RecipeNotFound { .. }
             | CoreError::Parse { .. }
             | CoreError::InvalidScale { .. }
+            | CoreError::MissingConfig { .. }
             | CoreError::Config { .. }
             | CoreError::Render { .. }
             | CoreError::Reference { .. }
@@ -166,6 +181,9 @@ mod tests {
                 rendered: "line 1\nline 2\n".to_string(),
             },
             CoreError::InvalidScale { scale: f64::NAN },
+            CoreError::MissingConfig {
+                kind: "pantry".to_string(),
+            },
             CoreError::Config {
                 path: None,
                 message: "unknown section".to_string(),

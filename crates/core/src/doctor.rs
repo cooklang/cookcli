@@ -7,12 +7,12 @@
 
 use crate::{
     diagnostic::Severity,
-    find,
+    find::tree_error,
     parser::{collect_diagnostics, render_report, PARSER},
     Context, CoreError, Diagnostic, Outcome, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang_find::{tree::TreeError, RecipeEntry, RecipeTree};
+use cooklang_find::{RecipeEntry, RecipeTree};
 use std::collections::BTreeMap;
 
 /// A validation run.
@@ -307,49 +307,10 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
     path.strip_prefix(base_dir).unwrap_or(path).to_owned()
 }
 
-/// Map a tree-building failure onto the error that describes what happened.
-///
-/// Everything except a listing failure is about the root itself: it is missing,
-/// it is a file, or its name cannot be turned into a glob pattern. None of them
-/// mean a recipe was read and rejected.
-fn tree_error(error: TreeError, base_dir: &Utf8Path) -> CoreError {
-    let search = |message: String| CoreError::Search {
-        base_dir: base_dir.to_owned(),
-        message,
-    };
-    match error {
-        // The variants' own `Display` repeats the path, which the `Search`
-        // rendering already names.
-        TreeError::DirectoryNotFound(_) => search("no such directory".to_string()),
-        TreeError::NotADirectory(_) => search("not a directory".to_string()),
-        TreeError::PatternError(source) => search(source.to_string()),
-        // What a root spelled `./recipes` gets: the walk finds
-        // `recipes/soup.cook`, which does not start with `./recipes`. Reached
-        // by `cook doctor validate -b ./recipes`, so it is worth wording for a
-        // person.
-        TreeError::StripPrefixError(what) => {
-            search(format!("cannot express {what} relative to it"))
-        }
-        // Carries the file it failed on, which is more use than the root.
-        TreeError::GlobError(source) => CoreError::Io {
-            path: Utf8Path::from_path(source.path())
-                .map(Utf8Path::to_owned)
-                .unwrap_or_else(|| base_dir.to_owned()),
-            source: source.into_error(),
-        },
-        // Unreachable through `build_tree`, which skips an entry it cannot
-        // load rather than failing. Mapped rather than ignored so that the
-        // match stops compiling if that changes.
-        TreeError::RecipeEntryError(source) => CoreError::Io {
-            path: base_dir.to_owned(),
-            source: find::entry_error(source),
-        },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cooklang_find::tree::TreeError;
 
     const CLEAN: &str = "---\ntitle: Basic Sauce\n---\n\nHeat @oil{2%tbsp} in a #pan.\n";
     /// Deprecated `>>` metadata parses, with one warning.
