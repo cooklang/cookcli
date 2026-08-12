@@ -72,13 +72,14 @@ pub enum CoreError {
         message: String,
     },
 
-    /// A recipe referenced itself, directly or through other recipes.
-    #[error("circular recipe reference: {chain}")]
-    CircularReference {
-        /// The reference cycle, as recipe names joined by arrows.
-        chain: String,
-    },
-
+    // No variant for a circular recipe reference. Reference expansion is
+    // bounded rather than recursive, so a cycle neither loops nor fails — it
+    // silently double-counts the ingredients it revisits, which is
+    // <https://github.com/cooklang/cookcli/issues/424>. Whoever fixes that
+    // needs to reintroduce a variant here; it was removed rather than left
+    // unreachable, because a public variant nothing can return invites
+    // consumers to write dead match arms and implies a guarantee this crate
+    // does not make.
     /// A recipe reference could not be expanded into its ingredients.
     ///
     /// The referenced recipe was found and parsed; what failed was working out
@@ -131,7 +132,6 @@ mod tests {
             | CoreError::InvalidScale { .. }
             | CoreError::Config { .. }
             | CoreError::Render { .. }
-            | CoreError::CircularReference { .. }
             | CoreError::Reference { .. }
             | CoreError::Io { .. } => {}
         }
@@ -155,9 +155,6 @@ mod tests {
             },
             CoreError::Render {
                 message: "undefined variable".to_string(),
-            },
-            CoreError::CircularReference {
-                chain: "a -> b -> a".to_string(),
             },
             CoreError::Reference {
                 name: "./sauce".to_string(),

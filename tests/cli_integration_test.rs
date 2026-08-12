@@ -277,3 +277,83 @@ fn test_cli_recipe_from_subdirectory() {
         .success()
         .stdout(predicate::str::contains("Pancakes"));
 }
+
+/// A pantry the user named with `--pantry` that cannot be read is fatal — they
+/// asked for that file by name, and quietly shopping as if it were empty could
+/// send them to the shop for things they already own. A pantry merely
+/// *discovered* in `config/` is different: nobody asked for it, so the command
+/// warns and builds the list without it.
+///
+/// Nothing else covers this distinction, and the two halves are one line apart
+/// in `shopping_list::run`, so a refactor could collapse them unnoticed.
+///
+/// Permission bits are the only way to make a file that `is_file()` accepts but
+/// `read_to_string` rejects — checking mere existence is what missed this case
+/// originally. They are not enforced for root, and some filesystems ignore them
+/// entirely, so the test probes whether they bite and skips if they do not,
+/// rather than asserting something untrue.
+#[cfg(unix)]
+#[test]
+fn test_cli_unreadable_pantry_is_fatal_only_when_named_explicitly() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::write(root.join("a.cook"), "Add @tomatoes{3}.\n").unwrap();
+    std::fs::create_dir(root.join("config")).unwrap();
+    // A local aisle config so the output does not depend on the developer's
+    // global `~/.config/cook/aisle.conf`.
+    std::fs::write(root.join("config/aisle.conf"), "[produce]\ntomatoes\n").unwrap();
+    let pantry = root.join("config/pantry.conf");
+    std::fs::write(&pantry, "[cupboard]\ntomatoes = \"1\"\n").unwrap();
+
+    let unreadable = std::fs::Permissions::from_mode(0o000);
+    let readable = std::fs::Permissions::from_mode(0o644);
+    std::fs::set_permissions(&pantry, unreadable).unwrap();
+    if std::fs::read_to_string(&pantry).is_ok() {
+        // Running as root, or on a filesystem that ignores the mode.
+        std::fs::set_permissions(&pantry, readable).unwrap();
+        return;
+    }
+
+    let run = |args: &[&str]| {
+        Command::cargo_bin("cook")
+            .unwrap()
+            .current_dir(root)
+            .arg("shopping-list")
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let discovered = run(&["a.cook"]);
+    let explicit = run(&["--pantry", "config/pantry.conf", "a.cook"]);
+
+    // Restore before asserting: a panic here must not leave a directory the
+    // `TempDir` drop cannot clean up.
+    std::fs::set_permissions(&pantry, readable).unwrap();
+
+    let stdout = String::from_utf8_lossy(&discovered.stdout);
+    let stderr = String::from_utf8_lossy(&discovered.stderr);
+    assert!(
+        discovered.status.success(),
+        "a discovered pantry that cannot be read must not fail the command\n{stderr}"
+    );
+    assert!(
+        stdout.contains("tomatoes 3"),
+        "nothing may be subtracted from a pantry that could not be read: {stdout}"
+    );
+    assert!(
+        stderr.contains("Failed to read pantry file"),
+        "the user must be told the pantry was skipped: {stderr}"
+    );
+
+    let stderr = String::from_utf8_lossy(&explicit.stderr);
+    assert!(
+        !explicit.status.success(),
+        "a pantry named with --pantry that cannot be read must be fatal"
+    );
+    assert!(
+        stderr.contains("pantry.conf"),
+        "the error must name the file it could not read: {stderr}"
+    );
+}

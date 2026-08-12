@@ -403,9 +403,10 @@ fn a_missing_referenced_recipe_is_not_found() {
 }
 
 /// Expansion is bounded rather than recursive, so two recipes referencing each
-/// other terminate instead of looping. This pins the behaviour that makes the
-/// `CircularReference` guard in `extract_into` unreachable today — if expansion
-/// ever becomes recursive, this test is the one that has to change.
+/// other terminate instead of looping — and silently double-count, which is
+/// <https://github.com/cooklang/cookcli/issues/424>. This is the test that has
+/// to change when that is fixed: a recursive expansion would error on the cycle
+/// instead, and would need a `CoreError` variant reintroduced for it.
 #[test]
 fn mutually_referencing_recipes_terminate() {
     let dir = dir_with(&[

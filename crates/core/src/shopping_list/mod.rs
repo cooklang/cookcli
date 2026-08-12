@@ -52,7 +52,6 @@ use cooklang::{
 };
 use cooklang_find::RecipeEntry;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Where to find the aisle configuration format, quoted when there is none.
 const AISLE_DOCS: &str = "https://cooklang.org/docs/spec/#shopping-lists";
@@ -251,7 +250,9 @@ impl ListItem {
 ///   does not exist.
 /// - [`CoreError::Parse`] if any recipe reached has parse errors.
 /// - [`CoreError::Reference`] if a recipe reference cannot be scaled.
-/// - [`CoreError::CircularReference`] if a recipe reaches itself.
+///
+/// A recipe that reaches itself is *not* an error. See
+/// [`extract_ingredients`].
 pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<AggregatedList>, CoreError> {
     let mut diagnostics = Vec::new();
 
@@ -384,10 +385,19 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 ///
 /// Expansion is iterative and stops three files deep: the named recipe, the
 /// recipes it references, and the recipes *those* reference — whose own
-/// references are not followed. It is bounded rather than recursive, so a cycle
-/// terminates instead of looping; the [`CoreError::CircularReference`] guard
-/// below is what a future recursive expansion would need, and cannot be tripped
-/// by the current one.
+/// references are not followed.
+///
+/// # Cycles are not detected
+///
+/// Because expansion is bounded rather than recursive, two recipes that
+/// reference each other neither loop nor fail. They silently double-count: the
+/// ingredients of the starting recipe are added once directly and once more
+/// when the cycle leads back to it. That is
+/// <https://github.com/cooklang/cookcli/issues/424>, pinned by
+/// `mutually_referencing_recipes_terminate`. Fixing it means making expansion
+/// recursive, tracking the recipes on the current path, and adding a
+/// `CoreError` variant for the cycle — deliberately absent today rather than
+/// present and unreachable.
 ///
 /// # Errors
 ///
@@ -398,30 +408,8 @@ pub fn extract_ingredients(
     options: &ExtractOptions<'_>,
     list: &mut IngredientList,
 ) -> Result<Vec<Diagnostic>, CoreError> {
-    let mut seen = BTreeMap::new();
-    extract_into(ctx, recipe, options, list, &mut seen)
-}
-
-fn extract_into(
-    ctx: &Context,
-    recipe: &ScaledRecipe,
-    options: &ExtractOptions<'_>,
-    list: &mut IngredientList,
-    seen: &mut BTreeMap<String, usize>,
-) -> Result<Vec<Diagnostic>, CoreError> {
     let base_path = ctx.base_path();
     let converter = PARSER.converter();
-
-    if seen.contains_key(&recipe.name) {
-        return Err(CoreError::CircularReference {
-            chain: format!(
-                "{} -> {}",
-                seen.keys().cloned().collect::<Vec<_>>().join(" -> "),
-                recipe.name
-            ),
-        });
-    }
-    seen.insert(recipe.name.clone(), seen.len());
 
     let entry = find::get_recipe(base_path, &recipe.name)?;
     let (parsed, mut diagnostics) = parse_entry(&entry, &recipe.name, Some(recipe.scale))?;
@@ -593,8 +581,6 @@ fn extract_into(
             list.add_recipe(&ref_recipe, converter, false);
         }
     }
-
-    seen.remove(&recipe.name);
 
     Ok(diagnostics)
 }
