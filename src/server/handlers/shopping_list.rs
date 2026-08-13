@@ -166,7 +166,10 @@ pub async fn shopping_list(
         for (name, qty) in entries {
             let item_json = serde_json::json!({
                 "name": name,
-                "quantities": qty.into_vec()
+                // Not `into_vec()`: that yields the components in the group's
+                // own random order, so an ingredient measured two ways came
+                // back differently on every request.
+                "quantities": crate::util::format::quantity::ordered_components(&qty)
             });
             shopping_items.push(item_json);
         }
