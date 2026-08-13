@@ -40,7 +40,7 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`313 passed; 0 failed; 26 ignored`** on unix, **312 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
+| `cargo test` | `cookcli` only | **`330 passed; 0 failed; 26 ignored`** on unix, **329 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
