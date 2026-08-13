@@ -35,7 +35,6 @@ fn test_cli_recipe_with_scaling() {
         .stdout(predicate::str::contains("water"));
 }
 
-#[ignore]
 #[test]
 fn test_cli_shopping_list() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -51,7 +50,6 @@ fn test_cli_shopping_list() {
         .stdout(predicate::str::contains("pasta"));
 }
 
-#[ignore]
 #[test]
 fn test_cli_shopping_list_multiple_recipes() {
     let temp_dir = common::setup_test_recipes().unwrap();

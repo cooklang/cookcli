@@ -92,80 +92,12 @@ fn test_recipe_markdown_output() {
     assert_snapshot!(stdout);
 }
 
-#[ignore]
-#[test]
-fn test_shopping_list_plain() {
-    let temp_dir = common::setup_test_recipes().unwrap();
-
-    let output = Command::cargo_bin("cook")
-        .unwrap()
-        .current_dir(temp_dir.path())
-        .arg("shopping-list")
-        .arg("--plain")
-        .arg("simple.cook")
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    // Sort lines for consistent output
-    let mut lines: Vec<&str> = stdout.lines().collect();
-    lines.sort();
-    let sorted = lines.join("\n");
-
-    assert_snapshot!(sorted);
-}
-
-#[ignore]
-#[test]
-fn test_shopping_list_categorized() {
-    let temp_dir = common::setup_test_recipes().unwrap();
-
-    let output = Command::cargo_bin("cook")
-        .unwrap()
-        .current_dir(temp_dir.path())
-        .arg("shopping-list")
-        .arg("simple.cook")
-        .arg("Breakfast/pancakes.cook")
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    // Filter out ANSI color codes for snapshot testing
-    let cleaned = strip_ansi_escapes::strip(&stdout);
-    let cleaned_str = String::from_utf8(cleaned).unwrap();
-
-    assert_snapshot!(cleaned_str);
-}
-
-#[ignore]
-#[test]
-fn test_shopping_list_json() {
-    let temp_dir = common::setup_test_recipes().unwrap();
-
-    let output = Command::cargo_bin("cook")
-        .unwrap()
-        .current_dir(temp_dir.path())
-        .arg("shopping-list")
-        .arg("-f")
-        .arg("json")
-        .arg("--pretty")
-        .arg("simple.cook")
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    // Parse and re-serialize for consistent formatting
-    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    let formatted = serde_json::to_string_pretty(&json).unwrap();
-
-    assert_snapshot!(formatted);
-}
+// The three `shopping-list` snapshots that used to sit here — plain,
+// categorized and json — were `#[ignore]`d with no reason and stale when run.
+// They are not repaired but deleted: `shopping_list_characterization_test`
+// snapshots the same three invocations against a fixture built for it, so
+// repairing these would have re-recorded the same output twice
+// (<https://github.com/cooklang/cookcli/issues/415>).
 
 #[test]
 fn test_doctor_validate_output() {

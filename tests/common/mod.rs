@@ -193,7 +193,7 @@ Tuesday:
 - @./simple{2}
 
 # Wednesday
-- @./with_ref
+- @./with_ref{}
 "#,
     )?;
     Ok(Utf8PathBuf::from_path_buf(menu_path).expect("Path should be UTF-8"))
