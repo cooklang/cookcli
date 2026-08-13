@@ -283,7 +283,11 @@ fn write_cookware(
         write!(w, r"- ")?;
 
         if !item.quantity.is_empty() {
-            write!(w, r"*{}* ", escape_typst(&item.quantity.to_string()))?;
+            write!(
+                w,
+                r"*{}* ",
+                escape_typst(&grouped_quantity_fmt(&item.quantity))
+            )?;
         }
 
         write!(w, r#"#cookware("{}")"#, escape_typst(cw.display_name()))?;

@@ -319,7 +319,7 @@ fn write_cookware(
             write!(
                 w,
                 r"\textbf{{{}}} ",
-                escape_latex(&item.quantity.to_string())
+                escape_latex(&grouped_quantity_fmt(&item.quantity))
             )?;
         }
 

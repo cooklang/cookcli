@@ -307,7 +307,7 @@ fn create_tools_list(recipe: &Recipe, converter: &Converter) -> Vec<String> {
         let mut tool_text = String::new();
 
         if !item.quantity.is_empty() {
-            tool_text.push_str(&item.quantity.to_string());
+            tool_text.push_str(&grouped_quantity_fmt(&item.quantity));
             tool_text.push(' ');
         }
 

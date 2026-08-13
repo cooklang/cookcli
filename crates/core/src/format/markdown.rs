@@ -392,10 +392,11 @@ fn cookware(
         let cw = item.cookware;
         write!(w, "- ")?;
         if !item.quantity.is_empty() {
+            let quantity = grouped_quantity_fmt(&item.quantity);
             if opts.italic_amounts {
-                write!(w, "*{}* ", item.quantity)?;
+                write!(w, "*{quantity}* ")?;
             } else {
-                write!(w, "{} ", item.quantity)?;
+                write!(w, "{quantity} ")?;
             }
         }
         write!(w, "{}", cw.display_name())?;
