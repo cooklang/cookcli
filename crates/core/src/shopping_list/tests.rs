@@ -32,9 +32,14 @@ fn ctx(dir: &tempfile::TempDir) -> Context {
     Context::new(base(dir))
 }
 
+/// A path-backed recipe at its authored scale — the form the CLI builds.
+fn at_path(name: &str) -> ScaledRecipe {
+    ScaledRecipe::new(RecipeSource::Path(name.into()))
+}
+
 fn request(names: &[&str]) -> GenerateRequest {
     GenerateRequest {
-        recipes: names.iter().map(|n| ScaledRecipe::new(*n)).collect(),
+        recipes: names.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
     }
 }
@@ -109,8 +114,8 @@ fn the_request_scale_is_applied_per_recipe() {
         &ctx(&dir),
         GenerateRequest {
             recipes: vec![
-                ScaledRecipe::scaled("a.cook", 2.0),
-                ScaledRecipe::scaled("b.cook", 10.0),
+                ScaledRecipe::scaled(RecipeSource::Path("a.cook".into()), 2.0),
+                ScaledRecipe::scaled(RecipeSource::Path("b.cook".into()), 10.0),
             ],
             ignore_references: false,
         },
@@ -349,7 +354,7 @@ fn ignore_references_leaves_the_reference_as_a_bare_item() {
     let list = generate(
         &ctx(&dir),
         GenerateRequest {
-            recipes: vec![ScaledRecipe::new("main.cook")],
+            recipes: vec![at_path("main.cook")],
             ignore_references: true,
         },
     )
@@ -440,7 +445,7 @@ fn included_references_selects_which_references_to_follow() {
     let included = ["sauce".to_string()];
     extract_ingredients(
         &ctx(&dir),
-        &ScaledRecipe::new("main.cook"),
+        &at_path("main.cook"),
         &ExtractOptions {
             ignore_references: false,
             included_references: Some(&included),
@@ -469,7 +474,7 @@ fn no_included_references_follows_all_of_them() {
     let mut list = IngredientList::new();
     extract_ingredients(
         &ctx(&dir),
-        &ScaledRecipe::new("main.cook"),
+        &at_path("main.cook"),
         &ExtractOptions::default(),
         &mut list,
     )
@@ -492,13 +497,8 @@ fn extract_ingredients_accumulates_across_calls() {
 
     let mut list = IngredientList::new();
     for name in ["a.cook", "b.cook"] {
-        extract_ingredients(
-            &ctx,
-            &ScaledRecipe::new(name),
-            &ExtractOptions::default(),
-            &mut list,
-        )
-        .expect("extracts");
+        extract_ingredients(&ctx, &at_path(name), &ExtractOptions::default(), &mut list)
+            .expect("extracts");
     }
 
     let items: Vec<(&String, String)> = list
@@ -640,4 +640,257 @@ fn items_keep_recipe_order() {
 
     let names: Vec<&str> = list.items.iter().map(|i| i.name.as_str()).collect();
     assert_eq!(names, vec!["zucchini", "apple", "banana"]);
+}
+
+// ---------------------------------------------------------------------------
+// In-memory recipes
+//
+// The case a path-only API cannot serve: an editor putting the buffer someone
+// is typing into onto a shopping list, before it has ever been saved.
+// ---------------------------------------------------------------------------
+
+/// Recipe text with no file behind it at all — the directory is empty, so a
+/// lookup could not have found anything even if one happened.
+#[test]
+fn in_memory_recipe_text_reaches_the_list() {
+    let dir = dir_with(&[]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: "Add @tomatoes{3} and @salt{1%tsp}.\n".to_string(),
+                name: "unsaved buffer".to_string(),
+            })],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["3".to_string()]));
+    assert_eq!(quantities(&list, "salt"), Some(vec!["1 tsp".to_string()]));
+}
+
+/// Two buffers merge into one list exactly as two files would. This is the
+/// editor's `generateShoppingList`, which takes an array of recipe texts.
+#[test]
+fn two_in_memory_recipes_aggregate_into_one_list() {
+    let dir = dir_with(&[]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![
+                ScaledRecipe::new(RecipeSource::Content {
+                    text: "Add @tomatoes{3} and @milk{500%ml}.\n".to_string(),
+                    name: "first".to_string(),
+                }),
+                ScaledRecipe::new(RecipeSource::Content {
+                    text: "Add @tomatoes{2} and @milk{1%l}.\n".to_string(),
+                    name: "second".to_string(),
+                }),
+            ],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["5".to_string()]));
+    assert_eq!(quantities(&list, "milk"), Some(vec!["1500 ml".to_string()]));
+}
+
+/// A path recipe and a buffer in the same request, aggregating together —
+/// nothing about `Content` puts it in a separate list.
+#[test]
+fn a_buffer_and_a_file_aggregate_together() {
+    let dir = dir_with(&[("a.cook", "Add @tomatoes{3}.\n")]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![
+                at_path("a.cook"),
+                ScaledRecipe::new(RecipeSource::Content {
+                    text: "Add @tomatoes{2}.\n".to_string(),
+                    name: "buffer".to_string(),
+                }),
+            ],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["5".to_string()]));
+}
+
+/// The documented boundary: only the *starting* recipe comes from memory. A
+/// buffer that references `@./sauce{}` still has that reference resolved from
+/// disk under `base_path`, and the referenced recipe's ingredients land on the
+/// list.
+#[test]
+fn an_in_memory_recipe_expands_references_from_disk() {
+    let dir = dir_with(&[("sauce.cook", "Simmer @tomatoes{4} in @oil{1%tbsp}.\n")]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: "Prepare @./sauce{} and add @basil{1}.\n".to_string(),
+                name: "buffer".to_string(),
+            })],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["4".to_string()]));
+    assert_eq!(quantities(&list, "oil"), Some(vec!["1 tbsp".to_string()]));
+    assert_eq!(quantities(&list, "basil"), Some(vec!["1".to_string()]));
+    // Expanded, not listed: `sauce` itself is not something to buy. That is
+    // the difference from `ignore_references`, and it must not depend on
+    // whether the recipe came from a file or a buffer.
+    assert_eq!(quantities(&list, "sauce"), None, "{:?}", list.items);
+}
+
+/// The other half of that boundary, stated as a failure: a buffer referencing
+/// a recipe that exists only in another buffer cannot work, and says so in the
+/// same words a path recipe would.
+#[test]
+fn a_reference_from_a_buffer_to_an_unsaved_recipe_is_not_found() {
+    let dir = dir_with(&[]);
+
+    match generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: "Prepare @./sauce{}.\n".to_string(),
+                name: "buffer".to_string(),
+            })],
+            ignore_references: false,
+        },
+    ) {
+        Err(CoreError::RecipeNotFound { name }) => assert!(name.contains("sauce"), "{name}"),
+        other => panic!("expected RecipeNotFound, got {other:?}"),
+    }
+}
+
+/// Mutation guard: `Content` must use the text it was handed and never look
+/// its `name` up. `decoy.cook` exists on disk with entirely different
+/// ingredients, so an implementation that resolved the name would be caught.
+#[test]
+fn in_memory_text_is_used_and_the_name_is_never_looked_up() {
+    let dir = dir_with(&[("decoy.cook", "Simmer @bones{1%kg}.\n")]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: "Add @tomatoes{3}.\n".to_string(),
+                name: "decoy.cook".to_string(),
+            })],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["3".to_string()]));
+    assert_eq!(
+        quantities(&list, "bones"),
+        None,
+        "the file named by `name` must not be read: {:?}",
+        list.items
+    );
+}
+
+#[test]
+fn the_request_scale_applies_to_an_in_memory_recipe() {
+    let dir = dir_with(&[]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Content {
+                    text: "Add @tomatoes{3}.\n".to_string(),
+                    name: "buffer".to_string(),
+                },
+                4.0,
+            )],
+            ignore_references: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["12".to_string()]));
+}
+
+/// Mutation guard: the supplied `name` is what identifies a buffer that will
+/// not parse. Nothing else can — there is no file to name — so an
+/// implementation that dropped it, or substituted a placeholder, would leave
+/// the caller unable to say which of several buffers was at fault.
+#[test]
+fn a_broken_buffer_is_a_parse_error_naming_the_supplied_name() {
+    let dir = dir_with(&[]);
+
+    match generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: "Add @{1%tsp}.\n".to_string(),
+                name: "Untitled-1".to_string(),
+            })],
+            ignore_references: false,
+        },
+    ) {
+        Err(CoreError::Parse {
+            name,
+            diagnostics,
+            rendered,
+        }) => {
+            assert_eq!(name, "Untitled-1");
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(diagnostics[0].severity, Severity::Error);
+            assert!(
+                rendered.contains("Untitled-1"),
+                "the rendered report should point at the buffer: {rendered}"
+            );
+        }
+        other => panic!("expected CoreError::Parse, got {other:?}"),
+    }
+}
+
+/// A warning from a buffer carries a span but no file, because there is no
+/// file to open — the same shape `recipe::read` produces for `Content`. Pinned
+/// so that a future change cannot quietly invent a path here.
+#[test]
+fn a_warning_from_a_buffer_carries_no_file() {
+    let dir = dir_with(&[]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            // Deprecated `>>` metadata parses, but warns.
+            recipes: vec![ScaledRecipe::new(RecipeSource::Content {
+                text: ">> title: Old Style\n\nAdd @salt{1%tsp}.\n".to_string(),
+                name: "buffer".to_string(),
+            })],
+            ignore_references: false,
+        },
+    )
+    .expect("parses despite warning");
+
+    let diagnostic = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.severity == Severity::Warning && d.location.is_some())
+        .unwrap_or_else(|| panic!("expected a recipe warning, got {:?}", outcome.diagnostics));
+    let location = diagnostic.location.as_ref().expect("filtered for Some");
+    assert_eq!(location.file, None, "{diagnostic:?}");
+    assert!(location.span.is_some(), "{diagnostic:?}");
 }

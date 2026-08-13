@@ -231,8 +231,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     let recipes = expanded_recipes
         .iter()
         .map(|entry| match split_recipe_name_and_scaling_factor(entry) {
-            Some((name, scale)) => ScaledRecipe::scaled(name, scale),
-            None => ScaledRecipe::new(entry.as_str()),
+            Some((name, scale)) => {
+                ScaledRecipe::scaled(cookcli_core::RecipeSource::Path(name.into()), scale)
+            }
+            None => ScaledRecipe::new(cookcli_core::RecipeSource::Path(entry.as_str().into())),
         })
         .collect();
 

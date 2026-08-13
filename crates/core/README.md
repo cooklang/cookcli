@@ -90,7 +90,7 @@ designed against one imagined caller. Where each in-scope export lands:
 | Editor export | `cookcli-core` |
 | --- | --- |
 | `parse(input)` | `parse_recipe(text, name, scale)` — the `Outcome` carries the warnings, and errors arrive as `CoreError::Parse` with the same diagnostics attached, so the addon's `{ recipe, errors, warnings }` shape is reconstructible. See the two notes below. |
-| `generateShoppingList(recipesJson, aisleConf?, pantryConf?)` | **Not expressible today.** `shopping_list::generate` takes `ScaledRecipe { name, scale }`, resolved against `Context::base_path` through `cooklang-find`; there is no way to hand it recipe *text*. The aisle and pantry halves are fine (`ConfigSource::Inline`) — it is the recipes that cannot come from a buffer. See "Known gap" below. |
+| `generateShoppingList(recipesJson, aisleConf?, pantryConf?)` | `shopping_list::generate(&ctx, GenerateRequest { recipes, ignore_references })`, with one `ScaledRecipe { source: RecipeSource::Content { .. }, scale }` per element of `recipesJson`, and the two configurations as `ConfigSource::Inline` on the `Context`. Buffers aggregate with each other and with files. See the note on references below. |
 | `findRecipe(baseDir, name)` | `find::get_recipe(base_path, name)`, then `RecipeEntry::content()`. `RecipeEntry` is re-exported, so a consumer needs no `cooklang-find` dependency of its own. |
 | `renderReport(recipe, template, configJson)` | `report::render(&ctx, RenderRequest { source, template, scale, datastore, base_path })`. Takes the template as text rather than a path, so a buffer works; the aisle and pantry paths in the addon's config map onto `Context::aisle` / `Context::pantry`. |
 | `parseShoppingList` / `writeShoppingList` / `parseChecked` / `writeCheckEntry` / `checkedSet` / `compactChecked` | Pure text transforms over `cooklang::shopping_list::{parse, write, parse_checked, write_check_entry, checked_set, compact_checked_log}`, reachable through this crate's `cooklang` re-export. `shopping_list::ShoppingListStore` is the file-backed superset — the `.shopping-list` / `.shopping-checked` pair beside a recipe collection — which is what CookCLI and the web server use. |
@@ -101,14 +101,22 @@ extracted), `startSync` / `stopSync` / `getSyncStatus` /
 reqwest, which this crate has no business depending on), and `LspServer`
 (`cooklang-language-server`).
 
-### Known gap
+Every in-scope export is expressible. Two boundaries are worth stating plainly
+rather than discovering later.
 
-`generateShoppingList` cannot be expressed. Closing it means letting
-`ScaledRecipe` name a `RecipeSource` rather than a `String`, so that
-`generate` and `extract_ingredients` can aggregate recipe text that was never
-written to disk. Until then, an editor building a shopping list from unsaved
-buffers still has to reimplement the aggregation — which is the exact
-duplication this crate exists to remove.
+### In-memory recipes and their references
+
+`ScaledRecipe::source` accepts a buffer, but only for the recipe *itself*. A
+`RecipeSource::Content` recipe that references another recipe (`@./sauce{}`)
+still has that reference resolved from disk, under `Context::base_path`,
+because a reference names a file and nothing in the request carries a second
+buffer to resolve it against. So:
+
+- a buffer whose references all exist on disk works, and the referenced
+  recipes' ingredients are expanded onto the list as usual;
+- a wholly in-memory recipe *graph* does not, and a reference to an unsaved
+  file fails with `CoreError::RecipeNotFound`, exactly as it would for a
+  recipe read from a path.
 
 ### Two notes on `parse`
 

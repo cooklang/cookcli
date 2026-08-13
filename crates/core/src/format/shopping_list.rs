@@ -209,7 +209,7 @@ mod tests {
     use super::*;
     use crate::{
         shopping_list::{generate, GenerateRequest, ScaledRecipe},
-        Context,
+        Context, RecipeSource,
     };
     use camino::Utf8PathBuf;
 
@@ -239,7 +239,10 @@ mod tests {
         generate(
             &ctx,
             GenerateRequest {
-                recipes: vec![ScaledRecipe::new("a.cook"), ScaledRecipe::new("b.cook")],
+                recipes: vec![
+                    ScaledRecipe::new(RecipeSource::Path("a.cook".into())),
+                    ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
+                ],
                 ignore_references: false,
             },
         )
@@ -369,7 +372,10 @@ mod tests {
         let aggregated = generate(
             &Context::new(base),
             GenerateRequest {
-                recipes: vec![ScaledRecipe::new("a.cook"), ScaledRecipe::new("b.cook")],
+                recipes: vec![
+                    ScaledRecipe::new(RecipeSource::Path("a.cook".into())),
+                    ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
+                ],
                 ignore_references: false,
             },
         )

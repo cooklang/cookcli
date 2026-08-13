@@ -51,9 +51,9 @@ use crate::{
     find,
     format::shopping_list::quantity_fmt,
     parser::{parse_recipe_at, parse_unscaled, PARSER},
-    ConfigSource, Context, CoreError, Diagnostic, Outcome,
+    ConfigSource, Context, CoreError, Diagnostic, Outcome, RecipeSource,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{
     aisle::AisleConf, ingredient_list::IngredientList, pantry::PantryConf,
     quantity::GroupedQuantity, quantity::Value, Recipe,
@@ -66,14 +66,30 @@ const AISLE_DOCS: &str = "https://cooklang.org/docs/spec/#shopping-lists";
 
 /// One recipe to include in a shopping list, with its scaling factor.
 ///
+/// The recipe is a [`RecipeSource`], matching
+/// [`recipe::read`](crate::recipe::read): a [`RecipeSource::Path`] is looked up
+/// under [`Context::base_path`], and a [`RecipeSource::Content`] is used as it
+/// stands, so an editor can put an unsaved buffer on a shopping list.
+///
 /// CookCLI's `name:factor` argument spelling is a *command-line* convention
 /// rather than a property of a recipe name, so it is not parsed here — callers
 /// that accept arguments in that form split them with
 /// [`split_name_and_scale`](crate::recipe::split_name_and_scale) first.
+///
+/// # In-memory recipes and their references
+///
+/// Only the recipe *itself* comes from memory. A [`RecipeSource::Content`]
+/// recipe that references another recipe (`@./sauce{}`) still has that
+/// reference resolved from disk under [`Context::base_path`], because a
+/// reference names a file and nothing in this API carries a second buffer to
+/// resolve it against. So a buffer whose references all exist on disk works;
+/// a wholly in-memory recipe *graph* does not, and a reference that names an
+/// unsaved file fails with [`CoreError::RecipeNotFound`] exactly as a path
+/// recipe would.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaledRecipe {
-    /// Recipe name or path, resolved against [`Context::base_path`].
-    pub name: String,
+    /// Where the recipe comes from.
+    pub source: RecipeSource,
     /// Scaling factor applied to the recipe's quantities. Pass `1.0` to leave
     /// them alone.
     pub scale: f64,
@@ -81,19 +97,13 @@ pub struct ScaledRecipe {
 
 impl ScaledRecipe {
     /// A recipe at its authored scale.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            scale: 1.0,
-        }
+    pub fn new(source: RecipeSource) -> Self {
+        Self { source, scale: 1.0 }
     }
 
     /// A recipe scaled by `scale`.
-    pub fn scaled(name: impl Into<String>, scale: f64) -> Self {
-        Self {
-            name: name.into(),
-            scale,
-        }
+    pub fn scaled(source: RecipeSource, scale: f64) -> Self {
+        Self { source, scale }
     }
 }
 
@@ -395,6 +405,10 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// recipes it references, and the recipes *those* reference — whose own
 /// references are not followed.
 ///
+/// **Every reference is resolved from disk**, under [`Context::base_path`],
+/// including the references of a [`RecipeSource::Content`] recipe. Only the
+/// starting recipe can come from memory; see [`ScaledRecipe`].
+///
 /// # Cycles are not detected
 ///
 /// Because expansion is bounded rather than recursive, two recipes that
@@ -419,8 +433,7 @@ pub fn extract_ingredients(
     let base_path = ctx.base_path();
     let converter = PARSER.converter();
 
-    let entry = find::get_recipe(base_path, &recipe.name)?;
-    let (parsed, mut diagnostics) = parse_entry(&entry, &recipe.name, Some(recipe.scale))?;
+    let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
     let ref_indices = list.add_recipe(&parsed, converter, options.ignore_references);
 
     tracing::debug!(
@@ -591,6 +604,31 @@ pub fn extract_ingredients(
     }
 
     Ok(diagnostics)
+}
+
+/// Parse the recipe a [`ScaledRecipe`] names, from disk or from memory.
+///
+/// The two arms differ only in where the text comes from. In-memory text is
+/// attributed to its caller-supplied `name` — the same rule
+/// [`recipe::read`](crate::recipe::read) follows — and carries no file, so
+/// [`Diagnostic::location`] has a span but no path for callers to open.
+/// Deliberately never touches the filesystem for a [`RecipeSource::Content`]:
+/// the whole point is a buffer that has no file yet.
+fn parse_source(
+    base_path: &Utf8Path,
+    source: &RecipeSource,
+    scale: f64,
+) -> Result<(Recipe, Vec<Diagnostic>), CoreError> {
+    match source {
+        RecipeSource::Path(path) => {
+            let entry = find::get_recipe(base_path, path.as_str())?;
+            parse_entry(&entry, path.as_str(), Some(scale))
+        }
+        RecipeSource::Content { text, name } => {
+            let outcome = parse_recipe_at(text, name, scale, None)?;
+            Ok((outcome.value, outcome.diagnostics))
+        }
+    }
 }
 
 /// Read and parse a resolved recipe file.

@@ -29,8 +29,9 @@ pub async fn shopping_list(
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
     for entry in payload {
+        let name = entry.recipe;
         let recipe = ScaledRecipe {
-            name: entry.recipe,
+            source: cookcli_core::RecipeSource::Path(name.as_str().into()),
             scale: entry.scale.unwrap_or(1.0),
         };
 
@@ -52,7 +53,7 @@ pub async fn shopping_list(
         })?;
 
         for diagnostic in diagnostics {
-            tracing::warn!("Recipe '{}': {}", recipe.name, diagnostic.message);
+            tracing::warn!("Recipe '{}': {}", name, diagnostic.message);
         }
     }
 
@@ -395,7 +396,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         extract_ingredients(
             &core_ctx,
             &ScaledRecipe {
-                name: path.to_string(),
+                source: cookcli_core::RecipeSource::Path(path.into()),
                 scale,
             },
             &ExtractOptions {
