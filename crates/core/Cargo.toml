@@ -1,0 +1,51 @@
+[package]
+name = "cookcli-core"
+version = "0.1.0"
+edition = "2021"
+description = "Recipe, shopping list, pantry and report operations for Cooklang, extracted from CookCLI"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/cooklang/cookcli"
+homepage = "https://cooklang.org"
+keywords = ["cooklang", "recipes", "cooking"]
+categories = ["parser-implementations"]
+
+# Dependencies are added by the task that first needs them, so that this
+# manifest always describes what the crate actually uses.
+[dependencies]
+# Strips ANSI escape codes at the writer, so that `format::Style::Plain` can be
+# honoured without touching yansi's global colour switch.
+anstream = "0.6"
+anstyle = "1"
+anstyle-yansi = "2"
+camino = { version = "1", features = ["serde1"] }
+# Reading and comparing the dates pantry items carry. Keep this declaration in
+# step with the root manifest's.
+chrono = "0.4"
+# Keep this declaration in step with the root manifest's. `bundled_units` is
+# deliberately absent: enabling it here would switch it back on for `cookcli`
+# through feature unification and undo #433, which removed it so quantities
+# keep their authored units.
+cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+# Recipe lookup by path or bare name. Keep this declaration in step with the
+# root manifest's, so both crates resolve the same version.
+cooklang-find = { version = "0.6.1", default-features = false }
+# Jinja2 report rendering. Keep this declaration in step with the root
+# manifest's, so both crates resolve the same version.
+cooklang-reports = "0.5.1"
+directories = "6"
+humantime = "2"
+regex = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+# `ansi-cell` lets the human formatter measure column widths ignoring escapes.
+tabular = { version = "0.2", features = ["ansi-cell"] }
+# `terminal_size` backs `textwrap::termwidth()`, which sets the wrap width.
+textwrap = { version = "0.16", features = ["terminal_size"] }
+thiserror = "2"
+tracing = "0.1"
+yansi = "1"
+
+[dev-dependencies]
+tempfile = "3"

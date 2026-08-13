@@ -1,0 +1,14 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&malformed_aisle_fixture(), &[\"pasta.cook\", \"salad.cook\"])"
+---
+[other]
+pasta     200 g
+water     2 l
+salt      2 tsp
+garlic    2 cloves
+olive oil 3 tbsp
+tomatoes  5
+flour     1 cup, 200 g
+milk      1 l, 500 ml
+lettuce   1 head

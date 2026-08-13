@@ -118,7 +118,10 @@ pub async fn recipe(
         .map(|entry| {
             serde_json::json!({
                 "index": entry.index,
-                "quantities": entry.quantity.into_vec()
+                // Not `into_vec()`: that yields the components in the group's
+                // own random order, so an ingredient measured two ways came
+                // back differently on every request.
+                "quantities": crate::util::format::quantity::ordered_components(&entry.quantity)
             })
         })
         .collect();

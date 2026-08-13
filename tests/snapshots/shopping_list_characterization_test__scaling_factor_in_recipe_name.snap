@@ -1,0 +1,18 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"pasta.cook:3\"])"
+---
+[produce]
+tomatoes  9
+garlic    6 cloves
+[dairy]
+milk      1500 ml
+[dry goods]
+pasta     600 g
+flour     600 g
+[condiments]
+olive oil 6 tbsp
+[spices]
+salt      3 tsp
+[other]
+water     6 l

@@ -1,6 +1,4 @@
 // Re-export modules for testing
-use anyhow::{Context as _, Result};
-use camino::{Utf8Path, Utf8PathBuf};
 
 // Commands - make them available as public modules
 pub mod build;
@@ -31,47 +29,17 @@ pub mod web;
 pub mod args;
 pub mod util;
 
-// Context struct for testing - matches the one in main.rs
-pub struct Context {
-    base_path: Utf8PathBuf,
-}
+/// The one `Context` definition, shared with every other consumer of the
+/// library.
+///
+/// The binary and this library are two crate roots over the same sources, so
+/// each used to carry its own copy — and they had drifted apart, one searching
+/// the platform configuration directory and one not
+/// (<https://github.com/cooklang/cookcli/issues/417>). Re-exporting core's
+/// leaves nowhere for them to drift.
+pub use cookcli_core::Context;
 
-impl Context {
-    pub fn new(base_path: Utf8PathBuf) -> Self {
-        Self { base_path }
-    }
-
-    pub fn aisle(&self) -> Option<Utf8PathBuf> {
-        let local_config = self.base_path.join("config").join("aisle.conf");
-        if local_config.is_file() {
-            Some(local_config)
-        } else {
-            None
-        }
-    }
-
-    pub fn pantry(&self) -> Option<Utf8PathBuf> {
-        let local_config = self.base_path.join("config").join("pantry.conf");
-        if local_config.is_file() {
-            Some(local_config)
-        } else {
-            None
-        }
-    }
-
-    pub fn base_path(&self) -> &Utf8PathBuf {
-        &self.base_path
-    }
-}
-
-const APP_NAME: &str = "cook";
-const UTF8_PATH_PANIC: &str = "cook only supports UTF-8 paths.";
-
-/// Resolve a global configuration file path (e.g. `~/.config/cook/{name}`).
-pub fn global_file_path(name: &str) -> Result<Utf8PathBuf> {
-    let dirs = directories::ProjectDirs::from("", "", APP_NAME)
-        .context("Could not determine home directory path")?;
-    let config = Utf8Path::from_path(dirs.config_dir()).expect(UTF8_PATH_PANIC);
-    let path = config.join(name);
-    Ok(path)
-}
+/// The core library, re-exported so a consumer of `cookcli` can name its types
+/// without adding a `cookcli-core` dependency that could resolve to a
+/// different version.
+pub use cookcli_core;

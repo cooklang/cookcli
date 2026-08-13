@@ -1,0 +1,24 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"-f\", \"markdown\", \"pasta.cook\", \"salad.cook\"])"
+---
+# produce
+- *5* tomatoes
+- *1 head* lettuce
+- *2 cloves* garlic
+
+# dairy
+- *1 l, 500 ml* milk
+
+# dry goods
+- *200 g* pasta
+- *1 cup, 200 g* flour
+
+# condiments
+- *3 tbsp* olive oil
+
+# spices
+- *2 tsp* salt
+
+# other
+- *2 l* water

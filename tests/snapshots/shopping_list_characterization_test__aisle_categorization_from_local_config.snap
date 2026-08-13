@@ -1,0 +1,22 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"pasta.cook\", \"salad.cook\", \"sauce.cook\", \"main.cook\"])"
+---
+[produce]
+tomatoes     13
+lettuce      1 head
+garlic       8 cloves
+[dairy]
+milk         1 l, 500 ml
+butter       50 g
+[dry goods]
+pasta        200 g
+flour        1 cup, 200 g
+rice         300 g
+[condiments]
+olive oil    5 tbsp
+[spices]
+salt         2 tsp
+black pepper 2 tsp
+[other]
+water        2 l

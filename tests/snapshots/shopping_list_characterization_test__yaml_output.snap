@@ -1,0 +1,100 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"-f\", \"yaml\", \"pasta.cook\", \"salad.cook\"])"
+---
+- category: produce
+  items:
+  - name: tomatoes
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 5.0
+      unit: null
+  - name: lettuce
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 1.0
+      unit: head
+  - name: garlic
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 2.0
+      unit: cloves
+- category: dairy
+  items:
+  - name: milk
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 1.0
+      unit: l
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 500.0
+      unit: ml
+- category: dry goods
+  items:
+  - name: pasta
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 200.0
+      unit: g
+  - name: flour
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 1.0
+      unit: cup
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 200.0
+      unit: g
+- category: condiments
+  items:
+  - name: olive oil
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 3.0
+      unit: tbsp
+- category: spices
+  items:
+  - name: salt
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 2.0
+      unit: tsp
+- category: other
+  items:
+  - name: water
+    quantity:
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 2.0
+      unit: l

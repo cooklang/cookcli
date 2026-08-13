@@ -350,11 +350,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
             (None, None)
         } else {
-            let quantities: Vec<_> = quantity
-                .iter()
+            let quantities: Vec<_> = crate::util::format::quantity::ordered_components(&quantity)
+                .into_iter()
                 .map(|q| {
                     let qty_str =
-                        crate::util::format::format_quantity(q.value()).unwrap_or_default();
+                        crate::util::format::number::format_quantity(q.value()).unwrap_or_default();
                     let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                     if unit_str.is_empty() {
                         qty_str
@@ -433,7 +433,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                     step_ingredients.push(StepIngredient {
                                         name: ing.name.to_string(),
                                         quantity: ing.quantity.as_ref().and_then(|q| {
-                                            crate::util::format::format_quantity(q.value())
+                                            crate::util::format::number::format_quantity(q.value())
                                         }),
                                         unit: ing
                                             .quantity
@@ -455,7 +455,9 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                     // Add timer quantity and unit
                                     if let Some(quantity) = &timer.quantity {
                                         if let Some(formatted) =
-                                            crate::util::format::format_quantity(quantity.value())
+                                            crate::util::format::number::format_quantity(
+                                                quantity.value(),
+                                            )
                                         {
                                             timer_text.push_str(&formatted);
                                         }
@@ -477,8 +479,9 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             }
                             Item::InlineQuantity { index } => {
                                 if let Some(q) = recipe.inline_quantities.get(*index) {
-                                    let mut qty = crate::util::format::format_quantity(q.value())
-                                        .unwrap_or_default();
+                                    let mut qty =
+                                        crate::util::format::number::format_quantity(q.value())
+                                            .unwrap_or_default();
                                     if let Some(unit) = q.unit() {
                                         if !qty.is_empty() {
                                             qty.push_str(&format!(" {unit}"));
@@ -599,20 +602,22 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
                     (None, None)
                 } else {
-                    let quantities: Vec<_> = quantity
-                        .iter()
-                        .map(|q| {
-                            let qty_str =
-                                crate::util::format::format_quantity(q.value()).unwrap_or_default();
-                            let unit_str =
-                                q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
-                            if unit_str.is_empty() {
-                                qty_str
-                            } else {
-                                format!("{} {}", qty_str, unit_str)
-                            }
-                        })
-                        .collect();
+                    let quantities: Vec<_> =
+                        crate::util::format::quantity::ordered_components(&quantity)
+                            .into_iter()
+                            .map(|q| {
+                                let qty_str =
+                                    crate::util::format::number::format_quantity(q.value())
+                                        .unwrap_or_default();
+                                let unit_str =
+                                    q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
+                                if unit_str.is_empty() {
+                                    qty_str
+                                } else {
+                                    format!("{} {}", qty_str, unit_str)
+                                }
+                            })
+                            .collect();
                     (Some(quantities.join(", ")), None)
                 };
 
@@ -639,7 +644,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
                     let (formatted_quantity, formatted_unit) = if let Some(q) = &ingredient.quantity
                     {
-                        let qty_str = crate::util::format::format_quantity(q.value());
+                        let qty_str = crate::util::format::number::format_quantity(q.value());
                         let unit_str = q.unit().as_ref().map(|u| u.to_string());
                         (qty_str, unit_str)
                     } else {
@@ -699,7 +704,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 } else if let Some(n) = v.as_i64() {
                     Some(n.to_string())
                 } else {
-                    v.as_f64().map(crate::util::format::format_number)
+                    v.as_f64().map(crate::util::format::number::format_number)
                 }
             })
         };
@@ -939,7 +944,7 @@ fn build_menu_template_inner(
                                 } else {
                                     // Regular ingredient
                                     let quantity = ing.quantity.as_ref().and_then(|q| {
-                                        crate::util::format::format_quantity(q.value())
+                                        crate::util::format::number::format_quantity(q.value())
                                     });
                                     let unit = ing
                                         .quantity
@@ -994,7 +999,7 @@ fn build_menu_template_inner(
                 } else if let Some(n) = v.as_i64() {
                     Some(n.to_string())
                 } else {
-                    v.as_f64().map(crate::util::format::format_number)
+                    v.as_f64().map(crate::util::format::number::format_number)
                 }
             })
         };

@@ -64,8 +64,8 @@ const CHANNEL_CAPACITY: usize = 16;
 /// memory if a runaway producer touches files in a tight loop.
 const BRIDGE_CAPACITY: usize = 32;
 
-/// Debounce window. Collapses the create+modify burst produced by
-/// `shopping_list_store::compact()`'s atomic rename.
+/// Debounce window. Collapses the create+modify burst produced by the atomic
+/// rename `cookcli_core::shopping_list::ShoppingListStore` writes with.
 const DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// Construct a broadcast sender and spawn a background task that watches
@@ -168,9 +168,12 @@ mod tests {
         assert_eq!(classify_path(&base(), &p), Some(WatchedFile::Checked));
     }
 
+    /// The store stages every rewrite in a `.<name>.<pid>.tmp` sibling before
+    /// renaming it into place. Reacting to the staging file would fire an
+    /// event for a file no client can read.
     #[test]
     fn ignores_temp_file_from_atomic_rename() {
-        let p = PathBuf::from("/tmp/recipes/.shopping-checked.tmp");
+        let p = PathBuf::from("/tmp/recipes/..shopping-checked.4321.tmp");
         assert_eq!(classify_path(&base(), &p), None);
     }
 

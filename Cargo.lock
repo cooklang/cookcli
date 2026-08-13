@@ -653,8 +653,6 @@ version = "0.33.1"
 dependencies = [
  "accept-language",
  "anstream 0.6.21",
- "anstyle",
- "anstyle-yansi",
  "anyhow",
  "askama",
  "askama_axum",
@@ -664,6 +662,7 @@ dependencies = [
  "camino",
  "chrono",
  "clap",
+ "cookcli-core",
  "cooklang",
  "cooklang-find",
  "cooklang-import",
@@ -675,7 +674,6 @@ dependencies = [
  "fluent",
  "fluent-templates",
  "futures-util",
- "humantime",
  "insta",
  "libsqlite3-sys",
  "mime_guess",
@@ -694,7 +692,6 @@ dependencies = [
  "sys-locale",
  "tabular",
  "tempfile",
- "textwrap",
  "thiserror 2.0.19",
  "tokio",
  "tokio-stream",
@@ -710,6 +707,32 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
+ "yansi",
+]
+
+[[package]]
+name = "cookcli-core"
+version = "0.1.0"
+dependencies = [
+ "anstream 0.6.21",
+ "anstyle",
+ "anstyle-yansi",
+ "camino",
+ "chrono",
+ "cooklang",
+ "cooklang-find",
+ "cooklang-reports",
+ "directories",
+ "humantime",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tabular",
+ "tempfile",
+ "textwrap",
+ "thiserror 2.0.19",
+ "tracing",
  "yansi",
 ]
 

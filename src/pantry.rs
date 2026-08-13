@@ -1,42 +1,9 @@
-use anyhow::{Context, Result};
-use chrono::prelude::*;
+use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
-use cooklang::pantry::PantryItem;
-use cooklang_find::build_tree;
+use cookcli_core::pantry as core;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
 
-use crate::{util::parse_recipe_from_entry, Context as AppContext};
-
-fn load_pantry_conf(path: &camino::Utf8PathBuf) -> Result<cooklang::pantry::PantryConf> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read pantry file at {path}"))?;
-    let result = cooklang::pantry::parse_lenient(&content);
-    result.output().cloned().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to parse pantry configuration: {:?}",
-            result.report()
-        )
-    })
-}
-
-fn write_pantry_conf(
-    path: &camino::Utf8PathBuf,
-    conf: &cooklang::pantry::PantryConf,
-) -> Result<()> {
-    let content = cooklang::pantry::to_toml_string(conf);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {parent}"))?;
-    }
-    std::fs::write(path, content).with_context(|| format!("Failed to write pantry file at {path}"))
-}
-
-/// Return the pantry path, or a sensible default for creating a new file.
-fn pantry_path_or_default(ctx: &AppContext) -> camino::Utf8PathBuf {
-    ctx.pantry()
-        .unwrap_or_else(|| ctx.base_path().join("config").join("pantry.conf"))
-}
+use crate::{util::cli_error, Context as AppContext};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -319,7 +286,7 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
     let new_ctx;
     let ctx = if let Some(base_path) = args.base_path {
         let absolute_base_path = crate::util::resolve_to_absolute_path(&base_path)?;
-        new_ctx = AppContext::new(absolute_base_path);
+        new_ctx = AppContext::discover(absolute_base_path);
         &new_ctx
     } else {
         ctx
@@ -340,72 +307,19 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
 }
 
 fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let content = std::fs::read_to_string(&pantry_path)
-        .with_context(|| format!("Failed to read pantry file at {pantry_path}"))?;
-
-    let result = cooklang::pantry::parse_lenient(&content);
-    let pantry_conf = result.output().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to parse pantry configuration: {:?}",
-            result.report()
-        )
-    })?;
-
-    let mut depleted_items = Vec::new();
-
-    for (section, items) in &pantry_conf.sections {
-        for item in items {
-            let is_low = item.is_low();
-            let should_show = if is_low {
-                true
-            } else {
-                match item {
-                    PantryItem::Simple(_) => args.all,
-                    PantryItem::WithAttributes(attrs) => {
-                        // Check if user set an explicit low threshold
-                        if let Some(low) = &attrs.low {
-                            // User has set a threshold
-                            // Only trust it if the units match (so we can actually compare them)
-                            if let Some(quantity) = &attrs.quantity {
-                                if units_match(quantity, low) {
-                                    // Units match, trust the threshold comparison result
-                                    args.all
-                                } else {
-                                    // Units don't match, use default rules instead
-                                    is_low_quantity(quantity)
-                                }
-                            } else {
-                                args.all
-                            }
-                        } else {
-                            // No explicit threshold set, use default rules
-                            if let Some(quantity) = &attrs.quantity {
-                                is_low_quantity(quantity)
-                            } else {
-                                args.all
-                            }
-                        }
-                    }
-                }
-            };
-
-            if should_show {
-                let quantity = item.quantity().map(|q| q.to_string());
-                let low_threshold = item.low().map(|l| l.to_string());
-
-                depleted_items.push(DepletedItem {
-                    name: item.name().to_string(),
-                    section: section.clone(),
-                    quantity,
-                    low_threshold,
-                    is_low,
-                });
-            }
-        }
-    }
+    let depleted_items: Vec<DepletedItem> =
+        core::depleted(ctx, core::DepletedRequest { all: args.all })
+            .map_err(cli_error)?
+            .into_value()
+            .into_iter()
+            .map(|item| DepletedItem {
+                is_low: item.is_low(),
+                name: item.name,
+                section: item.section,
+                quantity: item.quantity,
+                low_threshold: item.low,
+            })
+            .collect();
 
     match format {
         OutputFormat::Human => {
@@ -450,64 +364,24 @@ fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> R
 }
 
 fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let content = std::fs::read_to_string(&pantry_path)
-        .with_context(|| format!("Failed to read pantry file at {pantry_path}"))?;
-
-    let result = cooklang::pantry::parse_lenient(&content);
-    let pantry_conf = result.output().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to parse pantry configuration: {:?}",
-            result.report()
-        )
-    })?;
-
-    let today = Local::now().date_naive();
-    let threshold_date = today + chrono::Duration::days(args.days as i64);
-
-    let mut expiring_list = Vec::new();
-
-    for (section, items) in &pantry_conf.sections {
-        for item in items {
-            let expire_date = item.expire().and_then(parse_date);
-
-            if let Some(date) = expire_date {
-                if date <= threshold_date {
-                    let days_until = (date - today).num_days();
-                    let status = if days_until < 0 {
-                        format!("EXPIRED {} days ago", -days_until)
-                    } else if days_until == 0 {
-                        "EXPIRES TODAY".to_string()
-                    } else if days_until == 1 {
-                        "expires tomorrow".to_string()
-                    } else {
-                        format!("expires in {days_until} days")
-                    };
-
-                    expiring_list.push(ExpiringItem {
-                        name: item.name().to_string(),
-                        section: section.clone(),
-                        expire_date: Some(date.format("%Y-%m-%d").to_string()),
-                        days_until_expiry: Some(days_until),
-                        status,
-                    });
-                }
-            } else if args.include_unknown {
-                expiring_list.push(ExpiringItem {
-                    name: item.name().to_string(),
-                    section: section.clone(),
-                    expire_date: None,
-                    days_until_expiry: None,
-                    status: "No expiry date".to_string(),
-                });
-            }
-        }
-    }
-
-    // Sort by days until expiry
-    expiring_list.sort_by_key(|item| item.days_until_expiry.unwrap_or(i64::MAX));
+    let expiring_list: Vec<ExpiringItem> = core::expiring(
+        ctx,
+        core::ExpiringRequest {
+            days: args.days,
+            include_unknown: args.include_unknown,
+        },
+    )
+    .map_err(cli_error)?
+    .into_value()
+    .into_iter()
+    .map(|expiring| ExpiringItem {
+        status: expiry_status(expiring.days_until_expiry),
+        expire_date: expiring.expire_date,
+        days_until_expiry: expiring.days_until_expiry,
+        name: expiring.item.name,
+        section: expiring.item.section,
+    })
+    .collect();
 
     match format {
         OutputFormat::Human => {
@@ -565,104 +439,27 @@ fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> R
 }
 
 fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let content = std::fs::read_to_string(&pantry_path)
-        .with_context(|| format!("Failed to read pantry file at {pantry_path}"))?;
+    let matches = core::recipes(
+        ctx,
+        core::RecipesRequest {
+            threshold: args.threshold,
+        },
+    )
+    .map_err(cli_error)?
+    .into_value();
 
-    let result = cooklang::pantry::parse_lenient(&content);
-    let pantry_conf = result.output().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to parse pantry configuration: {:?}",
-            result.report()
-        )
-    })?;
-
-    // Build a set of available ingredients (normalized to lowercase)
-    let mut pantry_ingredients = HashSet::new();
-    for items in pantry_conf.sections.values() {
-        for item in items {
-            pantry_ingredients.insert(item.name().to_lowercase());
-        }
-    }
-
-    // Build recipe tree
-    let tree = build_tree(ctx.base_path()).context("Failed to build recipe tree")?;
-
-    let mut full_matches = Vec::new();
-    let mut partial_matches_raw = Vec::new();
-
-    // Recursively process recipes in the tree
-    fn process_tree(
-        tree: &cooklang_find::RecipeTree,
-        pantry_ingredients: &HashSet<String>,
-        full_matches: &mut Vec<String>,
-        partial_matches: &mut Vec<(String, usize, Vec<String>)>,
-        args: &RecipesArgs,
-    ) {
-        // Check if this node has a recipe
-        if let Some(entry) = &tree.recipe {
-            // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
-                // Get all ingredients from the recipe (excluding recipe references)
-                let mut recipe_ingredients = HashSet::new();
-                for ingredient in &recipe.ingredients {
-                    // Skip recipe references
-                    if ingredient.reference.is_some() {
-                        continue;
-                    }
-                    if ingredient.modifiers().should_be_listed() {
-                        recipe_ingredients
-                            .insert(ingredient.display_name().to_string().to_lowercase());
-                    }
-                }
-
-                if !recipe_ingredients.is_empty() {
-                    // Check how many ingredients are available in pantry
-                    let available_count = recipe_ingredients
-                        .iter()
-                        .filter(|ing| pantry_ingredients.contains(*ing))
-                        .count();
-
-                    let total_count = recipe_ingredients.len();
-                    let percentage = (available_count * 100) / total_count;
-
-                    let recipe_name = entry.name().as_deref().unwrap_or("unknown").to_string();
-
-                    if available_count == total_count {
-                        full_matches.push(recipe_name);
-                    } else if args.partial && percentage >= args.threshold as usize {
-                        let missing: Vec<_> = recipe_ingredients
-                            .iter()
-                            .filter(|ing| !pantry_ingredients.contains(*ing))
-                            .cloned()
-                            .collect();
-                        partial_matches.push((recipe_name, percentage, missing));
-                    }
-                }
-            }
-        }
-
-        // Recursively check children
-        for subtree in tree.children.values() {
-            process_tree(
-                subtree,
-                pantry_ingredients,
-                full_matches,
-                partial_matches,
-                args,
-            );
-        }
-    }
-
-    process_tree(
-        &tree,
-        &pantry_ingredients,
-        &mut full_matches,
-        &mut partial_matches_raw,
-        &args,
-    );
+    let full_matches = matches.full;
+    // Core reports partial matches whether or not they were asked for; showing
+    // them is what `--partial` decides.
+    let partial_matches_raw: Vec<(String, usize, Vec<String>)> = if args.partial {
+        matches
+            .partial
+            .into_iter()
+            .map(|m| (m.name, m.percentage, m.missing))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     match format {
         OutputFormat::Human => {
@@ -737,58 +534,30 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
 }
 
 fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()> {
-    // Build recipe tree
-    let tree = build_tree(ctx.base_path()).context("Failed to build recipe tree")?;
+    let plan = core::plan(
+        ctx,
+        core::PlanRequest {
+            max_ingredients: args.max_ingredients,
+            allow_missing: args.allow_missing,
+        },
+    )
+    .map_err(cli_error)?
+    .into_value();
 
-    // Structure to hold recipe information
-    struct RecipeInfo {
-        ingredients: HashSet<String>,
-    }
+    let total_recipes = plan.total_recipes;
+    let cookable_count = plan.cookable_recipes();
+    let coverage_percentage = plan.coverage_percentage();
+    let selected_ingredients: Vec<IngredientStep> = plan
+        .steps
+        .into_iter()
+        .map(|step| IngredientStep {
+            name: step.name,
+            new_recipes_unlocked: step.new_recipes_unlocked,
+            total_cookable: step.total_cookable,
+        })
+        .collect();
 
-    let mut recipes: Vec<RecipeInfo> = Vec::new();
-
-    // Recursively process recipes in the tree
-    fn process_tree(tree: &cooklang_find::RecipeTree, recipes: &mut Vec<RecipeInfo>) {
-        // Check if this node has a recipe
-        if let Some(entry) = &tree.recipe {
-            // Skip .menu files - only process .cook files
-            if entry.is_menu() {
-                return;
-            }
-
-            // Parse the recipe
-            if let Ok(recipe) = parse_recipe_from_entry(entry, 1.0) {
-                let mut recipe_ingredients = HashSet::new();
-
-                // Get all ingredients from the recipe (excluding recipe references)
-                for ingredient in &recipe.ingredients {
-                    // Skip recipe references
-                    if ingredient.reference.is_some() {
-                        continue;
-                    }
-                    if ingredient.modifiers().should_be_listed() {
-                        let name = ingredient.display_name().to_string();
-                        recipe_ingredients.insert(name);
-                    }
-                }
-
-                if !recipe_ingredients.is_empty() {
-                    recipes.push(RecipeInfo {
-                        ingredients: recipe_ingredients,
-                    });
-                }
-            }
-        }
-
-        // Recursively check children
-        for subtree in tree.children.values() {
-            process_tree(subtree, recipes);
-        }
-    }
-
-    process_tree(&tree, &mut recipes);
-
-    if recipes.is_empty() {
+    if total_recipes == 0 {
         match format {
             OutputFormat::Human => println!("No recipes found in collection."),
             OutputFormat::Json => {
@@ -812,67 +581,6 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
         }
         return Ok(());
     }
-
-    // Greedy coverage algorithm
-    // Track which ingredients are still needed for each recipe
-    let mut recipe_missing: Vec<HashSet<String>> =
-        recipes.iter().map(|r| r.ingredients.clone()).collect();
-
-    let mut selected_ingredients: Vec<IngredientStep> = Vec::new();
-    let mut cookable_count = 0;
-    let total_recipes = recipes.len();
-
-    // Continue until all recipes are cookable or we hit the limit
-    let max_ingredients = args.max_ingredients.unwrap_or(usize::MAX);
-
-    while cookable_count < total_recipes && selected_ingredients.len() < max_ingredients {
-        // Count how many recipes each ingredient appears in (among remaining recipes)
-        let mut ingredient_scores: HashMap<String, usize> = HashMap::new();
-
-        for missing_set in &recipe_missing {
-            for ingredient in missing_set {
-                *ingredient_scores.entry(ingredient.clone()).or_insert(0) += 1;
-            }
-        }
-
-        if ingredient_scores.is_empty() {
-            break; // No more ingredients to select
-        }
-
-        // Select the ingredient that appears in the most recipes
-        let best_ingredient = ingredient_scores
-            .iter()
-            .max_by_key(|(_, &count)| count)
-            .map(|(ing, _)| ing.clone())
-            .unwrap();
-
-        // Remove this ingredient from all recipe missing lists
-        let mut new_recipe_missing = Vec::new();
-        let mut newly_cookable = 0;
-
-        for mut missing_set in recipe_missing {
-            missing_set.remove(&best_ingredient);
-
-            if missing_set.len() <= args.allow_missing {
-                // This recipe is now cookable (with N or fewer missing ingredients)
-                newly_cookable += 1;
-            } else {
-                // Still missing some ingredients
-                new_recipe_missing.push(missing_set);
-            }
-        }
-
-        recipe_missing = new_recipe_missing;
-        cookable_count += newly_cookable;
-
-        selected_ingredients.push(IngredientStep {
-            name: best_ingredient,
-            new_recipes_unlocked: newly_cookable,
-            total_cookable: cookable_count,
-        });
-    }
-
-    let coverage_percentage = (cookable_count * 100) / total_recipes.max(1);
 
     // Output results
     match format {
@@ -976,36 +684,34 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 // ---------------------------------------------------------------------------
 
 fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let pantry_conf = load_pantry_conf(&pantry_path)?;
+    let sections: Vec<ListSection> = core::list(
+        ctx,
+        core::ListRequest {
+            section: args.section.clone(),
+        },
+    )
+    .map_err(cli_error)?
+    .into_value()
+    .sections
+    .into_iter()
+    .map(|section| ListSection {
+        name: section.name,
+        items: section
+            .items
+            .into_iter()
+            .map(|item| ListItem {
+                name: item.name,
+                quantity: item.quantity,
+                bought: item.bought,
+                expire: item.expire,
+                low: item.low,
+            })
+            .collect(),
+    })
+    .collect();
 
-    // Build filtered list of sections
-    let sections: Vec<ListSection> = pantry_conf
-        .sections
-        .iter()
-        .filter(|(name, _)| {
-            args.section
-                .as_ref()
-                .map(|s| s.eq_ignore_ascii_case(name))
-                .unwrap_or(true)
-        })
-        .map(|(name, items)| ListSection {
-            name: name.clone(),
-            items: items
-                .iter()
-                .map(|item| ListItem {
-                    name: item.name().to_string(),
-                    quantity: item.quantity().map(|q| q.to_string()),
-                    bought: item.bought().map(|b| b.to_string()),
-                    expire: item.expire().map(|e| e.to_string()),
-                    low: item.low().map(|l| l.to_string()),
-                })
-                .collect(),
-        })
-        .collect();
-
+    // Core reports what is there and leaves this to the caller: asking for a
+    // section that is not in the file is an error here, and always has been.
     if let Some(ref filter) = args.section {
         if sections.is_empty() {
             anyhow::bail!("Section '{}' not found in pantry", filter);
@@ -1059,84 +765,41 @@ fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()
 }
 
 fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
-    let pantry_path = pantry_path_or_default(ctx);
-
-    // Load existing pantry or start fresh
-    let mut pantry_conf = if pantry_path.exists() {
-        load_pantry_conf(&pantry_path)?
-    } else {
-        cooklang::pantry::PantryConf::default()
-    };
-
-    // Build the new item
-    let new_item = if args.quantity.is_some()
-        || args.bought.is_some()
-        || args.expire.is_some()
-        || args.low.is_some()
-    {
-        PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+    core::add(
+        ctx,
+        core::AddRequest {
+            section: args.section.clone(),
             name: args.name.clone(),
             quantity: args.quantity,
             bought: args.bought,
             expire: args.expire,
             low: args.low,
-        })
-    } else {
-        PantryItem::Simple(args.name.clone())
-    };
+        },
+    )
+    .map_err(cli_error)?;
 
-    // Check for duplicates in the target section
-    let section_items = pantry_conf
-        .sections
-        .entry(args.section.clone())
-        .or_default();
-    if section_items.iter().any(|i| i.name() == args.name) {
-        anyhow::bail!(
-            "Item '{}' already exists in section '{}'. Use `pantry update` to change it.",
-            args.name,
-            args.section
-        );
-    }
-    section_items.push(new_item);
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Added '{}' to section '{}'.", args.name, args.section);
     Ok(())
 }
 
 fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+    core::remove(
+        ctx,
+        core::RemoveRequest {
+            section: args.section.clone(),
+            name: args.name.clone(),
+        },
+    )
+    .map_err(cli_error)?;
 
-    let items = pantry_conf
-        .sections
-        .get_mut(&args.section)
-        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
-
-    let before = items.len();
-    items.retain(|i| i.name() != args.name);
-    if items.len() == before {
-        anyhow::bail!(
-            "Item '{}' not found in section '{}'",
-            args.name,
-            args.section
-        );
-    }
-
-    if items.is_empty() {
-        pantry_conf.sections.shift_remove(&args.section);
-    }
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Removed '{}' from section '{}'.", args.name, args.section);
     Ok(())
 }
 
 fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
+    // Core refuses an update that sets nothing too, in the wording a library
+    // can use. Checked again here so that the message names the flags the user
+    // actually typed, which is the only thing this adds.
     if args.quantity.is_none()
         && args.bought.is_none()
         && args.expire.is_none()
@@ -1145,52 +808,19 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
         anyhow::bail!("No attributes specified. Provide at least one of --quantity, --bought, --expire, --low.");
     }
 
-    let pantry_path = ctx
-        .pantry()
-        .ok_or_else(|| anyhow::anyhow!("No pantry configuration found"))?;
-    let mut pantry_conf = load_pantry_conf(&pantry_path)?;
+    core::update(
+        ctx,
+        core::UpdateRequest {
+            section: args.section.clone(),
+            name: args.name.clone(),
+            quantity: args.quantity,
+            bought: args.bought,
+            expire: args.expire,
+            low: args.low,
+        },
+    )
+    .map_err(cli_error)?;
 
-    let items = pantry_conf
-        .sections
-        .get_mut(&args.section)
-        .ok_or_else(|| anyhow::anyhow!("Section '{}' not found", args.section))?;
-
-    let item = items
-        .iter_mut()
-        .find(|i| i.name() == args.name)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Item '{}' not found in section '{}'",
-                args.name,
-                args.section
-            )
-        })?;
-
-    // Merge new values over existing attributes
-    let updated = match item {
-        PantryItem::Simple(name) => {
-            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-                name: name.clone(),
-                quantity: args.quantity,
-                bought: args.bought,
-                expire: args.expire,
-                low: args.low,
-            })
-        }
-        PantryItem::WithAttributes(attrs) => {
-            PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-                name: attrs.name.clone(),
-                quantity: args.quantity.or_else(|| attrs.quantity.clone()),
-                bought: args.bought.or_else(|| attrs.bought.clone()),
-                expire: args.expire.or_else(|| attrs.expire.clone()),
-                low: args.low.or_else(|| attrs.low.clone()),
-            })
-        }
-    };
-    *item = updated;
-
-    pantry_conf.rebuild_index();
-    write_pantry_conf(&pantry_path, &pantry_conf)?;
     println!("Updated '{}' in section '{}'.", args.name, args.section);
     Ok(())
 }
@@ -1199,62 +829,34 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
 // Utility helpers
 // ---------------------------------------------------------------------------
 
-/// Check if two quantity strings have matching units
-fn units_match(quantity: &str, low_threshold: &str) -> bool {
-    let parse_unit = |s: &str| -> Option<String> {
-        regex::Regex::new(r"^(\d+(?:\.\d+)?)\s*%?\s*(.*)$")
-            .ok()
-            .and_then(|re| re.captures(s))
-            .map(|captures| {
-                captures
-                    .get(2)
-                    .map(|m| m.as_str().to_lowercase())
-                    .unwrap_or_default()
-            })
-    };
-
-    match (parse_unit(quantity), parse_unit(low_threshold)) {
-        (Some(q_unit), Some(l_unit)) => q_unit == l_unit,
-        _ => false,
+/// How an expiry is worded for the user.
+///
+/// The arithmetic is `cookcli-core`'s; only the wording is here, because it is
+/// what `cook pantry expiring` prints. `None` is an item that has no readable
+/// expiry date, included only by `--include-unknown`.
+fn expiry_status(days_until: Option<i64>) -> String {
+    match days_until {
+        None => "No expiry date".to_string(),
+        Some(days) if days < 0 => format!("EXPIRED {} days ago", -days),
+        Some(0) => "EXPIRES TODAY".to_string(),
+        Some(1) => "expires tomorrow".to_string(),
+        Some(days) => format!("expires in {days} days"),
     }
 }
 
-fn is_low_quantity(quantity: &str) -> bool {
-    // Default rules for when no explicit threshold is set
-    // Grams/ml: <= 100, Kg/L: < 0.5, Items: <= 1
-    if let Some(captures) = regex::Regex::new(r"^(\d+(?:\.\d+)?)\s*%?\s*(.*)$")
-        .ok()
-        .and_then(|re| re.captures(quantity))
-    {
-        if let Ok(amount) = captures.get(1).unwrap().as_str().parse::<f64>() {
-            let unit = captures.get(2).map(|m| m.as_str()).unwrap_or("");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            // Different thresholds for different units
-            match unit.to_lowercase().as_str() {
-                "g" | "ml" => amount <= 100.0,
-                "kg" | "l" => amount < 0.5,
-                "" | "item" | "items" => amount <= 1.0,
-                _ => amount <= 1.0,
-            }
-        } else {
-            false
-        }
-    } else {
-        false
+    /// Every branch of the wording, in the order a day counts down through
+    /// them.
+    #[test]
+    fn expiry_is_worded_by_how_far_off_it_is() {
+        assert_eq!(expiry_status(Some(-2)), "EXPIRED 2 days ago");
+        assert_eq!(expiry_status(Some(-1)), "EXPIRED 1 days ago");
+        assert_eq!(expiry_status(Some(0)), "EXPIRES TODAY");
+        assert_eq!(expiry_status(Some(1)), "expires tomorrow");
+        assert_eq!(expiry_status(Some(2)), "expires in 2 days");
+        assert_eq!(expiry_status(None), "No expiry date");
     }
-}
-
-fn parse_date(date_str: &str) -> Option<NaiveDate> {
-    // Try multiple date formats
-    let formats = [
-        "%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y.%m.%d", "%d-%m-%Y",
-    ];
-
-    for format in &formats {
-        if let Ok(date) = NaiveDate::parse_from_str(date_str, format) {
-            return Some(date);
-        }
-    }
-
-    None
 }

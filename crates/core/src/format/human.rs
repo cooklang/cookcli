@@ -30,9 +30,15 @@
 
 //! Format a recipe for humans to read
 //!
-//! This will always write ansi colours. Use something like
-//! [`anstream`](https://docs.rs/anstream) to remove them if needed.
+//! Colour is chosen by the [`Style`] passed to [`print_human`]. The rendering
+//! code always paints; when the caller asks for [`Style::Plain`] the escape
+//! codes are removed at the writer, so the two outputs differ only by the
+//! escapes.
 
+use crate::format::{
+    quantity::{grouped_quantity_fmt, ordered_components},
+    Style,
+};
 use std::{collections::HashMap, io, time::Duration};
 
 use cooklang::{
@@ -127,24 +133,87 @@ mod style {
 }
 use style::styles;
 
-pub type Result<T = ()> = std::result::Result<T, io::Error>;
+type Result<T = ()> = std::result::Result<T, io::Error>;
 
+/// Write a recipe as the text `cook recipe` prints.
+///
+/// `name` is the title to show, `scale` is appended to it when it is not
+/// `1.0`, and `converter` supplies the units used to group quantities.
+///
+/// `style` decides whether ANSI escape codes survive. The rendering below
+/// always paints, so `Style::Plain` is `Style::Ansi` with the escapes
+/// removed, character for character.
 pub fn print_human(
     recipe: &Recipe,
     name: &str,
     scale: f64,
     converter: &Converter,
-    mut writer: impl std::io::Write,
-) -> Result {
-    let w = &mut writer;
+    style: Style,
+    writer: &mut impl io::Write,
+) -> io::Result<()> {
+    // Strip at the writer rather than reaching for yansi's global switch: a
+    // library must not mutate process-wide state that its callers share.
+    if style.is_ansi() {
+        write_recipe(writer, recipe, name, scale, converter)
+    } else {
+        write_recipe(
+            &mut StripWriter::new(writer),
+            recipe,
+            name,
+            scale,
+            converter,
+        )
+    }
+}
 
+fn write_recipe(
+    w: &mut impl io::Write,
+    recipe: &Recipe,
+    name: &str,
+    scale: f64,
+    converter: &Converter,
+) -> Result {
     header(w, recipe, name, scale)?;
     metadata(w, recipe, converter)?;
     ingredients(w, recipe, converter)?;
     cookware(w, recipe, converter)?;
     steps(w, recipe)?;
-
     Ok(())
+}
+
+/// A writer that drops ANSI escape sequences on their way through.
+///
+/// `anstream::StripStream` would do this, but it only accepts inner writers
+/// from a sealed list, which a type parameter cannot join. This wraps
+/// anstream's escape-sequence state machine directly instead, so a sequence
+/// split across two `write` calls is still removed — see the tests below.
+struct StripWriter<W: io::Write> {
+    inner: W,
+    state: anstream::adapter::StripBytes,
+}
+
+impl<W: io::Write> StripWriter<W> {
+    fn new(inner: W) -> Self {
+        Self {
+            inner,
+            state: anstream::adapter::StripBytes::default(),
+        }
+    }
+}
+
+impl<W: io::Write> io::Write for StripWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        for printable in self.state.strip_next(buf) {
+            self.inner.write_all(printable)?;
+        }
+        // The whole buffer was consumed: what was not forwarded was escapes.
+        // Reporting less would make `write_all` retry bytes already handled.
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 fn header(w: &mut impl io::Write, recipe: &Recipe, name: &str, scale: f64) -> Result {
@@ -323,8 +392,8 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
             row.add_cell("");
         }
 
-        let content = quantity
-            .iter()
+        let content = ordered_components(&quantity)
+            .into_iter()
             .map(|q| quantity_fmt(q).paint(outcome_style).to_string())
             .reduce(|s, q| format!("{s}, {q}"))
             .unwrap_or_default();
@@ -376,12 +445,7 @@ fn cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -> R
         if amount.is_empty() {
             row.add_cell("");
         } else {
-            let t = amount
-                .iter()
-                .map(|q| q.to_string())
-                .reduce(|s, q| format!("{s}, {q}"))
-                .unwrap();
-            row.add_ansi_cell(t);
+            row.add_ansi_cell(grouped_quantity_fmt(&amount));
         }
 
         if let Some(note) = &item.note {
@@ -667,4 +731,78 @@ where
         writeln!(w, "{line}")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    /// Feed `chunks` through a [`StripWriter`] as separate `write` calls.
+    fn strip_in_chunks(chunks: &[&[u8]]) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut w = StripWriter::new(&mut out);
+            for chunk in chunks {
+                let n = w.write(chunk).expect("write");
+                assert_eq!(
+                    n,
+                    chunk.len(),
+                    "write must report the whole buffer consumed, or write_all loops"
+                );
+            }
+            w.flush().expect("flush");
+        }
+        out
+    }
+
+    #[test]
+    fn strip_writer_passes_plain_bytes_through_untouched() {
+        assert_eq!(
+            strip_in_chunks(&[b"Ingredients:\n  water 2 c\n"]),
+            b"Ingredients:\n  water 2 c\n"
+        );
+    }
+
+    #[test]
+    fn strip_writer_removes_escape_sequences() {
+        assert_eq!(
+            strip_in_chunks(&["\u{1b}[1;45;37m Tea \u{1b}[0m\n".as_bytes()]),
+            b" Tea \n"
+        );
+    }
+
+    /// The reason this type exists rather than a one-shot `strip_bytes`: the
+    /// formatter writes in whatever chunks `writeln!` produces, so an escape
+    /// sequence can straddle two calls. Splitting mid-sequence must not leak
+    /// the tail as literal text.
+    #[test]
+    fn strip_writer_removes_an_escape_split_across_writes() {
+        let whole = "a\u{1b}[32mb\u{1b}[0mc";
+        let bytes = whole.as_bytes();
+        // Every split point, including ones inside both escape sequences.
+        for at in 0..=bytes.len() {
+            let (head, tail) = bytes.split_at(at);
+            assert_eq!(
+                strip_in_chunks(&[head, tail]),
+                b"abc",
+                "split at byte {at} of {whole:?} leaked escape bytes"
+            );
+        }
+    }
+
+    /// A sequence that is still incomplete when the writer is dropped must not
+    /// have been forwarded either.
+    #[test]
+    fn strip_writer_holds_back_an_unterminated_escape() {
+        assert_eq!(strip_in_chunks(&[b"x\x1b[3"]), b"x");
+    }
+
+    #[test]
+    fn strip_writer_preserves_non_ascii_text() {
+        assert_eq!(
+            strip_in_chunks(&["\u{1b}[3mSauté 180°C — ½\u{1b}[0m".as_bytes()]),
+            "Sauté 180°C — ½".as_bytes()
+        );
+    }
 }

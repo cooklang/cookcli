@@ -27,7 +27,12 @@ Boil for ~{5%minutes}."#,
         .arg("read")
         .arg("malformed.cook")
         .assert()
-        .success(); // Parser should be lenient
+        .success() // Parser should be lenient
+        // Warnings say which recipe they came from, which is what makes them
+        // actionable once a command reads more than one. The name is the
+        // recipe's declared title — this fixture uses the deprecated `>>`
+        // spelling, which is still a declared title.
+        .stderr(predicate::str::contains("Recipe 'Malformed Recipe':"));
 }
 
 #[test]

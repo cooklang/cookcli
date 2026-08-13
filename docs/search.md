@@ -12,7 +12,7 @@ cook search [OPTIONS] <TERMS>...
 
 | Argument | Description |
 |----------|-------------|
-| `<TERMS>...` | One or more search terms. Multiple terms are treated as AND (all must match). |
+| `<TERMS>...` | One or more search terms. A recipe matching any one of them is a match. |
 
 ## Options
 
@@ -26,7 +26,7 @@ cook search [OPTIONS] <TERMS>...
 # Find recipes mentioning chicken
 cook search chicken
 
-# Find recipes with both chicken and rice
+# Find recipes mentioning chicken or rice
 cook search chicken rice
 
 # Search in a specific directory
@@ -35,6 +35,8 @@ cook search -b ~/recipes pasta
 
 ## Notes
 
-- Searches through recipe titles, ingredients, instructions, and metadata
+- Searches file names and the whole recipe text, including metadata
 - Case-insensitive
-- Results are ranked by relevance
+- Results are ranked by relevance, best first: a file name matching the whole
+  query outranks a recipe that merely mentions one of the terms
+- Extra terms broaden the results rather than narrowing them

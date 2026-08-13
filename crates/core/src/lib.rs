@@ -1,0 +1,63 @@
+//! Recipe, shopping list, pantry and report operations for Cooklang.
+//!
+//! This crate holds the logic behind CookCLI's commands, with the CLI reduced
+//! to argument parsing and output formatting on top of it.
+//!
+//! Commands take their input as a [`RecipeSource`] or [`ConfigSource`] rather
+//! than a path, so an editor can pass an unsaved buffer. They return
+//! [`Outcome<T>`], which pairs the result with any [`Diagnostic`]s raised on
+//! the way, or a [`CoreError`] when no result could be produced.
+
+#![warn(missing_docs)]
+
+pub mod context;
+pub mod diagnostic;
+pub mod doctor;
+pub mod error;
+pub mod find;
+pub mod format;
+mod fs_atomic;
+pub mod outcome;
+pub mod pantry;
+pub mod parser;
+pub mod recipe;
+pub mod report;
+pub mod search;
+pub mod shopping_list;
+pub mod source;
+
+pub use context::{global_config_path, Context};
+pub use diagnostic::{Diagnostic, Location, Severity, Span};
+pub use error::CoreError;
+pub use format::{PaperSize, Style};
+pub use outcome::Outcome;
+pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};
+
+/// The `cooklang` crate this library was built against.
+///
+/// [`parse_recipe`] returns a [`cooklang::Recipe`] and [`PARSER`] is a
+/// [`cooklang::CooklangParser`], so those types are part of this crate's public
+/// surface. Re-exporting lets consumers name them without adding their own
+/// `cooklang` dependency, which could otherwise resolve to a different
+/// version and fail to unify.
+pub use cooklang;
+
+/// The `cooklang-find` crate this library was built against.
+///
+/// [`find::get_recipe`] returns a [`cooklang_find::RecipeEntry`], so that type
+/// is part of this crate's public surface. Re-exported for the same reason as
+/// [`cooklang`] above.
+pub use cooklang_find;
+pub use source::{ConfigSource, RecipeSource};
+
+/// Convenience alias for core results.
+pub type Result<T> = std::result::Result<T, CoreError>;
+
+/// Compiles `README.md`'s example as a doctest, so the crate's front page
+/// cannot rot into something that no longer builds.
+///
+/// Exists only under `cfg(doctest)`, so it is not part of the public API and
+/// does not appear in the rendered documentation.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

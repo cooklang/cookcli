@@ -29,9 +29,18 @@ fn test_context_creation() -> Result<()> {
     // Test that context has correct base path
     assert_eq!(ctx.base_path().as_str(), temp_dir.path().to_str().unwrap());
 
-    // Test that aisle and pantry are found
-    assert!(ctx.aisle().is_some());
-    assert!(ctx.pantry().is_some());
+    // Test that aisle and pantry are found — and at the local `config/` copies
+    // planted by the fixture, not at whatever the machine running this happens
+    // to have in its global configuration directory.
+    let base = camino::Utf8Path::new(temp_dir.path().to_str().unwrap());
+    assert_eq!(
+        ctx.aisle().path(),
+        Some(base.join("config/aisle.conf").as_path())
+    );
+    assert_eq!(
+        ctx.pantry().path(),
+        Some(base.join("config/pantry.conf").as_path())
+    );
 
     Ok(())
 }

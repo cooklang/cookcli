@@ -1,0 +1,13 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&base_fixture(), &[\"--ingredients-only\", \"pasta.cook\", \"salad.cook\"])"
+---
+pasta
+water
+salt
+garlic
+olive oil
+tomatoes
+flour
+milk
+lettuce

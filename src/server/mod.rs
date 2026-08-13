@@ -49,7 +49,6 @@ use tracing::{error, info};
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
-mod shopping_list_store;
 mod shopping_list_watcher;
 mod ui;
 
@@ -242,7 +241,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 }
 
 fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
-    let Context { base_path } = ctx;
+    let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
     let absolute_path = resolve_to_absolute_path(path)?;
@@ -272,9 +271,12 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
     };
 
     // Create a new Context with the actual base path to properly search for config files
-    let server_ctx = Context::new(absolute_path.clone());
-    let aisle_path = server_ctx.aisle();
-    let pantry_path = server_ctx.pantry();
+    let server_ctx = Context::discover(absolute_path.clone());
+    let aisle_path = server_ctx.aisle().path().map(camino::Utf8Path::to_path_buf);
+    let pantry_path = server_ctx
+        .pantry()
+        .path()
+        .map(camino::Utf8Path::to_path_buf);
 
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
@@ -289,7 +291,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
 
     #[cfg(feature = "sync")]
     let (session_path, session) = {
-        let path = crate::global_file_path("session.json")
+        let path = cookcli_core::global_config_path("session.json")
             .map(|p: Utf8PathBuf| p.into_std_path_buf())
             .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
         let session = match crate::sync::SyncSession::load(&path) {

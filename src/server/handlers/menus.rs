@@ -214,7 +214,7 @@ pub async fn get_menu(
                 } else if let Some(n) = value.as_i64() {
                     serde_json::Value::String(n.to_string())
                 } else if let Some(n) = value.as_f64() {
-                    serde_json::Value::String(crate::util::format::format_number(n))
+                    serde_json::Value::String(crate::util::format::number::format_number(n))
                 } else {
                     serde_json::Value::Null
                 };
@@ -346,7 +346,7 @@ pub async fn get_menu(
                                     });
                                 } else {
                                     let quantity = ing.quantity.as_ref().and_then(|q| {
-                                        crate::util::format::format_quantity(q.value())
+                                        crate::util::format::number::format_quantity(q.value())
                                     });
                                     let unit = ing
                                         .quantity

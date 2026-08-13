@@ -645,7 +645,9 @@ fn test_pantry_add_duplicate_errors() {
         .args(["pantry", "add", "pantry", "flour"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("already exists"));
+        .stderr(predicate::str::contains(
+            "Item 'flour' already exists in section 'pantry'",
+        ));
 }
 
 // ---------------------------------------------------------------------------
@@ -694,7 +696,9 @@ fn test_pantry_remove_nonexistent_item_errors() {
         .args(["pantry", "remove", "pantry", "nonexistent"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Item 'nonexistent' not found in section 'pantry'",
+        ));
 }
 
 #[test]
@@ -707,7 +711,9 @@ fn test_pantry_remove_nonexistent_section_errors() {
         .args(["pantry", "remove", "nosuchsection", "flour"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Section 'nosuchsection' not found",
+        ));
 }
 
 #[test]
@@ -787,7 +793,9 @@ fn test_pantry_update_nonexistent_item_errors() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains(
+            "Item 'nonexistent' not found in section 'pantry'",
+        ));
 }
 
 #[test]
@@ -1059,4 +1067,119 @@ fn test_pantry_non_ascii_round_trip() {
         .success()
         .stdout(predicate::str::contains("smörgås"))
         .stdout(predicate::str::contains("äpple"));
+}
+
+// ---------------------------------------------------------------------------
+// recipes: --partial is a display flag
+// ---------------------------------------------------------------------------
+
+/// `cookcli-core` works out partial matches whether or not they were asked
+/// for, so keeping them out of the output without `--partial` is the CLI's
+/// job. Both directions are checked here, because a flag that is ignored one
+/// way round looks fine from the other.
+#[test]
+fn test_pantry_recipes_partial_flag_decides_whether_partials_are_shown() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("config");
+    fs::create_dir(&config_dir).unwrap();
+    fs::write(config_dir.join("pantry.conf"), "[test]\nflour = \"5%kg\"\n").unwrap();
+    fs::write(
+        temp_dir.path().join("cake.cook"),
+        "Mix @flour{200%g} and @sugar{100%g}.\n",
+    )
+    .unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        // The same threshold the second run uses, so that the only
+        // difference between them is the flag.
+        .args(["pantry", "recipes", "--threshold", "50"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Partial Matches").not())
+        .stdout(predicate::str::contains("sugar").not())
+        .stdout(predicate::str::contains(
+            "No recipes found with all ingredients available.",
+        ));
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "recipes", "--partial", "--threshold", "50"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Partial Matches"))
+        .stdout(predicate::str::contains("cake (50% available)"))
+        .stdout(predicate::str::contains("Missing: sugar"));
+}
+
+// ---------------------------------------------------------------------------
+// plan
+// ---------------------------------------------------------------------------
+
+/// `cook pantry plan` had no coverage at all before the greedy algorithm moved
+/// into `cookcli-core`. This pins the numbers the CLI prints around it — and
+/// the order of the steps, which used to come out differently on every run
+/// because the ingredient scores were held in a `HashMap`.
+#[test]
+fn test_pantry_plan_reports_steps_and_coverage() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("bread.cook"),
+        "Mix @flour{1%kg} and @water{1%l}.\n",
+    )
+    .unwrap();
+    fs::write(
+        temp_dir.path().join("cake.cook"),
+        "Mix @flour{1%kg} and @sugar{1%kg}.\n",
+    )
+    .unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "plan"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "With these 3 ingredients, you can cook 2 out of 2 recipes:",
+        ))
+        // Flour is wanted twice so it leads, and the two ties after it are
+        // broken alphabetically.
+        .stdout(predicate::str::contains("1. flour"))
+        .stdout(predicate::str::contains("2. sugar"))
+        .stdout(predicate::str::contains("3. water"))
+        .stdout(predicate::str::contains("(+1 recipe, 2 total)"))
+        .stdout(predicate::str::contains("Final coverage: 100% of recipes"));
+
+    let output = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "-f", "json", "plan", "-n", "1"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: Value = serde_json::from_slice(&output).expect("Valid JSON output");
+    assert_eq!(json["total_recipes"], 2);
+    assert_eq!(json["cookable_recipes"], 0, "one ingredient cooks nothing");
+    assert_eq!(json["coverage_percentage"], 0);
+    assert_eq!(json["ingredients"].as_array().unwrap().len(), 1);
+}
+
+/// A directory with no recipes in it is not an error, and says so.
+#[test]
+fn test_pantry_plan_with_no_recipes() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .args(["pantry", "plan"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No recipes found in collection."));
 }

@@ -159,7 +159,10 @@ vinegar = {{ quantity = "50%ml", low = "200%ml" }}
 pub fn create_test_context(base_path: &Path) -> cookcli::Context {
     let utf8_path =
         Utf8PathBuf::from_path_buf(base_path.to_path_buf()).expect("Path should be UTF-8");
-    cookcli::Context::new(utf8_path)
+    // `discover`, not `new`: the tests plant `config/aisle.conf` and
+    // `config/pantry.conf` under the temp directory and expect commands to
+    // find them, which is exactly what the CLI does.
+    cookcli::Context::discover(utf8_path)
 }
 
 /// Helper to run a command and capture output

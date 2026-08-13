@@ -1,0 +1,17 @@
+---
+source: tests/shopping_list_characterization_test.rs
+expression: "run(&pantry_fixture(), &[\"pasta.cook\", \"salad.cook\"])"
+---
+[produce]
+tomatoes  3
+lettuce   1 head
+garlic    2 cloves
+[dairy]
+milk      1 l, 500 ml
+[dry goods]
+pasta     200 g
+flour     1 cup, 100 g
+[condiments]
+olive oil 2 tbsp
+[other]
+water     2 l

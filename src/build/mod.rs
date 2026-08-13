@@ -191,7 +191,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         String::new(),
     )?;
 
-    let aisle = ctx.aisle();
+    let aisle = ctx.aisle().path().map(camino::Utf8Path::to_path_buf);
     let recipe_count = walk_recipes(
         &tree,
         &source,

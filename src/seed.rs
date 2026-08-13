@@ -29,7 +29,7 @@ pub struct SeedArgs {
 }
 
 pub fn run(ctx: &Context, args: SeedArgs) -> Result<()> {
-    let path = args.output.as_ref().unwrap_or(&ctx.base_path);
+    let path = args.output.as_deref().unwrap_or(ctx.base_path());
 
     if path.is_file() {
         bail!("{} is not a directory", path);
