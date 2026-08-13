@@ -291,8 +291,12 @@ fn a_relative_base_path_reaches_the_template_absolute() {
         Path::new(base_path).is_absolute(),
         "expected an absolute base path, got: {base_path:?}"
     );
-    assert!(
-        base_path.ends_with("/sub"),
+    // Compare the final path component rather than a string suffix: the
+    // separator is a backslash on Windows, where `ends_with("/sub")` fails
+    // against an otherwise correct `C:\\...\\sub`.
+    assert_eq!(
+        Path::new(base_path).file_name().and_then(|s| s.to_str()),
+        Some("sub"),
         "expected the argument on the end, got: {base_path:?}"
     );
 }
