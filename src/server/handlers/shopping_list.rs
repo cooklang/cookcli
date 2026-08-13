@@ -479,7 +479,7 @@ pub async fn add_menu_to_shopping_list(
             };
 
             // Resolve this recipe's sub-recipe references, default servings, and yield
-            let ref_path_for_find = recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+            let ref_path_for_find = recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
             let info = match resolve_recipe_info(&state.base_path, &ref_path_for_find) {
                 Ok(info) => info,
                 Err(e) => {

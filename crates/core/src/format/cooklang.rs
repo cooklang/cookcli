@@ -109,14 +109,14 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                 let igr = &recipe.ingredients[index];
 
                 let name = if let Some(reference) = &igr.reference {
-                    let sep = std::path::MAIN_SEPARATOR.to_string();
-                    format!(
-                        ".{}{}{}{}",
-                        sep,
-                        reference.components.join(&sep),
-                        sep,
-                        igr.name
-                    )
+                    // `path` already carries the leading `.` — a reference's
+                    // components always begin with one, because `@./sauce{}`
+                    // parses as components `["."]`. Prepending another `./`
+                    // here, as this used to, made the formatter emit
+                    // `@././sub/sauce{}`; that reparses as components
+                    // `[".", ".", "sub"]`, so the next pass prepended one more
+                    // and the prefix grew without bound on every rewrite.
+                    reference.path(crate::find::REFERENCE_SEPARATOR)
                 } else {
                     igr.name.clone()
                 };
@@ -453,6 +453,68 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         let once = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
         let twice = format_to_string(&parse_recipe(&once, "r", 1.0).unwrap().value);
         assert_eq!(once, twice, "second format pass differed");
+    }
+
+    /// A recipe reference is re-emitted with `/` between its components on
+    /// every platform.
+    ///
+    /// This writer produces Cooklang *source*, so the separator is syntax, not
+    /// presentation: joining with `std::path::MAIN_SEPARATOR` wrote
+    /// `@.\sub\sauce{}` on Windows, which does not parse back as the same
+    /// reference (<https://github.com/cooklang/cookcli/issues/442>). The
+    /// assertion holds trivially on Unix, where the platform separator was
+    /// already `/`; it is the Windows leg of the CI matrix that it guards.
+    #[test]
+    fn a_reference_is_written_with_forward_slashes() {
+        let source = "Make @./sub/sauce{200%ml} and stir.\n";
+        let recipe = parse_recipe(source, "r", 1.0)
+            .expect("fixture parses")
+            .value;
+        let rendered = format_to_string(&recipe);
+
+        assert!(
+            rendered.contains("@./sub/sauce{"),
+            "expected a forward-slash reference, got: {rendered}"
+        );
+        assert!(
+            !rendered.contains('\\'),
+            "a reference path must never carry a backslash: {rendered}"
+        );
+
+        // And it still means the same thing when read back.
+        let reparsed = parse_recipe(&rendered, "r", 1.0).expect("re-parses").value;
+        let reference = reparsed.ingredients[0]
+            .reference
+            .as_ref()
+            .expect("still a recipe reference");
+        assert_eq!(
+            reference.path(crate::find::REFERENCE_SEPARATOR),
+            "./sub/sauce"
+        );
+    }
+
+    /// A reference survives repeated rewrites unchanged.
+    ///
+    /// It did not: a reference's components already begin with `.`, and the
+    /// writer prepended a second `./` on top, so each pass added one more —
+    /// `@./sub/sauce{}`, `@././sub/sauce{}`, `@./././sub/sauce{}`. Every pass
+    /// still resolved to the same file, so nothing failed; the source just got
+    /// steadily uglier each time a collection was reformatted.
+    ///
+    /// Unlike [`formatting_is_idempotent`], which covers the wrapping defect,
+    /// this holds for every pass and is not ignored.
+    #[test]
+    fn a_reference_does_not_accumulate_a_prefix_across_passes() {
+        let mut source = "Make @./sub/sauce{200%ml} and stir.\n".to_string();
+        for pass in 1..=4 {
+            let recipe = parse_recipe(&source, "r", 1.0).expect("parses").value;
+            let rendered = format_to_string(&recipe);
+            assert!(
+                rendered.contains("@./sub/sauce{"),
+                "pass {pass} changed the reference: {rendered}"
+            );
+            source = rendered;
+        }
     }
 
     /// Metadata survives as YAML front-matter, not as the deprecated `>>`

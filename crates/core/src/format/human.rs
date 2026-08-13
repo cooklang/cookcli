@@ -375,8 +375,8 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
                 .iter()
                 .find(|igr| igr.reference.is_some())
                 .unwrap();
-            let sep = std::path::MAIN_SEPARATOR.to_string();
-            let path = igr.reference.as_ref().unwrap().components.join(&sep);
+            let sep = crate::find::REFERENCE_SEPARATOR;
+            let path = igr.reference.as_ref().unwrap().components.join(sep);
             row.add_ansi_cell(
                 format!("(recipe: {}{}{})", path, sep, igr.name).paint(styles().reference_marker),
             );

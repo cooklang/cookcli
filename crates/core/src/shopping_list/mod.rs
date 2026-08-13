@@ -481,7 +481,7 @@ pub fn extract_ingredients(
                 }
             }
 
-            let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
+            let ref_path = reference.path(find::REFERENCE_SEPARATOR);
             let ref_entry = find::get_recipe(base_path, &ref_path)?;
 
             // Parse and scale the recipe based on the quantity specification.
@@ -553,17 +553,14 @@ pub fn extract_ingredients(
                     continue;
                 };
 
+                // Same shape as the outer `ref_path` above. `path` supplies
+                // the leading `.` itself, so prepending another — as this used
+                // to — spelled the lookup `././sub/sauce`, which resolved but
+                // named itself that way in any error about it.
                 let nested_path = if nested_ref.components.is_empty() {
                     nested_ref.name.clone()
                 } else {
-                    let sep = std::path::MAIN_SEPARATOR.to_string();
-                    format!(
-                        ".{}{}{}{}",
-                        sep,
-                        nested_ref.components.join(&sep),
-                        sep,
-                        nested_ref.name
-                    )
+                    nested_ref.path(find::REFERENCE_SEPARATOR)
                 };
 
                 let nested_entry = find::get_recipe(base_path, &nested_path)?;
