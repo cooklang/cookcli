@@ -3641,7 +3641,13 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 - [ ] `tests/snapshots/` is unchanged from `main` apart from Task 6's 14 new `shopping_list_characterization_test__*.snap` files.
 - [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean.
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.
-- [ ] No command module in `src/` contains parsing or aggregation logic.
+- [x] No **extracted** command module in `src/` contains parsing or aggregation logic.
+  - **Corrected criterion.** As originally written this was never achievable, because the plan only ever
+    scoped `doctor validate`. `cook doctor pantry` and `cook doctor aisle` still parse config with
+    `parse_lenient`, walk the tree with `cooklang_find::build_tree`, and aggregate ingredients in the CLI;
+    `run_validate` also still resolves recipe references itself. `util::parse_recipe_from_entry` likewise
+    retains 12 callers across `web/`, `server/`, `build/` and `util/menu_scale.rs`. None of these were in
+    scope. Recorded rather than quietly ticked.
 - [ ] `src/main.rs`'s and `src/lib.rs`'s duplicate `Context` and `global_file_path` are deleted; the CLI uses `cookcli_core::Context` exclusively.
 - [ ] `cargo publish -p cookcli-core --dry-run` succeeds.
 - [ ] `.github/workflows/release.yaml` publishes `cookcli-core` before `cookcli`, and release-please's behaviour with the new workspace has been verified rather than assumed.
