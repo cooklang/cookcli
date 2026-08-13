@@ -162,7 +162,7 @@ pub fn run(ctx: &Context, args: ReadArgs) -> Result<()> {
     let outcome = cookcli_core::recipe::read(
         // `cook recipe` reads neither aisle nor pantry, so it asks for no
         // configuration rather than making `Context` go looking for some.
-        &cookcli_core::Context::new(ctx.base_path().clone()),
+        &cookcli_core::Context::new(ctx.base_path().to_path_buf()),
         cookcli_core::recipe::ReadRequest { source, scale },
     )
     .map_err(crate::util::cli_error)?;

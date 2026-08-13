@@ -18,7 +18,7 @@ pub fn run(_ctx: &Context, _args: LoginArgs) -> Result<()> {
 async fn run_async() -> Result<()> {
     use std::io::{BufRead, Write};
 
-    let session_path = crate::global_file_path("session.json")
+    let session_path = cookcli_core::global_config_path("session.json")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
 

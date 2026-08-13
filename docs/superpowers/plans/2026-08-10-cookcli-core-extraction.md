@@ -3612,7 +3612,7 @@ API gap and it is far cheaper to fix now than after Spec 2 has started.
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test 2>&1 | tail -30
 ```
 
-Expected: all clean, counts at `passed=308 failed=0 ignored=26`.
+Expected: all clean, counts at `passed=330 failed=0 ignored=26` (329 on Windows).
 
 - [ ] **Step 9: Confirm no snapshot was silently accepted**
 
@@ -3637,7 +3637,7 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 ## Definition of Done
 
 - [ ] `crates/core` exists with the six commands, the store, formatters, and its own unit tests.
-- [ ] `cargo test` reports `308 passed; 0 failed; 26 ignored`.
+- [ ] `cargo test` reports `330 passed; 0 failed; 26 ignored` (329 on Windows).
 - [ ] `tests/snapshots/` is unchanged from `main` apart from Task 6's 14 new `shopping_list_characterization_test__*.snap` files.
 - [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean.
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.

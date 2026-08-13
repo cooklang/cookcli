@@ -25,10 +25,10 @@ pub async fn run(ctx: &Context, _args: LspArgs) -> Result<()> {
     // Currently the LSP server uses workspace paths from the editor,
     // but these could be used in the future for global config support
     debug!("Base path: {}", ctx.base_path());
-    if let Some(aisle) = ctx.aisle() {
+    if let Some(aisle) = ctx.aisle().path() {
         debug!("Aisle config: {}", aisle);
     }
-    if let Some(pantry) = ctx.pantry() {
+    if let Some(pantry) = ctx.pantry().path() {
         debug!("Pantry config: {}", pantry);
     }
 

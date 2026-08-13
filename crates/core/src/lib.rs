@@ -52,3 +52,12 @@ pub use source::{ConfigSource, RecipeSource};
 
 /// Convenience alias for core results.
 pub type Result<T> = std::result::Result<T, CoreError>;
+
+/// Compiles `README.md`'s example as a doctest, so the crate's front page
+/// cannot rot into something that no longer builds.
+///
+/// Exists only under `cfg(doctest)`, so it is not part of the public API and
+/// does not appear in the rendered documentation.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

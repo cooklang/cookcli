@@ -156,11 +156,11 @@ fn check_for_updates() {
 }
 
 fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
-    let base_path = args.base_path.as_ref().unwrap_or(ctx.base_path());
+    let base_path = args.base_path.as_deref().unwrap_or(ctx.base_path());
 
     // Load pantry configuration
-    let pantry_path = ctx.pantry();
-    let pantry = pantry_path.as_ref().and_then(|path| {
+    let pantry_path = ctx.pantry().path();
+    let pantry = pantry_path.and_then(|path| {
         match std::fs::read_to_string(path) {
             Ok(content) => {
                 let result = cooklang::pantry::parse_lenient(&content);
@@ -296,13 +296,13 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
 }
 
 fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
-    let base_path = args.base_path.as_ref().unwrap_or(ctx.base_path());
+    let base_path = args.base_path.as_deref().unwrap_or(ctx.base_path());
 
     // Load aisle configuration
-    let aisle_path = ctx.aisle();
-    let aisle_data = aisle_path.as_ref().and_then(|path| {
+    let aisle_path = ctx.aisle().path();
+    let aisle_data = aisle_path.and_then(|path| {
         std::fs::read_to_string(path)
-            .map(|content| (path.clone(), content))
+            .map(|content| (path.to_path_buf(), content))
             .ok()
     });
 
@@ -424,10 +424,10 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
     let base_path = args
         .base_path
         .clone()
-        .unwrap_or_else(|| ctx.base_path().clone());
+        .unwrap_or_else(|| ctx.base_path().to_path_buf());
 
     let report = cookcli_core::doctor::validate(
-        &ctx.to_core(),
+        ctx,
         cookcli_core::doctor::ValidateRequest {
             base_dir: Some(base_path.clone()),
             // This report is going straight to a terminal.

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Recipe, shopping list, pantry and report operations for Cooklang, extracted from CookCLI"
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/cooklang/cookcli"
 homepage = "https://cooklang.org"
 keywords = ["cooklang", "recipes", "cooking"]

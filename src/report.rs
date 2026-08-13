@@ -90,7 +90,7 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     // Aisle and pantry fall back to the context, which discovers them relative
     // to the working directory — not to `--base-path`, which only steers recipe
     // references inside the template.
-    let mut core_ctx = ctx.to_core();
+    let mut core_ctx = ctx.clone();
     if let Some(aisle) = args.aisle {
         core_ctx = core_ctx.with_aisle(ConfigSource::Path(to_absolute(aisle)));
     }

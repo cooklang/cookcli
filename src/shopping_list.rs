@@ -196,7 +196,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     // context's own search order (local `config/`, then the global config
     // directory) stands. `--ignore-pantry` skips the pantry altogether, which
     // core spells as "no pantry configuration".
-    let mut core_ctx = ctx.to_core();
+    let mut core_ctx = ctx.clone();
     if let Some(path) = args.aisle {
         core_ctx = core_ctx.with_aisle(ConfigSource::Path(path));
     }

@@ -8,7 +8,7 @@ use crate::Context;
 pub struct LogoutArgs {}
 
 pub fn run(_ctx: &Context, _args: LogoutArgs) -> Result<()> {
-    let session_path = crate::global_file_path("session.json")
+    let session_path = cookcli_core::global_config_path("session.json")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from(".cook-session.json"));
 

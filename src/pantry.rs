@@ -286,7 +286,7 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
     let new_ctx;
     let ctx = if let Some(base_path) = args.base_path {
         let absolute_base_path = crate::util::resolve_to_absolute_path(&base_path)?;
-        new_ctx = AppContext::new(absolute_base_path);
+        new_ctx = AppContext::discover(absolute_base_path);
         &new_ctx
     } else {
         ctx
@@ -308,7 +308,7 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
 
 fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> Result<()> {
     let depleted_items: Vec<DepletedItem> =
-        core::depleted(&ctx.to_core(), core::DepletedRequest { all: args.all })
+        core::depleted(ctx, core::DepletedRequest { all: args.all })
             .map_err(cli_error)?
             .into_value()
             .into_iter()
@@ -365,7 +365,7 @@ fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> R
 
 fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> Result<()> {
     let expiring_list: Vec<ExpiringItem> = core::expiring(
-        &ctx.to_core(),
+        ctx,
         core::ExpiringRequest {
             days: args.days,
             include_unknown: args.include_unknown,
@@ -440,7 +440,7 @@ fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> R
 
 fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Result<()> {
     let matches = core::recipes(
-        &ctx.to_core(),
+        ctx,
         core::RecipesRequest {
             threshold: args.threshold,
         },
@@ -535,7 +535,7 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
 
 fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()> {
     let plan = core::plan(
-        &ctx.to_core(),
+        ctx,
         core::PlanRequest {
             max_ingredients: args.max_ingredients,
             allow_missing: args.allow_missing,
@@ -685,7 +685,7 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 
 fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()> {
     let sections: Vec<ListSection> = core::list(
-        &ctx.to_core(),
+        ctx,
         core::ListRequest {
             section: args.section.clone(),
         },
@@ -766,7 +766,7 @@ fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()
 
 fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
     core::add(
-        &ctx.to_core(),
+        ctx,
         core::AddRequest {
             section: args.section.clone(),
             name: args.name.clone(),
@@ -784,7 +784,7 @@ fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
 
 fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
     core::remove(
-        &ctx.to_core(),
+        ctx,
         core::RemoveRequest {
             section: args.section.clone(),
             name: args.name.clone(),
@@ -809,7 +809,7 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
     }
 
     core::update(
-        &ctx.to_core(),
+        ctx,
         core::UpdateRequest {
             section: args.section.clone(),
             name: args.name.clone(),

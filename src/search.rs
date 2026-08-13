@@ -32,7 +32,7 @@ pub struct SearchArgs {
 
 pub fn run(ctx: &Context, args: SearchArgs) -> Result<()> {
     let outcome = cookcli_core::search::search(
-        &ctx.to_core(),
+        ctx,
         cookcli_core::search::SearchRequest {
             // The terms arrive as separate words only because a shell split
             // them; rejoining reconstructs the query the user typed.

@@ -1,5 +1,3 @@
-use camino::Utf8PathBuf;
-
 pub mod device_flow;
 pub mod endpoints;
 pub mod runner;
@@ -24,5 +22,5 @@ pub struct PendingDeviceFlow {
 /// Resolve the sync database file path.
 /// Returns an error if the global config directory cannot be determined.
 pub fn sync_db_path() -> anyhow::Result<String> {
-    crate::global_file_path("sync.db").map(|p: Utf8PathBuf| p.to_string())
+    Ok(cookcli_core::global_config_path("sync.db")?.to_string())
 }

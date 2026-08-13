@@ -321,8 +321,42 @@ jobs:
         uses: rust-lang/crates-io-auth-action@v1
         id: auth
 
-      - name: Publish | crates.io
-        run: cargo publish --allow-dirty
+      # cookcli depends on cookcli-core by `version` + `path`, and crates.io
+      # rejects a package whose dependency is not already published — so core
+      # goes first, and cookcli only after it is resolvable from the registry.
+      #
+      # release-please's `rust` strategy bumps every workspace member to the
+      # release version, so on a normal release this version is always new.
+      # The guard is for a re-run of an already-published release, where
+      # `cargo publish` would fail on "crate version already uploaded" and take
+      # the job down with it. Gating on the version rather than
+      # `continue-on-error`, so a genuine publish failure still fails the job.
+      - name: Publish | crates.io (cookcli-core)
+        run: |
+          set -euo pipefail
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "cookcli-core") | .version')
+          echo "cookcli-core version: $version"
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'User-Agent: cookcli-release (https://github.com/cooklang/cookcli)' \
+            "https://crates.io/api/v1/crates/cookcli-core/$version")
+          case "$status" in
+            200)
+              echo "cookcli-core $version is already on crates.io; skipping."
+              ;;
+            404)
+              cargo publish -p cookcli-core --allow-dirty
+              ;;
+            *)
+              echo "Unexpected status $status from crates.io; refusing to guess." >&2
+              exit 1
+              ;;
+          esac
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish | crates.io (cookcli)
+        run: cargo publish -p cookcli --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
