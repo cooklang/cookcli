@@ -1,19 +1,24 @@
-//! Recipe validation: the check behind `cook doctor validate`.
+//! The checks behind `cook doctor`.
 //!
 //! [`validate`] walks every `.cook` and `.menu` file under a root, parses it,
 //! and reports what it found. Broken recipes are the *payload*, not a failure:
 //! a collection full of syntax errors still validates successfully. See
-//! [`Outcome`] for the rule.
+//! [`Outcome`] for the rule. [`broken_references`] follows up on what it found,
+//! resolving the recipe references a report collected.
+//!
+//! [`aisle_coverage`] and [`pantry_coverage`] answer the other two questions
+//! `cook doctor` asks: which of a collection's ingredients are categorised in
+//! `aisle.conf`, and which of them are already in the pantry.
 
 use crate::{
     diagnostic::Severity,
-    find::tree_error,
+    find::{build_tree, listed_ingredients, parse_or_skip, walk},
     parser::{collect_diagnostics, render_report, PARSER},
-    Context, CoreError, Diagnostic, Outcome, Style,
+    ConfigSource, Context, CoreError, Diagnostic, Outcome, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang_find::{RecipeEntry, RecipeTree};
-use std::collections::BTreeMap;
+use cooklang_find::RecipeEntry;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A validation run.
 ///
@@ -103,6 +108,14 @@ impl RecipeValidation {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ValidationReport {
+    /// The root that was walked: [`ValidateRequest::base_dir`], or the
+    /// context's base path when that was unset.
+    ///
+    /// Carried so that a report is self-contained — every
+    /// [`RecipeValidation::path`] is relative to this, and
+    /// [`broken_references`] resolves against it without having to be told the
+    /// root a second time and possibly told it wrong.
+    pub base_dir: Utf8PathBuf,
     /// Every recipe found under the root, clean ones included, in path order.
     ///
     /// The order is this crate's, not the walk's: `cooklang-find` holds a
@@ -194,10 +207,16 @@ pub fn validate(
 
     tracing::trace!("validating recipes under {base_dir}");
 
-    let tree = cooklang_find::build_tree(&base_dir).map_err(|e| tree_error(e, &base_dir))?;
+    let tree = build_tree(&base_dir)?;
 
-    let mut recipes = Vec::new();
-    collect(&tree, &base_dir, req.style, &mut recipes);
+    let mut recipes: Vec<RecipeValidation> = walk(&tree)
+        .into_iter()
+        .map(|entry| validate_entry(entry, &base_dir, req.style))
+        .collect();
+    // `walk` already orders the entries by their full path, which under one
+    // root is the same order; sorted again on the path as reported, because
+    // that is what this crate promises and what makes it true whatever `walk`
+    // decides to do.
     recipes.sort_by(|a, b| a.path.cmp(&b.path));
 
     let diagnostics = recipes
@@ -206,19 +225,9 @@ pub fn validate(
         .collect();
 
     Ok(Outcome::with_diagnostics(
-        ValidationReport { recipes },
+        ValidationReport { base_dir, recipes },
         diagnostics,
     ))
-}
-
-/// Walk the tree depth-first, validating every recipe node.
-fn collect(tree: &RecipeTree, base_dir: &Utf8Path, style: Style, out: &mut Vec<RecipeValidation>) {
-    if let Some(entry) = &tree.recipe {
-        out.push(validate_entry(entry, base_dir, style));
-    }
-    for subtree in tree.children.values() {
-        collect(subtree, base_dir, style, out);
-    }
 }
 
 /// Read, parse and describe one recipe. Never fails: a recipe that cannot be
@@ -307,9 +316,256 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
     path.strip_prefix(base_dir).unwrap_or(path).to_owned()
 }
 
+// ---------------------------------------------------------------------------
+// Recipe references
+// ---------------------------------------------------------------------------
+
+/// Resolve every reference a report collected, keeping the ones that lead
+/// nowhere.
+///
+/// Keyed by the referring recipe, as [`ValidationReport::references`] is, and
+/// carrying the references in the order that recipe writes them — so a recipe
+/// making the same broken reference twice reports it twice. Recipes all of
+/// whose references resolve are left out entirely, so an empty map means every
+/// reference in the collection is good.
+///
+/// Every reference is resolved against [`ValidationReport::base_dir`], the root
+/// that was validated, rather than against the directory of the recipe making
+/// it. That is what `cook doctor validate` has always done, and it means a
+/// reference is judged by whether *the collection* holds a recipe of that name.
+///
+/// "Broken" is the whole of "could not be resolved to a readable recipe": a
+/// reference naming a file that exists but cannot be opened counts, exactly as
+/// one naming nothing at all does. Reporting them apart would need a reason on
+/// every entry, which nothing has yet asked for.
+///
+/// Nothing here fails, so there is no `Result`: this is the check, and what it
+/// finds is the answer. It does touch the filesystem, once per reference —
+/// which is why it is a function rather than a method on the report.
+pub fn broken_references(report: &ValidationReport) -> BTreeMap<&Utf8Path, Vec<String>> {
+    report
+        .references()
+        .into_iter()
+        .filter_map(|(recipe, references)| {
+            let broken: Vec<String> = references
+                .iter()
+                .filter(|reference| crate::find::get_recipe(&report.base_dir, reference).is_err())
+                .cloned()
+                .collect();
+            (!broken.is_empty()).then_some((recipe, broken))
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Ingredient coverage
+// ---------------------------------------------------------------------------
+
+/// Which collection to check a configuration against.
+///
+/// Not `#[non_exhaustive]`: consumers construct this. `..Default::default()`
+/// keeps a literal working if it grows a field.
+#[derive(Debug, Clone, Default)]
+pub struct CoverageRequest {
+    /// Directory whose recipes to scan. Defaults to the context base path.
+    pub base_dir: Option<Utf8PathBuf>,
+}
+
+/// One ingredient a collection uses, and whether a configuration knows it.
+///
+/// `#[non_exhaustive]` because this is an output type consumers read rather
+/// than construct.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckedIngredient {
+    /// The ingredient's name, spelled as the recipes write it. Where two
+    /// recipes spell it differently — `Salt` and `salt` — both spellings are
+    /// listed, even though the configuration is matched ignoring case.
+    pub name: String,
+    /// Whether the configuration names this ingredient.
+    pub known: bool,
+}
+
+/// How much of a collection's ingredients a configuration accounts for.
+///
+/// The two views callers want — what is covered and what is not — are
+/// [`known`](IngredientCoverage::known) and
+/// [`unknown`](IngredientCoverage::unknown), derived from
+/// [`ingredients`](IngredientCoverage::ingredients) rather than stored beside
+/// it, so that they cannot disagree with it or with each other.
+///
+/// `#[non_exhaustive]` because this is an output type consumers read rather
+/// than construct.
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IngredientCoverage {
+    /// How many recipes were scanned, including any that could not be read or
+    /// parsed — those contribute no ingredients, and say so in
+    /// [`Outcome::diagnostics`].
+    pub total_recipes: usize,
+    /// Every distinct ingredient the collection uses, in alphabetical order,
+    /// each marked with whether the configuration knows it.
+    ///
+    /// References to other recipes are not ingredients and are left out.
+    pub ingredients: Vec<CheckedIngredient>,
+}
+
+impl IngredientCoverage {
+    /// How many distinct ingredients the collection uses.
+    pub fn total_ingredients(&self) -> usize {
+        self.ingredients.len()
+    }
+
+    /// The ingredients the configuration knows, in alphabetical order.
+    pub fn known(&self) -> impl Iterator<Item = &str> {
+        self.filtered(true)
+    }
+
+    /// The ingredients the configuration does not know, in alphabetical order.
+    ///
+    /// With no configuration at all this is every ingredient, since nothing is
+    /// known. Ask [`ConfigSource::is_unset`] if you need to tell that from a
+    /// configuration that simply covers nothing.
+    pub fn unknown(&self) -> impl Iterator<Item = &str> {
+        self.filtered(false)
+    }
+
+    fn filtered(&self, known: bool) -> impl Iterator<Item = &str> {
+        self.ingredients
+            .iter()
+            .filter(move |ingredient| ingredient.known == known)
+            .map(|ingredient| ingredient.name.as_str())
+    }
+}
+
+/// Check the collection's ingredients against the aisle configuration
+/// [`Context::aisle`] names — the question `cook doctor aisle` asks.
+///
+/// An ingredient is known when the configuration names it, or names it as a
+/// synonym of something else, compared lowercased and otherwise exactly. With
+/// no aisle configuration nothing is known; see
+/// [`unknown`](IngredientCoverage::unknown).
+///
+/// # Errors
+///
+/// - [`CoreError::Io`] if the configuration is named but cannot be read.
+/// - [`CoreError::Search`] if the collection cannot be walked, and
+///   [`CoreError::Io`] if a file in it cannot be listed — as [`validate`]. A
+///   recipe that cannot be *parsed* is not an error: it is left out, with a
+///   warning in [`Outcome::diagnostics`].
+pub fn aisle_coverage(
+    ctx: &Context,
+    req: CoverageRequest,
+) -> Result<Outcome<IngredientCoverage>, CoreError> {
+    let source = ctx.aisle();
+    let mut diagnostics = Vec::new();
+    let mut known = BTreeSet::new();
+
+    if let Some(text) = source.read()? {
+        let parsed = cooklang::aisle::parse_lenient(&text);
+        diagnostics.extend(collect_diagnostics(parsed.report(), source.path()));
+        let conf = parsed.output().ok_or_else(|| config_error(source))?;
+        // The map is keyed by each name and synonym, already lowercased.
+        known.extend(conf.ingredients_info().into_keys());
+    }
+
+    coverage(ctx, req, &known, diagnostics)
+}
+
+/// Check the collection's ingredients against the pantry configuration
+/// [`Context::pantry`] names — the question `cook doctor pantry` asks.
+///
+/// An ingredient is known when an item of that name is in stock, in any
+/// section, compared lowercased and otherwise exactly; no quantity or date is
+/// considered, so an item that has run out still counts as known. With no
+/// pantry configuration nothing is known; see
+/// [`unknown`](IngredientCoverage::unknown).
+///
+/// Note the direction: this reports on the *collection's* ingredients, so a
+/// pantry item no recipe uses is not mentioned at all.
+///
+/// # Errors
+///
+/// As [`aisle_coverage`], plus [`CoreError::Config`] if the pantry cannot be
+/// parsed at all — the same verdict [`pantry::load`](crate::pantry::load)
+/// reaches on the same file.
+pub fn pantry_coverage(
+    ctx: &Context,
+    req: CoverageRequest,
+) -> Result<Outcome<IngredientCoverage>, CoreError> {
+    let source = ctx.pantry();
+    let mut diagnostics = Vec::new();
+    let mut known = BTreeSet::new();
+
+    if let Some(text) = source.read()? {
+        let parsed = cooklang::pantry::parse_lenient(&text);
+        diagnostics.extend(collect_diagnostics(parsed.report(), source.path()));
+        let conf = parsed.output().ok_or_else(|| config_error(source))?;
+        known.extend(conf.all_items().map(|item| item.name().to_lowercase()));
+    }
+
+    coverage(ctx, req, &known, diagnostics)
+}
+
+/// The failure that leaves a lenient parse with no configuration at all.
+///
+/// `cooklang`'s aisle parser is documented as never reaching this; its pantry
+/// parser reaches it for a file that is not TOML.
+fn config_error(source: &ConfigSource) -> CoreError {
+    CoreError::Config {
+        path: source.path().map(ToOwned::to_owned),
+        message: "the configuration could not be parsed".to_string(),
+    }
+}
+
+/// Scan the collection and mark each ingredient against `known`, which holds
+/// the configuration's names already lowercased.
+fn coverage(
+    ctx: &Context,
+    req: CoverageRequest,
+    known: &BTreeSet<String>,
+    mut diagnostics: Vec<Diagnostic>,
+) -> Result<Outcome<IngredientCoverage>, CoreError> {
+    let base_dir = req
+        .base_dir
+        .unwrap_or_else(|| ctx.base_path().to_path_buf());
+
+    let tree = build_tree(&base_dir)?;
+    let entries = walk(&tree);
+    let total_recipes = entries.len();
+
+    // A set, so an ingredient two recipes share is one ingredient. Ordered, so
+    // that the answer does not depend on the order `cooklang-find` happened to
+    // yield the directories in.
+    let mut names: BTreeSet<String> = BTreeSet::new();
+    for entry in entries {
+        let Some(recipe) = parse_or_skip(entry, &mut diagnostics) else {
+            continue;
+        };
+        names.extend(listed_ingredients(&recipe));
+    }
+
+    let ingredients = names
+        .into_iter()
+        .map(|name| CheckedIngredient {
+            known: known.contains(&name.to_lowercase()),
+            name,
+        })
+        .collect();
+
+    Ok(Outcome::with_diagnostics(
+        IngredientCoverage {
+            total_recipes,
+            ingredients,
+        },
+        diagnostics,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::find::tree_error;
     use cooklang_find::tree::TreeError;
 
     const CLEAN: &str = "---\ntitle: Basic Sauce\n---\n\nHeat @oil{2%tbsp} in a #pan.\n";
@@ -816,5 +1072,459 @@ mod tests {
             ),
             "recipes/soup.cook"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Recipe references
+    // -----------------------------------------------------------------------
+
+    /// The broken references of a collection, as pairs, for readable
+    /// assertions.
+    fn broken(report: &ValidationReport) -> Vec<(String, Vec<String>)> {
+        broken_references(report)
+            .into_iter()
+            .map(|(recipe, missing)| (recipe.to_string(), missing))
+            .collect()
+    }
+
+    #[test]
+    fn the_report_records_the_root_it_was_validated_against() {
+        let dir = fixture();
+        assert_eq!(run(&base(&dir)).base_dir, base(&dir));
+
+        let elsewhere = tempfile::TempDir::new().unwrap();
+        let report = validate(
+            &Context::new(base(&elsewhere)),
+            ValidateRequest {
+                base_dir: Some(base(&dir)),
+                style: Style::Plain,
+            },
+        )
+        .expect("validation succeeds")
+        .into_value();
+        assert_eq!(
+            report.base_dir,
+            base(&dir),
+            "the root that was walked, not the context's"
+        );
+    }
+
+    /// `with_ref.cook` makes two references: one to a recipe that is there and
+    /// one to a recipe that is not. Only the second is reported.
+    #[test]
+    fn only_references_that_resolve_to_nothing_are_reported() {
+        let dir = fixture();
+        assert_eq!(
+            broken(&run(&base(&dir))),
+            [(
+                "with_ref.cook".to_string(),
+                vec!["./nonexistent".to_string()]
+            )]
+        );
+    }
+
+    #[test]
+    fn a_collection_whose_references_all_resolve_reports_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("sauce.cook"), CLEAN);
+        write(
+            &base.join("dish.cook"),
+            "---\ntitle: Dish\n---\n\nMake @./sauce{}.\n",
+        );
+
+        assert!(
+            broken_references(&run(&base)).is_empty(),
+            "a resolvable reference must not be reported"
+        );
+    }
+
+    /// A recipe that makes the same broken reference twice has something wrong
+    /// with it twice, and the CLI counts one error per mention.
+    #[test]
+    fn a_reference_repeated_is_reported_once_per_mention() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(
+            &base.join("dish.cook"),
+            "---\ntitle: Dish\n---\n\nMake @./absent{}, then more @./absent{}.\n",
+        );
+
+        assert_eq!(
+            broken(&run(&base)),
+            [(
+                "dish.cook".to_string(),
+                vec!["./absent".to_string(), "./absent".to_string()]
+            )]
+        );
+    }
+
+    /// References are looked up in the collection as a whole, so a recipe in a
+    /// subdirectory can reference one at the root. This is what makes the
+    /// spelling `./sauce` work from anywhere, and it is the behaviour `cook
+    /// doctor validate` has always had.
+    #[test]
+    fn references_resolve_against_the_validated_root_from_anywhere_in_it() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("sauce.cook"), CLEAN);
+        std::fs::create_dir(base.join("Dinner")).unwrap();
+        write(
+            &base.join("Dinner").join("dish.cook"),
+            "---\ntitle: Dish\n---\n\nMake @./sauce{}.\n",
+        );
+
+        assert!(
+            broken_references(&run(&base)).is_empty(),
+            "a nested recipe must be able to reference the root's"
+        );
+    }
+
+    /// A collection with nothing to check comes back empty rather than
+    /// reporting anything.
+    #[test]
+    fn a_collection_with_no_references_has_none_broken() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("sauce.cook"), CLEAN);
+        assert!(broken_references(&run(&base(&dir))).is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Ingredient coverage
+    // -----------------------------------------------------------------------
+
+    /// A collection of one recipe, so that a check has something to scan.
+    fn one_recipe(text: &str) -> tempfile::TempDir {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("dish.cook"), text);
+        dir
+    }
+
+    fn aisle_ctx(dir: &tempfile::TempDir, conf: &str) -> Context {
+        Context::new(base(dir)).with_aisle(ConfigSource::Inline(conf.to_string()))
+    }
+
+    fn pantry_ctx(dir: &tempfile::TempDir, conf: &str) -> Context {
+        Context::new(base(dir)).with_pantry(ConfigSource::Inline(conf.to_string()))
+    }
+
+    fn checked(ctx: &Context, aisle: bool) -> Outcome<IngredientCoverage> {
+        let request = CoverageRequest::default();
+        if aisle {
+            aisle_coverage(ctx, request)
+        } else {
+            pantry_coverage(ctx, request)
+        }
+        .expect("the check succeeds")
+    }
+
+    fn known(coverage: &IngredientCoverage) -> Vec<&str> {
+        coverage.known().collect()
+    }
+
+    fn unknown(coverage: &IngredientCoverage) -> Vec<&str> {
+        coverage.unknown().collect()
+    }
+
+    fn all(coverage: &IngredientCoverage) -> Vec<&str> {
+        coverage
+            .ingredients
+            .iter()
+            .map(|ingredient| ingredient.name.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn an_aisle_splits_the_collection_into_categorised_and_not() {
+        let dir = one_recipe("Add @salt{1%tsp}, @water{1%l} and @leek{1}.\n");
+        let coverage = checked(
+            &aisle_ctx(&dir, "[produce]\nleek\n\n[pantry]\nsalt\n"),
+            true,
+        )
+        .value;
+
+        assert_eq!(known(&coverage), ["leek", "salt"]);
+        assert_eq!(unknown(&coverage), ["water"]);
+        assert_eq!(coverage.total_ingredients(), 3);
+        assert_eq!(coverage.total_recipes, 1);
+    }
+
+    /// An aisle entry naming several spellings of one thing knows all of them.
+    #[test]
+    fn an_aisle_synonym_counts_as_knowing_the_ingredient() {
+        let dir = one_recipe("Add @aubergine{1}.\n");
+        let coverage = checked(&aisle_ctx(&dir, "[produce]\neggplant|aubergine\n"), true).value;
+
+        assert_eq!(known(&coverage), ["aubergine"]);
+        assert!(unknown(&coverage).is_empty());
+    }
+
+    #[test]
+    fn a_pantry_knows_its_items_from_every_section() {
+        let dir = one_recipe("Add @salt{1%tsp}, @milk{1%l} and @water{1%l}.\n");
+        let conf = "[pantry]\nsalt = \"1%kg\"\n\n[dairy]\nmilk = \"1%l\"\n";
+        let coverage = checked(&pantry_ctx(&dir, conf), false).value;
+
+        assert_eq!(known(&coverage), ["milk", "salt"]);
+        assert_eq!(unknown(&coverage), ["water"]);
+    }
+
+    /// Nothing about the stock is considered: an item that has run out is
+    /// still an item the pantry knows about.
+    #[test]
+    fn a_pantry_item_that_has_run_out_still_counts_as_known() {
+        let dir = one_recipe("Add @honey{1%tbsp}.\n");
+        let conf = "[pantry]\nhoney = { quantity = \"0\", low = \"100%g\" }\n";
+        assert_eq!(
+            known(&checked(&pantry_ctx(&dir, conf), false).value),
+            ["honey"]
+        );
+    }
+
+    /// Both checks compare names ignoring case, and both report the
+    /// ingredient as the *recipe* spells it.
+    #[test]
+    fn names_are_matched_ignoring_case_and_reported_as_the_recipe_writes_them() {
+        let dir = one_recipe("Add @Salt{1%tsp} and @PEPPER{}.\n");
+
+        let aisle = checked(&aisle_ctx(&dir, "[pantry]\nsalt\npepper\n"), true).value;
+        assert_eq!(known(&aisle), ["PEPPER", "Salt"]);
+        assert!(unknown(&aisle).is_empty());
+
+        let conf = "[pantry]\nsalt = \"1%kg\"\npepper = \"50%g\"\n";
+        let pantry = checked(&pantry_ctx(&dir, conf), false).value;
+        assert_eq!(known(&pantry), ["PEPPER", "Salt"]);
+        assert!(unknown(&pantry).is_empty());
+    }
+
+    /// Two spellings of one ingredient are two entries, because the report
+    /// says what the recipes say. Both are judged the same way.
+    #[test]
+    fn two_spellings_of_one_ingredient_are_both_listed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("a.cook"), "Add @Salt{1%tsp}.\n");
+        write(&base(&dir).join("b.cook"), "Add @salt{1%tsp}.\n");
+
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(known(&coverage), ["Salt", "salt"]);
+        assert_eq!(coverage.total_ingredients(), 2);
+    }
+
+    /// With nothing to check against, everything is unknown — and the
+    /// collection is still scanned, which is what lets `cook doctor aisle`
+    /// report the count before explaining that there is no configuration.
+    #[test]
+    fn without_a_configuration_nothing_is_known() {
+        let dir = one_recipe("Add @salt{1%tsp}.\n");
+        let ctx = Context::new(base(&dir));
+
+        for aisle in [true, false] {
+            let coverage = checked(&ctx, aisle).value;
+            assert_eq!(coverage.total_recipes, 1);
+            assert!(known(&coverage).is_empty(), "aisle: {aisle}");
+            assert_eq!(unknown(&coverage), ["salt"], "aisle: {aisle}");
+        }
+    }
+
+    /// A reference is a recipe to make, not a thing to have in, so it is not
+    /// an ingredient — however the configuration happens to name it.
+    #[test]
+    fn references_to_other_recipes_are_not_ingredients() {
+        let dir = one_recipe("Make @./sauce{} and add @water{1%l}.\n");
+        write(&base(&dir).join("sauce.cook"), CLEAN);
+
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsauce\nwater\noil\n"), true).value;
+        assert_eq!(
+            all(&coverage),
+            ["oil", "water"],
+            "the referenced recipe's own ingredients count; the reference does not"
+        );
+    }
+
+    #[test]
+    fn every_recipe_under_the_root_is_scanned_including_nested_ones() {
+        let dir = one_recipe("Boil @water{1%l}.\n");
+        std::fs::create_dir(base(&dir).join("Breakfast")).unwrap();
+        write(
+            &base(&dir).join("Breakfast").join("porridge.cook"),
+            "Simmer @oats{50%g}.\n",
+        );
+
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nwater\n"), true).value;
+        assert_eq!(coverage.total_recipes, 2);
+        assert_eq!(
+            unknown(&coverage),
+            ["oats"],
+            "a subdirectory must be walked"
+        );
+    }
+
+    /// A recipe that cannot be parsed still counts as scanned — the CLI has
+    /// always said so — but contributes no ingredients, and says why.
+    #[test]
+    fn a_recipe_that_cannot_be_parsed_is_counted_but_contributes_nothing() {
+        let dir = one_recipe("Add @salt{1%tsp}.\n");
+        write(&base(&dir).join("broken.cook"), BROKEN);
+
+        let outcome = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true);
+        assert_eq!(outcome.value.total_recipes, 2);
+        assert_eq!(outcome.value.total_ingredients(), 1);
+        assert_eq!(known(&outcome.value), ["salt"]);
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("broken.cook")),
+            "the skipped recipe must be named: {:?}",
+            outcome.diagnostics
+        );
+    }
+
+    /// `cooklang-find` holds a directory's entries in a `HashMap`, so the walk
+    /// order changes from run to run. Asserted over several runs because one
+    /// run of an unsorted walk can come out sorted by luck.
+    #[test]
+    fn ingredients_come_back_in_alphabetical_order_every_time() {
+        let dir = tempfile::TempDir::new().unwrap();
+        for (file, ingredient) in [("a", "yeast"), ("b", "flour"), ("c", "sugar")] {
+            write(
+                &base(&dir).join(format!("{file}.cook")),
+                &format!("Add @{ingredient}{{1}}.\n"),
+            );
+        }
+        let ctx = aisle_ctx(&dir, "[pantry]\nflour\n");
+
+        for _ in 0..8 {
+            let coverage = checked(&ctx, true).value;
+            assert_eq!(all(&coverage), ["flour", "sugar", "yeast"]);
+            assert_eq!(unknown(&coverage), ["sugar", "yeast"]);
+        }
+    }
+
+    /// The two views are derived from one list, so between them they account
+    /// for every ingredient exactly once.
+    #[test]
+    fn the_two_views_partition_the_ingredients() {
+        let dir = one_recipe("Add @salt{1%tsp}, @water{1%l} and @leek{1}.\n");
+        let coverage = checked(&aisle_ctx(&dir, "[produce]\nleek\n"), true).value;
+
+        let mut both: Vec<&str> = known(&coverage)
+            .into_iter()
+            .chain(unknown(&coverage))
+            .collect();
+        both.sort_unstable();
+        assert_eq!(both, all(&coverage));
+        assert_eq!(
+            known(&coverage).len() + unknown(&coverage).len(),
+            coverage.total_ingredients()
+        );
+    }
+
+    #[test]
+    fn a_coverage_base_dir_overrides_the_context_base_path() {
+        let scanned = one_recipe("Add @salt{1%tsp}.\n");
+        let ignored = one_recipe("Add @decoy{1}.\n");
+
+        let coverage = aisle_coverage(
+            &aisle_ctx(&ignored, "[pantry]\nsalt\n"),
+            CoverageRequest {
+                base_dir: Some(base(&scanned)),
+            },
+        )
+        .expect("the check succeeds")
+        .into_value();
+
+        assert_eq!(known(&coverage), ["salt"]);
+        assert!(!all(&coverage).contains(&"decoy"), "{:?}", all(&coverage));
+    }
+
+    /// A warning in the configuration is carried back rather than logged, so
+    /// that a caller other than the CLI can show it.
+    #[test]
+    fn a_warning_in_the_configuration_comes_back_as_a_diagnostic() {
+        let dir = one_recipe("Add @leek{1}.\n");
+        let outcome = checked(&aisle_ctx(&dir, "[produce]\nleek\n\n[dairy]\nleek\n"), true);
+
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("Duplicate ingredient")),
+            "{:?}",
+            outcome.diagnostics
+        );
+        // ...and the check still answers.
+        assert_eq!(known(&outcome.value), ["leek"]);
+    }
+
+    /// A configuration the context names but cannot read is a failure, not an
+    /// absent configuration: reporting it as "nothing is categorised" would
+    /// send the user editing a file that is fine.
+    #[test]
+    fn a_configuration_that_cannot_be_read_is_reported() {
+        let dir = one_recipe("Add @salt{1%tsp}.\n");
+        let missing = base(&dir).join("config").join("aisle.conf");
+
+        match aisle_coverage(
+            &Context::new(base(&dir)).with_aisle(ConfigSource::Path(missing.clone())),
+            CoverageRequest::default(),
+        ) {
+            Err(CoreError::Io { path, source }) => {
+                assert_eq!(path, missing);
+                assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected CoreError::Io, got {:?}", other.map(|o| o.value)),
+        }
+    }
+
+    /// The same verdict `pantry::load` reaches on the same file.
+    #[test]
+    fn a_pantry_that_cannot_be_parsed_at_all_is_reported() {
+        let dir = one_recipe("Add @salt{1%tsp}.\n");
+
+        match pantry_coverage(
+            &pantry_ctx(&dir, "this is not toml ["),
+            CoverageRequest::default(),
+        ) {
+            Err(CoreError::Config { path, message }) => {
+                assert_eq!(path, None, "an inline configuration has no path");
+                assert!(!message.is_empty());
+            }
+            other => panic!(
+                "expected CoreError::Config, got {:?}",
+                other.map(|o| o.value)
+            ),
+        }
+    }
+
+    /// A root that is not there fails the same way validation does.
+    #[test]
+    fn a_root_that_does_not_exist_is_reported_by_a_coverage_check() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let missing = base(&dir).join("nope");
+
+        match pantry_coverage(
+            &Context::new(missing.clone()).with_pantry(ConfigSource::Inline(String::new())),
+            CoverageRequest::default(),
+        ) {
+            Err(CoreError::Search { base_dir, message }) => {
+                assert_eq!(base_dir, missing);
+                assert_eq!(message, "no such directory");
+            }
+            other => panic!(
+                "expected CoreError::Search, got {:?}",
+                other.map(|o| o.value)
+            ),
+        }
+    }
+
+    #[test]
+    fn an_empty_collection_covers_nothing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(coverage.total_recipes, 0);
+        assert_eq!(coverage.total_ingredients(), 0);
+        assert!(known(&coverage).is_empty());
+        assert!(unknown(&coverage).is_empty());
     }
 }

@@ -1,8 +1,11 @@
-//! Resolving a recipe name or path to a file on disk.
+//! Resolving a recipe name or path to a file on disk, and walking a whole
+//! collection of them.
 
-use crate::CoreError;
-use camino::Utf8Path;
-use cooklang_find::{tree::TreeError, RecipeEntry};
+use crate::{parser::parse_unscaled, CoreError, Diagnostic};
+use camino::{Utf8Path, Utf8PathBuf};
+use cooklang::Recipe;
+use cooklang_find::{tree::TreeError, RecipeEntry, RecipeTree};
+use std::collections::BTreeSet;
 
 /// Look `name` up under `base_path`, returning the file it resolves to.
 ///
@@ -106,10 +109,101 @@ pub(crate) fn tree_error(error: TreeError, base_dir: &Utf8Path) -> CoreError {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Walking a collection
+// ---------------------------------------------------------------------------
+
+/// Build the recipe tree under `base_dir`, in this crate's error wording.
+pub(crate) fn build_tree(base_dir: &Utf8Path) -> Result<RecipeTree, CoreError> {
+    tracing::trace!("walking recipes under {base_dir}");
+    cooklang_find::build_tree(base_dir).map_err(|e| tree_error(e, base_dir))
+}
+
+/// Every recipe in the tree, depth first, in path order.
+///
+/// Sorted because `cooklang-find` holds a directory's children in a `HashMap`,
+/// so the walk itself yields them differently from run to run. Several callers
+/// sort their own results anyway — `pantry::recipes` does, and `pantry::plan`
+/// breaks its ties alphabetically — but the diagnostics depend on this:
+/// without it, a collection with two unreadable recipes reports them in a
+/// different order each time.
+pub(crate) fn walk(tree: &RecipeTree) -> Vec<&RecipeEntry> {
+    fn collect<'a>(tree: &'a RecipeTree, out: &mut Vec<&'a RecipeEntry>) {
+        if let Some(entry) = &tree.recipe {
+            out.push(entry);
+        }
+        for subtree in tree.children.values() {
+            collect(subtree, out);
+        }
+    }
+
+    let mut entries = Vec::new();
+    collect(tree, &mut entries);
+    entries.sort_by_key(|entry| (entry.path().cloned(), entry.name().clone()));
+    entries
+}
+
+/// Parse one recipe, or note that it was left out.
+///
+/// Nothing here fails the walk: one unreadable file in a collection must not
+/// cost the caller the answer for the rest of it.
+pub(crate) fn parse_or_skip(
+    entry: &RecipeEntry,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Recipe> {
+    let display = entry
+        .path()
+        .map(ToString::to_string)
+        .or_else(|| entry.name().clone())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let mut skipped = |reason: &str| {
+        let diagnostic = Diagnostic::warning(format!(
+            "could not {reason} {display}, so it was not considered"
+        ));
+        diagnostics.push(match entry.path() {
+            Some(path) => diagnostic.at_file(path),
+            None => diagnostic,
+        });
+        None
+    };
+
+    let content = match entry.content() {
+        Ok(content) => content,
+        Err(_) => return skipped("read"),
+    };
+
+    // Unscaled: scaling by one would only re-fit units, and no caller of this
+    // reads a quantity.
+    match parse_unscaled(&content, &display, entry.path().map(Utf8PathBuf::as_path)) {
+        Ok(outcome) => Some(outcome.value),
+        Err(_) => skipped("parse"),
+    }
+}
+
+/// The ingredients a recipe asks the reader to have, as it writes them.
+///
+/// A set, so a recipe using flour twice wants flour once.
+///
+/// References to other recipes are left out: they are a recipe to make, not a
+/// thing to have in. Ingredients the parser marks as not to be listed are left
+/// out too, though with [`PARSER`](crate::PARSER)'s extensions there are none
+/// — `@-salt{}` parses as an ingredient *named* `-salt` rather than a hidden
+/// one, so it counts like any other. The filter is kept for the day that
+/// changes.
+pub(crate) fn listed_ingredients(recipe: &Recipe) -> BTreeSet<String> {
+    recipe
+        .ingredients
+        .iter()
+        .filter(|ingredient| ingredient.reference.is_none())
+        .filter(|ingredient| ingredient.modifiers().should_be_listed())
+        .map(|ingredient| ingredient.display_name().to_string())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use camino::Utf8PathBuf;
 
     fn fixture() -> tempfile::TempDir {
         let dir = tempfile::TempDir::new().unwrap();

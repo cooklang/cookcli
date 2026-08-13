@@ -1,11 +1,13 @@
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
-use cooklang_find::build_tree;
-use std::collections::BTreeSet;
+use cookcli_core::{
+    doctor::{aisle_coverage, broken_references, pantry_coverage, CoverageRequest},
+    Diagnostic,
+};
 use tracing::warn;
 
-use crate::{util::parse_recipe_from_entry, Context};
+use crate::{util::cli_error, Context};
 
 #[derive(Debug, Args)]
 pub struct DoctorArgs {
@@ -155,37 +157,19 @@ fn check_for_updates() {
     }
 }
 
-fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
-    let base_path = args.base_path.as_deref().unwrap_or(ctx.base_path());
-
-    // Load pantry configuration
-    let pantry_path = ctx.pantry().path();
-    let pantry = pantry_path.and_then(|path| {
-        match std::fs::read_to_string(path) {
-            Ok(content) => {
-                let result = cooklang::pantry::parse_lenient(&content);
-
-                // Display warnings if any
-                if result.report().has_warnings() {
-                    warn!("Warnings in pantry configuration:");
-                    for warning in result.report().warnings() {
-                        warn!("  - {warning}");
-                    }
-                }
-
-                result.output().cloned().map(|mut p| {
-                    p.rebuild_index();
-                    p
-                })
-            }
-            Err(e) => {
-                warn!("Failed to read pantry file: {e}");
-                None
-            }
+/// Core returns its warnings instead of logging them, so that a library
+/// consumer can show them its own way. Logging them is this boundary's job.
+fn log_diagnostics(diagnostics: &[Diagnostic]) {
+    for diagnostic in diagnostics {
+        match diagnostic.location.as_ref().and_then(|l| l.file.as_ref()) {
+            Some(file) => warn!("{file}: {}", diagnostic.message),
+            None => warn!("{}", diagnostic.message),
         }
-    });
+    }
+}
 
-    if pantry.is_none() && pantry_path.is_none() {
+fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
+    if ctx.pantry().is_unset() {
         println!("No pantry configuration found.");
         println!("To track your ingredient inventory, create a pantry.conf file in:");
         println!("  - ./config/pantry.conf (project-specific)");
@@ -199,242 +183,98 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
         return Ok(());
     }
 
-    // Find all recipes
-    let tree = build_tree(base_path)?;
-
-    // Collect all unique ingredients from all recipes and track which are in pantry
-    let mut all_ingredients = BTreeSet::new();
-    let mut pantry_ingredients = BTreeSet::new();
-    let mut recipe_count = 0;
-
-    // Walk through the tree to find and process all recipes
-    fn process_recipes(
-        tree: &cooklang_find::RecipeTree,
-        all_ingredients: &mut BTreeSet<String>,
-        pantry_ingredients: &mut BTreeSet<String>,
-        pantry: &Option<cooklang::pantry::PantryConf>,
-        recipe_count: &mut usize,
-    ) {
-        // Check if this node has a recipe
-        if let Some(entry) = &tree.recipe {
-            *recipe_count += 1;
-
-            // Parse the recipe
-            let recipe = match parse_recipe_from_entry(entry, 1.0) {
-                Ok(r) => r,
-                Err(e) => {
-                    let name = entry.name().as_deref().unwrap_or("unknown");
-                    warn!("Failed to parse recipe '{name}': {e}");
-                    return;
-                }
-            };
-
-            // Collect ingredients (excluding recipe references)
-            for ingredient in recipe.ingredients.iter() {
-                // Skip recipe references - they shouldn't be in pantry
-                if ingredient.reference.is_some() {
-                    continue;
-                }
-
-                if ingredient.modifiers().should_be_listed() {
-                    let name = ingredient.display_name();
-                    let name_str = name.to_string();
-                    all_ingredients.insert(name_str.clone());
-
-                    // Check if this ingredient is in pantry
-                    if let Some(pantry_conf) = pantry {
-                        if pantry_conf.has_ingredient(&name_str) {
-                            pantry_ingredients.insert(name_str);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recursively check children
-        for subtree in tree.children.values() {
-            process_recipes(
-                subtree,
-                all_ingredients,
-                pantry_ingredients,
-                pantry,
-                recipe_count,
-            );
-        }
-    }
-
-    process_recipes(
-        &tree,
-        &mut all_ingredients,
-        &mut pantry_ingredients,
-        &pantry,
-        &mut recipe_count,
-    );
+    let outcome = pantry_coverage(
+        ctx,
+        CoverageRequest {
+            base_dir: args.base_path,
+        },
+    )
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let coverage = outcome.value;
 
     println!(
         "Scanned {} recipes, found {} unique ingredients",
-        recipe_count,
-        all_ingredients.len()
+        coverage.total_recipes,
+        coverage.total_ingredients()
     );
 
-    if pantry.is_some() {
-        if pantry_ingredients.is_empty() {
-            println!("\n✓ No recipe ingredients are currently in your pantry");
-        } else {
-            println!(
-                "\n{} ingredients from recipes are in your pantry:",
-                pantry_ingredients.len()
-            );
-            for ingredient in pantry_ingredients {
-                println!("  ✓ {ingredient}");
-            }
-            println!("\nThese ingredients will be excluded from shopping lists.");
+    let in_pantry: Vec<&str> = coverage.known().collect();
+    if in_pantry.is_empty() {
+        println!("\n✓ No recipe ingredients are currently in your pantry");
+    } else {
+        println!(
+            "\n{} ingredients from recipes are in your pantry:",
+            in_pantry.len()
+        );
+        for ingredient in in_pantry {
+            println!("  ✓ {ingredient}");
         }
+        println!("\nThese ingredients will be excluded from shopping lists.");
     }
 
     Ok(())
 }
 
 fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
-    let base_path = args.base_path.as_deref().unwrap_or(ctx.base_path());
-
-    // Load aisle configuration
-    let aisle_path = ctx.aisle().path();
-    let aisle_data = aisle_path.and_then(|path| {
-        std::fs::read_to_string(path)
-            .map(|content| (path.to_path_buf(), content))
-            .ok()
-    });
-
-    let aisle = if let Some((_path, content)) = aisle_data.as_ref() {
-        let result = cooklang::aisle::parse_lenient(content);
-
-        // Display warnings if any
-        if result.report().has_warnings() {
-            eprintln!("Warnings in aisle configuration:");
-            for warning in result.report().warnings() {
-                eprintln!("  - {warning}");
-            }
-        }
-
-        result.output().cloned()
-    } else {
-        if aisle_data.is_none() && aisle_path.is_some() {
-            warn!("Failed to read aisle file");
-        } else if aisle_path.is_none() {
-            warn!("No aisle configuration found");
-        }
-        None
-    };
-
-    // Find all recipes
-    let tree = build_tree(base_path)?;
-
-    // Collect all unique ingredients from all recipes
-    let mut all_ingredients = BTreeSet::new();
-    let mut recipe_count = 0;
-
-    // Walk through the tree to find and process all recipes
-    fn process_recipes(
-        tree: &cooklang_find::RecipeTree,
-        all_ingredients: &mut BTreeSet<String>,
-        recipe_count: &mut usize,
-    ) {
-        // Check if this node has a recipe
-        if let Some(entry) = &tree.recipe {
-            *recipe_count += 1;
-
-            // Parse the recipe
-            let recipe = match parse_recipe_from_entry(entry, 1.0) {
-                Ok(r) => r,
-                Err(e) => {
-                    let name = entry.name().as_deref().unwrap_or("unknown");
-                    warn!("Failed to parse recipe '{name}': {e}");
-                    return;
-                }
-            };
-
-            // Collect ingredients (excluding recipe references)
-            for ingredient in recipe.ingredients.iter() {
-                // Skip recipe references - they shouldn't be in aisle
-                if ingredient.reference.is_some() {
-                    continue;
-                }
-
-                if ingredient.modifiers().should_be_listed() {
-                    let name = ingredient.display_name();
-                    all_ingredients.insert(name.to_string());
-                }
-            }
-        }
-
-        // Recursively check children
-        for subtree in tree.children.values() {
-            process_recipes(subtree, all_ingredients, recipe_count);
-        }
+    // Unlike the pantry check, this one scans first and reports a missing
+    // configuration afterwards, so the count is printed either way.
+    let configured = !ctx.aisle().is_unset();
+    if !configured {
+        warn!("No aisle configuration found");
     }
 
-    process_recipes(&tree, &mut all_ingredients, &mut recipe_count);
+    let outcome = aisle_coverage(
+        ctx,
+        CoverageRequest {
+            base_dir: args.base_path,
+        },
+    )
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let coverage = outcome.value;
 
     println!(
         "Scanned {} recipes, found {} unique ingredients",
-        recipe_count,
-        all_ingredients.len()
+        coverage.total_recipes,
+        coverage.total_ingredients()
     );
 
-    // Check which ingredients are missing from aisle
-    if let Some(aisle_conf) = aisle {
-        let aisle_info = aisle_conf.ingredients_info();
-
-        let missing_ingredients: Vec<_> = all_ingredients
-            .into_iter()
-            .filter(|ingredient| {
-                // Check if ingredient is in aisle (case-insensitive)
-                !aisle_info
-                    .iter()
-                    .any(|(aisle_name, _)| aisle_name.eq_ignore_ascii_case(ingredient))
-            })
-            .collect();
-
-        // Output results
-        if missing_ingredients.is_empty() {
-            println!("✓ All ingredients are present in aisle configuration");
-        } else {
-            println!(
-                "\n{} ingredients not found in aisle configuration:",
-                missing_ingredients.len()
-            );
-            for ingredient in missing_ingredients {
-                println!("  - {ingredient}");
-            }
-            println!("\nConsider adding these ingredients to your aisle.conf file.");
-        }
-    } else {
-        // No aisle config found - just inform the user
+    if !configured {
         println!("\nNo aisle configuration found.");
         println!("To organize ingredients by store section, create an aisle.conf file in:");
         println!("  - ./config/aisle.conf (project-specific)");
         println!("  - ~/.config/cook/aisle.conf (global)");
+        return Ok(());
+    }
+
+    let missing: Vec<&str> = coverage.unknown().collect();
+    if missing.is_empty() {
+        println!("✓ All ingredients are present in aisle configuration");
+    } else {
+        println!(
+            "\n{} ingredients not found in aisle configuration:",
+            missing.len()
+        );
+        for ingredient in missing {
+            println!("  - {ingredient}");
+        }
+        println!("\nConsider adding these ingredients to your aisle.conf file.");
     }
 
     Ok(())
 }
 
 fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
-    let base_path = args
-        .base_path
-        .clone()
-        .unwrap_or_else(|| ctx.base_path().to_path_buf());
-
     let report = cookcli_core::doctor::validate(
         ctx,
         cookcli_core::doctor::ValidateRequest {
-            base_dir: Some(base_path.clone()),
+            base_dir: args.base_path,
             // This report is going straight to a terminal.
             style: cookcli_core::Style::Ansi,
         },
     )
-    .map_err(crate::util::cli_error)?
+    .map_err(cli_error)?
     .into_value();
 
     for recipe in &report.recipes {
@@ -460,41 +300,23 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
     let mut total_errors = report.total_errors();
     let total_warnings = report.total_warnings();
 
-    // Check recipe references using cooklang_find::get_recipe
-    let recipe_references = report.references();
-    if !recipe_references.is_empty() {
+    // Recipe references are resolved separately from validation, so that a
+    // reference leading nowhere is not counted as a recipe with errors — the
+    // summary below has always reported them as errors belonging to no recipe.
+    if !report.references().is_empty() {
         println!("\n=== Recipe References ===");
-        let mut missing_refs = false;
+        let broken = broken_references(&report);
 
-        for (recipe_path, refs) in recipe_references {
-            let mut missing_in_recipe = Vec::new();
-
-            for reference in refs {
-                // Try to resolve the recipe using cooklang_find::get_recipe
-                // This handles relative paths and recipe discovery properly
-                match cooklang_find::get_recipe(vec![base_path.clone()], reference.into()) {
-                    Ok(_) => {
-                        // Recipe found, reference is valid
-                    }
-                    Err(_) => {
-                        // Recipe not found
-                        missing_in_recipe.push(reference.clone());
-                    }
-                }
-            }
-
-            if !missing_in_recipe.is_empty() {
-                missing_refs = true;
+        if broken.is_empty() {
+            println!("✓ All recipe references are valid");
+        } else {
+            for (recipe_path, missing) in broken {
                 println!("\n📄 {recipe_path}");
-                for missing_ref in missing_in_recipe {
+                for missing_ref in missing {
                     println!("  ❌ Missing reference: {missing_ref}");
                     total_errors += 1;
                 }
             }
-        }
-
-        if !missing_refs {
-            println!("✓ All recipe references are valid");
         }
     }
 
