@@ -30,6 +30,9 @@ fn docs_api_md_is_up_to_date() {
             path.display()
         )
     });
+    // Git on Windows may check the file out with CRLF endings; compare content,
+    // not line endings.
+    let actual = actual.replace("\r\n", "\n");
 
     assert_eq!(
         actual, expected,
