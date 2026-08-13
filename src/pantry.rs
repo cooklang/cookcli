@@ -1,9 +1,24 @@
 use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
-use cookcli_core::pantry as core;
+use cookcli_core::{pantry as core, Diagnostic};
 use serde::Serialize;
+use tracing::warn;
 
 use crate::{util::cli_error, Context as AppContext};
+
+/// Core returns its warnings instead of logging them, so that a library
+/// consumer can show them its own way. Logging them is this boundary's job.
+///
+/// The mutating commands used to drop them on the floor, so a pantry file with
+/// something the parser did not understand was edited with no word about it.
+fn log_diagnostics(diagnostics: &[Diagnostic]) {
+    for diagnostic in diagnostics {
+        match diagnostic.location.as_ref().and_then(|l| l.file.as_ref()) {
+            Some(file) => warn!("{file}: {}", diagnostic.message),
+            None => warn!("{}", diagnostic.message),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -765,7 +780,7 @@ fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()
 }
 
 fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
-    core::add(
+    let outcome = core::add(
         ctx,
         core::AddRequest {
             section: args.section.clone(),
@@ -777,13 +792,14 @@ fn run_add(ctx: &AppContext, args: AddArgs) -> Result<()> {
         },
     )
     .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
 
     println!("Added '{}' to section '{}'.", args.name, args.section);
     Ok(())
 }
 
 fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
-    core::remove(
+    let outcome = core::remove(
         ctx,
         core::RemoveRequest {
             section: args.section.clone(),
@@ -791,6 +807,7 @@ fn run_remove(ctx: &AppContext, args: RemoveArgs) -> Result<()> {
         },
     )
     .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
 
     println!("Removed '{}' from section '{}'.", args.name, args.section);
     Ok(())
@@ -808,7 +825,7 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
         anyhow::bail!("No attributes specified. Provide at least one of --quantity, --bought, --expire, --low.");
     }
 
-    core::update(
+    let outcome = core::update(
         ctx,
         core::UpdateRequest {
             section: args.section.clone(),
@@ -820,6 +837,7 @@ fn run_update(ctx: &AppContext, args: UpdateArgs) -> Result<()> {
         },
     )
     .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
 
     println!("Updated '{}' in section '{}'.", args.name, args.section);
     Ok(())
