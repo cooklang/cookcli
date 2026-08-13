@@ -352,13 +352,13 @@ fn doctor_pantry_on_its_own_fails_on_a_configuration_it_cannot_parse() {
         .stderr(predicate::str::contains("TOML parse error"));
 }
 
-/// Pins a **known oddity**, so that fixing it has to be deliberate: a broken
-/// recipe reference is counted into the error total but belongs to no recipe,
-/// so the summary reads "in 0 recipe(s)". Reported as
-/// <https://github.com/cooklang/cookcli/issues/437> rather than fixed here — this
-/// test is the tripwire, not an endorsement.
+/// A broken recipe reference is an error *belonging to the recipe that wrote
+/// it*. The summary used to count it into the error total but never into the
+/// recipe total, so it read "1 error(s) found in 0 recipe(s)" — a summary that
+/// contradicts itself exactly when someone is trying to work out what to fix
+/// (<https://github.com/cooklang/cookcli/issues/437>).
 #[test]
-fn a_broken_reference_counts_as_an_error_belonging_to_no_recipe() {
+fn a_broken_reference_is_attributed_to_the_recipe_that_wrote_it() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("dish.cook"),
@@ -375,7 +375,27 @@ fn a_broken_reference_counts_as_an_error_belonging_to_no_recipe() {
             "  ❌ Missing reference: ./nonexistent",
         ))
         .stdout(predicate::str::contains(
-            "❌ 1 error(s) found in 0 recipe(s)",
+            "❌ 1 error(s) found in 1 recipe(s)",
+        ));
+}
+
+/// Two broken references in one recipe are two errors in *one* recipe: the
+/// count is over recipes, not over references.
+#[test]
+fn two_broken_references_in_one_recipe_count_as_one_recipe() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("dish.cook"),
+        "---\ntitle: Dish\n---\n\nMake @./absent_one{} and @./absent_two{}.\n",
+    )
+    .unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "❌ 2 error(s) found in 1 recipe(s)",
         ));
 }
 
