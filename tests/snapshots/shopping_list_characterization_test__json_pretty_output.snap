@@ -60,12 +60,22 @@ expression: "run(&base_fixture(), &[\"-f\", \"json\", \"--pretty\", \"pasta.cook
         "name": "milk",
         "quantity": [
           {
+            "unit": "l",
+            "value": {
+              "type": "number",
+              "value": {
+                "type": "regular",
+                "value": 1.0
+              }
+            }
+          },
+          {
             "unit": "ml",
             "value": {
               "type": "number",
               "value": {
                 "type": "regular",
-                "value": 1500.0
+                "value": 500.0
               }
             }
           }
@@ -95,7 +105,7 @@ expression: "run(&base_fixture(), &[\"-f\", \"json\", \"--pretty\", \"pasta.cook
         "name": "flour",
         "quantity": [
           {
-            "unit": "c",
+            "unit": "cup",
             "value": {
               "type": "number",
               "value": {

@@ -36,7 +36,13 @@ expression: "run(&base_fixture(), &[\"-f\", \"yaml\", \"pasta.cook\", \"salad.co
         type: number
         value:
           type: regular
-          value: 1500.0
+          value: 1.0
+      unit: l
+    - value:
+        type: number
+        value:
+          type: regular
+          value: 500.0
       unit: ml
 - category: dry goods
   items:
@@ -55,7 +61,7 @@ expression: "run(&base_fixture(), &[\"-f\", \"yaml\", \"pasta.cook\", \"salad.co
         value:
           type: regular
           value: 1.0
-      unit: c
+      unit: cup
     - value:
         type: number
         value:
