@@ -307,8 +307,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                     }
                 }
                 OutputFormat::Yaml => {
-                    // No `plain`: see the note on `build_yaml_value`.
-                    let value = fmt::build_yaml_value(list);
+                    let value = fmt::build_yaml_value(list, args.plain);
 
                     serde_yaml::to_writer(w, &value)?;
                 }

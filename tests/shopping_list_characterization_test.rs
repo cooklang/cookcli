@@ -246,14 +246,22 @@ fn json_pretty_output() {
 // 6. -f yaml
 // ---------------------------------------------------------------------------
 
-/// Note (from reading `build_yaml_value`, not asserted by this snapshot):
-/// unlike the JSON and markdown writers, the YAML writer takes no `plain`
-/// parameter, so `-f yaml --plain` still categorises.
 #[test]
 fn yaml_output() {
     assert_snapshot!(run(
         &base_fixture(),
         &["-f", "yaml", "pasta.cook", "salad.cook"]
+    ));
+}
+
+/// `-f yaml --plain` drops the categories, like `-f json --plain` and
+/// `-f markdown --plain`. The YAML writer used to take no `plain` parameter at
+/// all, so the flag silently did nothing here (#419).
+#[test]
+fn yaml_plain_output() {
+    assert_snapshot!(run(
+        &base_fixture(),
+        &["-f", "yaml", "--plain", "pasta.cook", "salad.cook"]
     ));
 }
 
