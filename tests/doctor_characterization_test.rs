@@ -355,7 +355,7 @@ fn doctor_pantry_on_its_own_fails_on_a_configuration_it_cannot_parse() {
 /// Pins a **known oddity**, so that fixing it has to be deliberate: a broken
 /// recipe reference is counted into the error total but belongs to no recipe,
 /// so the summary reads "in 0 recipe(s)". Reported as
-/// <https://github.com/cooklang/cookcli/issues> rather than fixed here — this
+/// <https://github.com/cooklang/cookcli/issues/437> rather than fixed here — this
 /// test is the tripwire, not an endorsement.
 #[test]
 fn a_broken_reference_counts_as_an_error_belonging_to_no_recipe() {
