@@ -25,7 +25,10 @@ pub struct ReportArgs {
     #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
     template: Utf8PathBuf,
 
-    /// Recipe file to process
+    /// Recipe to process
+    ///
+    /// Either a path to a .cook file or a bare recipe name, resolved
+    /// against the base path like every other recipe argument.
     ///
     /// Can include an optional scaling factor using the :N syntax
     /// (e.g., "recipe.cook:2" to double the recipe). The scaling
@@ -54,10 +57,10 @@ pub struct ReportArgs {
     #[arg(short = 'p', long, value_hint = clap::ValueHint::FilePath)]
     pantry: Option<Utf8PathBuf>,
 
-    /// Base path for resolving recipe references
+    /// Base path for resolving the recipe and its references
     ///
-    /// Defaults to the current working directory. This is used when
-    /// recipes reference other recipes using relative paths.
+    /// Defaults to the current working directory. Both the RECIPE
+    /// argument and any recipes it references are looked up under it.
     #[arg(short = 'b', long, value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
 }
@@ -69,19 +72,6 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     // Split recipe name and scaling factor
     let (recipe_name, scaling_factor) =
         split_recipe_name_and_scaling_factor(&args.recipe).unwrap_or((&args.recipe, 1.0));
-
-    // Read the recipe file.
-    //
-    // Deliberately a plain read rather than the `cooklang-find` lookup every
-    // other command uses, because that is what this command has always done:
-    // `cook report -t x.jinja pancakes` does not resolve a bare recipe name the
-    // way `cook recipe pancakes` does, and the path is interpreted against the
-    // working directory rather than `--base-path`. Core handles a
-    // `RecipeSource::Path` the usual way, so switching this to one is all it
-    // would take — but that is a user-visible change and not this refactor's to
-    // make.
-    let recipe = fs::read_to_string(recipe_name)
-        .with_context(|| format!("Failed to read recipe file: {recipe_name}"))?;
 
     // Read the template file
     let template = fs::read_to_string(&args.template)
@@ -101,10 +91,14 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let outcome = cookcli_core::report::render(
         &core_ctx,
         RenderRequest {
-            source: RecipeSource::Content {
-                text: recipe,
-                name: recipe_name.to_string(),
-            },
+            // A path *or* a bare recipe name, resolved through `cooklang-find`
+            // under `base_path` — the same lookup `recipe`, `shopping-list`
+            // and `doctor` use. `report` used to read the argument with a
+            // plain `fs::read_to_string`, so `cook report -t t.jinja pancakes`
+            // failed where `cook recipe pancakes` worked, and `--base-path`
+            // had no bearing on the argument it most looked like it should
+            // (#430).
+            source: RecipeSource::Path(recipe_name.into()),
             template,
             scale: scaling_factor,
             datastore: args.datastore,
