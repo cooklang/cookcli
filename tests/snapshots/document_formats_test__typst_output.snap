@@ -1,0 +1,70 @@
+---
+source: tests/document_formats_test.rs
+expression: "render(\"typst\")"
+---
+#set page(paper: "a4", margin: (left: 2.5cm, right: 2.5cm, top: 2.5cm, bottom: 2.5cm))
+
+#set text(size: 11pt)
+
+// Define colors for recipe elements
+#let ingredientcolor = rgb(204, 85, 0)
+#let cookwarecolor = rgb(34, 139, 34)
+#let timercolor = rgb(220, 20, 60)
+
+// Custom commands for recipe elements
+#let ingredient(ingredient) = { text(fill: ingredientcolor)[*#ingredient*] }
+#let cookware(cookware) = { text(fill: cookwarecolor)[*#cookware*] }
+#let timer(timer) = { text(fill: timercolor)[*#timer*] }
+
+// BEGIN_RECIPE_CONTENT
+
+// BEGIN_TITLE
+#set align(center)
+= Test Kitchen
+#set align(left)
+#v(0.5cm)
+// END_TITLE
+
+// TAGS: dinner
+*Tags:* `dinner`
+
+// SERVINGS: 4
+// BEGIN_METADATA
+#set align(center)
+Servings: 4
+#set align(left)
+// END_METADATA
+
+== Ingredients
+
+- *200 g* #ingredient("plain flour")
+- *250 ml* #ingredient("whole milk")
+- #ingredient("fine sea salt")
+- #ingredient("sauce") _(see recipe: ./sauce)_
+- *1 tbsp* #ingredient("icing sugar") --- sifted
+
+== Cookware
+
+- #cookware("large mixing bowl")
+- *2* #cookware("pan")
+
+== Instructions
+
+=== Section 1
+
++ Mix #ingredient("plain flour") with #ingredient("whole milk") in a #cookware("large mixing bowl") and beat until smooth, then add #ingredient("fine sea salt").
++ Simmer #timer("gently: 10 minutes") in a #cookware("pan"), then rest #timer("5 minutes").
+
+_Note: Rest the dough somewhere warm, covered._
+
+
+=== Finishing
+
++ Serve with #ingredient("sauce") and dust with #ingredient("icing sugar").
+
+// END_RECIPE_CONTENT
+
+#v(1fr)
+#set align(center)
+#set text(10pt)
+_Created with CookCLI_

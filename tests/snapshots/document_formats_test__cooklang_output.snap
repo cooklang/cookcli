@@ -1,0 +1,21 @@
+---
+source: tests/document_formats_test.rs
+expression: "render(\"cooklang\")"
+---
+---
+title: Test Kitchen
+servings: 4
+tags:
+- dinner
+---
+
+
+Mix @plain flour{200%g} with @whole milk{250%ml} in a #large mixing bowl{} and
+beat until smooth, then add @fine sea salt{}.
+
+Simmer ~gently{10%minutes} in a #pan{2}, then rest ~{5%minutes}.
+
+> Rest the dough somewhere warm, covered.
+
+== Finishing ==
+Serve with @./sauce{} and dust with @icing sugar{1%tbsp}(sifted).
