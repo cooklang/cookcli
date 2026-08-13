@@ -1,24 +1,25 @@
-use crate::util::split_recipe_name_and_scaling_factor;
+use crate::util::{cli_error, split_recipe_name_and_scaling_factor};
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
-use cooklang_reports::{config::Config, render_template_with_config};
-use std::{fs, path::PathBuf};
+use cookcli_core::{report::RenderRequest, ConfigSource, CoreError, RecipeSource};
+use std::fs;
 use tracing::warn;
 
 #[derive(Parser, Debug)]
 pub struct ReportArgs {
     /// Path to the Jinja2 template file
     ///
-    /// The template receives recipe data including:
+    /// The template receives the recipe as a set of top-level variables:
     /// - metadata (title, author, tags, etc.)
     /// - ingredients (with quantities and units)
-    /// - steps (parsed instructions)
-    /// - cookware and timers
+    /// - sections (the parsed steps and text)
+    /// - cookware
+    /// - scale (the scaling factor in effect)
     ///
-    /// Example template variables:
-    ///   {{ recipe.title }}
-    ///   {% for ingredient in recipe.ingredients %}
+    /// Example template:
+    ///   {{ metadata.title }}
+    ///   {% for ingredient in ingredients %}
     ///     {{ ingredient.name }}: {{ ingredient.quantity }}
     ///   {% endfor %}
     #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
@@ -69,7 +70,16 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let (recipe_name, scaling_factor) =
         split_recipe_name_and_scaling_factor(&args.recipe).unwrap_or((&args.recipe, 1.0));
 
-    // Read the recipe file
+    // Read the recipe file.
+    //
+    // Deliberately a plain read rather than the `cooklang-find` lookup every
+    // other command uses, because that is what this command has always done:
+    // `cook report -t x.jinja pancakes` does not resolve a bare recipe name the
+    // way `cook recipe pancakes` does, and the path is interpreted against the
+    // working directory rather than `--base-path`. Core handles a
+    // `RecipeSource::Path` the usual way, so switching this to one is all it
+    // would take — but that is a user-visible change and not this refactor's to
+    // make.
     let recipe = fs::read_to_string(recipe_name)
         .with_context(|| format!("Failed to read recipe file: {recipe_name}"))?;
 
@@ -77,75 +87,61 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let template = fs::read_to_string(&args.template)
         .with_context(|| format!("Failed to read template file: {}", args.template))?;
 
-    // Create config with scale, optional datastore, and base_path
-    let mut builder = Config::builder();
-    builder.scale(scaling_factor);
-
-    if let Some(datastore) = args.datastore {
-        builder.datastore_path(PathBuf::from(datastore));
+    // Aisle and pantry fall back to the context, which discovers them relative
+    // to the working directory — not to `--base-path`, which only steers recipe
+    // references inside the template.
+    let mut core_ctx = ctx.to_core();
+    if let Some(aisle) = args.aisle {
+        core_ctx = core_ctx.with_aisle(ConfigSource::Path(to_absolute(aisle)));
+    }
+    if let Some(pantry) = args.pantry {
+        core_ctx = core_ctx.with_pantry(ConfigSource::Path(to_absolute(pantry)));
     }
 
-    // Use provided base_path or fall back to context
-    if let Some(base_path) = args.base_path {
-        // Convert to absolute path if relative
-        let abs_base_path = if base_path.is_absolute() {
-            PathBuf::from(base_path)
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(base_path)
-        };
-        builder.base_path(abs_base_path);
-    } else {
-        builder.base_path(PathBuf::from(ctx.base_path()));
-    }
+    let outcome = cookcli_core::report::render(
+        &core_ctx,
+        RenderRequest {
+            source: RecipeSource::Content {
+                text: recipe,
+                name: recipe_name.to_string(),
+            },
+            template,
+            scale: scaling_factor,
+            datastore: args.datastore,
+            base_path: args.base_path.map(to_absolute),
+        },
+    );
 
-    // Add aisle configuration if provided
-    if let Some(aisle_path) = args.aisle {
-        // Convert to absolute path if relative
-        let abs_aisle_path = if aisle_path.is_absolute() {
-            PathBuf::from(aisle_path)
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(aisle_path)
-        };
-        builder.aisle_path(abs_aisle_path);
-    } else if let Some(aisle_path) = ctx.aisle() {
-        // Use context aisle if not explicitly provided
-        builder.aisle_path(PathBuf::from(aisle_path));
-    }
-
-    // Add pantry configuration if provided
-    if let Some(pantry_path) = args.pantry {
-        // Convert to absolute path if relative
-        let abs_pantry_path = if pantry_path.is_absolute() {
-            PathBuf::from(pantry_path)
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(pantry_path)
-        };
-        builder.pantry_path(abs_pantry_path);
-    } else if let Some(pantry_path) = ctx.pantry() {
-        // Use context pantry if not explicitly provided
-        builder.pantry_path(PathBuf::from(pantry_path));
-    }
-
-    let config = builder.build();
-
-    // Render the report
-    let report = match render_template_with_config(&recipe, &template, &config) {
-        Ok(report) => report,
-        Err(err) => {
-            // Use the enhanced error formatting from cooklang-reports
-            eprintln!("{}", err.format_with_source());
+    let report = match outcome {
+        Ok(outcome) => outcome.value,
+        // The template engine's own report, with source location and hints,
+        // reads better than anything wrapped around it — so print it as-is and
+        // stop, rather than letting anyhow prefix it.
+        Err(CoreError::Render { rendered, .. }) => {
+            eprintln!("{rendered}");
             std::process::exit(1);
         }
+        Err(other) => return Err(cli_error(other)),
     };
 
     // Print the report
     println!("{report}");
 
     Ok(())
+}
+
+/// Resolve a path against the working directory without touching the disk.
+///
+/// Not `util::resolve_to_absolute_path`, which canonicalises and therefore
+/// fails on a path that does not exist yet; this command has always joined and
+/// left it at that.
+fn to_absolute(path: Utf8PathBuf) -> Utf8PathBuf {
+    if path.is_absolute() {
+        return path;
+    }
+    let cwd = std::env::current_dir()
+        .ok()
+        .and_then(|p| Utf8PathBuf::from_path_buf(p).ok())
+        .unwrap_or_else(|| Utf8PathBuf::from("."));
+    cwd.join(path)
 }

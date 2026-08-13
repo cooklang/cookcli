@@ -20,6 +20,7 @@ pub mod outcome;
 pub mod pantry;
 pub mod parser;
 pub mod recipe;
+pub mod report;
 pub mod search;
 pub mod shopping_list;
 pub mod source;

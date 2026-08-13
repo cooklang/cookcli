@@ -114,11 +114,22 @@ pub enum CoreError {
         message: String,
     },
 
-    /// A report template failed to render.
+    /// A report could not be produced from a template and a recipe.
+    ///
+    /// Covers a broken *template* and a recipe `cooklang-reports` could not
+    /// parse alike, because that crate parses the recipe itself, with its own
+    /// parser configuration, from inside the render call — the two failures
+    /// arrive down one channel and are not worth guessing apart. A recipe that
+    /// fails core's own parser still yields [`CoreError::Parse`]; it is only
+    /// [`report::render`](crate::report::render) that reports both this way.
     #[error("template rendering failed: {message}")]
     Render {
-        /// What the template engine reported.
+        /// A one-line summary, for logs and error chains.
         message: String,
+        /// The template engine's own multi-line report — source location,
+        /// error chain, and its hints — which the CLI prints verbatim. Not part
+        /// of `Display`, exactly as [`CoreError::Parse`]'s `rendered` is not.
+        rendered: String,
     },
 
     // No variant for a circular recipe reference. Reference expansion is
@@ -233,6 +244,7 @@ mod tests {
             },
             CoreError::Render {
                 message: "undefined variable".to_string(),
+                rendered: "line 1\nline 2\n".to_string(),
             },
             CoreError::Reference {
                 name: "./sauce".to_string(),
@@ -276,6 +288,18 @@ mod tests {
             rendered: "a very long report".to_string(),
         };
         assert_eq!(display(&error), "failed to parse recipe 'soup'");
+    }
+
+    #[test]
+    fn render_keeps_the_rendered_report_out_of_display() {
+        let error = CoreError::Render {
+            message: "syntax error: unexpected end of input".to_string(),
+            rendered: "a very long report\nwith hints\n".to_string(),
+        };
+        assert_eq!(
+            display(&error),
+            "template rendering failed: syntax error: unexpected end of input"
+        );
     }
 
     #[test]
