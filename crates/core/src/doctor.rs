@@ -677,8 +677,16 @@ mod tests {
         .into_value()
     }
 
-    fn paths(report: &ValidationReport) -> Vec<String> {
-        report.recipes.iter().map(|r| r.path.to_string()).collect()
+    /// The reported paths, left as paths rather than stringified.
+    ///
+    /// That is what makes the assertions below portable: camino compares a
+    /// path component by component, so the `Breakfast\pancakes.cook` the walk
+    /// produces on Windows equals the `Breakfast/pancakes.cook` written here,
+    /// while comparing the two as strings would not. Nothing else is
+    /// loosened — a recipe reported under a different directory, or with a
+    /// different file name, still fails.
+    fn paths(report: &ValidationReport) -> Vec<Utf8PathBuf> {
+        report.recipes.iter().map(|r| r.path.clone()).collect()
     }
 
     fn recipe<'a>(report: &'a ValidationReport, path: &str) -> &'a RecipeValidation {
@@ -979,7 +987,7 @@ mod tests {
 
         assert_eq!(report.total_recipes(), 5);
         assert!(
-            !paths(&report).contains(&"decoy.cook".to_string()),
+            !paths(&report).contains(&Utf8PathBuf::from("decoy.cook")),
             "{:?}",
             paths(&report)
         );

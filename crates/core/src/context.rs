@@ -236,12 +236,26 @@ mod tests {
 
     #[test]
     fn global_config_path_joins_the_app_name() {
-        // Asserted as a suffix: the prefix is whatever this machine's config
-        // directory happens to be.
+        // Asserted as properties rather than a fixed suffix, because the shape
+        // of the prefix is the platform's: `~/.config/cook/aisle.conf` on
+        // Linux and `…/Application Support/cook/aisle.conf` on macOS put the
+        // app name immediately before the file, but on Windows `directories`
+        // yields `…\Roaming\cook\config`, so the last component before the
+        // file is `config`. What holds everywhere is that the file is named
+        // last, somewhere under a directory belonging to `cook`.
         let path = global_config_path("aisle.conf").expect("a home directory");
+        assert_eq!(
+            path.file_name(),
+            Some("aisle.conf"),
+            "the name asked for must be the last component: {path}"
+        );
         assert!(
-            path.ends_with("cook/aisle.conf"),
-            "expected <config dir>/cook/aisle.conf, got {path}"
+            path.components().any(|c| c.as_str() == APP_NAME),
+            "expected a `{APP_NAME}` component in {path}"
+        );
+        assert!(
+            path.is_absolute(),
+            "the platform config directory is absolute: {path}"
         );
     }
 

@@ -207,8 +207,16 @@ mod tests {
         .into_value()
     }
 
-    fn relative_paths(hits: &[SearchHit]) -> Vec<String> {
-        hits.iter().map(|h| h.relative_path.to_string()).collect()
+    /// The hits' paths, left as paths rather than stringified.
+    ///
+    /// That is what makes the assertions below portable: camino compares a
+    /// path component by component, so the `Breakfast\pancakes.cook` the walk
+    /// produces on Windows equals the `Breakfast/pancakes.cook` written here,
+    /// while comparing the two as strings would not. Nothing else is
+    /// loosened — a hit under a different directory, or with a different file
+    /// name, still fails.
+    fn relative_paths(hits: &[SearchHit]) -> Vec<Utf8PathBuf> {
+        hits.iter().map(|h| h.relative_path.clone()).collect()
     }
 
     #[test]

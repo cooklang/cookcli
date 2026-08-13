@@ -435,7 +435,18 @@ fn a_missing_referenced_recipe_is_not_found() {
     let dir = dir_with(&[("main.cook", "Prepare @./absent{}.\n")]);
 
     match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::RecipeNotFound { name }) => assert_eq!(name, "absent"),
+        Err(CoreError::RecipeNotFound { name }) => {
+            // `@./absent{}` reaches the lookup spelled the way the platform
+            // joins it: `./absent` on Unix, where `find::get_recipe` strips
+            // the `./` off before reporting it, and `.\absent` on Windows,
+            // where the strip does not match and the prefix survives into the
+            // name. Both name the same missing recipe, so the assertion is on
+            // the recipe named, with a leading `./` normalised away. Anything
+            // else — the referring recipe, or a different name — still fails.
+            let named = name.replace('\\', "/");
+            let named = named.strip_prefix("./").unwrap_or(&named);
+            assert_eq!(named, "absent", "got {name:?}");
+        }
         other => panic!("expected RecipeNotFound, got {other:?}"),
     }
 }
