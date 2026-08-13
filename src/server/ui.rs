@@ -567,6 +567,7 @@ async fn api_docs_page(
         // Rendered so integrators can copy a working URL rather than a
         // relative path. `Host` reflects however the client reached us.
         base_url: format!("http://{host}{}/api", state.url_prefix),
+        preamble: crate::web::api_docs::preamble(),
         sections: crate::web::api_docs::sections(),
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),

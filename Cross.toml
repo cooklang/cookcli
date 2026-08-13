@@ -1,5 +1,15 @@
+# The glibc target must NOT use the `edge` image. `edge` tracks cross's main
+# branch, which is currently Ubuntu 24.04 / glibc 2.39, so the binary ends up
+# requiring GLIBC_2.38 (`__isoc23_strtol`/`__isoc23_sscanf`, emitted by gcc 13)
+# and GLIBC_2.39 (`pidfd_spawnp`/`pidfd_getpid`, from std's process spawning).
+# That broke every distro older than Ubuntu 24.04, including Debian 12, which
+# is supported until 2028 and ships glibc 2.36 (issue #420).
+#
+# The released 0.2.5 image is Ubuntu 16.04 / glibc 2.23, which keeps the floor
+# at GLIBC_2.18. The musl targets below are statically linked, so `edge` is
+# harmless there.
 [target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:0.2.5"
 
 [target.x86_64-unknown-linux-musl]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:edge"

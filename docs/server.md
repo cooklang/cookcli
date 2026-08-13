@@ -48,4 +48,5 @@ cook server --host
 - By default, only accepts connections from localhost
 - Use `--host` on trusted networks only — recipes become accessible to anyone on the network
 - The web interface supports recipe browsing, scaling, search, and shopping list management
+- The UI language is negotiated per request from the browser's `Accept-Language` header — each visitor sees the interface in their own language (supported: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`). For static sites, see the `--lang` flag of [`cook build web`](build.md#localization).
 - Mobile-friendly responsive layout

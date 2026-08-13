@@ -32,7 +32,55 @@
 //! in JSON, so examples are not reordered to match — only worth knowing if
 //! you're diffing captured bytes against these docs.
 
-use crate::web::templates::{ApiSection, EndpointDoc, ParamDoc};
+use crate::web::templates::{ApiNote, ApiPreamble, ApiSection, EndpointDoc, ParamDoc};
+
+fn note(label: &str, text: &str) -> ApiNote {
+    ApiNote {
+        label: label.to_string(),
+        text: text.to_string(),
+    }
+}
+
+/// Prose that opens the reference, shared by the `/api-docs` page and the
+/// generated `docs/api.md`.
+pub fn preamble() -> ApiPreamble {
+    ApiPreamble {
+        intro: "HTTP endpoints for building integrations against this CookCLI server.".to_string(),
+        notes: vec![
+            note(
+                "Authentication",
+                "None. Anyone who can reach the server can read and modify your recipes — \
+                 think twice before using `--host` on an untrusted network.",
+            ),
+            note(
+                "CORS",
+                "All origins are allowed, for the methods GET, POST, PUT and DELETE.",
+            ),
+            note("Request size limit", "1 MB."),
+            note(
+                "Content type",
+                "JSON in and out, except where noted — raw recipe text is `text/plain`.",
+            ),
+        ],
+        error_intro: "Every failure returns the same shape, with the status code carrying the \
+                      meaning:"
+            .to_string(),
+        error_example: r#"{ "error": "Recipe not found: Nope.cook" }"#.to_string(),
+        error_codes: vec![
+            note(
+                "400",
+                "malformed input: an invalid path, a bad query parameter, or a recipe that \
+                 failed to parse.",
+            ),
+            note(
+                "404",
+                "the recipe, menu, or pantry section does not exist, or no pantry file is \
+                 configured.",
+            ),
+            note("500", "the server could not read or write a file."),
+        ],
+    }
+}
 
 fn section(id: &str, title: &str, description: &str, endpoints: Vec<EndpointDoc>) -> ApiSection {
     ApiSection {
@@ -1147,10 +1195,15 @@ fn search_and_stats() -> ApiSection {
                 "GET",
                 "/api/search",
                 "Full-text recipe search",
+                // Backticks cannot nest here: the page's `inline_code` filter
+                // just alternates on every backtick, and Markdown would end
+                // the span at the inner one. The deserializer's message quotes
+                // the field name in backticks; they are dropped rather than
+                // escaped, since neither renderer would honour the escape.
                 "Matches against recipe names and content. Menus are searched alongside \
                  recipes. `q` is required: omitting it entirely returns a plain-text 400 from \
                  axum's query deserializer (`Failed to deserialize query string: missing field \
-                 \\`q\\``), not the page's usual JSON error envelope — the same shape as the \
+                 q`), not the page's usual JSON error envelope — the same shape as the \
                  `scale` parameter's failure mode on `GET /api/recipes/*path`. A present but \
                  empty `q=` is not rejected, though: it matches everything and returns the \
                  whole collection.",

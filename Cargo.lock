@@ -649,7 +649,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "cookcli"
-version = "0.32.1"
+version = "0.33.1"
 dependencies = [
  "accept-language",
  "anstream 0.6.21",
@@ -776,14 +776,10 @@ dependencies = [
  "enum-map",
  "finl_unicode",
  "indexmap",
- "prettyplease",
- "proc-macro2",
- "quote",
  "serde",
  "serde_yaml",
  "smallvec",
  "strum",
- "syn 2.0.118",
  "thiserror 2.0.19",
  "toml 0.8.23",
  "toml_edit",
@@ -2992,16 +2988,6 @@ checksum = "d0de1b847b39c8131db0467e9df1ff60e6d0562ab8e9a16e568ad0fdb372e2f2"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "prettyplease"
-version = "0.2.37"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
-dependencies = [
- "proc-macro2",
- "syn 2.0.118",
 ]
 
 [[package]]

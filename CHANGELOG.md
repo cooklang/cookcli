@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.33.1](https://github.com/cooklang/cookcli/compare/v0.33.0...v0.33.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **ci:** build Linux glibc binary against an older glibc ([#426](https://github.com/cooklang/cookcli/issues/426)) ([7f01da2](https://github.com/cooklang/cookcli/commit/7f01da24e1180806e0720f56b59193c2a255af12)), closes [#420](https://github.com/cooklang/cookcli/issues/420)
+* **docker:** add server feature for docker image ([#422](https://github.com/cooklang/cookcli/issues/422)) ([0aa7263](https://github.com/cooklang/cookcli/commit/0aa7263e6dfca1039d4fcd3cf4ff8ab61aac6ab7))
+
+## [0.33.0](https://github.com/cooklang/cookcli/compare/v0.32.1...v0.33.0) (2026-08-10)
+
+
+### Features
+
+* **build:** add --compress flag to write gzip copies of generated assets ([#389](https://github.com/cooklang/cookcli/issues/389)) ([67e324c](https://github.com/cooklang/cookcli/commit/67e324ca22303b48acf4a6304890d3914b885e70)), closes [#345](https://github.com/cooklang/cookcli/issues/345)
+* **build:** add --repo-url flag to link the source repo from the site footer ([#383](https://github.com/cooklang/cookcli/issues/383)) ([8b0121f](https://github.com/cooklang/cookcli/commit/8b0121f45b0b9ee0caee358f23541230d345e96e)), closes [#376](https://github.com/cooklang/cookcli/issues/376)
+* **build:** default site language to the system locale and document --lang ([#387](https://github.com/cooklang/cookcli/issues/387)) ([6360bd5](https://github.com/cooklang/cookcli/commit/6360bd53eb9c1c90d2edf1cde943c0efd057bcd8))
+* **i18n:** allow pluralization ([#377](https://github.com/cooklang/cookcli/issues/377)) ([3d5be1a](https://github.com/cooklang/cookcli/commit/3d5be1aa5121f45d8acf0511d8baaf172fad21a3))
+* put server, import and lsp behind cargo features ([#369](https://github.com/cooklang/cookcli/issues/369)) ([baee2a8](https://github.com/cooklang/cookcli/commit/baee2a8fa5b750332f414a8102dd7e0acbb98b2b)), closes [#366](https://github.com/cooklang/cookcli/issues/366)
+* **recipe:** add --paper-size and --margin flags for LaTeX/Typst output ([#382](https://github.com/cooklang/cookcli/issues/382)) ([b78fbd5](https://github.com/cooklang/cookcli/commit/b78fbd5a23c849138b4c81408708a47f095f67e4)), closes [#379](https://github.com/cooklang/cookcli/issues/379)
+* **server:** add a button to copy the shopping list as plain text ([#411](https://github.com/cooklang/cookcli/issues/411)) ([08170d5](https://github.com/cooklang/cookcli/commit/08170d5d1aef061ee663ada1db937f3582d012fd)), closes [#380](https://github.com/cooklang/cookcli/issues/380)
+* **server:** add API documentation page at /api-docs ([#412](https://github.com/cooklang/cookcli/issues/412)) ([a94c6e2](https://github.com/cooklang/cookcli/commit/a94c6e23240998ed4c54fc6218c23d891efa5b18))
+* **server:** add copy options to the shopping list copy button ([#413](https://github.com/cooklang/cookcli/issues/413)) ([0c3feb3](https://github.com/cooklang/cookcli/commit/0c3feb3314e0d7add8ffbea3dabfded2ed671b2c))
+* **server:** respect prefers-color-scheme for selecting theme ([#364](https://github.com/cooklang/cookcli/issues/364)) ([cf94de9](https://github.com/cooklang/cookcli/commit/cf94de9bb8ece158594da33d5d7d759d483f4648))
+
+
+### Bug Fixes
+
+* **deps:** declare cooklang's bundled_units feature explicitly ([#371](https://github.com/cooklang/cookcli/issues/371)) ([cb00cc9](https://github.com/cooklang/cookcli/commit/cb00cc97cb5ea96842e4cace5101a648936c5202)), closes [#366](https://github.com/cooklang/cookcli/issues/366)
+* fail the build with instructions when compiled front-end assets are missing ([#404](https://github.com/cooklang/cookcli/issues/404)) ([664db46](https://github.com/cooklang/cookcli/commit/664db4647abf53af24c87fd54e11ab546ed974e2)), closes [#233](https://github.com/cooklang/cookcli/issues/233)
+* **i18n:** remove hardcoded english meta titles ([#378](https://github.com/cooklang/cookcli/issues/378)) ([0d2140d](https://github.com/cooklang/cookcli/commit/0d2140d71a325022627de30b9ea7c629ba3fd549))
+* satisfy clippy::useless_borrows_in_formatting ([#370](https://github.com/cooklang/cookcli/issues/370)) ([6120c7c](https://github.com/cooklang/cookcli/commit/6120c7c80475c3269aa4713990887f588828dc72))
+* **server:** resolve section-style step image names (Recipe.S.N.ext) ([#388](https://github.com/cooklang/cookcli/issues/388)) ([62cc0d6](https://github.com/cooklang/cookcli/commit/62cc0d673d0ec7c2eea826e51c1c9fd1e5333253)), closes [#374](https://github.com/cooklang/cookcli/issues/374)
+* **server:** wrap long ingredient notes instead of clipping them ([#386](https://github.com/cooklang/cookcli/issues/386)) ([b34bd12](https://github.com/cooklang/cookcli/commit/b34bd12885954f1a85655eff64c737514fa768d8))
+
 ## [0.32.1](https://github.com/cooklang/cookcli/compare/v0.32.0...v0.32.1) (2026-06-26)
 
 

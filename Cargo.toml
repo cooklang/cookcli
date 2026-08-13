@@ -3,7 +3,7 @@ members = [".", "crates/core"]
 
 [package]
 name = "cookcli"
-version = "0.32.1"
+version = "0.33.1"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
@@ -67,11 +67,12 @@ camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 base64 = { version = "0.23", optional = true }
-# bundled_units carries the unit database (quantity scaling, unit normalisation).
-# We rely on it in `cook recipe`, but never declared it: it was reaching us only
-# via feature unification from cooklang-language-server / cooklang-reports, which
-# depend on cooklang with default features. Declare it where it is actually used.
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "bundled_units", "pantry", "shopping_list"] }
+# bundled_units is deliberately NOT enabled: it carries the unit database, and with
+# it Converter::default() silently converts quantities to a "best" unit (e.g.
+# 5/8 cup -> 10 tbsp) and approximates fractions. Without it the converter is empty
+# and quantities stay as authored. If it ever comes back, some dep is leaking it
+# through feature unification (`cargo tree -e features -i cooklang`).
+cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 cooklang-find = { version = "0.6.1", default-features = false }
 cooklang-import = { version = "0.9.14", optional = true }
 cooklang-sync-client = { version = "0.5.0", optional = true }
