@@ -11,7 +11,7 @@
 //! `aisle.conf`, and which of them are already in the pantry.
 
 use crate::{
-    diagnostic::Severity,
+    diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
     parser::{collect_diagnostics, render_report, PARSER},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, Style,
@@ -167,6 +167,12 @@ impl ValidationReport {
     /// A view over [`RecipeValidation::references`], borrowed rather than
     /// cloned, and ordered so that a caller reporting broken references reports
     /// them the same way twice running.
+    ///
+    /// **Nothing here has been resolved**, and a reference that resolves to
+    /// nothing raises no diagnostic, so it does not reach
+    /// [`Outcome::diagnostics`] or [`has_errors`](Outcome::has_errors) either.
+    /// Pass the report to [`broken_references`] to find out which of these lead
+    /// anywhere.
     pub fn references(&self) -> BTreeMap<&Utf8Path, &[String]> {
         self.recipes
             .iter()
@@ -189,6 +195,31 @@ impl ValidationReport {
 /// every diagnostic as one flat list, so that
 /// [`has_errors`](Outcome::has_errors) means what it says — the same
 /// diagnostics as in the report, each naming its own file.
+///
+/// # `has_errors` is not the whole verdict
+///
+/// **A broken recipe reference is not a diagnostic**, so a collection whose
+/// only fault is a reference leading nowhere has an empty
+/// [`Outcome::diagnostics`] and `has_errors() == false`. Resolving references
+/// costs a filesystem lookup each and needs a decision this function does not
+/// make, so it is [`broken_references`]'s separate job.
+///
+/// A caller gating on validation — a CI exit code, an editor's problem list —
+/// therefore wants both:
+///
+/// ```no_run
+/// # use cookcli_core::{doctor, Context};
+/// # fn main() -> Result<(), cookcli_core::CoreError> {
+/// # let ctx = Context::new("recipes".into());
+/// let outcome = doctor::validate(&ctx, doctor::ValidateRequest::default())?;
+/// let ok = !outcome.has_errors() && doctor::broken_references(&outcome.value).is_empty();
+/// # let _ = ok;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// `cook doctor validate --strict` fails on either, which is why it does its
+/// own arithmetic over the two.
 ///
 /// # Errors
 ///
@@ -403,8 +434,14 @@ pub struct IngredientCoverage {
     /// parsed — those contribute no ingredients, and say so in
     /// [`Outcome::diagnostics`].
     pub total_recipes: usize,
-    /// Every distinct ingredient the collection uses, in alphabetical order,
-    /// each marked with whether the configuration knows it.
+    /// Every distinct ingredient the collection uses, each marked with whether
+    /// the configuration knows it.
+    ///
+    /// Ordered by Unicode code point rather than alphabetically, so every
+    /// capitalised name sorts before every lowercase one: `Beetroot`,
+    /// `Zucchini`, `apple`. That is what CookCLI has always printed, and
+    /// changing it would move output nobody asked to have moved — a consumer
+    /// wanting a human ordering should sort these itself.
     ///
     /// References to other recipes are not ingredients and are left out.
     pub ingredients: Vec<CheckedIngredient>,
@@ -416,12 +453,14 @@ impl IngredientCoverage {
         self.ingredients.len()
     }
 
-    /// The ingredients the configuration knows, in alphabetical order.
+    /// The ingredients the configuration knows, in the order of
+    /// [`ingredients`](IngredientCoverage::ingredients).
     pub fn known(&self) -> impl Iterator<Item = &str> {
         self.filtered(true)
     }
 
-    /// The ingredients the configuration does not know, in alphabetical order.
+    /// The ingredients the configuration does not know, in the order of
+    /// [`ingredients`](IngredientCoverage::ingredients).
     ///
     /// With no configuration at all this is every ingredient, since nothing is
     /// known. Ask [`ConfigSource::is_unset`] if you need to tell that from a
@@ -446,9 +485,17 @@ impl IngredientCoverage {
 /// no aisle configuration nothing is known; see
 /// [`unknown`](IngredientCoverage::unknown).
 ///
+/// A configuration that parses with warnings — a duplicate entry, say — is a
+/// successful check carrying those warnings as [`Outcome::diagnostics`],
+/// located in the file when it came from one.
+///
 /// # Errors
 ///
 /// - [`CoreError::Io`] if the configuration is named but cannot be read.
+/// - [`CoreError::Config`] if it cannot be parsed at all. `cooklang`'s aisle
+///   parser is documented as never failing this way, so this is unreachable
+///   today; it is listed because the signature admits it and
+///   [`pantry_coverage`], which shares the code, does reach it.
 /// - [`CoreError::Search`] if the collection cannot be walked, and
 ///   [`CoreError::Io`] if a file in it cannot be listed — as [`validate`]. A
 ///   recipe that cannot be *parsed* is not an error: it is left out, with a
@@ -464,7 +511,9 @@ pub fn aisle_coverage(
     if let Some(text) = source.read()? {
         let parsed = cooklang::aisle::parse_lenient(&text);
         diagnostics.extend(collect_diagnostics(parsed.report(), source.path()));
-        let conf = parsed.output().ok_or_else(|| config_error(source))?;
+        let conf = parsed
+            .output()
+            .ok_or_else(|| config_error(source, "aisle", &diagnostics))?;
         // The map is keyed by each name and synonym, already lowercased.
         known.extend(conf.ingredients_info().into_keys());
     }
@@ -486,9 +535,10 @@ pub fn aisle_coverage(
 ///
 /// # Errors
 ///
-/// As [`aisle_coverage`], plus [`CoreError::Config`] if the pantry cannot be
-/// parsed at all — the same verdict [`pantry::load`](crate::pantry::load)
-/// reaches on the same file.
+/// Exactly as [`aisle_coverage`], except that [`CoreError::Config`] is
+/// genuinely reachable here — a `pantry.conf` that is not TOML — and comes back
+/// worded identically to [`pantry::load`](crate::pantry::load)'s, so that two
+/// commands reading one broken file say the same thing about it.
 pub fn pantry_coverage(
     ctx: &Context,
     req: CoverageRequest,
@@ -500,7 +550,9 @@ pub fn pantry_coverage(
     if let Some(text) = source.read()? {
         let parsed = cooklang::pantry::parse_lenient(&text);
         diagnostics.extend(collect_diagnostics(parsed.report(), source.path()));
-        let conf = parsed.output().ok_or_else(|| config_error(source))?;
+        let conf = parsed
+            .output()
+            .ok_or_else(|| config_error(source, "pantry", &diagnostics))?;
         known.extend(conf.all_items().map(|item| item.name().to_lowercase()));
     }
 
@@ -509,12 +561,13 @@ pub fn pantry_coverage(
 
 /// The failure that leaves a lenient parse with no configuration at all.
 ///
-/// `cooklang`'s aisle parser is documented as never reaching this; its pantry
-/// parser reaches it for a file that is not TOML.
-fn config_error(source: &ConfigSource) -> CoreError {
+/// The cause is taken from the diagnostics the parse did produce, through the
+/// same [`parse_failure`] the pantry module words its own failures with — a
+/// caller told only "it could not be parsed" has nothing to go and fix.
+fn config_error(source: &ConfigSource, kind: &str, diagnostics: &[Diagnostic]) -> CoreError {
     CoreError::Config {
         path: source.path().map(ToOwned::to_owned),
-        message: "the configuration could not be parsed".to_string(),
+        message: parse_failure(diagnostics, kind),
     }
 }
 
@@ -1370,23 +1423,42 @@ mod tests {
         assert_eq!(outcome.value.total_recipes, 2);
         assert_eq!(outcome.value.total_ingredients(), 1);
         assert_eq!(known(&outcome.value), ["salt"]);
-        assert!(
-            outcome
-                .diagnostics
-                .iter()
-                .any(|d| d.message.contains("broken.cook")),
-            "the skipped recipe must be named: {:?}",
-            outcome.diagnostics
-        );
+
+        let skipped = outcome
+            .diagnostics
+            .iter()
+            .find(|d| d.message.contains("broken.cook"))
+            .unwrap_or_else(|| {
+                panic!(
+                    "the skipped recipe must be named: {:?}",
+                    outcome.diagnostics
+                )
+            });
+        // A warning rather than an error: the check still produced its answer,
+        // and `Outcome::has_errors` must not say otherwise.
+        assert_eq!(skipped.severity, Severity::Warning);
+        assert!(!outcome.has_errors());
     }
 
     /// `cooklang-find` holds a directory's entries in a `HashMap`, so the walk
     /// order changes from run to run. Asserted over several runs because one
     /// run of an unsorted walk can come out sorted by luck.
+    ///
+    /// The order is by code point, **not** alphabetical: `Zucchini` sorts
+    /// before `apple` because `Z` is `U+005A` and `a` is `U+0061`. The mixed
+    /// case in the fixture is what holds the documented behaviour to account —
+    /// an all-lowercase fixture cannot tell the two orderings apart.
     #[test]
-    fn ingredients_come_back_in_alphabetical_order_every_time() {
+    fn ingredients_come_back_in_code_point_order_every_time() {
         let dir = tempfile::TempDir::new().unwrap();
-        for (file, ingredient) in [("a", "yeast"), ("b", "flour"), ("c", "sugar")] {
+        for (file, ingredient) in [
+            ("a", "yeast"),
+            ("b", "flour"),
+            ("c", "sugar"),
+            ("d", "Zucchini"),
+            ("e", "apple"),
+            ("f", "Beetroot"),
+        ] {
             write(
                 &base(&dir).join(format!("{file}.cook")),
                 &format!("Add @{ingredient}{{1}}.\n"),
@@ -1396,8 +1468,15 @@ mod tests {
 
         for _ in 0..8 {
             let coverage = checked(&ctx, true).value;
-            assert_eq!(all(&coverage), ["flour", "sugar", "yeast"]);
-            assert_eq!(unknown(&coverage), ["sugar", "yeast"]);
+            assert_eq!(
+                all(&coverage),
+                ["Beetroot", "Zucchini", "apple", "flour", "sugar", "yeast"],
+                "capitalised names sort first, as CookCLI has always printed them"
+            );
+            assert_eq!(
+                unknown(&coverage),
+                ["Beetroot", "Zucchini", "apple", "sugar", "yeast"]
+            );
         }
     }
 
@@ -1441,7 +1520,7 @@ mod tests {
     /// A warning in the configuration is carried back rather than logged, so
     /// that a caller other than the CLI can show it.
     #[test]
-    fn a_warning_in_the_configuration_comes_back_as_a_diagnostic() {
+    fn a_warning_in_the_aisle_configuration_comes_back_as_a_diagnostic() {
         let dir = one_recipe("Add @leek{1}.\n");
         let outcome = checked(&aisle_ctx(&dir, "[produce]\nleek\n\n[dairy]\nleek\n"), true);
 
@@ -1455,6 +1534,53 @@ mod tests {
         );
         // ...and the check still answers.
         assert_eq!(known(&outcome.value), ["leek"]);
+    }
+
+    /// The pantry's mirror of the test above. It exists because deleting
+    /// `pantry_coverage`'s `collect_diagnostics` call left every other test in
+    /// this module passing: the aisle twin does not cover it.
+    #[test]
+    fn a_warning_in_the_pantry_configuration_comes_back_as_a_diagnostic() {
+        let dir = one_recipe("Add @ice{1}.\n");
+        let conf = "[freezer]\nice = { quantity = \"1%kg\", colour = \"white\" }\n";
+        let outcome = checked(&pantry_ctx(&dir, conf), false);
+
+        assert!(
+            !outcome.diagnostics.is_empty(),
+            "the unknown attribute must be reported"
+        );
+        for diagnostic in &outcome.diagnostics {
+            assert_eq!(diagnostic.severity, Severity::Warning, "{diagnostic:?}");
+        }
+        assert!(!outcome.has_errors());
+        // ...and the check still answers.
+        assert_eq!(known(&outcome.value), ["ice"]);
+    }
+
+    /// A warning carries the file it came from, so a caller showing it can say
+    /// which configuration to go and edit.
+    #[test]
+    fn a_configuration_warning_is_located_in_the_file_it_came_from() {
+        let dir = one_recipe("Add @ice{1}.\n");
+        let path = base(&dir).join("pantry.conf");
+        write(
+            &path,
+            "[freezer]\nice = { quantity = \"1%kg\", colour = \"white\" }\n",
+        );
+
+        let ctx = Context::new(base(&dir)).with_pantry(ConfigSource::Path(path.clone()));
+        let outcome =
+            pantry_coverage(&ctx, CoverageRequest::default()).expect("the check succeeds");
+
+        let located = outcome
+            .diagnostics
+            .iter()
+            .find(|d| d.location.is_some())
+            .unwrap_or_else(|| panic!("expected a located warning: {:?}", outcome.diagnostics));
+        assert_eq!(
+            located.location.as_ref().and_then(|l| l.file.as_deref()),
+            Some(path.as_path())
+        );
     }
 
     /// A configuration the context names but cannot read is a failure, not an
@@ -1477,18 +1603,30 @@ mod tests {
         }
     }
 
-    /// The same verdict `pantry::load` reaches on the same file.
+    /// The same verdict *and the same wording* `pantry::load` reaches on the
+    /// same file. Asserted against `load`'s own answer rather than a literal,
+    /// because the point is that the two agree: a user told two different
+    /// things about one file by two commands has to work out which is true.
     #[test]
-    fn a_pantry_that_cannot_be_parsed_at_all_is_reported() {
+    fn a_pantry_that_cannot_be_parsed_at_all_is_reported_as_pantry_load_reports_it() {
         let dir = one_recipe("Add @salt{1%tsp}.\n");
+        let ctx = pantry_ctx(&dir, "this is not toml [");
 
-        match pantry_coverage(
-            &pantry_ctx(&dir, "this is not toml ["),
-            CoverageRequest::default(),
-        ) {
+        let from_load = match crate::pantry::load(&ctx) {
+            Err(CoreError::Config { message, .. }) => message,
+            other => panic!("expected CoreError::Config from load, got {other:?}"),
+        };
+
+        match pantry_coverage(&ctx, CoverageRequest::default()) {
             Err(CoreError::Config { path, message }) => {
                 assert_eq!(path, None, "an inline configuration has no path");
-                assert!(!message.is_empty());
+                // The parser's own cause, not a constant: without this the
+                // message degrades to "could not be parsed" and nobody notices.
+                assert!(
+                    message.contains("TOML parse error"),
+                    "the cause must survive: {message}"
+                );
+                assert_eq!(message, from_load, "the two commands must agree");
             }
             other => panic!(
                 "expected CoreError::Config, got {:?}",

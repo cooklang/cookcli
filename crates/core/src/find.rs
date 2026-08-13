@@ -147,6 +147,13 @@ pub(crate) fn walk(tree: &RecipeTree) -> Vec<&RecipeEntry> {
 ///
 /// Nothing here fails the walk: one unreadable file in a collection must not
 /// cost the caller the answer for the rest of it.
+///
+/// **Only the skip is reported.** A recipe that parses with warnings — the
+/// deprecated `>>` metadata syntax, say — contributes its ingredients and none
+/// of its warnings, because they cannot change any answer a caller of this is
+/// computing. `doctor::validate` is the one command that reports them, and the
+/// reason `cook doctor aisle` and `cook doctor pantry` no longer log a recipe's
+/// parse warnings the way they did before they went through here.
 pub(crate) fn parse_or_skip(
     entry: &RecipeEntry,
     diagnostics: &mut Vec<Diagnostic>,

@@ -127,9 +127,81 @@ impl Diagnostic {
     }
 }
 
+/// Word the failure that left a lenient parse with no configuration at all,
+/// from the diagnostics it did produce.
+///
+/// The causes are flattened onto one line because [`CoreError`]'s `Display` is
+/// documented as being one: a TOML syntax error arrives as a multi-line report
+/// with the offending line quoted underneath it. `kind` names the configuration
+/// as it is named to the user — `"pantry"`, `"aisle"` — and is used only for
+/// the fallback, when the parse produced no error diagnostic to quote.
+///
+/// Shared so that two commands reading the same broken file say the same thing
+/// about it: `pantry::load` and `doctor::pantry_coverage` both reach here.
+///
+/// [`CoreError`]: crate::CoreError
+pub(crate) fn parse_failure(diagnostics: &[Diagnostic], kind: &str) -> String {
+    let causes: Vec<String> = diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .map(|d| one_line(&d.message))
+        .collect();
+
+    if causes.is_empty() {
+        format!("the {kind} configuration could not be parsed")
+    } else {
+        causes.join("; ")
+    }
+}
+
+/// Collapse a multi-line message onto one line, keeping every part of it.
+fn one_line(message: &str) -> String {
+    message
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_line_keeps_every_part_of_a_multi_line_message() {
+        assert_eq!(one_line("first\n\n  second  \nthird"), "first second third");
+        assert_eq!(one_line("already one line"), "already one line");
+    }
+
+    /// Every error is kept, flattened, and joined — a caller handed this
+    /// instead of the diagnostics has to be able to act on it.
+    #[test]
+    fn parse_failure_keeps_every_error_and_drops_the_rest() {
+        let diagnostics = [
+            Diagnostic::error("TOML parse error at line 1, column 10\n  |\n1 | not toml"),
+            Diagnostic::warning("unknown attribute 'colour'"),
+            Diagnostic::error("second cause"),
+        ];
+        assert_eq!(
+            parse_failure(&diagnostics, "pantry"),
+            "TOML parse error at line 1, column 10 | 1 | not toml; second cause"
+        );
+    }
+
+    /// Only when there is nothing to quote does the wording fall back to
+    /// naming the configuration.
+    #[test]
+    fn parse_failure_falls_back_to_naming_the_configuration() {
+        assert_eq!(
+            parse_failure(&[], "pantry"),
+            "the pantry configuration could not be parsed"
+        );
+        assert_eq!(
+            parse_failure(&[Diagnostic::warning("only a warning")], "aisle"),
+            "the aisle configuration could not be parsed"
+        );
+    }
 
     #[test]
     fn warning_constructor_sets_severity() {

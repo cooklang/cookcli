@@ -122,19 +122,19 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
             }
 
             println!("\n=== Recipe Validation ===");
-            run_validate(
+            report_check(run_validate(
                 ctx,
                 ValidateArgs {
                     base_path: None,
                     strict: false,
                 },
-            )?;
+            ));
 
             println!("\n=== Aisle Check ===");
-            run_aisle(ctx, AisleArgs { base_path: None })?;
+            report_check(run_aisle(ctx, AisleArgs { base_path: None }));
 
             println!("\n=== Pantry Check ===");
-            run_pantry(ctx, PantryArgs { base_path: None })?;
+            report_check(run_pantry(ctx, PantryArgs { base_path: None }));
 
             Ok(())
         }
@@ -154,6 +154,23 @@ fn check_for_updates() {
         Err(e) => {
             println!("⚠️  Unable to check for updates: {e}");
         }
+    }
+}
+
+/// Print a check's failure and carry on to the next one.
+///
+/// Only the aggregate `cook doctor` goes through here. Each subcommand run on
+/// its own still exits non-zero on a failure, because a script asking for one
+/// answer wants to know it did not get it — but `cook doctor` is asked for
+/// several, and a command whose whole job is reporting problems must not stop
+/// at the first one and leave the remaining checks unrun. An unreadable
+/// `aisle.conf` should not be able to hide what the pantry check would have
+/// said.
+fn report_check(result: Result<()>) {
+    if let Err(e) = result {
+        // `{e:#}` so the chain — core's line and the underlying cause — comes
+        // out on the one line, matching the version check just above.
+        println!("⚠️  This check could not run: {e:#}");
     }
 }
 

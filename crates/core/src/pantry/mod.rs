@@ -49,7 +49,7 @@
 //! prefer to apply changes to the text itself.
 
 use crate::{
-    diagnostic::Severity,
+    diagnostic::parse_failure,
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
     fs_atomic::write_atomically,
     parser::collect_diagnostics,
@@ -237,38 +237,9 @@ pub fn load(ctx: &Context) -> Result<Outcome<PantryContents>, CoreError> {
         )),
         None => Err(CoreError::Config {
             path: path.map(ToOwned::to_owned),
-            message: parse_failure(&diagnostics),
+            message: parse_failure(&diagnostics, "pantry"),
         }),
     }
-}
-
-/// Word the failure that left `parse_lenient` with no configuration at all.
-///
-/// The causes are flattened onto one line because [`CoreError`]'s `Display` is
-/// documented as being one: a TOML syntax error arrives as a multi-line report
-/// with the offending line quoted underneath it.
-fn parse_failure(diagnostics: &[Diagnostic]) -> String {
-    let causes: Vec<String> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Error)
-        .map(|d| one_line(&d.message))
-        .collect();
-
-    if causes.is_empty() {
-        "the pantry configuration could not be parsed".to_string()
-    } else {
-        causes.join("; ")
-    }
-}
-
-/// Collapse a multi-line message onto one line, keeping every part of it.
-fn one_line(message: &str) -> String {
-    message
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,7 +1064,7 @@ fn parse_conf(
         Some(conf) => Ok((conf.clone(), diagnostics)),
         None => Err(CoreError::Config {
             path: Some(path.to_owned()),
-            message: parse_failure(&diagnostics),
+            message: parse_failure(&diagnostics, "pantry"),
         }),
     }
 }

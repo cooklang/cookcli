@@ -193,12 +193,6 @@ fn a_diagnostic_from_a_pantry_file_points_at_that_file() {
     assert_eq!(location.file.as_deref(), Some(path.as_path()));
 }
 
-#[test]
-fn one_line_keeps_every_part_of_a_multi_line_message() {
-    assert_eq!(one_line("first\n\n  second  \nthird"), "first second third");
-    assert_eq!(one_line("already one line"), "already one line");
-}
-
 // ---------------------------------------------------------------------------
 // list
 // ---------------------------------------------------------------------------

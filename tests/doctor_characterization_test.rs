@@ -312,6 +312,89 @@ fn pantry_without_a_configuration_explains_itself_instead_of_scanning() {
 // doctor, with no subcommand
 // ---------------------------------------------------------------------------
 
+/// A configuration too broken to parse fails its own check, and the checks
+/// after it still run. `cook doctor`'s whole job is reporting problems, so one
+/// broken file must not hide what the rest would have said.
+#[test]
+fn doctor_with_no_subcommand_carries_on_past_a_check_it_cannot_run() {
+    let dir = collection(
+        "Boil @water{1%l}.\n",
+        Some("[pantry]\nwater\n"),
+        Some("this is not toml ["),
+    );
+
+    cook(dir.path())
+        .arg("doctor")
+        .assert()
+        // The run as a whole still succeeds: `cook doctor` has no --strict, and
+        // reporting the problem is the point.
+        .success()
+        .stdout(predicate::str::contains("=== Aisle Check ==="))
+        .stdout(predicate::str::contains(
+            "✓ All ingredients are present in aisle configuration",
+        ))
+        .stdout(predicate::str::contains("=== Pantry Check ==="))
+        .stdout(predicate::str::contains("This check could not run:"))
+        // The parser's own cause must survive as far as the user.
+        .stdout(predicate::str::contains("TOML parse error"));
+}
+
+/// The same broken pantry asked for on its own is a failure, because a script
+/// asking one question wants to know it got no answer.
+#[test]
+fn doctor_pantry_on_its_own_fails_on_a_configuration_it_cannot_parse() {
+    let dir = collection("Boil @water{1%l}.\n", None, Some("this is not toml ["));
+
+    cook(dir.path())
+        .args(["doctor", "pantry"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("TOML parse error"));
+}
+
+/// Pins a **known oddity**, so that fixing it has to be deliberate: a broken
+/// recipe reference is counted into the error total but belongs to no recipe,
+/// so the summary reads "in 0 recipe(s)". Reported as
+/// <https://github.com/cooklang/cookcli/issues> rather than fixed here — this
+/// test is the tripwire, not an endorsement.
+#[test]
+fn a_broken_reference_counts_as_an_error_belonging_to_no_recipe() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("dish.cook"),
+        "---\ntitle: Dish\n---\n\nMake @./nonexistent{}.\n",
+    )
+    .unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("=== Recipe References ==="))
+        .stdout(predicate::str::contains(
+            "  ❌ Missing reference: ./nonexistent",
+        ))
+        .stdout(predicate::str::contains(
+            "❌ 1 error(s) found in 0 recipe(s)",
+        ));
+}
+
+/// ...and it is an error for `--strict`, which is what CI gates on.
+#[test]
+fn a_broken_reference_fails_a_strict_validation() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("dish.cook"),
+        "---\ntitle: Dish\n---\n\nMake @./nonexistent{}.\n",
+    )
+    .unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "validate", "--strict"])
+        .assert()
+        .failure();
+}
+
 /// Every check runs, in order, off one invocation.
 #[test]
 fn doctor_with_no_subcommand_runs_every_check() {
