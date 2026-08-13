@@ -40,7 +40,7 @@ The repository root is *both* the workspace root and a member package, so Cargo 
 
 | Command | Scope | Baseline | Meaning |
 |---|---|---|---|
-| `cargo test` | `cookcli` only | **`330 passed; 0 failed; 26 ignored`** on unix, **329 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
+| `cargo test` | `cookcli` only | **`343 passed; 0 failed; 26 ignored`** on unix, **342 on Windows** | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. | **The CLI behaviour contract.** Must not move, except when a task deliberately adds CLI tests. |
 | `cargo test --workspace` | `cookcli` + `cookcli-core` | `340` after Task 4 | Everything, including core's unit tests. Grows every task. |
 
 **The CLI number dropped 296 → 290 in Task 4, legitimately.** `src/util/format.rs` held the only three `#[test]`s among the seven moved formatter files, and they compiled into *both* the `cookcli` lib target and the `cook` bin target — so they counted twice. They now run once, in `cookcli-core`. Verified: lib 72→69, bin 72→69, and **every integration-test target unchanged**. If you see 290 and the per-target breakdown differs from that, something else moved and you must investigate.
@@ -3637,17 +3637,19 @@ git commit -m "chore(core): add README and prepare cookcli-core for publishing"
 ## Definition of Done
 
 - [ ] `crates/core` exists with the six commands, the store, formatters, and its own unit tests.
-- [ ] `cargo test` reports `330 passed; 0 failed; 26 ignored` (329 on Windows).
+- [ ] `cargo test` reports `343 passed; 0 failed; 26 ignored` (342 on Windows).
 - [ ] `tests/snapshots/` is unchanged from `main` apart from Task 6's 14 new `shopping_list_characterization_test__*.snap` files.
 - [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean.
 - [ ] `cargo tree -p cookcli-core --depth 1` shows no CLI-only or server-only dependencies.
 - [x] No **extracted** command module in `src/` contains parsing or aggregation logic.
-  - **Corrected criterion.** As originally written this was never achievable, because the plan only ever
-    scoped `doctor validate`. `cook doctor pantry` and `cook doctor aisle` still parse config with
-    `parse_lenient`, walk the tree with `cooklang_find::build_tree`, and aggregate ingredients in the CLI;
-    `run_validate` also still resolves recipe references itself. `util::parse_recipe_from_entry` likewise
-    retains 12 callers across `web/`, `server/`, `build/` and `util/menu_scale.rs`. None of these were in
-    scope. Recorded rather than quietly ticked.
+  - **Corrected criterion, since closed.** As originally written this was never achievable, because the
+    plan only ever scoped `doctor validate`: `cook doctor pantry` and `cook doctor aisle` parsed config
+    with `parse_lenient`, walked the tree with `cooklang_find::build_tree` and aggregated ingredients in
+    the CLI, and `run_validate` resolved recipe references itself. A follow-up task moved all three into
+    `doctor::aisle_coverage`, `doctor::pantry_coverage` and `doctor::broken_references`, and added the
+    thirteen CLI characterization tests those two subcommands had never had — hence the contract above
+    reading 343 rather than 330. `util::parse_recipe_from_entry` still has 12 callers across `web/`,
+    `server/`, `build/` and `util/menu_scale.rs`; those were never in scope and remain.
 - [ ] `src/main.rs`'s and `src/lib.rs`'s duplicate `Context` and `global_file_path` are deleted; the CLI uses `cookcli_core::Context` exclusively.
 - [ ] `cargo publish -p cookcli-core --dry-run` succeeds.
 - [ ] `.github/workflows/release.yaml` publishes `cookcli-core` before `cookcli`, and release-please's behaviour with the new workspace has been verified rather than assumed.
