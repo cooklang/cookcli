@@ -207,8 +207,28 @@ fn component_word_separator<'a>(
         if last_added < component.start() {
             words.extend(default_separator.find_words(&line[last_added..component.start()]));
         }
-        words.push(Word::from(&line[component.range()]));
-        last_added = component.end();
+
+        // Take the whitespace that follows the component along with it.
+        //
+        // A `textwrap::Word` carries the whitespace that *trails* it, and that
+        // trailing whitespace is what gets dropped when the line breaks there.
+        // Emitting the component on its own left it with none, so the space
+        // after it fell to the following word instead — as an empty word whose
+        // whitespace is that space — and when the break landed at exactly that
+        // point the space moved to the start of the wrapped line. Reparsed, a
+        // leading space is ordinary step text, so the next format pass added
+        // another, and another: the formatter was not idempotent, and
+        // rewriting a collection through it corrupted every step that happened
+        // to wrap just after a component
+        // (<https://github.com/cooklang/cookcli/issues/414>).
+        //
+        // `Word::from` splits trailing whitespace off into the `whitespace`
+        // field for us, so extending the slice is the whole fix.
+        let trailing = line[component.end()..]
+            .find(|c: char| !c.is_whitespace())
+            .map_or(line.len(), |offset| component.end() + offset);
+        words.push(Word::from(&line[component.start()..trailing]));
+        last_added = trailing;
     }
     if last_added < line.len() {
         words.extend(default_separator.find_words(&line[last_added..]));
@@ -429,30 +449,54 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         );
     }
 
-    /// Formatting should be idempotent, so that rewriting a stored `.cook`
-    /// file does not churn it. **It is not** — this test documents a defect
-    /// that predates the move into this crate.
+    /// Formatting is idempotent, so that rewriting a stored `.cook` file does
+    /// not churn it.
     ///
-    /// A wrapped step whose break falls just after a component comes out with
-    /// a leading space, and that space is preserved in the step text, so each
-    /// pass adds another. Reproduced at the CLI: four runs of
-    /// `cook recipe X -f cooklang` indent the third line by 1, 2, 3 then 4
-    /// spaces.
+    /// It was not: a step whose wrap fell just after a component came out with
+    /// a leading space, that space reparsed as ordinary step text, and the next
+    /// pass added another — one space after pass 1, two after pass 2, three
+    /// after pass 3, without bound. Any workflow that rewrites recipes through
+    /// the formatter — normalising a collection, an editor's "format document",
+    /// a pre-commit hook — degraded the source a little more on each run
+    /// (<https://github.com/cooklang/cookcli/issues/414>).
     ///
-    /// Cause: [`component_word_separator`] emits the component via
-    /// `Word::from`, whose `whitespace` field is empty, so the space that
-    /// follows it is handed to the *next* word and lands at the start of the
-    /// wrapped line instead of being dropped at the break.
-    ///
-    /// Ignored rather than deleted so the defect stays recorded, and rather
-    /// than fixed here because changing how steps wrap is a behaviour change,
-    /// not part of moving the formatter.
-    #[ignore = "known defect: wrapping accumulates a leading space per pass"]
+    /// `FIXTURE`'s long step is built to reach this: it wraps, and it puts a
+    /// multi-word component near the wrap point.
     #[test]
     fn formatting_is_idempotent() {
         let once = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
         let twice = format_to_string(&parse_recipe(&once, "r", 1.0).unwrap().value);
         assert_eq!(once, twice, "second format pass differed");
+    }
+
+    /// The defect this guards grew by one space per pass, so two passes is the
+    /// smallest case that shows it and proves nothing about the fourth. Run it
+    /// out far enough that an accumulating change cannot hide.
+    #[test]
+    fn formatting_is_stable_over_many_passes() {
+        let first = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        let mut current = first.clone();
+        for pass in 2..=6 {
+            current = format_to_string(&parse_recipe(&current, "r", 1.0).unwrap().value);
+            assert_eq!(first, current, "pass {pass} differed from the first");
+        }
+    }
+
+    /// The specific shape that broke: a step that wraps immediately after a
+    /// component must not start the next line with a space.
+    #[test]
+    fn a_wrap_just_after_a_component_leaves_no_leading_space() {
+        let rendered = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        assert!(
+            rendered.lines().count() > 1,
+            "fixture must wrap for this to mean anything: {rendered}"
+        );
+        for line in rendered.lines() {
+            assert!(
+                !line.starts_with(' '),
+                "step lines must not be indented: {line:?}\n--- rendered ---\n{rendered}"
+            );
+        }
     }
 
     /// A recipe reference is re-emitted with `/` between its components on
