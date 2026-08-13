@@ -485,6 +485,11 @@ impl IngredientCoverage {
 /// no aisle configuration nothing is known; see
 /// [`unknown`](IngredientCoverage::unknown).
 ///
+/// The fold is `str::to_lowercase`, so it is case-insensitive over the whole of
+/// Unicode rather than ASCII alone: `Öl` matches an entry spelled `öl`. `cook
+/// doctor aisle` compared with `eq_ignore_ascii_case` before this moved here,
+/// and so reported such a name as uncategorised.
+///
 /// A configuration that parses with warnings — a duplicate entry, say — is a
 /// successful check carrying those warnings as [`Outcome::diagnostics`],
 /// located in the file when it came from one.
@@ -1348,6 +1353,26 @@ mod tests {
         let pantry = checked(&pantry_ctx(&dir, conf), false).value;
         assert_eq!(known(&pantry), ["PEPPER", "Salt"]);
         assert!(unknown(&pantry).is_empty());
+    }
+
+    /// The fold is Unicode's, not ASCII's. Worth pinning because it is a
+    /// deliberate change: the CLI compared with `eq_ignore_ascii_case` before
+    /// this moved into core, which left `Öl` reported as uncategorised however
+    /// the configuration spelled it.
+    #[test]
+    fn a_non_ascii_name_is_matched_ignoring_case_too() {
+        let dir = one_recipe("Add @Öl{1%tbsp} and @Ärter{100%g}.\n");
+
+        let aisle = checked(&aisle_ctx(&dir, "[pantry]\növerste|öl\närter\n"), true).value;
+        assert_eq!(known(&aisle), ["Ärter", "Öl"]);
+        assert!(unknown(&aisle).is_empty(), "{:?}", unknown(&aisle));
+
+        // Non-ASCII keys have to be quoted to be valid TOML.
+        let conf = "[pantry]\n\"öl\" = \"1%l\"\n\"ärter\" = \"1%kg\"\n";
+        assert_eq!(
+            known(&checked(&pantry_ctx(&dir, conf), false).value),
+            ["Ärter", "Öl"]
+        );
     }
 
     /// Two spellings of one ingredient are two entries, because the report
