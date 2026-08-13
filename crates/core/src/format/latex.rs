@@ -1,6 +1,6 @@
 //! Format a recipe as a standalone LaTeX document.
 
-use crate::format::PaperSize;
+use crate::format::{quantity::grouped_quantity_fmt, PaperSize};
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -251,7 +251,7 @@ fn write_ingredients(
             write!(
                 w,
                 r"\textbf{{{}}} ",
-                escape_latex(&entry.quantity.to_string())
+                escape_latex(&grouped_quantity_fmt(&entry.quantity))
             )?;
         }
 

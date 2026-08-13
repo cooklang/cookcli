@@ -1,6 +1,6 @@
 //! Format a recipe as a standalone Typst document.
 
-use crate::format::PaperSize;
+use crate::format::{quantity::grouped_quantity_fmt, PaperSize};
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -219,7 +219,11 @@ fn write_ingredients(
         write!(w, r"- ")?;
 
         if !entry.quantity.is_empty() {
-            write!(w, r"*{}* ", escape_typst(&entry.quantity.to_string()))?;
+            write!(
+                w,
+                r"*{}* ",
+                escape_typst(&grouped_quantity_fmt(&entry.quantity))
+            )?;
         }
 
         if let Some(reference) = &ingredient.reference {

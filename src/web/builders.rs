@@ -350,8 +350,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
             (None, None)
         } else {
-            let quantities: Vec<_> = quantity
-                .iter()
+            let quantities: Vec<_> = crate::util::format::quantity::ordered_components(&quantity)
+                .into_iter()
                 .map(|q| {
                     let qty_str =
                         crate::util::format::number::format_quantity(q.value()).unwrap_or_default();
@@ -602,20 +602,22 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 let (formatted_quantity, formatted_unit) = if quantity.is_empty() {
                     (None, None)
                 } else {
-                    let quantities: Vec<_> = quantity
-                        .iter()
-                        .map(|q| {
-                            let qty_str = crate::util::format::number::format_quantity(q.value())
-                                .unwrap_or_default();
-                            let unit_str =
-                                q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
-                            if unit_str.is_empty() {
-                                qty_str
-                            } else {
-                                format!("{} {}", qty_str, unit_str)
-                            }
-                        })
-                        .collect();
+                    let quantities: Vec<_> =
+                        crate::util::format::quantity::ordered_components(&quantity)
+                            .into_iter()
+                            .map(|q| {
+                                let qty_str =
+                                    crate::util::format::number::format_quantity(q.value())
+                                        .unwrap_or_default();
+                                let unit_str =
+                                    q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
+                                if unit_str.is_empty() {
+                                    qty_str
+                                } else {
+                                    format!("{} {}", qty_str, unit_str)
+                                }
+                            })
+                            .collect();
                     (Some(quantities.join(", ")), None)
                 };
 

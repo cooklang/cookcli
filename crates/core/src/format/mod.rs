@@ -20,6 +20,7 @@ pub mod human;
 pub mod latex;
 pub mod markdown;
 pub mod number;
+pub mod quantity;
 pub mod schema;
 pub mod shopping_list;
 pub mod typst;

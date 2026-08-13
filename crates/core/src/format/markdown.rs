@@ -30,6 +30,7 @@
 
 //! Format a recipe as markdown
 
+use crate::format::quantity::grouped_quantity_fmt;
 use std::{fmt::Write, io};
 
 use cooklang::{
@@ -339,10 +340,11 @@ fn ingredients(
 
         write!(w, "- ")?;
         if !entry.quantity.is_empty() {
+            let quantity = grouped_quantity_fmt(&entry.quantity);
             if opts.italic_amounts {
-                write!(w, "*{}* ", entry.quantity)?;
+                write!(w, "*{quantity}* ")?;
             } else {
-                write!(w, "{} ", entry.quantity)?;
+                write!(w, "{quantity} ")?;
             }
         }
 

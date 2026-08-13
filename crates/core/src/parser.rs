@@ -56,11 +56,16 @@ pub fn parse_recipe_at(
 /// Parse recipe text and collect diagnostics, without scaling it.
 ///
 /// Deliberately separate from `parse_recipe_at(.., 1.0, ..)`:
-/// [`cooklang::Recipe::scale`] re-fits units even at a factor of one, so
-/// `1500 ml` comes back as `1.5 l`. "Scale by one" and "do not scale" are
-/// therefore different operations, and shopping-list reference expansion needs
-/// the latter — it applies its own `scale_to_target` afterwards, and a fit in
-/// between would change the numbers the user sees.
+/// [`cooklang::Recipe::scale`] re-fits units even at a factor of one, so with a
+/// unit database behind it `1500 ml` comes back as `1.5 l`. "Scale by one" and
+/// "do not scale" are therefore different operations, and shopping-list
+/// reference expansion needs the latter — it applies its own `scale_to_target`
+/// afterwards, and a fit in between would change the numbers the user sees.
+///
+/// That fit is invisible today: `cooklang`'s `bundled_units` feature is off, so
+/// quantities keep the units they were authored in and there is no database to
+/// fit against. The two functions stay separate anyway, because the difference
+/// is in `scale`'s contract rather than in today's unit configuration.
 pub(crate) fn parse_unscaled(
     text: &str,
     name: &str,
@@ -203,19 +208,23 @@ mod tests {
         );
     }
 
-    /// The reason `parse_unscaled` exists: scaling by one is not a no-op,
-    /// because it re-fits units. Anything that must not disturb the authored
-    /// quantities has to skip the scale call, not pass `1.0`.
+    /// The reason `parse_unscaled` exists: scaling by one is not a no-op in
+    /// `cooklang`'s contract, because it re-fits units.
+    ///
+    /// Re-fitting needs a unit database and `bundled_units` is off, so both
+    /// paths leave `1500 ml` alone today. What this pins is that neither of
+    /// them *changes* the authored quantity; the `scale(1.0)` assertion is the
+    /// one to revisit if the unit database ever comes back.
     #[test]
-    fn scaling_by_one_refits_units_but_not_scaling_leaves_them_alone() {
+    fn neither_scaling_by_one_nor_parse_unscaled_disturbs_authored_units() {
         let text = "Pour @milk{1500%ml}.\n";
 
         let scaled = parse_recipe(text, "milk", 1.0).expect("parses").value;
         let quantity = scaled.ingredients[0].quantity.as_ref().unwrap();
         assert_eq!(
             (quantity.value().to_string(), quantity.unit()),
-            ("1.5".to_string(), Some("l")),
-            "scale(1.0) refits 1500 ml to 1.5 l"
+            ("1500".to_string(), Some("ml")),
+            "with no unit database, scale(1.0) has nothing to re-fit"
         );
 
         let untouched = parse_unscaled(text, "milk", None).expect("parses").value;

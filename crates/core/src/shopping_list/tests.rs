@@ -81,26 +81,59 @@ fn duplicate_ingredients_are_merged_into_one_item() {
     assert_eq!(quantities(&list, "salt"), Some(vec!["3 tsp".to_string()]));
 }
 
-/// Units that convert are summed into one quantity; units that do not are kept
-/// side by side rather than silently added.
+/// Quantities that add up are summed into one; quantities that do not are kept
+/// side by side rather than silently added, ordered by unit name.
+///
+/// `cooklang`'s unit database is off, so quantities keep the unit they were
+/// authored in and only *identical* units add up: `ml` and `l` now stay apart
+/// just as `g` and `cup` always did.
 #[test]
-fn convertible_units_combine_and_others_stay_separate() {
+fn same_unit_quantities_combine_and_others_stay_separate() {
     let dir = dir_with(&[
         ("a.cook", "Pour @milk{500%ml} and @flour{200%g}.\n"),
-        ("b.cook", "Pour @milk{1%l} and @flour{1%cup}.\n"),
+        ("b.cook", "Pour @milk{250%ml} and @flour{1%cup}.\n"),
     ]);
 
     let list = generate(&ctx(&dir), request(&["a.cook", "b.cook"]))
         .expect("generates")
         .value;
 
-    assert_eq!(quantities(&list, "milk"), Some(vec!["1500 ml".to_string()]));
-    // Two entries rather than one, because grams and cups do not convert. The
-    // order within an ingredient is `cooklang`'s, not the recipes'.
-    let flour = quantities(&list, "flour").expect("flour is listed");
-    assert_eq!(flour.len(), 2, "{flour:?}");
-    assert!(flour.contains(&"200 g".to_string()), "{flour:?}");
-    assert!(flour.contains(&"1 c".to_string()), "{flour:?}");
+    assert_eq!(quantities(&list, "milk"), Some(vec!["750 ml".to_string()]));
+    // Two entries rather than one, because grams and cups do not convert, in
+    // unit-name order — not the order the recipes were written in, which the
+    // grouping has already lost. See `format::quantity::ordered_components`.
+    assert_eq!(
+        quantities(&list, "flour"),
+        Some(vec!["1 cup".to_string(), "200 g".to_string()])
+    );
+}
+
+/// The same ingredient measured two ways renders in one fixed order, whichever
+/// recipe is read first.
+///
+/// Without this, the order comes out of a `HashMap` and changes from run to
+/// run. Asserting the exact string rather than "one of two orders" is the
+/// point: a single run of a weaker assertion passes by luck.
+#[test]
+fn inconvertible_quantities_render_in_the_same_order_either_way_round() {
+    let cup_first = dir_with(&[
+        ("a.cook", "Mix @flour{1%cup}.\n"),
+        ("b.cook", "Mix @flour{100%g}.\n"),
+    ]);
+    let gram_first = dir_with(&[
+        ("a.cook", "Mix @flour{100%g}.\n"),
+        ("b.cook", "Mix @flour{1%cup}.\n"),
+    ]);
+
+    for dir in [&cup_first, &gram_first] {
+        let list = generate(&ctx(dir), request(&["a.cook", "b.cook"]))
+            .expect("generates")
+            .value;
+        assert_eq!(
+            quantities(&list, "flour"),
+            Some(vec!["1 cup".to_string(), "100 g".to_string()])
+        );
+    }
 }
 
 #[test]
@@ -698,7 +731,12 @@ fn two_in_memory_recipes_aggregate_into_one_list() {
     .value;
 
     assert_eq!(quantities(&list, "tomatoes"), Some(vec!["5".to_string()]));
-    assert_eq!(quantities(&list, "milk"), Some(vec!["1500 ml".to_string()]));
+    // `ml` and `l` do not add up without a unit database, so both survive, in
+    // unit-name order.
+    assert_eq!(
+        quantities(&list, "milk"),
+        Some(vec!["1 l".to_string(), "500 ml".to_string()])
+    );
 }
 
 /// A path recipe and a buffer in the same request, aggregating together —

@@ -35,7 +35,10 @@
 //! codes are removed at the writer, so the two outputs differ only by the
 //! escapes.
 
-use crate::format::Style;
+use crate::format::{
+    quantity::{grouped_quantity_fmt, ordered_components},
+    Style,
+};
 use std::{collections::HashMap, io, time::Duration};
 
 use cooklang::{
@@ -389,8 +392,8 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
             row.add_cell("");
         }
 
-        let content = quantity
-            .iter()
+        let content = ordered_components(&quantity)
+            .into_iter()
             .map(|q| quantity_fmt(q).paint(outcome_style).to_string())
             .reduce(|s, q| format!("{s}, {q}"))
             .unwrap_or_default();
@@ -442,12 +445,7 @@ fn cookware(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -> R
         if amount.is_empty() {
             row.add_cell("");
         } else {
-            let t = amount
-                .iter()
-                .map(|q| q.to_string())
-                .reduce(|s, q| format!("{s}, {q}"))
-                .unwrap();
-            row.add_ansi_cell(t);
+            row.add_ansi_cell(grouped_quantity_fmt(&amount));
         }
 
         if let Some(note) = &item.note {

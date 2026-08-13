@@ -35,7 +35,10 @@
 //! string — rather than writing into a [`std::io::Write`], because the callers
 //! hand the result to `serde` or print it in one go.
 
-use crate::{format::Style, shopping_list::AggregatedList};
+use crate::{
+    format::{quantity::ordered_components, Style},
+    shopping_list::AggregatedList,
+};
 use cooklang::quantity::{GroupedQuantity, Quantity, Value};
 use serde::Serialize;
 use yansi::Paint;
@@ -52,10 +55,11 @@ pub(crate) fn quantity_fmt(qty: &Quantity) -> String {
 }
 
 /// Add a quantity cell to a table row, joining the parts that could not be
-/// combined into a single unit with commas.
+/// combined into a single unit with commas, in
+/// [`ordered_components`](crate::format::quantity::ordered_components) order.
 fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {
-    let content = qty
-        .iter()
+    let content = ordered_components(qty)
+        .into_iter()
         .map(quantity_fmt)
         .reduce(|s, q| format!("{s}, {q}"))
         .unwrap_or_default();
@@ -104,8 +108,8 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
         if ingredients_only {
             format!("- {ingredient}\n")
         } else {
-            let quantity_string = quantity
-                .iter()
+            let quantity_string = ordered_components(quantity)
+                .into_iter()
                 .map(quantity_fmt)
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -154,9 +158,16 @@ struct JsonIngredient {
 
 impl From<(String, GroupedQuantity)> for JsonIngredient {
     fn from((name, qty): (String, GroupedQuantity)) -> Self {
+        // `GroupedQuantity::into_vec` would save the clones, but it yields the
+        // components in the group's own random order; going through
+        // `ordered_components` keeps every output path on one ordering rule.
         JsonIngredient {
             name,
-            quantity: qty.into_vec().into_iter().map(JsonQuantity::from).collect(),
+            quantity: ordered_components(&qty)
+                .into_iter()
+                .cloned()
+                .map(JsonQuantity::from)
+                .collect(),
         }
     }
 }
@@ -362,30 +373,72 @@ mod tests {
         );
     }
 
+    /// Two units that cannot be added stay side by side — and every writer
+    /// puts them in the same order.
+    ///
+    /// The order is the one
+    /// [`ordered_components`](crate::format::quantity::ordered_components)
+    /// fixes; rendered in the group's own order it would come out of a
+    /// `HashMap` and differ between runs *and* between these four formats. The
+    /// exact strings are asserted rather than "one of two orders", because a
+    /// weaker assertion passes by luck.
     #[test]
-    fn quantities_that_do_not_convert_are_listed_side_by_side() {
+    fn quantities_that_do_not_convert_are_listed_side_by_side_in_one_order() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("a.cook"), "Add @flour{200%g}.\n").unwrap();
         std::fs::write(dir.path().join("b.cook"), "Add @flour{1%cup}.\n").unwrap();
 
         let base = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-        let aggregated = generate(
-            &Context::new(base),
-            GenerateRequest {
-                recipes: vec![
-                    ScaledRecipe::new(RecipeSource::Path("a.cook".into())),
-                    ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
-                ],
-                ignore_references: false,
-            },
-        )
-        .expect("generates")
-        .value;
+        let aggregated = || {
+            generate(
+                &Context::new(base.clone()),
+                GenerateRequest {
+                    recipes: vec![
+                        ScaledRecipe::new(RecipeSource::Path("a.cook".into())),
+                        ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
+                    ],
+                    ignore_references: false,
+                },
+            )
+            .expect("generates")
+            .value
+        };
 
-        let table = build_human_table(aggregated, true, Style::Plain).to_string();
+        let table = build_human_table(aggregated(), true, Style::Plain).to_string();
         assert!(
-            table.contains("flour 1 c, 200 g"),
-            "inconvertible units are joined with a comma: {table}"
+            table.contains("flour 1 cup, 200 g"),
+            "inconvertible units are joined with a comma, cup before g: {table}"
+        );
+
+        let markdown = build_md_value(aggregated(), true, false);
+        assert!(
+            markdown.contains("- *1 cup, 200 g* flour\n"),
+            "markdown agrees with the table: {markdown}"
+        );
+
+        let units = |value: &serde_json::Value| -> Vec<String> {
+            value["quantity"]
+                .as_array()
+                .expect("quantity is an array")
+                .iter()
+                .map(|q| q["unit"].as_str().unwrap_or_default().to_string())
+                .collect()
+        };
+        let json = build_json_value(aggregated(), true);
+        assert_eq!(units(&json[0]), vec!["cup", "g"], "json agrees: {json}");
+
+        let yaml = serde_json::to_value(build_yaml_value(aggregated())).unwrap();
+        assert_eq!(
+            units(&yaml[0]["items"][0]),
+            vec!["cup", "g"],
+            "yaml agrees: {yaml}"
+        );
+
+        // And the library's own rendered view, which the CLI does not use but
+        // consumers of `AggregatedList` do.
+        assert_eq!(
+            aggregated().items[0].quantities,
+            vec!["1 cup".to_string(), "200 g".to_string()]
         );
     }
 }

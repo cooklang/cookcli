@@ -49,7 +49,7 @@ pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
 
 use crate::{
     find,
-    format::shopping_list::quantity_fmt,
+    format::{quantity::ordered_components, shopping_list::quantity_fmt},
     parser::{parse_recipe_at, parse_unscaled, PARSER},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, RecipeSource,
 };
@@ -148,7 +148,10 @@ pub struct ListItem {
     ///
     /// More than one entry when the recipes asked for units that do not
     /// convert into each other (`200 g` of flour plus `1 cup` of flour), and
-    /// empty when no recipe gave a quantity at all.
+    /// empty when no recipe gave a quantity at all. Several entries are ordered
+    /// by unit name with the unitless one first, as
+    /// [`ordered_components`](crate::format::quantity::ordered_components)
+    /// describes.
     pub quantities: Vec<String>,
 }
 
@@ -240,7 +243,10 @@ impl ListItem {
     fn render((name, quantity): &(String, GroupedQuantity)) -> Self {
         Self {
             name: name.clone(),
-            quantities: quantity.iter().map(quantity_fmt).collect(),
+            quantities: ordered_components(quantity)
+                .into_iter()
+                .map(quantity_fmt)
+                .collect(),
         }
     }
 }
