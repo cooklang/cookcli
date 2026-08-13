@@ -1,13 +1,13 @@
-use crate::server::{
-    shopping_list_store::{recipe_display_name, ShoppingListApiItem, ShoppingListStore},
-    AppState,
-};
+use crate::server::AppState;
 use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
 use camino::Utf8PathBuf;
-use cookcli_core::shopping_list::{extract_ingredients, ExtractOptions, ScaledRecipe};
+use cookcli_core::shopping_list::{
+    extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingListStore,
+    StoredEntry,
+};
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
 use serde_json;
@@ -192,7 +192,7 @@ pub async fn shopping_list(
 
 pub async fn get_shopping_list_items(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<ShoppingListApiItem>>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Vec<StoredEntry>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
@@ -219,7 +219,7 @@ pub async fn add_to_shopping_list(
     let store = ShoppingListStore::new(&state.base_path);
     // `name` is derived from `path` on load — any client-supplied display
     // name would be silently discarded, so it's not accepted here.
-    let item = ShoppingListApiItem {
+    let item = StoredEntry {
         name: recipe_display_name(&payload.path),
         path: payload.path,
         scale: payload.scale,
@@ -507,7 +507,7 @@ pub async fn add_menu_to_shopping_list(
                 .unwrap_or(&ref_display)
                 .to_string();
 
-            recipes.push(ShoppingListApiItem {
+            recipes.push(StoredEntry {
                 name: recipe_display_name(&path),
                 path,
                 scale: final_scale,

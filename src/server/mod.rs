@@ -49,7 +49,6 @@ use tracing::{error, info};
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
-mod shopping_list_store;
 mod shopping_list_watcher;
 mod ui;
 

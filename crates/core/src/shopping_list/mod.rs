@@ -38,6 +38,14 @@
 //! [`extract_ingredients`] is the accumulation step on its own, for callers
 //! that build a list incrementally — the web server adds one recipe at a time
 //! and picks which references to follow per recipe.
+//!
+//! [`ShoppingListStore`] is the other half: the `.shopping-list` and
+//! `.shopping-checked` files that remember which recipes someone put on their
+//! list and what they have already ticked off while shopping.
+
+mod store;
+
+pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
 
 use crate::{
     find,

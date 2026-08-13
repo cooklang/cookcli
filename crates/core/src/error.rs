@@ -171,6 +171,23 @@ pub enum CoreError {
         message: String,
     },
 
+    /// A saved shopping list could not be read as one.
+    ///
+    /// The `.shopping-list` file was read; it is its contents that could not be
+    /// parsed. Distinct from [`CoreError::Io`], which is the file itself being
+    /// unreadable, and from [`CoreError::Parse`], which is a recipe.
+    ///
+    /// Reachable because the file is a plain text format users and other
+    /// Cooklang apps edit directly, so this crate is not the only thing that
+    /// writes it.
+    #[error("invalid shopping list at {path}: {message}")]
+    InvalidShoppingList {
+        /// The shopping list that could not be parsed.
+        path: Utf8PathBuf,
+        /// What was wrong with it, as the format parser reported it.
+        message: String,
+    },
+
     /// A file could not be read or written.
     ///
     /// There is deliberately no `From<std::io::Error>`: every call site must
@@ -213,6 +230,7 @@ mod tests {
             | CoreError::Render { .. }
             | CoreError::Reference { .. }
             | CoreError::Search { .. }
+            | CoreError::InvalidShoppingList { .. }
             | CoreError::Io { .. } => {}
         }
     }
@@ -253,6 +271,10 @@ mod tests {
             CoreError::Search {
                 base_dir: Utf8PathBuf::from("/recipes/notes[2024]"),
                 message: "Pattern syntax error near position 20".to_string(),
+            },
+            CoreError::InvalidShoppingList {
+                path: Utf8PathBuf::from("/recipes/.shopping-list"),
+                message: "Invalid multiplier: expected a number".to_string(),
             },
             CoreError::Io {
                 path: Utf8PathBuf::from("config/aisle.conf"),

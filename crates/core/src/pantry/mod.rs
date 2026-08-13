@@ -51,6 +51,7 @@
 use crate::{
     diagnostic::Severity,
     find::tree_error,
+    fs_atomic::write_atomically,
     parser::{collect_diagnostics, parse_unscaled},
     ConfigSource, Context, CoreError, Diagnostic, Outcome,
 };
@@ -1104,90 +1105,7 @@ fn save(path: &Utf8Path, conf: &mut cooklang::pantry::PantryConf) -> Result<(), 
     // index disagrees with its sections is a trap for anything that later
     // does, and rebuilding it costs nothing at this size.
     conf.rebuild_index();
-    write_atomically(path, &cooklang::pantry::to_toml_string(conf))
-}
-
-/// Write `contents` to `path` so that a failure leaves the previous file
-/// intact.
-///
-/// Every change here re-serialises the *whole* pantry, so a write that failed
-/// half way — a full disk, a killed process — would replace someone's pantry
-/// with a truncated one rather than fail cleanly. Instead the new text goes to
-/// a temporary file beside the target and is renamed over it, which either
-/// happens completely or not at all.
-///
-/// Two details that keep a hand-managed configuration working:
-///
-/// - **Symlinks are followed.** An existing target is resolved to the file it
-///   names before anything is written, so a `config/pantry.conf` symlinked
-///   into a dotfiles repository is updated through the link rather than
-///   replaced by a regular file — and the temporary file lands on the same
-///   filesystem as the file it replaces, which rename requires.
-/// - **Permissions are carried over**, because a temporary file is created
-///   from the process umask, which may be more permissive than the pantry was.
-///
-/// A failure leaves no temporary file behind unless removing it fails too, and
-/// names the pantry as the caller gave it rather than wherever the symlinks
-/// and `..`s led — that is the file the caller knows about.
-fn write_atomically(path: &Utf8Path, contents: &str) -> Result<(), CoreError> {
-    let failed = |source: std::io::Error| CoreError::Io {
-        path: path.to_owned(),
-        source,
-    };
-    let target = path.canonicalize_utf8().unwrap_or_else(|_| path.to_owned());
-
-    // `parent` is empty for a bare relative filename, which is the current
-    // directory and needs no creating.
-    if let Some(parent) = target.parent().filter(|parent| !parent.as_str().is_empty()) {
-        std::fs::create_dir_all(parent).map_err(failed)?;
-    }
-
-    // Named after the process, so two `cook`s writing the same pantry do not
-    // overwrite each other's half-written temporary file. They can still race
-    // over the pantry itself; last rename wins, and neither leaves it corrupt.
-    let name = target.file_name().unwrap_or("pantry.conf");
-    let temp = target.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
-
-    let written = (|| -> std::io::Result<()> {
-        std::fs::write(&temp, contents)?;
-        if let Ok(metadata) = std::fs::metadata(&target) {
-            std::fs::set_permissions(&temp, metadata.permissions())?;
-        }
-        rename_replace(&temp, &target)
-    })();
-
-    if let Err(source) = written {
-        // Best effort. The pantry itself is untouched either way, which is the
-        // thing worth protecting.
-        let _ = std::fs::remove_file(&temp);
-        return Err(failed(source));
-    }
-    Ok(())
-}
-
-/// Move `from` onto `to`, replacing `to` if it is there.
-///
-/// A plain rename everywhere but Android, where libc implements `rename` with
-/// the `renameat2` syscall that Android's seccomp filter blocks: the process is
-/// killed with SIGSYS rather than handed an error, so the syscall has to be
-/// avoided rather than recovered from. The fallback there is copy then remove,
-/// which is *not* atomic — an interrupted pantry write on Android can still
-/// truncate the file.
-///
-/// The CLI carries the same workaround in `src/server/fs_atomic.rs`, where it
-/// also needs an async form for the web server. Duplicated rather than shared
-/// because this crate does not depend on that one; both cite
-/// <https://github.com/cooklang/cookcli/issues/349>.
-fn rename_replace(from: &Utf8Path, to: &Utf8Path) -> std::io::Result<()> {
-    #[cfg(target_os = "android")]
-    {
-        std::fs::copy(from, to)?;
-        std::fs::remove_file(from)
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        std::fs::rename(from, to)
-    }
+    write_atomically(path, cooklang::pantry::to_toml_string(conf))
 }
 
 // ---------------------------------------------------------------------------

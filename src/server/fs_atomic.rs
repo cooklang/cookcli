@@ -9,6 +9,12 @@
 //! rather than handle its failure.
 //!
 //! See <https://github.com/cooklang/cookcli/issues/349>.
+//!
+//! `cookcli-core` carries the same workaround in its own `fs_atomic` module,
+//! for the pantry and shopping list files it writes. Kept separate because that
+//! one is crate-private (a library about recipes should not publish filesystem
+//! helpers) and has no async runtime to offer [`rename_replace_async`], which
+//! is what this copy is really here for.
 
 use camino::Utf8PathBuf;
 use std::io;
