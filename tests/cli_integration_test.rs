@@ -110,11 +110,17 @@ fn test_cli_search_multiple_terms() {
         .stdout(predicate::str::contains("sauce.cook"));
 }
 
-/// Every term is searched, not just the first.
+/// Every term reaches the search, not just the first.
 ///
 /// The terms above both appear in `sauce.cook`, so that test still passes if
 /// the trailing ones are dropped on the way to the search. Here the first term
-/// matches nothing, so the recipe can only be found by the second.
+/// matches `sauce.cook` and the second matches nothing, so a dropped second
+/// term shows up as a hit that should have been filtered out.
+///
+/// This probe used to run the other way round — first term matching nothing,
+/// second finding the recipe — which worked while terms were ORed. Under AND
+/// (#425) that query correctly returns nothing, so it can no longer tell a
+/// dropped term from a working filter.
 #[test]
 fn test_cli_search_uses_every_term_not_just_the_first() {
     let temp_dir = common::setup_test_recipes().unwrap();
@@ -123,11 +129,39 @@ fn test_cli_search_uses_every_term_not_just_the_first() {
         .unwrap()
         .current_dir(temp_dir.path())
         .arg("search")
+        .arg("garlic")
         .arg("kohlrabi")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sauce.cook").not());
+}
+
+/// Extra terms narrow rather than widen: a recipe missing one of them is not a
+/// hit, however well it matches the rest (#425).
+#[test]
+fn test_cli_search_terms_are_anded() {
+    let temp_dir = common::setup_test_recipes().unwrap();
+
+    // `garlic` alone finds it...
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("search")
         .arg("garlic")
         .assert()
         .success()
         .stdout(predicate::str::contains("sauce.cook"));
+
+    // ...and a term it does not contain takes it back out.
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("search")
+        .arg("garlic")
+        .arg("rhubarb")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
 }
 
 #[test]
