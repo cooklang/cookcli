@@ -708,6 +708,18 @@ Some source files include code from
 license.
 ````
 
+- [ ] **Step 1b: Repair the intra-doc links the move broke**
+
+Moved doc comments link to items that stayed in `cookcli-core`, so links that resolved there now dangle. This crate's docs are published to docs.rs, so they have to resolve.
+
+Run: `cargo doc -p cooklang-format --no-deps 2>&1 | grep "unresolved link to" | sort -u`
+
+For each one, pick the right repair — do not blanket-allow the lint:
+- **Item moved to this crate but the path is stale** (e.g. `` [`ordered_components`] ``, `` [`grouped_quantity_fmt`] ``, `` [`GroupedQuantity`] ``): fix the path so it resolves — `[`crate::quantity::ordered_components`]`, and for `cooklang` types `[`cooklang::quantity::GroupedQuantity`]`.
+- **Item genuinely lives in `cookcli-core`** (e.g. `` [`get_recipe`] `` in `REFERENCE_SEPARATOR`'s doc): drop the link brackets, leaving plain code formatting — `` `get_recipe` ``. Do not link across to a crate this one does not depend on.
+
+Re-run until the grep returns nothing.
+
 - [ ] **Step 2: Compile the README as a doctest**
 
 Append to `crates/format/src/lib.rs`, mirroring what `cookcli-core` does:
@@ -878,4 +890,5 @@ EOF
 - `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` are clean, and the green check reports `failures: 0` with `passed:` at or above 760.
 - `git diff main -- tests/snapshots src/` is empty.
 - `cargo publish --dry-run -p cooklang-format` succeeds.
+- `cargo doc -p cooklang-format --no-deps 2>&1 | grep -c "unresolved link to"` returns `0` — the crate's published documentation has no dangling links.
 - `cargo tree -p cooklang-format -e normal | grep cookcli` finds nothing.
