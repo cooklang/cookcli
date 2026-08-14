@@ -6,6 +6,12 @@
 
 #![warn(missing_docs)]
 
+/// Cooklang source rendering of a recipe, for round-tripping.
+///
+/// Named `cooklang_source` rather than `cooklang` because the latter name is
+/// already taken in this crate's root by the re-exported `cooklang` crate —
+/// the two cannot share a name in the same scope.
+pub mod cooklang_source;
 /// Markdown rendering of a recipe.
 pub mod markdown;
 /// Human-friendly rendering of quantity numbers.
@@ -58,10 +64,18 @@ pub(crate) mod test_support {
     pub(crate) static PARSER: LazyLock<CooklangParser> =
         LazyLock::new(|| CooklangParser::new(Extensions::empty(), Converter::default()));
 
-    /// Stands in for `cookcli_core::Outcome`, of which the formatter tests
-    /// only ever use `.value`.
+    /// Stands in for `cookcli_core::Outcome`, of which the formatter tests use
+    /// `.value` and `.diagnostics`.
     pub(crate) struct Parsed {
         pub(crate) value: Recipe,
+        /// The parse warnings, rendered.
+        ///
+        /// `cookcli_core::Outcome` carries structured `Diagnostic`s, built from
+        /// the same `report.iter()` this reads. The tests here only ask whether
+        /// the collection is empty and print it when it is not, so strings carry
+        /// exactly the meaning they need without this crate depending on core —
+        /// which it cannot do anyway, since core depends on this crate.
+        pub(crate) diagnostics: Vec<String>,
     }
 
     /// Parse and scale, mirroring `cookcli_core::parse_recipe`.
@@ -73,10 +87,20 @@ pub(crate) mod test_support {
         if parsed.report().has_errors() {
             return Err(format!("{name} failed to parse"));
         }
+        // Collected before `into_result` consumes the parse result. Errors are
+        // already ruled out above, so what remains is warnings.
+        let diagnostics = parsed
+            .report()
+            .iter()
+            .map(|diag| diag.message.to_string())
+            .collect();
         match parsed.into_result() {
             Ok((mut recipe, _)) => {
                 recipe.scale(scale, PARSER.converter());
-                Ok(Parsed { value: recipe })
+                Ok(Parsed {
+                    value: recipe,
+                    diagnostics,
+                })
             }
             Err(_) => Err(format!("{name} produced no output")),
         }

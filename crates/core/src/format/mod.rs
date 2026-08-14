@@ -15,10 +15,14 @@
 //! optional, so there is nothing left to reject. `CoreError::Io` also wants a
 //! path, and a formatter has none.
 
-pub mod cooklang;
 pub mod human;
 pub mod latex;
-pub use cooklang_format::{markdown, number, quantity, schema};
+// `cooklang_format` cannot export the writer module under the bare name
+// `cooklang` — that name is already taken there by the re-exported
+// `cooklang` crate. Aliasing it back to `cooklang` here preserves this
+// crate's public path `format::cooklang::print_cooklang`, which
+// `src/recipe/read.rs:228` depends on.
+pub use cooklang_format::{cooklang_source as cooklang, markdown, number, quantity, schema};
 pub mod shopping_list;
 pub mod typst;
 
