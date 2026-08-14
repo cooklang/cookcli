@@ -321,6 +321,45 @@ jobs:
         uses: rust-lang/crates-io-auth-action@v1
         id: auth
 
+      # The chain is cooklang-format -> cookcli-core -> cookcli: crates.io
+      # rejects a package whose dependency is not already published, so each
+      # link goes up only after the one it depends on is resolvable from the
+      # registry.
+      #
+      # release-please's `rust` strategy bumps every workspace member to the
+      # release version. It must also rewrite the `version` requirement on the
+      # path dependencies (cookcli -> cookcli-core -> cooklang-format); if it
+      # does not, publishing fails here on an unresolvable dependency rather
+      # than silently shipping something wrong. Check the release PR's diff the
+      # first time this runs.
+      #
+      # The guard below is for a re-run of an already-published release, where
+      # `cargo publish` would fail on "crate version already uploaded" and take
+      # the job down with it.
+      - name: Publish | crates.io (cooklang-format)
+        run: |
+          set -euo pipefail
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "cooklang-format") | .version')
+          echo "cooklang-format version: $version"
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'User-Agent: cookcli-release (https://github.com/cooklang/cookcli)' \
+            "https://crates.io/api/v1/crates/cooklang-format/$version")
+          case "$status" in
+            200)
+              echo "cooklang-format $version is already on crates.io; skipping."
+              ;;
+            404)
+              cargo publish -p cooklang-format --allow-dirty
+              ;;
+            *)
+              echo "Unexpected status $status from crates.io; refusing to guess." >&2
+              exit 1
+              ;;
+          esac
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
       # cookcli depends on cookcli-core by `version` + `path`, and crates.io
       # rejects a package whose dependency is not already published — so core
       # goes first, and cookcli only after it is resolvable from the registry.
