@@ -29,6 +29,10 @@
 // SOFTWARE.
 
 //! Format a recipe as cooklang
+//!
+//! Named `cooklang_source` rather than `cooklang`: at this crate's root that
+//! name belongs to the re-exported `cooklang` parser crate, and the two cannot
+//! share a scope. `cookcli-core` aliases it back to `format::cooklang`.
 
 use std::{fmt::Write, io};
 

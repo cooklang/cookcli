@@ -3,28 +3,26 @@
 //! Each module turns a parsed [`cooklang::Recipe`] into one target format.
 //! The `print_*` functions write into a [`std::io::Write`]; the `*_to_string`
 //! wrappers are for callers that want a `String`.
+//!
+//! # Errors
+//!
+//! These functions return a bare [`std::io::Error`]. The only thing that can
+//! fail is the caller's own writer: the recipe is already parsed, and every
+//! field is optional, so there is nothing left to reject.
 
 #![warn(missing_docs)]
 
-/// Cooklang source rendering of a recipe, for round-tripping.
-///
-/// Named `cooklang_source` rather than `cooklang` because the latter name is
-/// already taken in this crate's root by the re-exported `cooklang` crate —
-/// the two cannot share a name in the same scope.
+// Declared bare, without `///` docs: a doc attribute on a `mod` declaration is
+// merged with the module's own `//!` header and the whole thing then resolves
+// its intra-doc links in *this* scope rather than the module's, which breaks
+// every link a module writes to its own items. Each module documents itself.
 pub mod cooklang_source;
-/// Human-friendly rendering of a recipe, for a terminal.
 pub mod human;
-/// LaTeX rendering of a recipe.
 pub mod latex;
-/// Markdown rendering of a recipe.
 pub mod markdown;
-/// Human-friendly rendering of quantity numbers.
 pub mod number;
-/// Deterministic ordering for grouped quantities.
 pub mod quantity;
-/// schema.org/Recipe JSON-LD rendering of a recipe.
 pub mod schema;
-/// Typst rendering of a recipe.
 pub mod typst;
 
 /// The `cooklang` crate this library was built against.
@@ -42,8 +40,8 @@ pub use cooklang;
 /// they should be shown back. Joining with the platform separator instead made
 /// Windows disagree with itself: `doctor` reports a broken reference as
 /// `./absent` because it joins with `/`, while the shopping list reported the
-/// same one as `.\absent`, and the `./`-stripping in `get_recipe` only
-/// matches the forward-slash form, so the prefix survived into the reported
+/// same one as `.\absent`, and the `./`-stripping in `cookcli-core`'s recipe
+/// lookup only matches the forward-slash form, so the prefix survived into the reported
 /// name (<https://github.com/cooklang/cookcli/issues/442>).
 ///
 /// Resolution is unaffected either way — `Utf8Path::join` takes `.\sauce` and

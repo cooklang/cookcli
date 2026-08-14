@@ -13,6 +13,7 @@ other projects can render recipes without depending on the CLI's internals.
 | `cooklang_source` | Cooklang source (round-trips) |
 | `latex`, `typst` | typeset documents, paper-size and margin aware |
 | `schema` | schema.org/Recipe JSON-LD |
+| `number`, `quantity` | shared primitives: number rendering, and the deterministic ordering every other module renders grouped quantities through |
 
 JSON and YAML of the recipe itself need no formatter here: `cooklang::Recipe`
 is `Serialize`, so `serde_json` or `serde_yaml` handle those directly.
