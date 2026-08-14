@@ -40,7 +40,7 @@ The one place genuinely new tests are called for is the new crate's public surfa
 | `crates/format/LICENSE` | MIT, copy of root `LICENSE` |
 | `crates/format/README.md` | front page + attribution + doctested example |
 | `crates/format/src/lib.rs` | `Style`, `PaperSize`, `REFERENCE_SEPARATOR`, `*_to_string` wrappers, module declarations, `#[cfg(test)] mod test_support` |
-| `crates/format/src/{number,quantity,schema,human,markdown,cooklang,latex,typst}.rs` | moved verbatim from `crates/core/src/format/` |
+| `crates/format/src/{number,quantity,schema,human,markdown,cooklang_source,latex,typst}.rs` | moved verbatim from `crates/core/src/format/` (`cooklang.rs` is renamed — see Task 6) |
 | `crates/format/tests/standalone.rs` | proves the crate renders without core |
 
 **Modified:**
@@ -422,8 +422,18 @@ Add `pub mod X;` to the module list, keeping it alphabetical.
 In `crates/core/src/format/mod.rs`, remove `pub mod X;` and add `X` to the re-export list, which grows as files move until it reads:
 
 ```rust
-pub use cooklang_format::{cooklang, markdown, number, quantity, schema};
+pub use cooklang_format::{cooklang_source as cooklang, markdown, number, quantity, schema};
 ```
+
+**The `cooklang.rs` name collision.** In core this file is `format::cooklang`, one level below the crate root where `pub use cooklang;` re-exports the parser crate — two scopes, no clash. In the new crate both would land at the root, and `pub mod cooklang;` beside `pub use cooklang;` is E0255 (*the name `cooklang` is defined multiple times*). A leading `::` cannot fix a duplicate **definition**; it only disambiguates a *usage*.
+
+Resolution: the parser-crate re-export keeps the bare name, because consumers naming `cooklang::Recipe` without their own `cooklang` dependency is the reason it exists. The writer module is named for what it emits:
+
+- move the file to `crates/format/src/cooklang_source.rs` (`git mv` to that name directly)
+- declare it as `pub mod cooklang_source;`
+- core's shim aliases it back with `cooklang_source as cooklang`, so `format::cooklang::print_cooklang` at `src/recipe/read.rs:228` — its only consumer — is untouched
+
+`cooklang_source` also sits better beside `markdown`, `latex` and `typst`: every module is named for its output.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -521,10 +531,12 @@ git commit -m "refactor(format): move Style, PaperSize and the to_string wrapper
 pub mod shopping_list;
 
 pub use cooklang_format::{
-    cooklang, human, human_to_string, latex, markdown, markdown_to_string, number, quantity,
-    schema, typst, PaperSize, Style,
+    cooklang_source as cooklang, human, human_to_string, latex, markdown, markdown_to_string,
+    number, quantity, schema, typst, PaperSize, Style,
 };
 ```
+
+The alias is what keeps `format::cooklang::print_cooklang` working at `src/recipe/read.rs:228` — see the note in Task 6 on why the module could not keep the bare name in the new crate.
 
 - [ ] **Step 2: Confirm nothing is left behind**
 
@@ -621,8 +633,10 @@ fn renders_every_format_the_crate_advertises() {
         .expect("typst");
     assert!(!buf.is_empty(), "typst output is empty");
 
+    // `cooklang_source`, not `cooklang`: the bare name is the re-exported
+    // parser crate. See Task 6.
     let mut buf = Vec::new();
-    cooklang_format::cooklang::print_cooklang(&recipe, &mut buf).expect("cooklang");
+    cooklang_format::cooklang_source::print_cooklang(&recipe, &mut buf).expect("cooklang");
     assert!(!buf.is_empty(), "cooklang output is empty");
 }
 ```
