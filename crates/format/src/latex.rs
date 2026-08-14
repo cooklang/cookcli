@@ -1,6 +1,6 @@
 //! Format a recipe as a standalone LaTeX document.
 
-use crate::format::{quantity::grouped_quantity_fmt, PaperSize};
+use crate::{quantity::grouped_quantity_fmt, PaperSize};
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -256,7 +256,7 @@ fn write_ingredients(
         }
 
         if let Some(reference) = &ingredient.reference {
-            let sep = crate::find::REFERENCE_SEPARATOR;
+            let sep = crate::REFERENCE_SEPARATOR;
             let path = reference.components.join(sep);
             write!(
                 w,

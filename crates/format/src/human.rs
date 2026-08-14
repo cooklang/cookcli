@@ -35,7 +35,7 @@
 //! codes are removed at the writer, so the two outputs differ only by the
 //! escapes.
 
-use crate::format::{
+use crate::{
     quantity::{grouped_quantity_fmt, ordered_components},
     Style,
 };
@@ -375,7 +375,7 @@ fn ingredients(w: &mut impl io::Write, recipe: &Recipe, converter: &Converter) -
                 .iter()
                 .find(|igr| igr.reference.is_some())
                 .unwrap();
-            let sep = crate::find::REFERENCE_SEPARATOR;
+            let sep = crate::REFERENCE_SEPARATOR;
             let path = igr.reference.as_ref().unwrap().components.join(sep);
             row.add_ansi_cell(
                 format!("(recipe: {}{}{})", path, sep, igr.name).paint(styles().reference_marker),
