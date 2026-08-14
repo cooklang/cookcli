@@ -10,6 +10,8 @@
 pub mod number;
 /// Deterministic ordering for grouped quantities.
 pub mod quantity;
+/// schema.org/Recipe JSON-LD rendering of a recipe.
+pub mod schema;
 
 /// The `cooklang` crate this library was built against.
 ///

@@ -19,8 +19,7 @@ pub mod cooklang;
 pub mod human;
 pub mod latex;
 pub mod markdown;
-pub use cooklang_format::{number, quantity};
-pub mod schema;
+pub use cooklang_format::{number, quantity, schema};
 pub mod shopping_list;
 pub mod typst;
 
