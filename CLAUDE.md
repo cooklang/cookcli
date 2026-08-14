@@ -84,6 +84,8 @@ cargo clippy      # Lint code
 ### Workspace Structure
 This is a Cargo workspace with multiple crates:
 - `cookcli` (this crate) - The CLI application
+- `crates/core` (`cookcli-core`) - Command logic as a library
+- `crates/format` (`cooklang-format`) - Recipe output formatters, published for reuse
 - `../cooklang-rs` - Core Cooklang parser and models
 - `../cooklang-find` - Recipe discovery and search
 - `../cooklang-reports` - Template-based report generation
