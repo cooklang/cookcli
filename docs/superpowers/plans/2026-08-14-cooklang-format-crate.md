@@ -16,7 +16,17 @@
 
 This is a **move, not a rewrite**. The existing test suite is the specification: it must stay green at every commit, and the insta snapshots must not change by a single byte. If a snapshot changes, the move altered rendering — that is a bug, not a snapshot to accept. **Never run `cargo insta accept` during this plan.**
 
-Baseline recorded 2026-08-14 on branch `feat/cooklang-format-crate`: `cargo test --workspace` → 22 suites, all green, 0 failures.
+**The green check.** Run this after every move; it is referenced by name throughout the plan:
+
+```bash
+out=$(cargo test --workspace --quiet 2>&1)
+echo "failures: $(echo "$out" | grep -cE 'test result: FAILED')"
+echo "passed:   $(echo "$out" | grep -oE '^test result: ok\. [0-9]+ passed' | grep -oE '[0-9]+' | paste -sd+ - | bc)"
+```
+
+Expected at every commit: `failures: 0` and `passed: 760`.
+
+Count **passing tests, not suites**. Suite count is not an invariant here: `cargo test --workspace` emits one result line per test binary, so merely adding `crates/format` to the workspace takes the line count from 22 to 24 (its empty unit-test and doc-test harnesses) without any test being added or lost. Passing-test count is what a move must preserve — 760, measured on 2026-08-14 on branch `feat/cooklang-format-crate` after Unit A's scaffolding. It rises only where the plan adds real tests (Tasks 9 and 10); it must never fall.
 
 The one place genuinely new tests are called for is the new crate's public surface — Task 9 adds an integration test proving the crate works standalone, without `cookcli-core`.
 
@@ -56,8 +66,8 @@ The one place genuinely new tests are called for is the new crate's public surfa
 
 - [ ] **Step 1: Confirm the baseline is green before touching anything**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -E "test result: (FAILED|ok)" | sort | uniq -c`
-Expected: 22 lines of `test result: ok`, zero `FAILED`. If anything fails here, stop — the failure predates this work and the plan's safety net is not in place.
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0`. Record the `passed:` number — that is the invariant every later step must preserve. If anything fails here, stop: the failure predates this work and the plan's safety net is not in place.
 
 - [ ] **Step 2: Create `crates/format/Cargo.toml`**
 
@@ -174,8 +184,8 @@ cooklang-format = { version = "0.1.0", path = "../format" }
 
 - [ ] **Step 2: Verify the workspace still builds and tests pass**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 - [ ] **Step 3: Commit**
 
@@ -285,8 +295,8 @@ The five files still say `crate::find::REFERENCE_SEPARATOR`. Inside core that st
 
 - [ ] **Step 5: Verify**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 - [ ] **Step 6: Commit**
 
@@ -358,8 +368,8 @@ Every `crate::format::quantity::grouped_quantity_fmt` in the still-in-core forma
 Run: `cargo test -p cooklang-format 2>&1 | grep "test result"`
 Expected: `test result: ok.` with a non-zero count (the `quantity` and `number` unit tests).
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 - [ ] **Step 6: Commit**
 
@@ -417,8 +427,8 @@ pub use cooklang_format::{cooklang, markdown, number, quantity, schema};
 
 - [ ] **Step 5: Verify and commit**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 Run: `git status --porcelain tests/snapshots`
 Expected: empty output. **A modified snapshot means the move changed rendering — stop and investigate rather than accepting it.**
@@ -471,8 +481,8 @@ pub use cooklang_format::{
 
 - [ ] **Step 6: Verify**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 Run: `cargo test -p cooklang-format 2>&1 | grep "paper_sizes_map_to_both_typesetter_spellings"`
 Expected: the test name appears and passes, proving the moved test module runs in its new home.
@@ -535,8 +545,8 @@ Expected: `anstyle`, `anstyle_yansi`, `humantime` and `textwrap` return no files
 
 - [ ] **Step 4: Verify the whole workspace**
 
-Run: `cargo test --workspace --quiet 2>&1 | grep -cE "test result: ok"`
-Expected: `22`
+Run: the **green check** (see "How to verify this refactor")
+Expected: `failures: 0` and `passed: 760`
 
 Run: `git status --porcelain tests/snapshots`
 Expected: empty.
@@ -865,7 +875,7 @@ EOF
 
 ## Done when
 
-- `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` are all clean.
+- `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` are clean, and the green check reports `failures: 0` with `passed:` at or above 760.
 - `git diff main -- tests/snapshots src/` is empty.
 - `cargo publish --dry-run -p cooklang-format` succeeds.
 - `cargo tree -p cooklang-format -e normal | grep cookcli` finds nothing.
