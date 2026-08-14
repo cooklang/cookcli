@@ -721,6 +721,7 @@ dependencies = [
  "chrono",
  "cooklang",
  "cooklang-find",
+ "cooklang-format",
  "cooklang-reports",
  "directories",
  "humantime",
