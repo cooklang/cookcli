@@ -42,7 +42,7 @@ pub use cooklang;
 /// they should be shown back. Joining with the platform separator instead made
 /// Windows disagree with itself: `doctor` reports a broken reference as
 /// `./absent` because it joins with `/`, while the shopping list reported the
-/// same one as `.\absent`, and the `./`-stripping in [`get_recipe`] only
+/// same one as `.\absent`, and the `./`-stripping in `get_recipe` only
 /// matches the forward-slash form, so the prefix survived into the reported
 /// name (<https://github.com/cooklang/cookcli/issues/442>).
 ///
@@ -154,6 +154,15 @@ pub fn markdown_to_string(
 fn into_string(buf: Vec<u8>) -> std::io::Result<String> {
     String::from_utf8(buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
+
+/// Compiles `README.md`'s example as a doctest, so the crate's front page
+/// cannot rot into something that no longer builds.
+///
+/// Exists only under `cfg(doctest)`, so it is not part of the public API and
+/// does not appear in the rendered documentation.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 /// A test-only stand-in for `cookcli-core`'s parser.
 ///

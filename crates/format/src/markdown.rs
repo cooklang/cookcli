@@ -217,7 +217,7 @@ where
 
 /// Writes a recipe in Markdown format
 ///
-/// This is an alias for [`print_md_with_options`] where the options are the
+/// This is an alias for `print_md_with_options` where the options are the
 /// default value.
 pub fn print_md(
     recipe: &Recipe,

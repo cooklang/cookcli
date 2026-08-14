@@ -1,9 +1,10 @@
-//! Deterministic ordering for [`GroupedQuantity`].
+//! Deterministic ordering for [`cooklang::quantity::GroupedQuantity`].
 //!
 //! Everything in this crate that renders or serialises a grouped quantity goes
-//! through [`ordered_components`] or [`grouped_quantity_fmt`], so the human
-//! table, Markdown, JSON, YAML, LaTeX, Typst, schema.org and library outputs
-//! all agree on one order.
+//! through [`crate::quantity::ordered_components`] or
+//! [`crate::quantity::grouped_quantity_fmt`], so the human table, Markdown,
+//! JSON, YAML, LaTeX, Typst, schema.org and library outputs all agree on one
+//! order.
 
 use cooklang::quantity::{GroupedQuantity, Quantity};
 

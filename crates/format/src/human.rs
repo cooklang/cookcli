@@ -30,10 +30,10 @@
 
 //! Format a recipe for humans to read
 //!
-//! Colour is chosen by the [`Style`] passed to [`print_human`]. The rendering
-//! code always paints; when the caller asks for [`Style::Plain`] the escape
-//! codes are removed at the writer, so the two outputs differ only by the
-//! escapes.
+//! Colour is chosen by the [`Style`] passed to [`crate::human::print_human`].
+//! The rendering code always paints; when the caller asks for [`Style::Plain`]
+//! the escape codes are removed at the writer, so the two outputs differ only
+//! by the escapes.
 
 use crate::{
     quantity::{grouped_quantity_fmt, ordered_components},
