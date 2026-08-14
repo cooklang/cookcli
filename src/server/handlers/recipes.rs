@@ -271,20 +271,29 @@ pub async fn search(
     State(state): State<Arc<AppState>>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, Json<serde_json::Value>)> {
-    let recipes = cooklang_find::search(&state.base_path, &query.q).map_err(|e| {
+    // Through core rather than `cooklang_find::search` directly, so this agrees
+    // with `cook search`. Calling the library here left the web UI on the old
+    // union-over-terms behaviour after the CLI moved to AND (#425), which is
+    // the kind of split the two would never have been noticed to have.
+    let hits = cookcli_core::search::search(
+        &cookcli_core::Context::new(state.base_path.clone()),
+        cookcli_core::search::SearchRequest {
+            query: query.q.clone(),
+            base_dir: None,
+        },
+    )
+    .map_err(|e| {
         tracing::error!("Failed to search recipes: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
-    })?;
+    })?
+    .into_value();
 
-    let results = recipes
+    let results = hits
         .into_iter()
-        .filter_map(|recipe| {
-            recipe.path().map(|path| {
-                let relative_path = path.strip_prefix(&state.base_path).unwrap_or(path);
-                serde_json::json!({
-                    "name": recipe.name(),
-                    "path": relative_path.to_string()
-                })
+        .map(|hit| {
+            serde_json::json!({
+                "name": hit.name,
+                "path": hit.relative_path.to_string()
             })
         })
         .collect();

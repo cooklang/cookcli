@@ -44,6 +44,10 @@ tabular = { version = "0.2", features = ["ansi-cell"] }
 # `terminal_size` backs `textwrap::termwidth()`, which sets the wrap width.
 textwrap = { version = "0.16", features = ["terminal_size"] }
 thiserror = "2"
+# Editing pantry.conf as a document rather than rebuilding it from a parsed
+# model, so that comments, layout and keys `cooklang` does not model survive a
+# `cook pantry add` — see `pantry::edit`.
+toml_edit = "0.22"
 tracing = "0.1"
 yansi = "1"
 

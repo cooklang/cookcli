@@ -227,8 +227,8 @@ fn write_ingredients(
         }
 
         if let Some(reference) = &ingredient.reference {
-            let sep = std::path::MAIN_SEPARATOR.to_string();
-            let path = reference.components.join(&sep);
+            let sep = crate::find::REFERENCE_SEPARATOR;
+            let path = reference.components.join(sep);
             write!(
                 w,
                 r#"#ingredient("{}")"#,

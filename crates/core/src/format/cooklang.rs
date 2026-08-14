@@ -109,14 +109,14 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                 let igr = &recipe.ingredients[index];
 
                 let name = if let Some(reference) = &igr.reference {
-                    let sep = std::path::MAIN_SEPARATOR.to_string();
-                    format!(
-                        ".{}{}{}{}",
-                        sep,
-                        reference.components.join(&sep),
-                        sep,
-                        igr.name
-                    )
+                    // `path` already carries the leading `.` — a reference's
+                    // components always begin with one, because `@./sauce{}`
+                    // parses as components `["."]`. Prepending another `./`
+                    // here, as this used to, made the formatter emit
+                    // `@././sub/sauce{}`; that reparses as components
+                    // `[".", ".", "sub"]`, so the next pass prepended one more
+                    // and the prefix grew without bound on every rewrite.
+                    reference.path(crate::find::REFERENCE_SEPARATOR)
                 } else {
                     igr.name.clone()
                 };
@@ -207,8 +207,28 @@ fn component_word_separator<'a>(
         if last_added < component.start() {
             words.extend(default_separator.find_words(&line[last_added..component.start()]));
         }
-        words.push(Word::from(&line[component.range()]));
-        last_added = component.end();
+
+        // Take the whitespace that follows the component along with it.
+        //
+        // A `textwrap::Word` carries the whitespace that *trails* it, and that
+        // trailing whitespace is what gets dropped when the line breaks there.
+        // Emitting the component on its own left it with none, so the space
+        // after it fell to the following word instead — as an empty word whose
+        // whitespace is that space — and when the break landed at exactly that
+        // point the space moved to the start of the wrapped line. Reparsed, a
+        // leading space is ordinary step text, so the next format pass added
+        // another, and another: the formatter was not idempotent, and
+        // rewriting a collection through it corrupted every step that happened
+        // to wrap just after a component
+        // (<https://github.com/cooklang/cookcli/issues/414>).
+        //
+        // `Word::from` splits trailing whitespace off into the `whitespace`
+        // field for us, so extending the slice is the whole fix.
+        let trailing = line[component.end()..]
+            .find(|c: char| !c.is_whitespace())
+            .map_or(line.len(), |offset| component.end() + offset);
+        words.push(Word::from(&line[component.start()..trailing]));
+        last_added = trailing;
     }
     if last_added < line.len() {
         words.extend(default_separator.find_words(&line[last_added..]));
@@ -429,30 +449,116 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         );
     }
 
-    /// Formatting should be idempotent, so that rewriting a stored `.cook`
-    /// file does not churn it. **It is not** — this test documents a defect
-    /// that predates the move into this crate.
+    /// Formatting is idempotent, so that rewriting a stored `.cook` file does
+    /// not churn it.
     ///
-    /// A wrapped step whose break falls just after a component comes out with
-    /// a leading space, and that space is preserved in the step text, so each
-    /// pass adds another. Reproduced at the CLI: four runs of
-    /// `cook recipe X -f cooklang` indent the third line by 1, 2, 3 then 4
-    /// spaces.
+    /// It was not: a step whose wrap fell just after a component came out with
+    /// a leading space, that space reparsed as ordinary step text, and the next
+    /// pass added another — one space after pass 1, two after pass 2, three
+    /// after pass 3, without bound. Any workflow that rewrites recipes through
+    /// the formatter — normalising a collection, an editor's "format document",
+    /// a pre-commit hook — degraded the source a little more on each run
+    /// (<https://github.com/cooklang/cookcli/issues/414>).
     ///
-    /// Cause: [`component_word_separator`] emits the component via
-    /// `Word::from`, whose `whitespace` field is empty, so the space that
-    /// follows it is handed to the *next* word and lands at the start of the
-    /// wrapped line instead of being dropped at the break.
-    ///
-    /// Ignored rather than deleted so the defect stays recorded, and rather
-    /// than fixed here because changing how steps wrap is a behaviour change,
-    /// not part of moving the formatter.
-    #[ignore = "known defect: wrapping accumulates a leading space per pass"]
+    /// `FIXTURE`'s long step is built to reach this: it wraps, and it puts a
+    /// multi-word component near the wrap point.
     #[test]
     fn formatting_is_idempotent() {
         let once = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
         let twice = format_to_string(&parse_recipe(&once, "r", 1.0).unwrap().value);
         assert_eq!(once, twice, "second format pass differed");
+    }
+
+    /// The defect this guards grew by one space per pass, so two passes is the
+    /// smallest case that shows it and proves nothing about the fourth. Run it
+    /// out far enough that an accumulating change cannot hide.
+    #[test]
+    fn formatting_is_stable_over_many_passes() {
+        let first = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        let mut current = first.clone();
+        for pass in 2..=6 {
+            current = format_to_string(&parse_recipe(&current, "r", 1.0).unwrap().value);
+            assert_eq!(first, current, "pass {pass} differed from the first");
+        }
+    }
+
+    /// The specific shape that broke: a step that wraps immediately after a
+    /// component must not start the next line with a space.
+    #[test]
+    fn a_wrap_just_after_a_component_leaves_no_leading_space() {
+        let rendered = format_to_string(&parse_recipe(FIXTURE, "r", 1.0).unwrap().value);
+        assert!(
+            rendered.lines().count() > 1,
+            "fixture must wrap for this to mean anything: {rendered}"
+        );
+        for line in rendered.lines() {
+            assert!(
+                !line.starts_with(' '),
+                "step lines must not be indented: {line:?}\n--- rendered ---\n{rendered}"
+            );
+        }
+    }
+
+    /// A recipe reference is re-emitted with `/` between its components on
+    /// every platform.
+    ///
+    /// This writer produces Cooklang *source*, so the separator is syntax, not
+    /// presentation: joining with `std::path::MAIN_SEPARATOR` wrote
+    /// `@.\sub\sauce{}` on Windows, which does not parse back as the same
+    /// reference (<https://github.com/cooklang/cookcli/issues/442>). The
+    /// assertion holds trivially on Unix, where the platform separator was
+    /// already `/`; it is the Windows leg of the CI matrix that it guards.
+    #[test]
+    fn a_reference_is_written_with_forward_slashes() {
+        let source = "Make @./sub/sauce{200%ml} and stir.\n";
+        let recipe = parse_recipe(source, "r", 1.0)
+            .expect("fixture parses")
+            .value;
+        let rendered = format_to_string(&recipe);
+
+        assert!(
+            rendered.contains("@./sub/sauce{"),
+            "expected a forward-slash reference, got: {rendered}"
+        );
+        assert!(
+            !rendered.contains('\\'),
+            "a reference path must never carry a backslash: {rendered}"
+        );
+
+        // And it still means the same thing when read back.
+        let reparsed = parse_recipe(&rendered, "r", 1.0).expect("re-parses").value;
+        let reference = reparsed.ingredients[0]
+            .reference
+            .as_ref()
+            .expect("still a recipe reference");
+        assert_eq!(
+            reference.path(crate::find::REFERENCE_SEPARATOR),
+            "./sub/sauce"
+        );
+    }
+
+    /// A reference survives repeated rewrites unchanged.
+    ///
+    /// It did not: a reference's components already begin with `.`, and the
+    /// writer prepended a second `./` on top, so each pass added one more —
+    /// `@./sub/sauce{}`, `@././sub/sauce{}`, `@./././sub/sauce{}`. Every pass
+    /// still resolved to the same file, so nothing failed; the source just got
+    /// steadily uglier each time a collection was reformatted.
+    ///
+    /// Unlike [`formatting_is_idempotent`], which covers the wrapping defect,
+    /// this holds for every pass and is not ignored.
+    #[test]
+    fn a_reference_does_not_accumulate_a_prefix_across_passes() {
+        let mut source = "Make @./sub/sauce{200%ml} and stir.\n".to_string();
+        for pass in 1..=4 {
+            let recipe = parse_recipe(&source, "r", 1.0).expect("parses").value;
+            let rendered = format_to_string(&recipe);
+            assert!(
+                rendered.contains("@./sub/sauce{"),
+                "pass {pass} changed the reference: {rendered}"
+            );
+            source = rendered;
+        }
     }
 
     /// Metadata survives as YAML front-matter, not as the deprecated `>>`

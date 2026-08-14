@@ -58,3 +58,6 @@ cook shopping-list "2 Day Plan.menu"
 - Items are grouped by aisle category from `aisle.conf` (use `--plain` to disable)
 - Uncategorized items appear in an "other" category; run `cook doctor aisle` to find them
 - Menu files (`.menu`) are supported with their own scaling
+- Referenced recipes (`@./sauce{}`) are expanded into their ingredients; a
+  reference leading back to a recipe already being expanded is skipped with a
+  warning, so a cycle cannot inflate the quantities

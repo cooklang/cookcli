@@ -5,19 +5,28 @@
 //!
 //! # What counts as a match
 //!
-//! Scoring is `cooklang-find`'s, and it is worth knowing before building a UI
-//! on top of it, because it is **not** the AND over the query's terms that
-//! CookCLI's own help text has long claimed:
+//! **Every term must match.** A recipe is a hit when each whitespace-separated
+//! term of the query appears somewhere in its text or in its file name, matched
+//! case-insensitively as a substring. Adding a term narrows the results.
+//!
+//! Ranking is `cooklang-find`'s, and is a separate question from matching:
 //!
 //! - The file name is matched against the **whole query**, spaces included.
-//!   An exact stem match scores highest, a substring match next.
-//! - The contents are matched against **each term separately**, and every
-//!   occurrence adds a little. A file containing any one term scores above
-//!   zero, so a multi-term query is closer to a union than an intersection —
-//!   adding a term can return *more* recipes, not fewer.
+//!   An exact stem match ranks highest, a substring match next.
+//! - The contents are matched against each term, and every occurrence adds a
+//!   little.
 //!
-//! Anything scoring above zero is a hit, so a query of common words matches
-//! most of a collection.
+//! # Why matching is not simply `cooklang-find`'s scoring
+//!
+//! `cooklang-find` keeps anything scoring above zero, and it scores a file for
+//! *any* term it contains — so a multi-term query was a union there, and
+//! `cook search chicken rice` returned recipes with no rice in them. That
+//! contradicted CookCLI's own help text, which had always promised AND
+//! (<https://github.com/cooklang/cookcli/issues/425>), and it made a query of
+//! common words match most of a collection.
+//!
+//! The union is still what the library returns; [`search`] intersects it here.
+//! A single-term query is unaffected, since AND over one term is that term.
 
 use crate::{find, Context, CoreError, Outcome};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -78,8 +87,7 @@ pub struct SearchHit {
 /// is unset. Nothing else on the context is consulted. A root that does not
 /// exist is not an error: there is simply nothing under it to match.
 ///
-/// See the [module documentation](self) for what scoring counts as a match —
-/// it is not an AND over the query's terms.
+/// Every term must match; see the [module documentation](self).
 ///
 /// # Errors
 ///
@@ -99,23 +107,59 @@ pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit
     let entries =
         cooklang_find::search(&base_dir, &req.query).map_err(|e| search_error(e, &base_dir))?;
 
-    let hits = entries
-        .iter()
-        .filter_map(|entry| {
-            // A search only ever yields file-backed entries, so this skips
-            // nothing today. It is a `filter_map` rather than an unwrap because
-            // a `RecipeEntry` need not have a path, and inventing one for an
-            // entry that lacks it would be worse than leaving it out.
-            let path = entry.path()?;
-            Some(SearchHit {
-                relative_path: relative_to(&base_dir, path),
-                path: path.clone(),
-                name: entry.name().clone(),
-            })
-        })
+    // `cooklang-find` returns the union over the terms, best first. Narrowing
+    // to the intersection keeps that ranking — it only removes rows.
+    let terms: Vec<String> = req
+        .query
+        .split_whitespace()
+        .map(str::to_lowercase)
         .collect();
 
+    let mut hits = Vec::new();
+    for entry in &entries {
+        // A search only ever yields file-backed entries, so this skips nothing
+        // today. It is a `continue` rather than an unwrap because a
+        // `RecipeEntry` need not have a path, and inventing one for an entry
+        // that lacks it would be worse than leaving it out.
+        let Some(path) = entry.path() else { continue };
+        if !matches_every_term(path, &terms)? {
+            continue;
+        }
+        hits.push(SearchHit {
+            relative_path: relative_to(&base_dir, path),
+            path: path.clone(),
+            name: entry.name().clone(),
+        });
+    }
+
     Ok(Outcome::new(hits))
+}
+
+/// Whether every term appears in `path`'s text or in its file name.
+///
+/// Terms are expected already lowercased. Matching is a case-insensitive
+/// substring test against the two surfaces `cooklang-find` scores — the file
+/// stem and the contents — so that intersecting cannot drop a recipe the
+/// library matched on a term it would have counted.
+///
+/// An empty term list matches everything, which is what an all-whitespace query
+/// should do: `cooklang-find` returns nothing for it anyway.
+fn matches_every_term(path: &Utf8Path, terms: &[String]) -> Result<bool, CoreError> {
+    if terms.is_empty() {
+        return Ok(true);
+    }
+
+    let contents = std::fs::read_to_string(path)
+        .map_err(|source| CoreError::Io {
+            path: path.to_owned(),
+            source,
+        })?
+        .to_lowercase();
+    let stem = path.file_stem().unwrap_or_default().to_lowercase();
+
+    Ok(terms
+        .iter()
+        .all(|term| contents.contains(term) || stem.contains(term)))
 }
 
 /// Express `path` relative to `base_dir`, leaving it whole when it does not
@@ -240,32 +284,72 @@ mod tests {
         assert!(run(&base(&dir), "kohlrabi").is_empty());
     }
 
-    /// Pins the semantics that CookCLI's help text has long described as AND.
+    /// Every term must match. `curry.cook` has no rice in it and `pilaf.cook`
+    /// has no chicken, so "chicken rice" matches neither.
     ///
-    /// It is not AND. `cooklang-find` scores a file for *any* term it contains
-    /// and keeps everything that scores above zero, so a two-term query is a
-    /// union: `curry.cook` has no rice in it and `pilaf.cook` has no chicken,
-    /// and "chicken rice" returns both. Changing that is `cooklang-find`'s
-    /// call, not this crate's; this test is here so the change is noticed.
+    /// This used to return both: `cooklang-find` scores a file for *any* term
+    /// and keeps everything above zero, so a multi-term query was a union
+    /// (<https://github.com/cooklang/cookcli/issues/425>).
     #[test]
-    fn multiple_terms_are_ored_not_anded() {
+    fn multiple_terms_are_anded() {
         let dir = fixture();
-        let mut hits = relative_paths(&run(&base(&dir), "chicken rice"));
-        hits.sort();
-        assert_eq!(hits, ["curry.cook", "pilaf.cook"]);
+        assert!(
+            run(&base(&dir), "chicken rice").is_empty(),
+            "no recipe has both: {:?}",
+            relative_paths(&run(&base(&dir), "chicken rice"))
+        );
     }
 
-    /// The corollary of the above: an AND-style query does not narrow.
+    /// The point of AND: a second term narrows rather than widens.
     #[test]
-    fn adding_a_term_can_widen_the_result_set() {
+    fn adding_a_term_narrows_the_result_set() {
         let dir = fixture();
-        let one = run(&base(&dir), "chicken");
-        let two = run(&base(&dir), "chicken rice");
-        assert_eq!(relative_paths(&one), ["curry.cook"]);
-        assert!(
-            two.len() > one.len(),
-            "a second term must not be an AND filter: {:?}",
-            relative_paths(&two)
+        let base = base(&dir);
+        write(
+            &base.join("stir-fry.cook"),
+            "Fry @chicken{1} and @rice{1}.\n",
+        );
+
+        let one = relative_paths(&run(&base, "chicken"));
+        let two = relative_paths(&run(&base, "chicken rice"));
+
+        let mut sorted = one.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["curry.cook", "stir-fry.cook"]);
+        assert_eq!(two, ["stir-fry.cook"], "the second term must filter");
+        assert!(two.len() < one.len(), "adding a term must not widen");
+    }
+
+    /// A term may match the file name rather than the contents, and still
+    /// count towards the AND — `pilaf` appears in no recipe's text.
+    #[test]
+    fn a_term_matching_only_the_file_name_satisfies_the_and() {
+        let dir = fixture();
+        assert_eq!(
+            relative_paths(&run(&base(&dir), "pilaf rice")),
+            ["pilaf.cook"]
+        );
+    }
+
+    /// A single-term query means the same thing as it always did: AND over one
+    /// term is that term. This is the compatibility guarantee for the change.
+    #[test]
+    fn a_single_term_query_is_unchanged() {
+        let dir = fixture();
+        assert_eq!(relative_paths(&run(&base(&dir), "chicken")), ["curry.cook"]);
+        assert_eq!(
+            relative_paths(&run(&base(&dir), "flour")),
+            ["Breakfast/pancakes.cook"]
+        );
+    }
+
+    /// Matching ignores case on both sides, as the underlying scoring does.
+    #[test]
+    fn terms_match_regardless_of_case() {
+        let dir = fixture();
+        assert_eq!(
+            relative_paths(&run(&base(&dir), "CHICKEN Oil")),
+            ["curry.cook"]
         );
     }
 

@@ -318,7 +318,7 @@ pub async fn get_menu(
                                     let final_scale = match authored_quantity {
                                         Some(quantity) => {
                                             let lookup =
-                                                recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+                                                recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
                                             let info = ref_info_cache
                                                 .entry(lookup.clone())
                                                 .or_insert_with(|| {

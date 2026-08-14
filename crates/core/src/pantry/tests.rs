@@ -1094,8 +1094,8 @@ fn add_puts_a_new_item_at_the_end_of_an_existing_section() {
     );
 }
 
-/// An item added with no attributes is written as an empty one, and reads
-/// back with nothing invented.
+/// An item added with no attributes is written in the short form with an empty
+/// quantity, and reads back with nothing invented.
 #[test]
 fn add_without_attributes_writes_an_empty_item() {
     let (_dir, ctx) = planted(SMALL);
@@ -1115,10 +1115,10 @@ fn add_without_attributes_writes_an_empty_item() {
         .items()
         .find(|item| item.name == "sugar")
         .expect("sugar is in the returned pantry");
-    assert_eq!(sugar.quantity, None);
+    assert_eq!(sugar.quantity.as_deref(), Some(""));
     assert_eq!(sugar.expire, None);
     assert!(
-        read_back(&ctx).contains("sugar = {}"),
+        read_back(&ctx).contains("sugar = \"\""),
         "{}",
         read_back(&ctx)
     );
@@ -1671,12 +1671,15 @@ fn a_pantry_that_cannot_be_parsed_stops_a_change() {
 // What a write keeps, and what it throws away
 // ---------------------------------------------------------------------------
 
-/// Pins the loss documented on the module. Comments do not survive a change,
-/// because the file is re-serialised from a model that has never seen them.
+/// Comments, indentation and the short item form all survive a change, because
+/// the file is edited as a document rather than rebuilt from a parsed model.
+///
+/// The whole original text is asserted with only the new line added, which is
+/// the strongest form this can take: anything reformatted anywhere fails.
 #[test]
-fn a_write_throws_away_comments_and_layout() {
-    let (_dir, ctx) =
-        planted("# my pantry\n\n[pantry]\n# staple\n  flour   =   \"1%kg\"   # a whole bag\n");
+fn a_write_keeps_comments_and_layout() {
+    let original = "# my pantry\n\n[pantry]\n# staple\n  flour   =   \"1%kg\"   # a whole bag\n";
+    let (_dir, ctx) = planted(original);
 
     add(
         &ctx,
@@ -1690,16 +1693,16 @@ fn a_write_throws_away_comments_and_layout() {
 
     assert_eq!(
         read_back(&ctx),
-        "[pantry]\nflour = { quantity = \"1%kg\" }\nsugar = {}\n",
-        "comments, indentation and the shorthand item shape are all rewritten; \
-         only what cooklang models survives"
+        format!("{original}sugar = \"\"\n"),
+        "only the new item may be added"
     );
 }
 
-/// An attribute `cooklang` does not model is dropped, and the caller is told
-/// so — the warning is the only sign that anything was lost.
+/// An attribute `cooklang` does not model survives an unrelated change. The
+/// parser still warns that it does not understand it — that warning is about
+/// what `cook pantry list` can show, not about anything being lost.
 #[test]
-fn a_write_throws_away_attributes_cooklang_does_not_model() {
+fn a_write_keeps_attributes_cooklang_does_not_model() {
     let (_dir, ctx) = planted("[pantry]\nflour = { quantity = \"1%kg\", shelf = \"top\" }\n");
 
     let outcome = add(
@@ -1721,16 +1724,20 @@ fn a_write_throws_away_attributes_cooklang_does_not_model() {
         outcome.diagnostics
     );
     let written = read_back(&ctx);
-    assert!(!written.contains("shelf"), "and it is gone\n{written}");
+    assert!(
+        written.contains("shelf = \"top\""),
+        "the attribute must survive\n{written}"
+    );
     assert!(written.contains("1%kg"), "{written}");
 }
 
-/// An attribute whose value is not a string is dropped with no warning at all.
+/// An attribute whose value is not a string survives too. It used to vanish
+/// with no warning at all, which was the quietest of the losses.
 #[test]
-fn a_write_throws_away_a_non_string_attribute_silently() {
+fn a_write_keeps_a_non_string_attribute() {
     let (_dir, ctx) = planted("[pantry]\nflour = { quantity = 2 }\n");
 
-    let outcome = add(
+    add(
         &ctx,
         AddRequest {
             section: "pantry".to_string(),
@@ -1740,15 +1747,10 @@ fn a_write_throws_away_a_non_string_attribute_silently() {
     )
     .expect("adds");
 
-    assert!(
-        outcome.diagnostics.is_empty(),
-        "nothing warns about this: {:?}",
-        outcome.diagnostics
-    );
     let written = read_back(&ctx);
     assert!(
-        !written.contains('2'),
-        "the quantity is gone all the same\n{written}"
+        written.contains("quantity = 2"),
+        "the bare number must survive\n{written}"
     );
 }
 
@@ -1780,17 +1782,21 @@ fn a_write_keeps_section_and_item_order() {
     );
 }
 
-/// Items above the first section header stay above it rather than being
-/// wrapped in a `[general]` section — but they can only be written as
-/// `name = "quantity"`, so everything else about them is lost.
+/// A top-level item can only be written `name = "quantity"`, so giving one an
+/// expiry is refused rather than done wrong.
+///
+/// The two wrong ways are both worse. Dropping the attribute silently is what
+/// this used to do. Writing the inline table it would need is worse still: the
+/// parser reads a top-level inline table as a *section header*, so `salt` would
+/// stop being an item and become a section holding `quantity` and `expire` —
+/// the corruption in <https://github.com/cooklang/cookcli/issues/429>.
 #[test]
-fn a_write_keeps_general_items_at_the_top_but_loses_their_other_attributes() {
-    let (_dir, ctx) = planted(
-        "salt = \"1%kg\"\n\n[dairy]\nmilk = { quantity = \"2%l\", expire = \"2025-12-01\" }\n",
-    );
+fn a_general_item_cannot_be_given_an_attribute_it_has_no_room_for() {
+    let original =
+        "salt = \"1%kg\"\n\n[dairy]\nmilk = { quantity = \"2%l\", expire = \"2025-12-01\" }\n";
+    let (_dir, ctx) = planted(original);
 
-    // `salt` is a general item; give it an expiry, which cannot be written.
-    update(
+    let error = update(
         &ctx,
         UpdateRequest {
             section: "general".to_string(),
@@ -1799,22 +1805,34 @@ fn a_write_keeps_general_items_at_the_top_but_loses_their_other_attributes() {
             ..Default::default()
         },
     )
+    .expect_err("must refuse");
+
+    assert!(
+        error.to_string().contains("move it into a section"),
+        "the message should say what to do instead: {error}"
+    );
+    assert_eq!(read_back(&ctx), original, "nothing may be written");
+}
+
+/// Its quantity can still be changed, in place and in the short form.
+#[test]
+fn a_general_item_quantity_can_be_updated() {
+    let (_dir, ctx) = planted("salt = \"1%kg\"\n\n[dairy]\nmilk = \"2%l\"\n");
+
+    update(
+        &ctx,
+        UpdateRequest {
+            section: "general".to_string(),
+            name: "salt".to_string(),
+            quantity: Some("2%kg".to_string()),
+            ..Default::default()
+        },
+    )
     .expect("updates");
 
     let written = read_back(&ctx);
-    assert!(
-        written.find("salt").unwrap() < written.find('[').unwrap(),
-        "a general item stays above the first section header\n{written}"
-    );
+    assert_eq!(written, "salt = \"2%kg\"\n\n[dairy]\nmilk = \"2%l\"\n");
     assert!(!written.contains("[general]"), "{written}");
-    assert!(
-        !written.contains("2025-11-11"),
-        "a general item's expiry cannot be written and is lost\n{written}"
-    );
-    assert!(
-        written.contains("2025-12-01"),
-        "a sectioned item's is not\n{written}"
-    );
 }
 
 /// A bare general item gains an empty quantity, because the only shape the
@@ -2138,4 +2156,125 @@ fn a_write_that_fails_after_writing_its_temporary_file_still_removes_it() {
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(left, ["a-directory"], "no temporary file is left behind");
+}
+
+// ---------------------------------------------------------------------------
+// The document survives an edit
+// ---------------------------------------------------------------------------
+
+/// The reproduction from <https://github.com/cooklang/cookcli/issues/429>,
+/// asserted end to end: an unrelated `add` used to destroy the top-level
+/// `salt`, drop the comment and drop `shelf`. The whole file is compared, so
+/// anything reformatted anywhere fails.
+#[test]
+fn an_unrelated_add_changes_only_the_line_it_adds() {
+    let original = "# my pantry notes\n\
+                    salt = { quantity = \"1%kg\", expire = \"2027-01-01\" }\n\
+                    \n\
+                    [fridge]\n\
+                    milk = { quantity = \"1%l\", shelf = \"top\" }\n";
+    let (_dir, ctx) = planted(original);
+
+    add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "butter".to_string(),
+            quantity: Some("200%g".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert_eq!(
+        read_back(&ctx),
+        format!("{original}butter = \"200%g\"\n"),
+        "only the new item may appear"
+    );
+}
+
+/// A section written as a list of names has nowhere to put a quantity, so an
+/// edit has to rewrite it. Every name in it survives that, and the caller is
+/// told the shape changed.
+#[test]
+fn an_array_section_is_rewritten_as_a_table_keeping_its_items() {
+    let (_dir, ctx) = planted("fridge = [\"milk\", \"eggs\"]\n");
+
+    let outcome = add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "butter".to_string(),
+            quantity: Some("200%g".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning && d.message.contains("list of names")),
+        "the rewrite must be reported: {:?}",
+        outcome.diagnostics
+    );
+    assert_eq!(
+        names(&outcome.value.sections[0].items),
+        ["milk", "eggs", "butter"],
+        "no name may be lost to the rewrite"
+    );
+    assert!(read_back(&ctx).contains("[fridge]"));
+}
+
+/// An item whose value is neither a quantity nor a set of attributes is
+/// refused rather than overwritten, and nothing is written at all.
+#[test]
+fn an_update_refuses_an_item_written_as_a_bare_number() {
+    let original = "[pantry]\nflour = 3\n";
+    let (_dir, ctx) = planted(original);
+
+    let error = update(
+        &ctx,
+        UpdateRequest {
+            section: "pantry".to_string(),
+            name: "flour".to_string(),
+            quantity: Some("1%kg".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("must refuse");
+
+    assert!(
+        error.to_string().contains("bare number"),
+        "the message should say what it found: {error}"
+    );
+    assert_eq!(read_back(&ctx), original, "nothing may be written");
+}
+
+/// Adding a `general` item with an attribute it has no room for is refused for
+/// the same reason `update` is: writing the inline table it would need turns
+/// the item into a section.
+#[test]
+fn a_general_add_with_attributes_is_refused() {
+    let original = "salt = \"1%kg\"\n";
+    let (_dir, ctx) = planted(original);
+
+    let error = add(
+        &ctx,
+        AddRequest {
+            section: "general".to_string(),
+            name: "pepper".to_string(),
+            quantity: Some("100%g".to_string()),
+            expire: Some("2027-01-01".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("must refuse");
+
+    assert!(
+        error.to_string().contains("move it into a section"),
+        "{error}"
+    );
+    assert_eq!(read_back(&ctx), original, "nothing may be written");
 }

@@ -732,6 +732,7 @@ dependencies = [
  "tempfile",
  "textwrap",
  "thiserror 2.0.19",
+ "toml_edit",
  "tracing",
  "yansi",
 ]

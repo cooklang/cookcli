@@ -11,42 +11,48 @@
 //!
 //! [`add`], [`remove`] and [`update`] change the pantry and write it back.
 //! They are the only functions in this crate that write to a file the user
-//! owns, so read [`write_atomically`] and **[what a write keeps and what it
-//! throws away](#what-a-write-keeps-and-what-it-throws-away)** before calling
-//! them.
+//! owns, so read [`write_atomically`] and **[what a write
+//! touches](#what-a-write-touches)** before calling them.
 //!
-//! # What a write keeps and what it throws away
+//! # What a write touches
 //!
-//! There is no editing in place. Every change re-parses the whole
-//! configuration into `cooklang`'s model, applies itself, and serialises that
-//! model back over the file — so anything the model does not carry is gone the
-//! first time anything is added, removed or updated. What survives:
+//! **Only the entry asked for.** A change is applied to the file as a TOML
+//! document, so everything else is left byte for byte as it was: comments,
+//! blank lines, indentation, key order, the choice between `x = "1%kg"` and
+//! `x = { quantity = "1%kg" }`, attributes `cooklang` does not model, and
+//! values that are not strings.
 //!
-//! - Section order, item order within a section, and every item's name,
-//!   `quantity`, `bought`, `expire` and `low`.
-//! - Items written above the first section header. They are read into a
-//!   section called `general` and written back above the first header rather
-//!   than under a `[general]` one — except that they can only be written as
-//!   `name = "quantity"`, so a `general` item's `bought`, `expire` and `low`
-//!   do not survive, and one with no quantity comes back with an empty one.
-//! - Non-ASCII names, which are quoted as TOML requires.
+//! It did not always work this way. Every change used to re-parse the whole
+//! file into `cooklang`'s model, apply itself, and serialise that model back —
+//! so anything the model did not carry was gone the first time anything was
+//! added, removed or updated, silently, on a file people hand-write. A
+//! top-level item written with attributes fared worst: the parser reads
 //!
-//! What does not:
+//! ```toml
+//! salt = { quantity = "1%kg", expire = "2027-01-01" }
+//! ```
 //!
-//! - **Comments.** Every one, wherever it is.
-//! - **Layout**: blank lines, indentation, the choice between `x = "1%kg"` and
-//!   `x = { quantity = "1%kg" }`, and a section written as an array of items
-//!   (`fridge = ["milk"]`), which comes back as a `[fridge]` table.
-//! - **Attributes `cooklang` does not model**, and attributes whose value is
-//!   not a string — `quantity = 2` rather than `quantity = "2"`. Both are
-//!   dropped, the first with a warning in [`Outcome::diagnostics`], the second
-//!   silently.
-//! - **A section literally named `general`**, whose items are moved to the top
-//!   of the file and lose every attribute but `quantity`, as above.
+//! as a *section* named `salt` holding items `quantity` and `expire`, and the
+//! rewrite emitted it as one — destroying the item and inventing two, on a
+//! command that had nothing to do with it
+//! (<https://github.com/cooklang/cookcli/issues/429>).
 //!
-//! None of this is new — it is what `cook pantry add` has always done — but a
-//! consumer editing a file a person also hand-writes should know it, and may
-//! prefer to apply changes to the text itself.
+//! What a write still normalises, because it is what the writer must choose:
+//!
+//! - A **new** item is written `name = "quantity"` when that is all it has, and
+//!   `name = { … }` when it carries more. An item added to `general` is always
+//!   written in the short form, because a top-level inline table would be read
+//!   back as a section header — the very shape above.
+//! - An item **updated** with an attribute it has no room for grows from the
+//!   short form into a table, keeping the quantity it had.
+//! - A section emptied by [`remove`] is removed, matching what `cooklang` does
+//!   with an empty section when it reads the file back.
+//!
+//! [`update`] refuses, rather than guesses, when an item's value is neither a
+//! quantity nor a set of attributes — a hand-written `salt = 3`. Attributes
+//! `cooklang` does not model are kept untouched; its own parse still reports
+//! them as unknown fields, which is about what `cook pantry list` can show
+//! rather than about anything being lost.
 
 use crate::{
     diagnostic::parse_failure,
@@ -807,8 +813,8 @@ pub struct UpdateRequest {
 /// Returns the pantry as it now stands on disk, so a caller need not read it
 /// back, together with any warnings from parsing what was there before.
 ///
-/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
-/// first**: comments and formatting in the existing file are lost.
+/// Only the entry asked for is touched; see [what a write
+/// touches](self#what-a-write-touches).
 ///
 /// # Errors
 ///
@@ -821,11 +827,18 @@ pub struct UpdateRequest {
 /// - [`CoreError::Config`] if the existing file cannot be parsed at all, and
 ///   [`CoreError::Io`] if it cannot be read or the new one cannot be written.
 pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, CoreError> {
-    let path = path_to_create(ctx)?;
-    let (mut conf, diagnostics) = read_conf_or_empty(&path)?;
+    let attributes = edit::Attributes {
+        quantity: req.quantity,
+        bought: req.bought,
+        expire: req.expire,
+        low: req.low,
+    };
+    edit::check_general_attributes(&req.section, &req.name, &attributes)?;
 
-    let items = conf.sections.entry(req.section.clone()).or_default();
-    if items.iter().any(|item| item.name() == req.name) {
+    let path = path_to_create(ctx)?;
+    let (mut doc, mut diagnostics) = read_document_or_empty(&path)?;
+
+    if edit::item_exists(&doc, &req.section, &req.name) {
         return Err(CoreError::PantryEdit {
             message: format!(
                 "item '{}' already exists in section '{}'",
@@ -833,13 +846,11 @@ pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, Co
             ),
         });
     }
-    items.push(new_item(&req));
 
-    save(&path, &mut conf)?;
-    Ok(Outcome::with_diagnostics(
-        PantryContents::from_conf(&conf),
-        diagnostics,
-    ))
+    diagnostics.extend(normalise_array_section(&mut doc, &req.section, &path));
+    edit::insert(&mut doc, &req.section, &req.name, &attributes);
+
+    save(&path, &doc, diagnostics)
 }
 
 /// Take an item out of the pantry and write it back.
@@ -851,8 +862,8 @@ pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, Co
 /// Returns the pantry as it now stands on disk, and any warnings from parsing
 /// what was there before.
 ///
-/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
-/// first**: comments and formatting in the existing file are lost.
+/// Only the entry asked for is touched; see [what a write
+/// touches](self#what-a-write-touches).
 ///
 /// # Errors
 ///
@@ -865,28 +876,19 @@ pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, Co
 ///   written.
 pub fn remove(ctx: &Context, req: RemoveRequest) -> Result<Outcome<PantryContents>, CoreError> {
     let path = path_to_edit(ctx)?;
-    let (mut conf, diagnostics) = read_conf(&path)?;
+    let (mut doc, mut diagnostics) = read_document(&path)?;
 
-    let items = conf
-        .sections
-        .get_mut(&req.section)
-        .ok_or_else(|| section_not_found(&req.section))?;
-    let before = items.len();
-    items.retain(|item| item.name() != req.name);
-    if items.len() == before {
+    diagnostics.extend(normalise_array_section(&mut doc, &req.section, &path));
+    if !edit::section_exists(&doc, &req.section) {
+        return Err(section_not_found(&req.section));
+    }
+    if !edit::item_exists(&doc, &req.section, &req.name) {
         return Err(item_not_found(&req.name, &req.section));
     }
-    if items.is_empty() {
-        // `shift_remove`, not `swap_remove`: the remaining sections must keep
-        // the order the file wrote them in.
-        conf.sections.shift_remove(&req.section);
-    }
 
-    save(&path, &mut conf)?;
-    Ok(Outcome::with_diagnostics(
-        PantryContents::from_conf(&conf),
-        diagnostics,
-    ))
+    edit::remove(&mut doc, &req.section, &req.name);
+
+    save(&path, &doc, diagnostics)
 }
 
 /// Change an item already in the pantry and write it back.
@@ -898,8 +900,8 @@ pub fn remove(ctx: &Context, req: RemoveRequest) -> Result<Outcome<PantryContent
 /// Returns the pantry as it now stands on disk, and any warnings from parsing
 /// what was there before.
 ///
-/// **Read [what a write keeps](self#what-a-write-keeps-and-what-it-throws-away)
-/// first**: comments and formatting in the existing file are lost.
+/// Only the entry asked for is touched; see [what a write
+/// touches](self#what-a-write-touches).
 ///
 /// # Errors
 ///
@@ -911,9 +913,16 @@ pub fn remove(ctx: &Context, req: RemoveRequest) -> Result<Outcome<PantryContent
 /// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
 ///   written.
 pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    let attributes = edit::Attributes {
+        quantity: req.quantity,
+        bought: req.bought,
+        expire: req.expire,
+        low: req.low,
+    };
+
     // Checked before anything is read: an update of nothing is a mistake
     // whether or not there is a pantry to make it in.
-    if req.quantity.is_none() && req.bought.is_none() && req.expire.is_none() && req.low.is_none() {
+    if attributes.is_empty() {
         return Err(CoreError::PantryEdit {
             message: format!(
                 "no attributes given to update on item '{}' in section '{}'",
@@ -922,57 +931,22 @@ pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContent
         });
     }
 
+    edit::check_general_attributes(&req.section, &req.name, &attributes)?;
+
     let path = path_to_edit(ctx)?;
-    let (mut conf, diagnostics) = read_conf(&path)?;
+    let (mut doc, mut diagnostics) = read_document(&path)?;
 
-    let items = conf
-        .sections
-        .get_mut(&req.section)
-        .ok_or_else(|| section_not_found(&req.section))?;
-    let item = items
-        .iter_mut()
-        .find(|item| item.name() == req.name)
-        .ok_or_else(|| item_not_found(&req.name, &req.section))?;
-
-    *item = cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-        name: item.name().to_string(),
-        // `or_else` on the request's value, so a set attribute wins and an
-        // unset one falls back to what the item already said. A `Simple` item
-        // has nothing to fall back to, and becomes one with attributes.
-        quantity: req
-            .quantity
-            .or_else(|| item.quantity().map(ToOwned::to_owned)),
-        bought: req.bought.or_else(|| item.bought().map(ToOwned::to_owned)),
-        expire: req.expire.or_else(|| item.expire().map(ToOwned::to_owned)),
-        low: req.low.or_else(|| item.low().map(ToOwned::to_owned)),
-    });
-
-    save(&path, &mut conf)?;
-    Ok(Outcome::with_diagnostics(
-        PantryContents::from_conf(&conf),
-        diagnostics,
-    ))
-}
-
-/// The item [`add`] will write.
-///
-/// A request with no attributes builds a `Simple` item rather than one with
-/// four empty fields, because that is the shape `cooklang` normalises to when
-/// it reads a file back. Nothing observable turns on it — both serialise to
-/// `name = {}` and both read back identically — but a value this crate builds
-/// should hold the same invariant as one it parsed.
-fn new_item(req: &AddRequest) -> cooklang::pantry::PantryItem {
-    if req.quantity.is_none() && req.bought.is_none() && req.expire.is_none() && req.low.is_none() {
-        cooklang::pantry::PantryItem::Simple(req.name.clone())
-    } else {
-        cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-            name: req.name.clone(),
-            quantity: req.quantity.clone(),
-            bought: req.bought.clone(),
-            expire: req.expire.clone(),
-            low: req.low.clone(),
-        })
+    diagnostics.extend(normalise_array_section(&mut doc, &req.section, &path));
+    if !edit::section_exists(&doc, &req.section) {
+        return Err(section_not_found(&req.section));
     }
+    if !edit::item_exists(&doc, &req.section, &req.name) {
+        return Err(item_not_found(&req.name, &req.section));
+    }
+
+    edit::apply(&mut doc, &req.section, &req.name, &attributes)?;
+
+    save(&path, &doc, diagnostics)
 }
 
 fn section_not_found(section: &str) -> CoreError {
@@ -1019,41 +993,6 @@ fn read_only() -> CoreError {
     }
 }
 
-/// Read a pantry file into the model a change is applied to.
-///
-/// Separate from [`load`], which hands out this crate's own read-only
-/// [`PantryContents`]: a change needs `cooklang`'s own type, because that is
-/// what can be serialised back.
-fn read_conf(
-    path: &Utf8Path,
-) -> Result<(cooklang::pantry::PantryConf, Vec<Diagnostic>), CoreError> {
-    let text = std::fs::read_to_string(path).map_err(|source| CoreError::Io {
-        path: path.to_owned(),
-        source,
-    })?;
-    parse_conf(path, &text)
-}
-
-/// As [`read_conf`], but an absent file is an empty pantry rather than an
-/// error — which is what lets [`add`] create one.
-///
-/// Missing is judged by the read failing rather than by asking whether the
-/// file exists first, so that nothing can delete it in between.
-fn read_conf_or_empty(
-    path: &Utf8Path,
-) -> Result<(cooklang::pantry::PantryConf, Vec<Diagnostic>), CoreError> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse_conf(path, &text),
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-            Ok((cooklang::pantry::PantryConf::default(), Vec::new()))
-        }
-        Err(source) => Err(CoreError::Io {
-            path: path.to_owned(),
-            source,
-        }),
-    }
-}
-
 fn parse_conf(
     path: &Utf8Path,
     text: &str,
@@ -1069,13 +1008,95 @@ fn parse_conf(
     }
 }
 
-/// Serialise the changed pantry over `path`.
-fn save(path: &Utf8Path, conf: &mut cooklang::pantry::PantryConf) -> Result<(), CoreError> {
-    // Serialising does not read the lookup index, but a `PantryConf` whose
-    // index disagrees with its sections is a trap for anything that later
-    // does, and rebuilding it costs nothing at this size.
-    conf.rebuild_index();
-    write_atomically(path, cooklang::pantry::to_toml_string(conf))
+/// Convert a section written as an array of names into the equivalent table,
+/// and say so.
+///
+/// The array form has nowhere to put a key, so an edit to such a section has to
+/// rewrite it. Doing that here, rather than leaving [`edit::insert`] to replace
+/// the array wholesale, is what keeps the names already in it.
+fn normalise_array_section(
+    doc: &mut toml_edit::DocumentMut,
+    section: &str,
+    path: &Utf8Path,
+) -> Vec<Diagnostic> {
+    let converted = edit::normalise_array_section(doc, section);
+    if converted.is_empty() {
+        return Vec::new();
+    }
+    vec![Diagnostic::warning(format!(
+        "section '{section}' was written as a list of names, which cannot hold quantities; \
+         rewritten as a [{section}] section keeping {}",
+        converted.join(", ")
+    ))
+    .at_file(path.to_owned())]
+}
+
+/// Read a pantry file as an editable document, and the warnings `cooklang`
+/// raises about it.
+///
+/// Parsed twice, deliberately and cheaply: once as TOML, which is what an edit
+/// is applied to, and once through `cooklang`, whose lenient parse is what
+/// produces the diagnostics a caller expects and what decides whether the file
+/// is a *pantry* rather than merely valid TOML.
+fn read_document(path: &Utf8Path) -> Result<(toml_edit::DocumentMut, Vec<Diagnostic>), CoreError> {
+    let text = std::fs::read_to_string(path).map_err(|source| CoreError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    parse_document(path, &text)
+}
+
+/// As [`read_document`], but an absent file is an empty document rather than an
+/// error — which is what lets [`add`] create one.
+///
+/// Missing is judged by the read failing rather than by asking whether the
+/// file exists first, so that nothing can delete it in between.
+fn read_document_or_empty(
+    path: &Utf8Path,
+) -> Result<(toml_edit::DocumentMut, Vec<Diagnostic>), CoreError> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => parse_document(path, &text),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+            Ok((toml_edit::DocumentMut::new(), Vec::new()))
+        }
+        Err(source) => Err(CoreError::Io {
+            path: path.to_owned(),
+            source,
+        }),
+    }
+}
+
+fn parse_document(
+    path: &Utf8Path,
+    text: &str,
+) -> Result<(toml_edit::DocumentMut, Vec<Diagnostic>), CoreError> {
+    // `cooklang` first, so that a file it rejects is reported the way every
+    // other pantry command reports it, rather than as a TOML error.
+    let (_, diagnostics) = parse_conf(path, text)?;
+    Ok((edit::parse(text, path)?, diagnostics))
+}
+
+/// Write the edited document over `path` and read back what it now says.
+///
+/// Reading back rather than deriving the result from the edit is what keeps the
+/// returned [`PantryContents`] honest: it is the file as the next command will
+/// see it, normalisation and all.
+fn save(
+    path: &Utf8Path,
+    doc: &toml_edit::DocumentMut,
+    diagnostics: Vec<Diagnostic>,
+) -> Result<Outcome<PantryContents>, CoreError> {
+    let text = doc.to_string();
+    write_atomically(path, &text)?;
+
+    // The re-read is for the value, not for its diagnostics: those are the same
+    // ones already collected from reading the file, and reporting them twice
+    // per edit is noise.
+    let (conf, _) = parse_conf(path, &text)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
 }
 
 /// What to call a recipe in the results: its title, or its file stem.
@@ -1148,6 +1169,8 @@ fn parse_date(date: &str) -> Option<NaiveDate> {
         .iter()
         .find_map(|format| NaiveDate::parse_from_str(date, format).ok())
 }
+
+mod edit;
 
 #[cfg(test)]
 mod tests;

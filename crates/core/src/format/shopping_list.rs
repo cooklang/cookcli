@@ -204,15 +204,25 @@ pub fn build_json_value(list: AggregatedList, plain: bool) -> serde_json::Value 
     }
 }
 
-/// Render the list as YAML: an array of categories, each with its items.
+/// Render the list as YAML: an array of categories, each with its items, or a
+/// flat array of items when `plain` is set.
 ///
-/// Note the missing `plain` parameter. Unlike the JSON and Markdown writers,
-/// this one always categorises, so `cook shopping-list -f yaml --plain`
-/// silently ignores the flag. That is
-/// <https://github.com/cooklang/cookcli/issues/419>, preserved here on purpose
-/// so the extraction that moved this code changed no behaviour.
-pub fn build_yaml_value(list: AggregatedList) -> serde_yaml::Value {
-    serde_yaml::to_value(json_categories(list)).unwrap()
+/// The same document shape as [`build_json_value`], which is the point: this
+/// writer used to take no `plain` at all and always categorise, so
+/// `-f yaml --plain` silently produced a different shape from
+/// `-f json --plain` for anyone scripting against both (#419).
+pub fn build_yaml_value(list: AggregatedList, plain: bool) -> serde_yaml::Value {
+    if plain {
+        serde_yaml::to_value(
+            list.raw_items
+                .into_iter()
+                .map(JsonIngredient::from)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    } else {
+        serde_yaml::to_value(json_categories(list)).unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -339,16 +349,46 @@ mod tests {
         );
     }
 
-    /// Records <https://github.com/cooklang/cookcli/issues/419>: the YAML
-    /// writer has no `plain` parameter, so the flag cannot reach it.
+    /// YAML categorises unless `plain`, and then produces the same document
+    /// shape as JSON does — a flat array of items. It used to take no `plain`
+    /// at all, so `-f yaml --plain` silently disagreed with `-f json --plain`
+    /// (<https://github.com/cooklang/cookcli/issues/419>).
     #[test]
-    fn yaml_always_categorises() {
+    fn yaml_is_categorised_unless_plain() {
         let dir = fixture();
-        let yaml = serde_yaml::to_string(&build_yaml_value(list(&dir))).unwrap();
+
+        let full = serde_yaml::to_string(&build_yaml_value(list(&dir), false)).unwrap();
         assert!(
-            yaml.contains("category: produce"),
-            "yaml is always categorised: {yaml}"
+            full.contains("category: produce"),
+            "yaml categorises by default: {full}"
         );
+
+        let plain = build_yaml_value(list(&dir), true);
+        let items = plain.as_sequence().expect("plain yaml is a sequence");
+        let names: Vec<&str> = items
+            .iter()
+            .map(|i| i["name"].as_str().expect("every entry has a name"))
+            .collect();
+        assert_eq!(
+            names,
+            vec!["tomatoes", "salt", "water"],
+            "--plain lists every ingredient in recipe order, uncategorised"
+        );
+        assert!(
+            !serde_yaml::to_string(&plain).unwrap().contains("category:"),
+            "--plain must drop the headings: {plain:?}"
+        );
+    }
+
+    /// `-f json --plain` and `-f yaml --plain` must agree on the document
+    /// shape, which is the whole point of the flag reaching both writers.
+    #[test]
+    fn plain_json_and_plain_yaml_describe_the_same_document() {
+        let dir = fixture();
+        let json = build_json_value(list(&dir), true);
+        let yaml: serde_json::Value =
+            serde_yaml::from_value(build_yaml_value(list(&dir), true)).unwrap();
+        assert_eq!(json, yaml, "plain json and plain yaml must agree");
     }
 
     #[test]
@@ -427,7 +467,7 @@ mod tests {
         let json = build_json_value(aggregated(), true);
         assert_eq!(units(&json[0]), vec!["cup", "g"], "json agrees: {json}");
 
-        let yaml = serde_json::to_value(build_yaml_value(aggregated())).unwrap();
+        let yaml = serde_json::to_value(build_yaml_value(aggregated(), false)).unwrap();
         assert_eq!(
             units(&yaml[0]["items"][0]),
             vec!["cup", "g"],

@@ -14,7 +14,7 @@ cook report [OPTIONS] --template <TEMPLATE> <RECIPE>
 
 | Argument | Description |
 |----------|-------------|
-| `<RECIPE>` | Recipe file to process. Supports scaling with `:N` syntax (e.g., `recipe.cook:2`). |
+| `<RECIPE>` | Recipe to process: a path to a `.cook` file or a bare recipe name, resolved against the base path. Supports scaling with `:N` syntax (e.g., `recipe.cook:2`). |
 
 ## Options
 
@@ -24,7 +24,7 @@ cook report [OPTIONS] --template <TEMPLATE> <RECIPE>
 | `-d, --datastore <DIR>` | Path to datastore directory with additional recipe data (nutrition, costs) |
 | `-a, --aisle <FILE>` | Path to aisle configuration file |
 | `-p, --pantry <FILE>` | Path to pantry configuration file |
-| `-b, --base-path <PATH>` | Base path for resolving recipe references (default: current directory) |
+| `-b, --base-path <PATH>` | Base path the `<RECIPE>` argument and any recipe references are resolved against (default: current directory) |
 
 ## Template Variables
 
