@@ -16,8 +16,6 @@ categories = ["parser-implementations"]
 # Strips ANSI escape codes at the writer, so that `format::Style::Plain` can be
 # honoured without touching yansi's global colour switch.
 anstream = "0.6"
-anstyle = "1"
-anstyle-yansi = "2"
 camino = { version = "1", features = ["serde1"] }
 # Reading and comparing the dates pantry items carry. Keep this declaration in
 # step with the root manifest's.
@@ -38,15 +36,12 @@ cooklang-format = { version = "0.1.0", path = "../format" }
 # manifest's, so both crates resolve the same version.
 cooklang-reports = "0.5.1"
 directories = "6"
-humantime = "2"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 # `ansi-cell` lets the human formatter measure column widths ignoring escapes.
 tabular = { version = "0.2", features = ["ansi-cell"] }
-# `terminal_size` backs `textwrap::termwidth()`, which sets the wrap width.
-textwrap = { version = "0.16", features = ["terminal_size"] }
 thiserror = "2"
 # Editing pantry.conf as a document rather than rebuilding it from a parsed
 # model, so that comments, layout and keys `cooklang` does not model survive a

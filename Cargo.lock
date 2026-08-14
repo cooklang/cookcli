@@ -715,8 +715,6 @@ name = "cookcli-core"
 version = "0.1.0"
 dependencies = [
  "anstream 0.6.21",
- "anstyle",
- "anstyle-yansi",
  "camino",
  "chrono",
  "cooklang",
@@ -724,14 +722,12 @@ dependencies = [
  "cooklang-format",
  "cooklang-reports",
  "directories",
- "humantime",
  "regex",
  "serde",
  "serde_json",
  "serde_yaml",
  "tabular",
  "tempfile",
- "textwrap",
  "thiserror 2.0.19",
  "toml_edit",
  "tracing",
