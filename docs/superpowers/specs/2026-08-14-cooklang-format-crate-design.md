@@ -7,8 +7,8 @@
 ## Problem
 
 CookCLI carries a set of converters that turn a parsed `cooklang::Recipe` into
-Markdown, LaTeX, Typst, JSON/YAML, terminal-styled text, and back into
-Cooklang source. Other projects want them — the issue names them directly:
+Markdown, LaTeX, Typst, schema.org JSON-LD, terminal-styled text, and back
+into Cooklang source. Other projects want them — the issue names them directly:
 "we have some converters like cooklang to markdown etc which can be reused in
 other projects".
 
@@ -79,7 +79,7 @@ Moves to `crates/format` (8 files, ~3,400 lines):
 | `markdown.rs` | Markdown |
 | `cooklang.rs` | round-trip Cooklang source |
 | `latex.rs`, `typst.rs` | typeset output, paper-size aware |
-| `schema.rs` | JSON/YAML recipe schema |
+| `schema.rs` | schema.org/Recipe JSON-LD |
 | `number.rs`, `quantity.rs` | shared number and quantity primitives |
 
 Stays in `cookcli-core`:
