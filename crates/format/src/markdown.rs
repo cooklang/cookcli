@@ -30,7 +30,7 @@
 
 //! Format a recipe as markdown
 
-use crate::format::quantity::grouped_quantity_fmt;
+use crate::quantity::grouped_quantity_fmt;
 use std::{fmt::Write, io};
 
 use cooklang::{
@@ -349,7 +349,7 @@ fn ingredients(
         }
 
         if let Some(reference) = &ingredient.reference {
-            let sep = crate::find::REFERENCE_SEPARATOR;
+            let sep = crate::REFERENCE_SEPARATOR;
             let path = reference.components.join(sep);
             write!(
                 w,

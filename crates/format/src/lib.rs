@@ -6,6 +6,8 @@
 
 #![warn(missing_docs)]
 
+/// Markdown rendering of a recipe.
+pub mod markdown;
 /// Human-friendly rendering of quantity numbers.
 pub mod number;
 /// Deterministic ordering for grouped quantities.
