@@ -29,6 +29,10 @@
 // SOFTWARE.
 
 //! Format a recipe as cooklang
+//!
+//! Named `cooklang_source` rather than `cooklang`: at this crate's root that
+//! name belongs to the re-exported `cooklang` parser crate, and the two cannot
+//! share a scope. `cookcli-core` aliases it back to `format::cooklang`.
 
 use std::{fmt::Write, io};
 
@@ -116,7 +120,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                     // `@././sub/sauce{}`; that reparses as components
                     // `[".", ".", "sub"]`, so the next pass prepended one more
                     // and the prefix grew without bound on every rewrite.
-                    reference.path(crate::find::REFERENCE_SEPARATOR)
+                    reference.path(crate::REFERENCE_SEPARATOR)
                 } else {
                     igr.name.clone()
                 };
@@ -300,7 +304,7 @@ impl ComponentFormatter<'_> {
 mod tests {
     use super::*;
     // `super::*` already brings `std::fmt::Write` into scope for `write!`.
-    use crate::parser::parse_recipe;
+    use crate::test_support::parse_recipe;
 
     /// Exercises the things this formatter can get wrong: multi-word names
     /// (which need `{}` to stay one component), a note, an aliased name, an
@@ -531,10 +535,7 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
             .reference
             .as_ref()
             .expect("still a recipe reference");
-        assert_eq!(
-            reference.path(crate::find::REFERENCE_SEPARATOR),
-            "./sub/sauce"
-        );
+        assert_eq!(reference.path(crate::REFERENCE_SEPARATOR), "./sub/sauce");
     }
 
     /// A reference survives repeated rewrites unchanged.

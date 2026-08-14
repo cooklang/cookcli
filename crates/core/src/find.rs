@@ -7,25 +7,9 @@ use cooklang::Recipe;
 use cooklang_find::{tree::TreeError, RecipeEntry, RecipeTree};
 use std::collections::BTreeSet;
 
-/// The separator a recipe reference's path is built and reported with.
-///
-/// **Always `/`, never [`std::path::MAIN_SEPARATOR`].** A reference is written
-/// `@./sauce{}` in Cooklang, so `/` is the separator the user typed and the one
-/// they should be shown back. Joining with the platform separator instead made
-/// Windows disagree with itself: `doctor` reports a broken reference as
-/// `./absent` because it joins with `/`, while the shopping list reported the
-/// same one as `.\absent`, and the `./`-stripping in [`get_recipe`] only
-/// matches the forward-slash form, so the prefix survived into the reported
-/// name (<https://github.com/cooklang/cookcli/issues/442>).
-///
-/// Resolution is unaffected either way — `Utf8Path::join` takes `.\sauce` and
-/// `./sauce` alike on Windows — but two of these paths are not diagnostics at
-/// all: the Cooklang writer re-emits the reference as source, where a backslash
-/// is not valid syntax, and the Markdown writer puts it in a link target.
-///
-/// On Unix this is what [`std::path::MAIN_SEPARATOR`] already was, so nothing
-/// about the output changes there.
-pub const REFERENCE_SEPARATOR: &str = "/";
+/// Re-exported from [`cooklang_format`], which is where the writers that
+/// depend on this spelling now live.
+pub use cooklang_format::REFERENCE_SEPARATOR;
 
 /// Look `name` up under `base_path`, returning the file it resolves to.
 ///

@@ -1,0 +1,34 @@
+[package]
+name = "cooklang-format"
+version = "0.1.0"
+edition = "2021"
+description = "Render Cooklang recipes as Markdown, LaTeX, Typst, JSON, terminal text, or Cooklang source"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/cooklang/cookcli"
+homepage = "https://cooklang.org"
+keywords = ["cooklang", "recipes", "markdown", "formatter"]
+categories = ["text-processing"]
+
+[dependencies]
+# Strips ANSI escape codes at the writer, so that `Style::Plain` can be
+# honoured without touching yansi's global colour switch.
+anstream = "0.6"
+anstyle = "1"
+anstyle-yansi = "2"
+# Keep this declaration in step with the root and `cookcli-core` manifests.
+# `bundled_units` is deliberately absent: enabling it here would switch it back
+# on for both other crates through feature unification and undo #433, which
+# removed it so quantities keep their authored units.
+cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+# Timer durations in the human formatter.
+humantime = "2"
+regex = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+# `ansi-cell` lets the human formatter measure column widths ignoring escapes.
+tabular = { version = "0.2", features = ["ansi-cell"] }
+# `terminal_size` backs `textwrap::termwidth()`, which sets the wrap width.
+textwrap = { version = "0.16", features = ["terminal_size"] }
+yansi = "1"

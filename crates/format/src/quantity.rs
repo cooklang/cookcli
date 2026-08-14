@@ -1,9 +1,14 @@
 //! Deterministic ordering for [`GroupedQuantity`].
 //!
-//! Everything in this crate that renders or serialises a grouped quantity goes
-//! through [`ordered_components`] or [`grouped_quantity_fmt`], so the human
-//! table, Markdown, JSON, YAML, LaTeX, Typst, schema.org and library outputs
-//! all agree on one order.
+//! Everything that renders or serialises a grouped quantity goes through
+//! [`ordered_components`] or [`grouped_quantity_fmt`], so the human table,
+//! Markdown, JSON, YAML, LaTeX, Typst, schema.org and library outputs all
+//! agree on one order.
+//!
+//! That ordering is a published contract, not a local convention: `cookcli-core`
+//! renders its shopping list through these functions, and the snapshot tests
+//! pinning the order live in CookCLI, two crates downstream. Changing it
+//! changes their output.
 
 use cooklang::quantity::{GroupedQuantity, Quantity};
 
@@ -69,7 +74,7 @@ fn unit_key(qty: &Quantity) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::PARSER;
+    use crate::test_support::PARSER;
 
     /// Build a group by adding each quantity in turn, the way the shopping
     /// list and the recipe formatters do.
