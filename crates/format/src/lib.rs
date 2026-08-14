@@ -6,6 +6,11 @@
 
 #![warn(missing_docs)]
 
+/// Human-friendly rendering of quantity numbers.
+pub mod number;
+/// Deterministic ordering for grouped quantities.
+pub mod quantity;
+
 /// The `cooklang` crate this library was built against.
 ///
 /// Every public function takes `cooklang` types, so they are part of this

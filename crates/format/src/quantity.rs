@@ -69,7 +69,7 @@ fn unit_key(qty: &Quantity) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::PARSER;
+    use crate::test_support::PARSER;
 
     /// Build a group by adding each quantity in turn, the way the shopping
     /// list and the recipe formatters do.
