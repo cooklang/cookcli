@@ -806,6 +806,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cooklang-format"
+version = "0.1.0"
+dependencies = [
+ "anstream 0.6.21",
+ "anstyle",
+ "anstyle-yansi",
+ "cooklang",
+ "humantime",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tabular",
+ "textwrap",
+ "yansi",
+]
+
+[[package]]
 name = "cooklang-import"
 version = "0.9.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
