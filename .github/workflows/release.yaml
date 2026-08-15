@@ -273,6 +273,12 @@ jobs:
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    # As for github_build: upload_artifacts is what flips the release out of
+    # draft, so a job it needs failing hard would strand the release as a draft
+    # with no binaries attached. A missing source tarball is worth a red job in
+    # the Actions UI, not a stuck release — an npm registry hiccup here says
+    # nothing about the platform builds.
+    continue-on-error: true
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v7

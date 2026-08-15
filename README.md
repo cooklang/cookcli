@@ -222,8 +222,10 @@ cargo build --release
 If Node.js is unavailable or its native toolchain has no build for your platform, use a source drop that ships those two files prebuilt:
 
 ```bash
-# cook-<version>-source.tar.gz, attached to every GitHub release
-VERSION=0.33.1
+# cook-<version>-source.tar.gz is attached to each GitHub release.
+# Set VERSION to the one you want: https://github.com/cooklang/CookCLI/releases
+VERSION=0.34.0
+
 curl -LO "https://github.com/cooklang/CookCLI/releases/download/v$VERSION/cook-$VERSION-source.tar.gz"
 tar xzf "cook-$VERSION-source.tar.gz"
 cd "cookcli-$VERSION"
