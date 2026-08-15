@@ -84,6 +84,195 @@
 
 /* Custom component classes */
 @layer components {
+    /* ---------- Surfaces ---------- */
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .card-head h2,
+    .card-head h3 {
+        margin: 0;
+        font-size: 11.5px;
+        font-weight: 650;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .card-head .count {
+        font-size: 12px;
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- Controls ---------- */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 11px;
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        font-weight: 550;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+    }
+
+    .btn:hover { background: var(--surface-sunk); }
+
+    .btn svg { width: 15px; height: 15px; }
+
+    /* One accent-filled button per view. Everything else is neutral. */
+    .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-ink);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent);
+        filter: brightness(1.06);
+    }
+
+    .stepper {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+    }
+
+    .stepper button {
+        width: 26px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .stepper button:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .stepper input,
+    .stepper .value {
+        width: 44px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        text-align: center;
+        font-size: 13.5px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .stepper input:focus { outline: none; }
+
+    /* ---------- Lists ---------- */
+    .row {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: 14px;
+    }
+
+    .row + .row { border-top: 1px solid var(--border); }
+
+    .row .row-name { flex: 1; min-width: 0; }
+
+    .row .row-value {
+        white-space: nowrap;
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .row .row-note {
+        color: var(--text-faint);
+        font-size: 12.5px;
+    }
+
+    /* ---------- Text ---------- */
+    /* One quiet dot-separated line, replacing rows of coloured pills. */
+    .metaline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 0;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .metaline > *:not(:last-child)::after {
+        content: "·";
+        margin: 0 8px;
+        color: var(--text-faint);
+    }
+
+    .metaline b { font-weight: 600; color: var(--text); }
+
+    .metaline a { color: var(--info); text-decoration: none; }
+
+    .metaline a:hover { text-decoration: underline; }
+
+    .section-label {
+        font-size: 11.5px;
+        font-weight: 650;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin: 18px 0 8px;
+    }
+
+    .chip {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--surface-sunk);
+        color: var(--text-muted);
+    }
+
+    /* ---------- Status ---------- */
+    /* Shared by the pantry page and the shopping list's pantry sidebar,
+       so stock state reads identically in both places. Defined here
+       rather than in the pantry task because Task 8 consumes it first. */
+    .item-status-dot {
+        flex: 0 0 auto;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+    }
+
+    .item-status-dot.in-stock { background: var(--ok); }
+
+    .item-status-dot.out-of-stock { background: var(--accent); }
+
     /* Recipe cards with colorful borders */
     .recipe-card {
         @apply relative overflow-hidden;
@@ -252,15 +441,6 @@
     /* Out-of-stock text in dark mode */
     .pantry-item.out-of-stock .quantity-display {
         @apply text-red-600 dark:text-red-400;
-    }
-
-    /* Status dots with dark mode support */
-    .item-status-dot.in-stock {
-        @apply bg-green-500 dark:bg-green-400;
-    }
-
-    .item-status-dot.out-of-stock {
-        @apply bg-red-500 dark:bg-red-400;
     }
 
     /* CodeMirror editor dark mode support */
