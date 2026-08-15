@@ -76,7 +76,7 @@ This is a deliberate move away from the current playful identity (gradients, emo
 
 ### 1. Token layer
 
-Added to `static/css/input.css`. Eleven semantic names, defined once per theme:
+Added to `static/css/input.css`. Twelve semantic names, defined once per theme:
 
 ```css
 :root {
