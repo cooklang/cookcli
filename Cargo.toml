@@ -58,7 +58,7 @@ path = "src/main.rs"
 
 [dependencies]
 accept-language = "3"
-anstream = "0.6"
+anstream = "1.0"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
 askama_axum = { version = "0.4", optional = true }

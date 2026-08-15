@@ -13,7 +13,7 @@ categories = ["text-processing"]
 [dependencies]
 # Strips ANSI escape codes at the writer, so that `Style::Plain` can be
 # honoured without touching yansi's global colour switch.
-anstream = "0.6"
+anstream = "1.0"
 anstyle = "1"
 anstyle-yansi = "2"
 # Keep this declaration in step with the root and `cookcli-core` manifests.

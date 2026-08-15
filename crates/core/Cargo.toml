@@ -50,5 +50,5 @@ yansi = "1"
 [dev-dependencies]
 # Only the tests strip escape codes now; the formatters that emit them moved to
 # `cooklang-format`.
-anstream = "0.6"
+anstream = "1.0"
 tempfile = "3"
