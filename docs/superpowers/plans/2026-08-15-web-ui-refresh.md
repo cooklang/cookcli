@@ -41,7 +41,38 @@ npm run build-css && cargo build && ./target/debug/cook server ./seed --port 908
 
 **4. Playwright reuses a running server** (`reuseExistingServer: !process.env.CI`). If you leave a stale server on port 9080, tests will run against stale templates and give meaningless results. Kill it before running tests, or make sure you rebuilt and restarted it.
 
-**5. Do not rename these class names.** The E2E suite (129 tests) selects on them directly:
+**4a. Measured E2E baseline** (established in Task 2, commit `742606d`). Compare every later run against *this*, not against "all green":
+
+| | Count |
+| --- | --- |
+| Total | 134 |
+| Passed | 127 |
+| Failed | 2 (flaky — see below) |
+| Skipped | 5 (pre-existing `test.skip` in source) |
+
+The 2 failures are **pre-existing test-isolation flakiness, not regressions**:
+- `shopping-list-copy.spec.ts:89` "leaves out items that are already ticked off"
+- `shopping-list.spec.ts:29` "should add recipe ingredients to shopping list"
+
+Both pass when rerun with `--workers=1`. Cause: the shopping list persists to a single shared file (`/tmp/shopping_list.txt`), and Playwright's parallel workers race on it. When either fails, rerun that spec alone with `--workers=1` before concluding you broke something.
+
+The 5 skips are `accessibility.spec.ts:44`, `recipe-display.spec.ts:31`, `recipe-display.spec.ts:44`, `shopping-list.spec.ts:54`, `shopping-list.spec.ts:91`.
+
+**4b. Tests mutate a tracked seed fixture.** The pantry tests write to `seed/config/pantry.conf`, which IS tracked in git. After any test run, restore it before committing so it isn't swept into your commit:
+
+```bash
+git checkout -- seed/config/pantry.conf
+```
+
+**4c. Playwright browsers on this host.** macOS 13.7.8 has no published Playwright Chromium build. Install with:
+
+```bash
+PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=mac14 npx playwright install chromium
+```
+
+This pulls the mac14 Chrome-for-Testing build, which runs correctly here. Local environment only — never commit anything for this.
+
+**5. Do not rename these class names.** The E2E suite (134 tests) selects on them directly:
 
 | Class | Used by |
 | --- | --- |
@@ -233,7 +264,7 @@ Expected: page still renders with badges, step numbers and nav pills styled. Min
 - [ ] **Step 6: Run the full E2E suite as a baseline**
 
 Run: `npm test`
-Expected: all 129 tests pass. **Record any pre-existing failures now** — you need this baseline to tell your regressions apart from failures that were already there.
+Expected: all 134 tests: 127 passed, 2 flaky, 5 skipped (see baseline above). **Record any pre-existing failures now** — you need this baseline to tell your regressions apart from failures that were already there.
 
 - [ ] **Step 7: Commit**
 
@@ -1869,7 +1900,7 @@ If contrast fails, darken `--accent-text` in light mode and lighten `--text-mute
 - [ ] **Step 2: Full E2E suite**
 
 Run: `npm test`
-Expected: all 129 tests PASS (minus any failure recorded in the Task 2 baseline).
+Expected: 127 passed, 2 flaky, 5 skipped — matching the Task 2 baseline exactly.
 
 - [ ] **Step 3: Rust checks**
 
