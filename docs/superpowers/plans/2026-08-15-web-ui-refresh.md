@@ -517,7 +517,9 @@ Converts the test-visible classes to flat token styling, and removes exactly the
 
 In `static/css/input.css`, delete the existing `.recipe-card`, `.recipe-card::before`, `.ingredient-badge`, `.cookware-badge`, `.timer-badge`, `.step-number`, `.tag`, `.nav-pill`, `.nav-pill:hover`, `.nav-pill.active`, `.metadata-pill`, `.metadata-pill svg`, and all ten `.metadata-*` variant rules.
 
-**Also delete the OLD `.btn-primary` and `.btn-primary:hover` rules** — the gradient ones (`background: linear-gradient(135deg, #ff6b35, #f97316)` with the orange glow `box-shadow`), which sit *later* in the file than the token-based `.btn-primary` added in Task 3. Because they come later in source order they currently win the cascade, so the Task 3 component is inert until they are removed. Verify afterwards that exactly one `.btn-primary` definition remains:
+**Also delete the OLD `.btn-primary` and `.btn-primary:hover` rules** — the gradient ones (`background: linear-gradient(135deg, #ff6b35, #f97316)` with the orange glow `box-shadow`), which sit *later* in the file than the token-based `.btn-primary` added in Task 3.
+
+The two rules currently *partially* override each other, which is worse than one simply winning. CSS resolves per-property, not per-rule: the old rule re-sets only `background`, so the new rule's `border-color` and `color: var(--accent-ink)` stay live — and on `:hover` the old rule sets neither `background` nor `filter`, so the new flat `var(--accent)` fill wins there. The result is a button that renders as a gradient at rest and flips to a flat fill on hover. No page renders `.btn-primary` before Task 6, so this is invisible today, but it must be resolved here rather than carried forward. Verify afterwards that exactly one `.btn-primary` definition remains:
 
 ```bash
 grep -c "^\s*\.btn-primary\s*{" static/css/input.css   # must print 1
