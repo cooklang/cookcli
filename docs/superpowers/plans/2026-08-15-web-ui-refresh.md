@@ -25,6 +25,24 @@ cargo build
 
 and restart the server. `CLAUDE.md` claims templates recompile per request — that is wrong for this Askama 0.12 setup.
 
+**1a. How to verify a design token actually works.** Do NOT grep `output.css` for `--color-<name>`. `@theme inline` *inlines* a token's value into the generated utility instead of emitting a `--color-<name>` custom property, and Tailwind only generates a utility at all when some scanned file uses it. So a correctly-wired token can legitimately produce zero matches for `color-<name>`. Verify the two real things instead:
+
+```bash
+# 1. the raw custom property is defined for both themes
+grep -o -- "--danger:[^;]*" static/css/output.css     # expect two hits (light + dark)
+
+# 2. whatever consumes it compiled correctly
+grep -o "\.item-status-dot\.out-of-stock{[^}]*}" static/css/output.css
+```
+
+To confirm a Tailwind utility form (`bg-danger`, `text-muted`) would work, drop a throwaway file inside a content glob, rebuild, grep, then delete it and rebuild again:
+
+```bash
+printf '<div class="bg-danger"></div>\n' > static/_probe.html
+npm run build-css && grep -o "\.bg-danger{[^}]*}" static/css/output.css
+rm static/_probe.html && npm run build-css
+```
+
 **2. CSS must be rebuilt too.** `static/css/output.css` is a build artifact. After editing `static/css/input.css`:
 
 ```bash
