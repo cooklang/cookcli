@@ -54,7 +54,9 @@ The 2 failures are **pre-existing test-isolation flakiness, not regressions**:
 - `shopping-list-copy.spec.ts:89` "leaves out items that are already ticked off"
 - `shopping-list.spec.ts:29` "should add recipe ingredients to shopping list"
 
-Both pass when rerun with `--workers=1`. Cause: the shopping list persists to a single shared file (`/tmp/shopping_list.txt`), and Playwright's parallel workers race on it. When either fails, rerun that spec alone with `--workers=1` before concluding you broke something.
+Both pass when rerun with `--workers=1`. Cause: the shopping list persists to single shared files — `seed/.shopping-list` and `seed/.shopping-checked` — and `playwright.config.ts` sets `fullyParallel: true` with unbounded local workers, which race on them. `shopping-list-copy.spec.ts` overwrites those files directly in `beforeEach`; `shopping-list.spec.ts:29` mutates the same files through the UI. When either fails, rerun that spec alone with `--workers=1` before concluding you broke something.
+
+(Note: `CLAUDE.md` says the shopping list lives at `/tmp/shopping_list.txt`. That is stale — the real paths are `seed/.shopping-list` / `seed/.shopping-checked`, written relative to the server's base directory. Both are gitignored, so `git add -A` will not sweep them up.)
 
 The 5 skips are `accessibility.spec.ts:44`, `recipe-display.spec.ts:31`, `recipe-display.spec.ts:44`, `shopping-list.spec.ts:54`, `shopping-list.spec.ts:91`.
 
