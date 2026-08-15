@@ -5,6 +5,76 @@
    darkMode: 'class' and the content globs) authoritative. */
 @config "../../tailwind.config.js";
 
+/* ============================================================
+   DESIGN TOKENS
+   Fourteen semantic names, defined once per theme. Every colour
+   in the UI resolves through one of these. Do not introduce raw
+   hex values or Tailwind palette utilities in templates.
+   ============================================================ */
+:root {
+    --bg:            #faf9f7;
+    --surface:       #ffffff;
+    --surface-sunk:  #f4f2ef;
+    --border:        #e6e2dc;
+    --border-strong: #d5cfc6;
+    --text:          #1b1917;
+    --text-muted:    #6f6862;
+    --text-faint:    #9a938c;
+    --accent:        #d9541c;
+    --accent-text:   #b0400f;
+    --accent-soft:   #fdefe6;
+    --ok:            #2f7d55;
+    --ok-soft:       #e7f4ec;
+    --info:          #2b6cb0;
+
+    --radius-control: 6px;
+    --radius-card:   10px;
+    --shadow-card:   0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.dark {
+    color-scheme: dark;
+    --bg:            #131519;
+    --surface:       #1a1d22;
+    --surface-sunk:  #212530;
+    --border:        #2b3038;
+    --border-strong: #3a414b;
+    --text:          #eceef1;
+    --text-muted:    #9aa2ac;
+    --text-faint:    #6f7883;
+    --accent:        #ff7a45;
+    --accent-text:   #ff9166;
+    --accent-soft:   #2c1e17;
+    --ok:            #5fbe8b;
+    --ok-soft:       #17271f;
+    --info:          #7ab3ea;
+
+    --shadow-card:   none;
+}
+
+/* Register tokens with Tailwind so they generate real utilities
+   (bg-surface, text-muted, border-line, …). `inline` makes the
+   generated utilities reference the custom property, so they flip
+   automatically under .dark with no override rules.
+   Border tokens are named `line` so the utility reads `border-line`
+   rather than `border-border`. */
+@theme inline {
+    --color-bg:          var(--bg);
+    --color-surface:     var(--surface);
+    --color-sunk:        var(--surface-sunk);
+    --color-line:        var(--border);
+    --color-line-strong: var(--border-strong);
+    --color-text:        var(--text);
+    --color-muted:       var(--text-muted);
+    --color-faint:       var(--text-faint);
+    --color-accent:      var(--accent);
+    --color-accent-text: var(--accent-text);
+    --color-accent-soft: var(--accent-soft);
+    --color-ok:          var(--ok);
+    --color-ok-soft:     var(--ok-soft);
+    --color-info:        var(--info);
+}
+
 /* Custom component classes */
 @layer components {
     /* Recipe cards with colorful borders */
