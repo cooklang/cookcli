@@ -515,7 +515,15 @@ Converts the test-visible classes to flat token styling, and removes exactly the
 
 - [ ] **Step 1: Replace the badge, tag and pill definitions**
 
-In `static/css/input.css`, delete the existing `.recipe-card`, `.recipe-card::before`, `.ingredient-badge`, `.cookware-badge`, `.timer-badge`, `.step-number`, `.tag`, `.nav-pill`, `.nav-pill:hover`, `.nav-pill.active`, `.metadata-pill`, and all ten `.metadata-*` variant rules. Replace with:
+In `static/css/input.css`, delete the existing `.recipe-card`, `.recipe-card::before`, `.ingredient-badge`, `.cookware-badge`, `.timer-badge`, `.step-number`, `.tag`, `.nav-pill`, `.nav-pill:hover`, `.nav-pill.active`, `.metadata-pill`, `.metadata-pill svg`, and all ten `.metadata-*` variant rules.
+
+**Also delete the OLD `.btn-primary` and `.btn-primary:hover` rules** — the gradient ones (`background: linear-gradient(135deg, #ff6b35, #f97316)` with the orange glow `box-shadow`), which sit *later* in the file than the token-based `.btn-primary` added in Task 3. Because they come later in source order they currently win the cascade, so the Task 3 component is inert until they are removed. Verify afterwards that exactly one `.btn-primary` definition remains:
+
+```bash
+grep -c "^\s*\.btn-primary\s*{" static/css/input.css   # must print 1
+```
+
+Replace all of the above with:
 
 ```css
     /* Inline recipe entities: weight + tint, not bordered gradient pills,
