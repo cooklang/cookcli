@@ -36,6 +36,12 @@ Templates use only the `md` (768px) and `lg` (1024px) breakpoints. Tablet portra
 
 Accent colour is not controlled: orange, yellow, green, blue, cyan, purple, and pink gradients all appear as primary-weight UI.
 
+### Three competing sources of styling truth
+
+`static/css/custom-styles.css` defines `.recipe-card`, `.ingredient-badge`, `.cookware-badge`, `.timer-badge`, `.btn-primary`, `.search-input`, `.recipe-image-placeholder`, `.step-number`, `.tag`, `.nav-pill` and `.metadata-pill` — every one of which `input.css` *also* defines, with different values. It is linked after `output.css` in `base.html`, so it silently wins. `static/css/styles.css` (444 lines) is referenced by nothing at all.
+
+Both files are deleted; `input.css` becomes the single source of truth.
+
 ### Dark mode is unmaintainable
 
 `templates/base.html` contains roughly 450 lines of blanket overrides of the form:
@@ -200,5 +206,5 @@ The token and component layers land **first** and are purely additive — no exi
 ## Out of scope
 
 - **Cook mode** (`static/css/cooking-mode.css`, `static/js/cooking-mode.js`) keeps its current appearance, apart from the inline entity classes it shares with the main stylesheet. Its own compaction — dead vertical space, missing next/previous affordances, duplicate ingredient entries in the mise-en-place grid — is a natural follow-up, tracked separately.
-- **Pantry quantity formatting bug.** Quantities render as `250%g`, `2%l`, `200%g` — a format-string defect, unrelated to design. To be fixed in its own change.
+- **Pantry raw quantity display.** Quantities render as `250%g`, `2%l`, `200%g`. `%` is the quantity/unit separator used by `pantry.conf` — the pantry edit form's own placeholder reads `Quantity (e.g., 500%g)` — so this is the stored value being displayed unformatted rather than a defect. Rendering it as `250 g` is worthwhile but belongs in its own change.
 - No backend, routing, template-data, or API changes. This is a presentation-layer refresh only.
