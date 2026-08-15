@@ -19,7 +19,7 @@
     "test:codegen": "playwright codegen http://localhost:9080"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
+    "@axe-core/playwright": "^4.13.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/language": "^6.12.4",
     "@codemirror/lint": "^6.9.7",
@@ -28,7 +28,7 @@
     "@codemirror/view": "^6.39.11",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/cli": "^4.3.3",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "playwright": "^1.55.0",
     "tailwindcss": "^4.3.3"
   },
