@@ -157,6 +157,10 @@
         @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap border bg-white;
     }
 
+    .metadata-pill svg {
+        @apply w-4 h-4 mr-2;
+    }
+
     .metadata-servings {
         @apply text-gray-600 border-gray-300;
     }
