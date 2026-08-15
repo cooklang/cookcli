@@ -48,7 +48,7 @@ jobs:
 
       - name: Checkout repository
         if: steps.creds.outputs.available == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 1
 
