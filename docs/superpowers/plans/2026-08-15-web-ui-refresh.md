@@ -59,7 +59,7 @@ These classes are **restyled, not renamed**. Keeping the names is deliberate: it
 | File | Responsibility after this plan |
 | --- | --- |
 | `static/css/input.css` | **Single source of styling truth.** Token definitions, `@theme` registration, component layer. |
-| `static/css/output.css` | Build artifact. Never edit by hand. |
+| `static/css/output.css` | Build artifact. Never edit by hand, and **never commit it** — it is gitignored (`.gitignore:5`) and has never been tracked. `git add static/css/output.css` errors; `git add -A` correctly skips it. |
 | `static/css/custom-styles.css` | **Deleted.** Currently duplicates `input.css`'s component layer with different values, and loads *after* `output.css` so it silently wins. |
 | `static/css/styles.css` | **Deleted.** 444 lines, referenced by nothing. |
 | `static/css/cooking-mode.css` | Keeps its own layout, but consumes tokens for colour and inherits the shared badge classes. |
@@ -172,7 +172,7 @@ Expected: the page looks exactly as it did before. Tokens are defined but nothin
 - [ ] **Step 5: Commit**
 
 ```bash
-git add static/css/input.css static/css/output.css
+git add static/css/input.css
 git commit -m "feat(ui): add semantic design tokens"
 ```
 
@@ -459,7 +459,7 @@ Expected: same result as the Task 2 baseline. No template uses the new classes y
 - [ ] **Step 5: Commit**
 
 ```bash
-git add static/css/input.css static/css/output.css
+git add static/css/input.css
 git commit -m "feat(ui): add token-based component layer"
 ```
 
@@ -660,7 +660,7 @@ Expected: same as baseline. `recipe-display.spec.ts` and `navigation.spec.ts` as
 - [ ] **Step 6: Commit**
 
 ```bash
-git add static/css/input.css static/css/output.css templates/base.html
+git add static/css/input.css templates/base.html
 git commit -m "refactor(ui): restyle badges and pills onto design tokens"
 ```
 
