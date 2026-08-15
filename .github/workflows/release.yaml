@@ -263,10 +263,81 @@ jobs:
           name: cook-${{ matrix.target }}.msi
           path: target/wix/cook-${{ matrix.target }}.msi
 
+  # A source tarball that already contains the npm-generated front-end assets
+  # (issue #445). GitHub's auto-generated tag archives omit them — they are
+  # gitignored — and build.rs then refuses to build, so downstream packagers on
+  # platforms with no prebuilt lightningcss/esbuild binary (OpenBSD, for one)
+  # cannot produce them locally at all.
+  source_tarball:
+    name: Build source tarball
+    needs: release_please
+    if: ${{ needs.release_please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    # As for github_build: upload_artifacts is what flips the release out of
+    # draft, so a job it needs failing hard would strand the release as a draft
+    # with no binaries attached. A missing source tarball is worth a red job in
+    # the Actions UI, not a stuck release — an npm registry hiccup here says
+    # nothing about the platform builds.
+    continue-on-error: true
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release_please.outputs.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build CSS
+        run: npm run build-css
+
+      - name: Build JS
+        run: npm run build-js
+
+      - name: Build | Source tarball
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          prefix="cookcli-$version"
+
+          # `git archive` rather than a plain `tar .`, so nothing untracked
+          # (node_modules/, target/) can leak in; the two generated assets are
+          # then copied on top.
+          mkdir -p dist
+          git archive --format=tar --prefix="$prefix/" HEAD | tar -x -C dist
+          cp static/css/output.css "dist/$prefix/static/css/output.css"
+          cp static/js/editor.bundle.js "dist/$prefix/static/js/editor.bundle.js"
+          tar -czf "cook-$version-source.tar.gz" -C dist "$prefix"
+
+          # The whole point of this artifact is those two files, and a tarball
+          # missing them fails only much later, in someone else's build. The
+          # listing goes to a file rather than into `grep -q`, which would exit
+          # early, SIGPIPE the tar, and trip `pipefail` on a healthy tarball.
+          tar -tzf "cook-$version-source.tar.gz" > dist/contents.txt
+          for asset in static/css/output.css static/js/editor.bundle.js; do
+            grep -qx "$prefix/$asset" dist/contents.txt \
+              || { echo "source tarball is missing $asset" >&2; exit 1; }
+          done
+        env:
+          TAG: ${{ needs.release_please.outputs.tag_name }}
+
+      # Named to match the `cook-*` pattern that upload_artifacts downloads,
+      # checksums and attaches to the release.
+      - name: Release | Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: cook-source.tar.gz
+          path: cook-*-source.tar.gz
+
   # Create GitHub release with Rust build targets and release notes
   upload_artifacts:
     name: Add Build Artifacts to Release
-    needs: [release_please, github_build]
+    needs: [release_please, github_build, source_tarball]
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Artifacts
