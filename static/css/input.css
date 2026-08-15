@@ -7,7 +7,7 @@
 
 /* ============================================================
    DESIGN TOKENS
-   Fifteen semantic names, defined once per theme. Every colour
+   Seventeen semantic names, defined once per theme. Every colour
    in the UI resolves through one of these. Do not introduce raw
    hex values or Tailwind palette utilities in templates.
    --accent-ink is the foreground colour for text and icons sitting ON a
@@ -30,6 +30,8 @@
     --accent-ink:    #ffffff;
     --ok:            #2f7d55;
     --ok-soft:       #e7f4ec;
+    --danger:        #b42318;
+    --danger-soft:   #fdecea;
     --info:          #2b6cb0;
 
     --radius-control: 6px;
@@ -53,6 +55,8 @@
     --accent-ink:    #131519;
     --ok:            #5fbe8b;
     --ok-soft:       #17271f;
+    --danger:        #ff8a8a;
+    --danger-soft:   #2a1618;
     --info:          #7ab3ea;
 
     --shadow-card:   none;
@@ -79,6 +83,8 @@
     --color-accent-ink:  var(--accent-ink);
     --color-ok:          var(--ok);
     --color-ok-soft:     var(--ok-soft);
+    --color-danger:      var(--danger);
+    --color-danger-soft: var(--danger-soft);
     --color-info:        var(--info);
 }
 
@@ -108,6 +114,17 @@
         letter-spacing: .06em;
         text-transform: uppercase;
         color: var(--text-muted);
+    }
+
+    /* Escape hatch: card heads whose text is user-authored data
+       (aisle categories, pantry locations) rather than fixed chrome. */
+    .card-head.plain h2,
+    .card-head.plain h3 {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--text);
     }
 
     .card-head .count {
@@ -186,14 +203,27 @@
         font-size: 13.5px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+    /* Suppress native spin buttons — they appear on hover/focus, widen the
+       input and overflow the stepper's rounded corner. The −/+ buttons are
+       the intended affordance. */
+    .stepper input::-webkit-outer-spin-button,
+    .stepper input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
     }
 
     .stepper input:focus { outline: none; }
 
     /* ---------- Lists ---------- */
+    /* center, not baseline: .row children include non-text controls
+       (checkboxes, status dots) and all content is single-line. */
     .row {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         gap: 10px;
         padding: 7px 14px;
         font-size: 14px;
@@ -248,16 +278,6 @@
         margin: 18px 0 8px;
     }
 
-    .chip {
-        display: inline-block;
-        padding: 1px 8px;
-        border-radius: 9999px;
-        font-size: 12px;
-        font-weight: 500;
-        background: var(--surface-sunk);
-        color: var(--text-muted);
-    }
-
     /* ---------- Status ---------- */
     /* Shared by the pantry page and the shopping list's pantry sidebar,
        so stock state reads identically in both places. Defined here
@@ -271,7 +291,7 @@
 
     .item-status-dot.in-stock { background: var(--ok); }
 
-    .item-status-dot.out-of-stock { background: var(--accent); }
+    .item-status-dot.out-of-stock { background: var(--danger); }
 
     /* Recipe cards with colorful borders */
     .recipe-card {

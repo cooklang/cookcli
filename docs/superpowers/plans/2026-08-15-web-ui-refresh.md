@@ -1089,6 +1089,8 @@ In `templates/recipe.html`, replace the title bar block (lines 36–95) with:
                 {% if !static_mode %}
                 <div class="stepper">
                     <label for="scale" class="sr-only">{{ tr.t("recipe-scale-label") }}</label>
+                    <button type="button" aria-label="Decrease scale"
+                            onclick="stepScale(-0.5)">&minus;</button>
                     <input type="number"
                            id="scale"
                            value="{{ scale }}"
@@ -1096,7 +1098,25 @@ In `templates/recipe.html`, replace the title bar block (lines 36–95) with:
                            max="200"
                            step="0.5"
                            onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                    <button type="button" aria-label="Increase scale"
+                            onclick="stepScale(0.5)">+</button>
                 </div>
+```
+
+The `id="scale"` input, its `min`/`max`/`step` and its `onchange` are preserved verbatim — `addToShoppingList()` reads `document.getElementById('scale').value`, and `recipe-scaling.spec.ts` drives the input directly. The −/+ buttons are additive. Add this helper to the page's existing `<script>` block:
+
+```javascript
+function stepScale(delta) {
+    const input = document.getElementById('scale');
+    const next = Math.min(200, Math.max(0.5, (parseFloat(input.value) || 1) + delta));
+    input.value = next;
+    input.dispatchEvent(new Event('change'));
+}
+```
+
+Dispatching `change` rather than calling the handler directly keeps a single source of navigation behaviour.
+
+```html
                 <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -1514,7 +1534,7 @@ Replace the category block template literal (currently `<div class="mb-6 bg-whit
 ```javascript
         html += data.categories.map(category => `
             <div class="card mb-2.5">
-                <div class="card-head"><h3>${escHtml(category.category)}</h3></div>
+                <div class="card-head plain"><h3>${escHtml(category.category)}</h3></div>
                 <ul>
                     ${category.items.map((item, idx) => {
                         const itemId = `item-${item.name.replace(/\s+/g, '-')}`;
@@ -1543,6 +1563,8 @@ Four things must survive verbatim, because other code reads them:
 - **`id` / `for` pairing on checkbox and label** — clicking the label is how items get ticked.
 - **`data-action="toggle-item"`, `data-item-id`, `data-ingredient-name"`** — the delegated `onchange` handler dispatches on these.
 - **`.item-name`** — read by the copy-to-clipboard builder and by the tests.
+
+Aisle names come from `aisle.conf` and are user-authored, so they use the `.plain` variant rather than the uppercase micro-label treatment.
 
 - [ ] **Step 3: Convert the JS-rendered pantry sidebar**
 
@@ -1624,6 +1646,8 @@ In `static/css/input.css`, delete the `.pantry-item`, `.pantry-item:hover`, `.pa
 
 `.item-status-dot` is **not** redefined here — Task 3 already defines it, because the shopping list's pantry sidebar (Task 8) consumes it first.
 
+Note: `.item-status-dot.out-of-stock` uses `var(--danger)`, not `var(--accent)` — the accent is reserved for the single primary action per view. If the out-of-stock row needs a tinted background, use `var(--danger-soft)`.
+
 The seven `.pantry-item .text-gray-*` rules existed only to force dark-mode text colours onto Tailwind utilities. Tokens make them unnecessary — but that means you must also remove those `text-gray-*` utilities from the pantry markup in the next step, or the text will stay grey in dark mode.
 
 - [ ] **Step 2: Collapse the item markup**
@@ -1664,7 +1688,7 @@ Unlike the recipes index, the pantry has no client-side sorter reparenting its c
 
 - [ ] **Step 3: Convert the section grid**
 
-Replace `<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">` (line 59) with a `.card` per storage location containing a `.card-head` (location name + item count) and the items as `.pantry-item` rows. Wrap the locations in `<div class="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">`.
+Replace `<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">` (line 59) with a `.card` per storage location containing a `class="card-head plain"` head (location name + item count) and the items as `.pantry-item` rows. Wrap the locations in `<div class="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">`. Storage location names are user-authored, so they use the `.plain` variant rather than the uppercase micro-label treatment.
 
 - [ ] **Step 4: Head and modal**
 
@@ -1888,6 +1912,16 @@ Expected: dark background forced to white, text dark, nav hidden, badges readabl
 
 Run: `npm test`
 Expected: same as baseline.
+
+- [ ] **Step 3b: Split `input.css`**
+
+`input.css` now holds the theme contract (tokens, `@theme` registration) and the whole component vocabulary in one file, and the component half is edited constantly while the token half is meant to stay stable. Split at the `@layer components` boundary:
+
+- `static/css/input.css` keeps `@import "tailwindcss"`, `@config`, the `:root` / `.dark` token blocks and `@theme inline` — the rarely-touched theme contract.
+- Move the entire `@layer components { … }` block into a new `static/css/components.css`.
+- Pull it back in with `@import "./components.css";` placed immediately after the `@theme inline` block. Tailwind v4 processes `@layer components` contributions from imported partials correctly.
+
+Verify with `npm run build-css` (exit 0) and confirm the compiled `output.css` still contains `.card`, `.btn`, `.row` and `.metaline`.
 
 - [ ] **Step 7: Commit**
 
