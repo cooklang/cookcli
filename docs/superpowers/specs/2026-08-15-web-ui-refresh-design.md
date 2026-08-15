@@ -87,10 +87,11 @@ Added to `static/css/input.css`. Eleven semantic names, defined once per theme:
   --border-strong: #d5cfc6;
   --text:          #1b1917;
   --text-muted:    #6f6862;
-  --text-faint:    #9a938c;
-  --accent:        #d9541c;
+  --text-faint:    #736c66;
+  --accent:        #c2410c;
   --accent-text:   #b0400f;
   --accent-soft:   #fdefe6;
+  --accent-ink:    #ffffff;
 }
 
 .dark {
@@ -101,10 +102,11 @@ Added to `static/css/input.css`. Eleven semantic names, defined once per theme:
   --border-strong: #3a414b;
   --text:          #eceef1;
   --text-muted:    #9aa2ac;
-  --text-faint:    #6f7883;
+  --text-faint:    #858e99;
   --accent:        #ff7a45;
   --accent-text:   #ff9166;
   --accent-soft:   #2c1e17;
+  --accent-ink:    #131519;
 }
 ```
 
@@ -123,6 +125,7 @@ Semantic tokens are registered with Tailwind v4's `@theme inline` so they genera
   --color-accent:       var(--accent);       /* bg-accent      */
   --color-accent-text:  var(--accent-text);  /* text-accent-text */
   --color-accent-soft:  var(--accent-soft);  /* bg-accent-soft */
+  --color-accent-ink:   var(--accent-ink);   /* text-accent-ink */
 }
 ```
 
@@ -130,7 +133,7 @@ Border tokens are named `line` rather than `border` so the generated utility rea
 
 The existing `@config "../../tailwind.config.js"` directive stays; the legacy `primary-orange` / `light-*` colours in `tailwind.config.js` are removed once no template references them.
 
-Three further status tokens cover pantry stock and shopping-list state: `--ok`, `--ok-soft`, `--info` (fourteen tokens in total).
+Three further status tokens cover pantry stock and shopping-list state: `--ok`, `--ok-soft`, `--info` (fifteen tokens in total).
 
 **Collapsed scales:**
 
@@ -199,7 +202,7 @@ The token and component layers land **first** and are purely additive — no exi
 ### 7. Verification
 
 - `npm test` (Playwright E2E, `tests/e2e/`) runs after each page migration. Tests use mostly semantic selectors, but any that assert on gradient or colour utility classes will need updating alongside the page they cover.
-- `tests/e2e/accessibility.spec.ts` covers WCAG 2.0 AA contrast and will catch regressions in the new palette. All token pairs (`--text` on `--surface`, `--text-muted` on `--surface`, `--accent-text` on `--surface`, `#fff` on `--accent`) must pass AA in both themes.
+- `tests/e2e/accessibility.spec.ts` covers WCAG 2.0 AA contrast and will catch regressions in the new palette. All token pairs (`--text` on `--surface`, `--text-muted` on `--surface`, `--accent-text` on `--surface`, `--accent-ink` on `--accent`) must pass AA in both themes.
 - Each migrated page is visually checked at **820px** (tablet portrait), **1024px**, and **1440px**, in both light and dark.
 - `cargo fmt`, `cargo clippy`, and `cargo test` must pass before the PR, per `CLAUDE.md`.
 

@@ -84,9 +84,13 @@ Insert immediately after the `@config "../../tailwind.config.js";` line in `stat
 ```css
 /* ============================================================
    DESIGN TOKENS
-   Fourteen semantic names, defined once per theme. Every colour
+   Fifteen semantic names, defined once per theme. Every colour
    in the UI resolves through one of these. Do not introduce raw
    hex values or Tailwind palette utilities in templates.
+   --accent-ink is the foreground colour for text and icons sitting ON a
+   filled --accent background. It is white in light mode and near-black in
+   dark mode, because the dark accent is deliberately vivid and cannot
+   carry white text at AA contrast.
    ============================================================ */
 :root {
     --bg:            #faf9f7;
@@ -96,10 +100,11 @@ Insert immediately after the `@config "../../tailwind.config.js";` line in `stat
     --border-strong: #d5cfc6;
     --text:          #1b1917;
     --text-muted:    #6f6862;
-    --text-faint:    #9a938c;
-    --accent:        #d9541c;
+    --text-faint:    #736c66;
+    --accent:        #c2410c;
     --accent-text:   #b0400f;
     --accent-soft:   #fdefe6;
+    --accent-ink:    #ffffff;
     --ok:            #2f7d55;
     --ok-soft:       #e7f4ec;
     --info:          #2b6cb0;
@@ -118,10 +123,11 @@ Insert immediately after the `@config "../../tailwind.config.js";` line in `stat
     --border-strong: #3a414b;
     --text:          #eceef1;
     --text-muted:    #9aa2ac;
-    --text-faint:    #6f7883;
+    --text-faint:    #858e99;
     --accent:        #ff7a45;
     --accent-text:   #ff9166;
     --accent-soft:   #2c1e17;
+    --accent-ink:    #131519;
     --ok:            #5fbe8b;
     --ok-soft:       #17271f;
     --info:          #7ab3ea;
@@ -147,6 +153,7 @@ Insert immediately after the `@config "../../tailwind.config.js";` line in `stat
     --color-accent:      var(--accent);
     --color-accent-text: var(--accent-text);
     --color-accent-soft: var(--accent-soft);
+    --color-accent-ink:  var(--accent-ink);
     --color-ok:          var(--ok);
     --color-ok-soft:     var(--ok-soft);
     --color-info:        var(--info);
@@ -307,7 +314,7 @@ Add at the top of the existing `@layer components { … }` block in `static/css/
     .btn-primary {
         background: var(--accent);
         border-color: var(--accent);
-        color: #fff;
+        color: var(--accent-ink);
     }
 
     .btn-primary:hover {
@@ -1857,7 +1864,7 @@ git commit -m "refactor(ui): remove dark-mode utility override block"
 Run: `npx playwright test tests/e2e/accessibility.spec.ts --project=chromium`
 Expected: 12 tests PASS, including `should have sufficient color contrast` (axe `color-contrast` is enabled at line 134).
 
-If contrast fails, darken `--accent-text` in light mode and lighten `--text-muted` in dark mode until it passes. These four pairs must reach AA in both themes: `--text` on `--surface`, `--text-muted` on `--surface`, `--accent-text` on `--surface`, and `#fff` on `--accent`.
+If contrast fails, darken `--accent-text` in light mode and lighten `--text-muted` in dark mode until it passes. These four pairs must reach AA in both themes: `--text` on `--surface`, `--text-muted` on `--surface`, `--accent-text` on `--surface`, and `--accent-ink` on `--accent`.
 
 - [ ] **Step 2: Full E2E suite**
 
