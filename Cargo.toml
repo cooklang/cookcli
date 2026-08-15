@@ -109,7 +109,7 @@ tokio-util = { version = "0.7", optional = true }
 thiserror = { version = "2", optional = true }
 toml = "1.1.3"
 tower = { version = "0.5", features = ["util"], optional = true }
-tower-http = { version = "0.6", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
+tower-http = { version = "0.7", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
 tower-lsp = { version = "0.20", optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
