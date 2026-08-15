@@ -43,7 +43,7 @@ thiserror = "2"
 # Editing pantry.conf as a document rather than rebuilding it from a parsed
 # model, so that comments, layout and keys `cooklang` does not model survive a
 # `cook pantry add` — see `pantry::edit`.
-toml_edit = "0.22"
+toml_edit = "0.25"
 tracing = "0.1"
 yansi = "1"
 
