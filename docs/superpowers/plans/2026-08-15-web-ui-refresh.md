@@ -68,9 +68,12 @@ npm run build-css && cargo build && ./target/debug/cook server ./seed --port 908
 | Failed | 2 (flaky — see below) |
 | Skipped | 5 (pre-existing `test.skip` in source) |
 
-The 2 failures are **pre-existing test-isolation flakiness, not regressions**:
+The failures are **pre-existing test-isolation flakiness, not regressions**. Expect roughly 1–2 failures per run, drawn from *any* of the shopping-list specs — the specific tests vary run to run. Observed so far:
 - `shopping-list-copy.spec.ts:89` "leaves out items that are already ticked off"
 - `shopping-list.spec.ts:29` "should add recipe ingredients to shopping list"
+- `shopping-list-live.spec.ts:32` "updates the sidebar when .shopping-list changes on disk"
+
+Treat any failure confined to `shopping-list*.spec.ts` as suspect-flaky and confirm with a serial rerun before investigating. A failure in any OTHER spec file is a real regression.
 
 Both pass when rerun with `--workers=1`. Cause: the shopping list persists to single shared files — `seed/.shopping-list` and `seed/.shopping-checked` — and `playwright.config.ts` sets `fullyParallel: true` with unbounded local workers, which race on them. `shopping-list-copy.spec.ts` overwrites those files directly in `beforeEach`; `shopping-list.spec.ts:29` mutates the same files through the UI. When either fails, rerun that spec alone with `--workers=1` before concluding you broke something.
 
@@ -698,6 +701,12 @@ Replace all of the above with:
 ```
 
 Note: `.recipe-image-placeholder` and `.search-input:focus` stay as they are for now; `.search-input:focus` is replaced in Task 5.
+
+**Two consequences of this task that are known and accepted:**
+
+1. **Cook mode needs the dark tokens forced.** The badges no longer carry their own background, so they resolve whatever `--accent-text` / `--ok` the *site* theme provides — but cook mode's card is always dark navy. With the site in light mode the badges landed at ~2.5:1 on that card. Fixed by adding `.cooking-overlay` alongside `.dark` on the token block in `input.css`, so the overlay always resolves the dark values (verified 6.6:1 and 6.4:1 after). Do not remove that selector.
+
+2. **`recipes.html` and `/directory/*` look wrong until Task 7.** `.recipe-card` now sets `display: flex; align-items: center`, but the template still nests a `flex-col` card with an `h-48` image header. The result is that the image shrink-wraps and centres instead of filling the card. `background` and `border-radius` are unaffected — Tailwind's utilities layer beats `@layer components`, so the markup's `bg-white`/`rounded-2xl` still win — but the flex properties have no competing utility and do apply. This is cosmetic breakage confined to the branch. **It is only acceptable because Tasks 4 and 7 ship together in one PR; do not deploy an intermediate commit.**
 
 - [ ] **Step 2: Remove the dark overrides for these classes**
 

@@ -206,6 +206,13 @@ The token and component layers land **first** and are purely additive — no exi
 - Each migrated page is visually checked at **820px** (tablet portrait), **1024px**, and **1440px**, in both light and dark.
 - `cargo fmt`, `cargo clippy`, and `cargo test` must pass before the PR, per `CLAUDE.md`.
 
+## Deferred follow-ups
+
+Raised during implementation review, deliberately not addressed in this refresh:
+
+- **`--ok` is semantically overloaded.** It is both a *status* colour (`.item-status-dot.in-stock` on the pantry page) and a *category* colour (`.cookware-badge` in recipe steps). They are unrelated concerns that happen to want the same green today, so a future change to one silently re-tints the other. A distinct `--cookware-text` token defaulting to the same values would decouple them at zero visual cost.
+- **Inline entities are distinguished mainly by hue.** Ingredients (`--accent-text`, orange) and cookware (`--ok`, green) differ from prose by colour plus `font-weight: 600`. The weight signals "this is an entity", but not *which kind* — and the two hues sit at similar luminance, so readers with deuteranopia or protanopia will struggle to tell them apart. Both clear AA contrast against the page, so this is a hue-discrimination issue rather than a legibility one. `.timer-badge` already carries a shape cue; ingredients and cookware may warrant a similarly cheap non-hue signal.
+
 ## Out of scope
 
 - **Cook mode** (`static/css/cooking-mode.css`, `static/js/cooking-mode.js`) keeps its current appearance, apart from the inline entity classes it shares with the main stylesheet. Its own compaction — dead vertical space, missing next/previous affordances, duplicate ingredient entries in the mise-en-place grid — is a natural follow-up, tracked separately.

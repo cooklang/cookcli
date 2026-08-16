@@ -39,7 +39,13 @@
     --shadow-card:   0 1px 2px rgba(0, 0, 0, .04);
 }
 
-.dark {
+/* .cooking-overlay is listed here deliberately. Cook mode's chrome is always
+   dark regardless of the site theme, so the tokens must resolve to their dark
+   values inside it. Without this, inline entity badges — which carry no
+   background of their own since Task 4 — inherit the LIGHT theme's
+   --accent-text / --ok and render at roughly 2.5:1 on cook mode's navy card. */
+.dark,
+.cooking-overlay {
     color-scheme: dark;
     --bg:            #131519;
     --surface:       #1a1d22;
