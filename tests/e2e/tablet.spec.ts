@@ -23,6 +23,33 @@ test.describe('Tablet layout', () => {
 
     await expect(page.locator('nav a.nav-pill', { hasText: /Recipes/i })).toBeVisible();
   });
+
+  test('recipe action buttons keep their labels', async ({ page }) => {
+    await page.goto('/recipe/Neapolitan Pizza');
+    await page.waitForLoadState('networkidle');
+
+    // Below lg these used to collapse to unlabelled coloured circles. The
+    // label markup survived inside `hidden lg:inline` spans, so assert on
+    // visibility — textContent alone still matches display:none text.
+    const cook = page.getByRole('button', { name: /Cook/i });
+    await expect(cook).toContainText(/Cook/i);
+    await expect(cook.getByText(/^Cook$/)).toBeVisible();
+
+    const edit = page.getByRole('link', { name: /Edit/i });
+    await expect(edit).toContainText(/Edit/i);
+    await expect(edit.getByText(/^Edit$/)).toBeVisible();
+  });
+
+  test('ingredient rows do not wrap', async ({ page }) => {
+    await page.goto('/recipe/Neapolitan Pizza');
+    await page.waitForLoadState('networkidle');
+
+    // A single-line row is ~30px tall. Wrapping pushes it past 44px.
+    const row = page.locator('.ingredient-list .row', { hasText: 'mozzarella cheese' });
+    const box = await row.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeLessThan(44);
+  });
 });
 
 // The bar has almost zero horizontal slack at the md breakpoint: at exactly

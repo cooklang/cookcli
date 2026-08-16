@@ -499,6 +499,66 @@
         margin-right: 4px;
     }
 
+    /* ---------- Recipe page ---------- */
+    /* Fixed-width rail is what guarantees ingredient names and
+       quantities never wrap in the 768–1023px tablet band. */
+    .recipe-layout {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 700px) {
+        .recipe-layout {
+            grid-template-columns: 264px minmax(0, 1fr);
+            align-items: start;
+        }
+
+        .recipe-rail {
+            position: sticky;
+            top: 64px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .recipe-layout { grid-template-columns: 300px minmax(0, 1fr); }
+    }
+
+    .ingredient-list { list-style: none; margin: 0; padding: 4px 0; }
+
+    .step-list { list-style: none; margin: 0; padding: 0; }
+
+    .step-list > li {
+        display: flex;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .step-list > li + li { border-top: 1px solid var(--border); }
+
+    .step-body { font-size: 15px; line-height: 1.6; }
+
+    .step-refs {
+        margin-top: 7px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 14px;
+        font-size: 12.5px;
+        color: var(--text-faint);
+    }
+
+    .step-refs b { font-weight: 600; color: var(--text-muted); }
+
+    .recipe-note {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-left: 3px solid var(--border-strong);
+        background: var(--surface-sunk);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
     /* Step images in recipes */
     .image-step {
         @apply w-full max-h-80 object-contain rounded-xl;

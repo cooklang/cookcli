@@ -136,7 +136,7 @@ test.describe('Recipe Display', () => {
     await page.waitForLoadState('networkidle');
 
     // Check that ingredients with notes are displayed
-    const ingredientsList = page.locator('ul.space-y-3 li');
+    const ingredientsList = page.locator('ul.ingredient-list li');
     const count = await ingredientsList.count();
     expect(count).toBeGreaterThan(0);
 
@@ -145,7 +145,7 @@ test.describe('Recipe Display', () => {
 
     if (await ingredientWithNote.count() > 0) {
       // Check note is displayed with correct styling
-      const noteSpan = ingredientWithNote.locator('span.italic.text-gray-600');
+      const noteSpan = ingredientWithNote.locator('span.row-note');
       await expect(noteSpan).toBeVisible();
 
       // Check note content
@@ -161,7 +161,7 @@ test.describe('Recipe Display', () => {
     }
 
     // Check step-level ingredient notes
-    const stepIngredients = page.locator('.text-sm.text-gray-600.mt-2');
+    const stepIngredients = page.locator('.step-refs');
     if (await stepIngredients.count() > 0) {
       const stepNoteSpan = stepIngredients.locator('span.italic').first();
       if (await stepNoteSpan.count() > 0) {
