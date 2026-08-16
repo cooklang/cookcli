@@ -622,7 +622,11 @@
                 -webkit-text-fill-color: #000 !important;
             }
 
-            #menu-content .space-y-6 > * + * {
+            /* Post-refresh markup: the section stack is .space-y-4. The
+               .space-y-6 selector is kept so a stale cached page still
+               compacts. */
+            #menu-content .space-y-6 > * + *,
+            #menu-content .space-y-4 > * + * {
                 margin-top: 0.3rem !important;
             }
 
