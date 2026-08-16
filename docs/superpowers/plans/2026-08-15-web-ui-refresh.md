@@ -1907,6 +1907,17 @@ Only now is it safe: every page consumes tokens, so nothing depends on `.dark .b
 - Modify: `templates/base.html` (`<style>` block)
 - Modify: `tailwind.config.js`
 
+- [ ] **Step 0: Migrate the search-result markup FIRST — it is a known landmine**
+
+Task 5 deleted the `#search-results`-scoped dark overrides. Result items currently stay legible in dark mode **only because the general `.dark .text-gray-800 { color: #e5e7eb }` and `.dark .text-gray-500` rules in the very block this task deletes still match them.** Delete the block without migrating the markup first and every search result becomes dark-grey text on a dark surface.
+
+The result items are generated in two places — migrate both before deleting anything:
+
+- `templates/base.html`, the search-results renderer (around line 838)
+- `static/js/search.js`, used in static-site mode
+
+Replace their hardcoded `text-gray-800` / `text-gray-500` / `border-gray-100` utilities with `text-text` / `text-muted` / `border-line`. Then verify: open the site in dark mode, type `pizza`, and confirm the dropdown's titles, subtitles and row separators are all legible. (The separator is already wrong today — there is no `.dark .border-gray-100` rule — so this fixes a live minor bug too.)
+
 - [ ] **Step 1: Confirm nothing still relies on the overrides**
 
 Run: `grep -rn "bg-white\|text-gray-[0-9]\|bg-gray-50\|border-gray-[0-9]\|bg-gradient-to-" templates/*.html | grep -v "print:" | grep -v "^templates/base.html:[0-9]*: *\." `

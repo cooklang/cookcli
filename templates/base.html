@@ -248,9 +248,12 @@
             background-color: #374151;
         }
 
-        /* Search result keyboard selection */
+        /* Search result keyboard selection. --surface-sunk alone is only about
+           1.1:1 against --surface in dark mode — effectively invisible while
+           arrowing through results — so the accent bar carries the signal. */
         #search-results a.search-selected {
-            background: var(--surface-sunk) !important;
+            background: var(--accent-soft) !important;
+            box-shadow: inset 3px 0 0 var(--accent);
         }
 
         @media print {
@@ -666,8 +669,11 @@
 <body class="bg-bg text-text">
     <nav class="appbar">
         <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="appbar-brand">
-            <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="" class="h-[22px] w-[22px] rounded-md" width="22" height="22">
-            <span class="hidden sm:inline">Cook</span>
+            <!-- alt is a real label, not decorative: the "Cook" span is
+                 display:none below sm, so without it the link has no
+                 accessible name at narrow widths. -->
+            <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="h-[22px] w-[22px] rounded-md" width="22" height="22">
+            <span class="hidden sm:inline" aria-hidden="true">Cook</span>
         </a>
 
         <div class="appbar-nav hidden md:flex">
