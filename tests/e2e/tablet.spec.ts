@@ -50,6 +50,17 @@ test.describe('Tablet layout', () => {
     expect(box).not.toBeNull();
     expect(box!.height).toBeLessThan(44);
   });
+
+  test('recipe cards are dense', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Hero cards were ~190px tall for one word and a count.
+    const card = page.locator('.recipe-card').first();
+    const box = await card.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeLessThan(80);
+  });
 });
 
 // The bar has almost zero horizontal slack at the md breakpoint: at exactly
