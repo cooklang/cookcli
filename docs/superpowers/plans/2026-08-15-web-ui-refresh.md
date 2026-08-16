@@ -81,6 +81,14 @@ Both pass when rerun with `--workers=1`. Cause: the shopping list persists to si
 
 The 5 skips are `accessibility.spec.ts:44`, `recipe-display.spec.ts:31`, `recipe-display.spec.ts:44`, `shopping-list.spec.ts:54`, `shopping-list.spec.ts:91`.
 
+**4a-i. Clear the shopping-list fixtures before every full run.** `seed/.shopping-list` accumulates duplicate entries across local runs (it is append-driven and never reset), which makes the parallel-worker race meaningfully worse — a polluted file turns 1 flaky failure into 3. Both files are gitignored and the app recreates them, so deleting is safe:
+
+```bash
+rm -f seed/.shopping-list seed/.shopping-checked
+```
+
+Do this before `npm test`, not after.
+
 **4b. Tests mutate a tracked seed fixture.** The pantry tests write to `seed/config/pantry.conf`, which IS tracked in git. After any test run, restore it before committing so it isn't swept into your commit:
 
 ```bash
