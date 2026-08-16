@@ -574,6 +574,22 @@
                 margin-bottom: 0.15rem !important;
             }
 
+            /* Post-refresh markup: aisle groups are .card + .card-head, items
+               are .row. Same compaction as the utility selectors above, which
+               no longer match anything the page renders. */
+            #shopping-list-results .card {
+                margin-bottom: 0.15rem !important;
+            }
+
+            #shopping-list-results .card-head {
+                padding: 0 !important;
+                border-bottom: none !important;
+            }
+
+            #shopping-list-results .row {
+                padding: 0 !important;
+            }
+
             #shopping-list-results .mb-4,
             #shopping-list-results .mb-3 {
                 margin-bottom: 0 !important;
