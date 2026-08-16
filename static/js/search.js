@@ -36,12 +36,12 @@
 
   function render(matches) {
     if (matches.length === 0) {
-      results.innerHTML = '<div class="p-4 text-gray-500 text-center">No recipes found</div>';
+      results.innerHTML = '<div class="p-4 text-muted text-center">No recipes found</div>';
     } else {
       results.innerHTML = matches.map(function (m) {
         var href = prefix + "/" + m.path;
-        return '<a href="' + escapeHtml(href) + '" class="search-result block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">' +
-          '<div class="font-medium text-gray-800">' + escapeHtml(m.title) + '</div>' +
+        return '<a href="' + escapeHtml(href) + '" class="search-result block px-4 py-3 hover:bg-sunk transition-colors border-b border-line last:border-b-0">' +
+          '<div class="font-medium text-text">' + escapeHtml(m.title) + '</div>' +
           '</a>';
       }).join("");
     }

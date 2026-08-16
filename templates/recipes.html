@@ -6,12 +6,12 @@
 <div>
     {% if !breadcrumbs.is_empty() %}
     <nav class="mb-4">
-        <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
-                <span class="mx-2 text-gray-400">/</span>
-                <a href="{{ prefix }}/directory/{{ crumb.path }}{% if static_mode %}.html{% endif %}" class="hover:text-gray-900">{{ crumb.name }}</a>
+                <span class="mx-2 text-faint">/</span>
+                <a href="{{ prefix }}/directory/{{ crumb.path }}{% if static_mode %}.html{% endif %}" class="hover:text-text">{{ crumb.name }}</a>
             </li>
             {% endfor %}
         </ol>
@@ -34,19 +34,19 @@
 
     {% match todays_menu %}
     {% when Some with (menu) %}
-    <div class="mb-8 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div class="flex-1">
-                <div class="flex items-center gap-3 mb-2">
-                    <span class="text-2xl">📋</span>
-                    <h2 class="text-xl font-bold">{{ tr.t("todays-menu-title") }}</h2>
-                    <span class="text-sm opacity-80">{{ menu.date_display }}</span>
+    <div class="mb-6 card p-4 border-l-[3px] border-l-accent">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2.5 mb-1">
+                    <span class="text-lg">📋</span>
+                    <h2 class="text-[15px] font-semibold text-text">{{ tr.t("todays-menu-title") }}</h2>
+                    <span class="text-xs text-faint">{{ menu.date_display }}</span>
                 </div>
-                <p class="text-sm opacity-90">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
+                <p class="text-[13px] text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
+            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>
@@ -93,7 +93,7 @@
         {% endfor %}
 
         {% if items.is_empty() %}
-        <div class="text-gray-500 text-center py-8">
+        <div class="text-faint text-center py-8">
             {{ tr.t("recipes-empty") }}
         </div>
         {% endif %}

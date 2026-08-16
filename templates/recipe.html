@@ -7,15 +7,15 @@
 
 <div>
     <nav class="mb-4 breadcrumb print:hidden">
-        <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
-                <span class="mx-2 text-gray-400">/</span>
+                <span class="mx-2 text-faint">/</span>
                 {% if loop.last %}
-                    <span class="text-gray-900">{{ crumb }}</span>
+                    <span class="text-text">{{ crumb }}</span>
                 {% else %}
-                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-gray-900">{{ crumb }}</a>
+                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-text">{{ crumb }}</a>
                 {% endif %}
             </li>
             {% endfor %}
