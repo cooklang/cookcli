@@ -92,6 +92,21 @@ PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=mac14 npx playwright install chromium
 
 This pulls the mac14 Chrome-for-Testing build, which runs correctly here. Local environment only — never commit anything for this.
 
+**4d. Kill `text-orange-600` on sight.** It computes to `#f54900`, which is **3.60:1** on white — below the AA 4.5:1 bar. It currently passes CI only because decorative elements make axe report it as "incomplete" rather than a violation; as this refresh removes those elements, each occurrence turns into a hard test failure. Task 4 already hit this once (`recipes.html:79`).
+
+When you migrate a page, replace every `text-orange-600` in it with `text-accent-text` (5.86:1 light, 7.64:1 dark). Do not substitute `text-orange-700` — the legacy palette is deleted in Task 13.
+
+Known occurrences at the time of writing, by owning task:
+
+| File | Lines | Migrated in |
+| --- | --- | --- |
+| `templates/recipe.html` | 204, 334 | Task 6 |
+| `templates/shopping_list.html` | 10, 67, 72, 175, 184, 195, 216, 225, 471, 481 | Task 8 |
+| `templates/pantry.html` | 28, 44, 315, 350 | Task 9 |
+| `templates/base.html` | 235, 372, 492, 820, 824, 829, 863, 866 | Tasks 5 and 13 |
+
+Re-grep rather than trusting these line numbers — they drift as files are edited.
+
 **5. Do not rename these class names.** The E2E suite (134 tests) selects on them directly:
 
 | Class | Used by |
