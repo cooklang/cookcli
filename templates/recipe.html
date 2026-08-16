@@ -45,16 +45,16 @@
                 <div class="stepper">
                     <label for="scale" class="sr-only">{{ tr.t("recipe-scale-label") }}</label>
                     <button type="button" aria-label="Decrease scale"
-                            onclick="stepScale(-0.5)">&minus;</button>
+                            onclick="adjustScale(-0.5)">&minus;</button>
                     <input type="number"
                            id="scale"
                            value="{{ scale }}"
                            min="0.5"
                            max="200"
                            step="0.5"
-                           onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                           onchange="goToScale(this.value)">
                     <button type="button" aria-label="Increase scale"
-                            onclick="stepScale(0.5)">+</button>
+                            onclick="adjustScale(0.5)">+</button>
                 </div>
                 <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,9 +200,9 @@
                         {% if section.ingredients.len() > 0 %}
                             {% match section.name %}
                             {% when Some with (name) %}
-                                <h3 class="section-label px-3.5">{{ name }}</h3>
+                                <h3 class="section-label">{{ name }}</h3>
                             {% when None %}
-                                {% if !loop.first %}<h3 class="section-label px-3.5">{{ tr.t("recipe-main-section") }}</h3>{% endif %}
+                                {% if !loop.first %}<h3 class="section-label">{{ tr.t("recipe-main-section") }}</h3>{% endif %}
                             {% endmatch %}
 
                             <ul class="ingredient-list">
@@ -282,7 +282,7 @@
                 {% for section in sections %}
                     {% match section.name %}
                     {% when Some with (name) %}
-                        <h3 class="section-label px-3.5">{{ name }}</h3>
+                        <h3 class="section-label">{{ name }}</h3>
                     {% when None %}
                     {% endmatch %}
 
@@ -408,12 +408,34 @@ function showRecipeError(message) {
     content.parentNode.insertBefore(banner, content);
 }
 
-function stepScale(delta) {
-    const input = document.getElementById('scale');
-    const next = Math.min(200, Math.max(0.5, (parseFloat(input.value) || 1) + delta));
-    input.value = next;
-    input.dispatchEvent(new Event('change'));
+// Rescaling is a full page navigation, which would otherwise dump you back at
+// the title. Stash the scroll offset first and restore it on the way in, so
+// tapping −/+ while reading step 8 leaves you at step 8.
+// The −/+ buttons themselves call adjustScale() from keyboard-shortcuts.js,
+// which clamps to the input's own min/max and skips the change event entirely
+// when the value did not move.
+const SCALE_SCROLL_KEY = 'recipe-scroll:' + window.location.pathname;
+
+function goToScale(value) {
+    try {
+        sessionStorage.setItem(SCALE_SCROLL_KEY, String(window.scrollY));
+    } catch (e) { /* private mode / storage disabled */ }
+    window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${value}`;
 }
+
+// Only ever set immediately before a scale navigation, and cleared as soon as
+// it is read, so arriving at this page any other way restores nothing.
+(function restoreScaleScroll() {
+    let stashed = null;
+    try {
+        stashed = sessionStorage.getItem(SCALE_SCROLL_KEY);
+        if (stashed !== null) sessionStorage.removeItem(SCALE_SCROLL_KEY);
+    } catch (e) { return; }
+    if (stashed === null) return;
+    const y = parseInt(stashed, 10);
+    if (!Number.isFinite(y) || y <= 0) return;
+    window.addEventListener('load', function () { window.scrollTo(0, y); });
+})();
 </script>
 {% endif %}
 {% endblock %}

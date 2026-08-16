@@ -37,6 +37,10 @@
     --radius-control: 6px;
     --radius-card:   10px;
     --shadow-card:   0 1px 2px rgba(0, 0, 0, .04);
+
+    /* Height of the sticky app bar. Used by .appbar itself and by anything
+       that has to sit clear of it (the sticky ingredient rail). */
+    --appbar-h: 48px;
 }
 
 /* .cooking-overlay is listed here deliberately. Cook mode's chrome is always
@@ -92,6 +96,58 @@
     --color-danger:      var(--danger);
     --color-danger-soft: var(--danger-soft);
     --color-info:        var(--info);
+}
+
+/* Print: force the light token values regardless of the active theme, and
+   flatten the recipe grid. The print rules in base.html were written against
+   pre-refresh markup (`.bg-white`, `.grid`, `.md\:col-span-*`) and no longer
+   match anything, so without this a dark-theme recipe prints as near-black
+   text on a near-black card. */
+@media print {
+    :root,
+    .dark,
+    .cooking-overlay {
+        --bg:            #ffffff;
+        --surface:       #ffffff;
+        --surface-sunk:  #f5f4f2;
+        --border:        #dddad5;
+        --border-strong: #bbb6ae;
+        --text:          #111111;
+        --text-muted:    #444444;
+        --text-faint:    #666666;
+        --accent:        #a8380c;
+        --accent-text:   #a8380c;
+        --accent-soft:   #f7ece5;
+        --accent-ink:    #ffffff;
+        --ok:            #23624a;
+        --ok-soft:       #eaf3ee;
+        --danger:        #96201a;
+        --danger-soft:   #f8eae9;
+        --info:          #1f4f86;
+        --shadow-card:   none;
+    }
+
+    .card {
+        border-color: var(--border) !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+
+    /* Single column on paper; the rail must not stay sticky. */
+    .recipe-layout {
+        display: block !important;
+    }
+
+    .recipe-rail {
+        position: static !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin-bottom: 16px;
+    }
+
+    .step-list > li {
+        break-inside: avoid;
+    }
 }
 
 /* Custom component classes */
@@ -282,6 +338,9 @@
         text-transform: uppercase;
         color: var(--text-faint);
         margin: 18px 0 8px;
+        /* Baked in so every call site does not have to remember px-3.5;
+           it aligns the label with .row / .card-head padding. */
+        padding: 0 14px;
     }
 
     /* ---------- Status ---------- */
@@ -401,7 +460,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        height: 48px;
+        height: var(--appbar-h);
         padding: 0 16px;
         background: var(--surface);
         border-bottom: 1px solid var(--border);
@@ -500,8 +559,9 @@
     }
 
     /* ---------- Recipe page ---------- */
-    /* Fixed-width rail is what guarantees ingredient names and
-       quantities never wrap in the 768–1023px tablet band. */
+    /* The fixed-width rail keeps typical ingredient rows — name on the left,
+       quantity on the right — on a single line in the 768–1023px tablet band.
+       Long names still wrap, which is the intended behaviour. */
     .recipe-layout {
         display: grid;
         gap: 16px;
@@ -514,9 +574,14 @@
             align-items: start;
         }
 
+        /* A rail taller than the viewport would otherwise hide its own bottom
+           for the whole scroll, so it scrolls internally instead. */
         .recipe-rail {
             position: sticky;
-            top: 64px;
+            top: calc(var(--appbar-h) + 16px);
+            max-height: calc(100vh - var(--appbar-h) - 32px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
     }
 
@@ -557,6 +622,17 @@
         background: var(--surface-sunk);
         color: var(--text-muted);
         font-style: italic;
+    }
+
+    /* Coarse pointers get real touch targets. The stated use case is a
+       tablet propped in a kitchen, where 26px buttons are not tappable. */
+    @media (pointer: coarse) {
+        .btn { height: 44px; padding: 0 14px; }
+        .stepper { height: 44px; }
+        .stepper button { width: 40px; }
+        .stepper input, .stepper .value { width: 52px; }
+        .icon-btn { width: 40px; height: 40px; }
+        .ref-checkbox { width: 20px; height: 20px; }
     }
 
     /* Step images in recipes */

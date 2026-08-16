@@ -375,6 +375,10 @@
         }
     }
 
+    // The recipe page's −/+ stepper buttons call this too, so the clamping,
+    // rounding and no-op guard live in exactly one place.
+    window.adjustScale = adjustScale;
+
     // Shopping list page specific shortcuts
     function handleShoppingListShortcuts(event, key) {
         switch (key) {

@@ -109,25 +109,26 @@ test.describe('Recipe Display', () => {
     await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
     await page.waitForLoadState('networkidle');
 
-    // Check for metadata pills
-    const metadataPills = page.locator('.metadata-pill');
+    // Metadata renders as dot-separated entries inside #metadata-container.
+    // NOT `.metadata-pill` — since the UI refresh that class is emitted only
+    // for *custom* metadata keys, and Easy Pancakes has none, so selecting on
+    // it yields a count of 0 and silently skips every assertion below.
+    const metadataEntries = page.locator('#metadata-container > span');
 
-    if (await metadataPills.count() > 0) {
-      await expect(metadataPills.first()).toBeVisible();
+    expect(await metadataEntries.count()).toBeGreaterThan(0);
+    await expect(metadataEntries.first()).toBeVisible();
 
-      // Check for common metadata like servings, time, etc.
-      const metadataText = await metadataPills.allTextContents();
-      const hasValidMetadata = metadataText.some(text =>
-        text.includes('servings') ||
-        text.includes('time') ||
-        text.includes('difficulty') ||
-        text.includes('cuisine')
-      );
+    const metadataText = (await metadataEntries.allTextContents())
+      .join(' ')
+      .toLowerCase();
 
-      if (hasValidMetadata) {
-        expect(hasValidMetadata).toBeTruthy();
-      }
-    }
+    // Easy Pancakes declares servings, prep time, cook time, author and tags.
+    expect(metadataText).toContain('2');
+    expect(metadataText).toContain('servings');
+    expect(metadataText).toContain('5 min');
+    expect(metadataText).toContain('20 min');
+    expect(metadataText).toContain('cookcli team');
+    expect(metadataText).toContain('#breakfast');
   });
 
   test('should display ingredient notes from shorthand notation', async ({ page }) => {
