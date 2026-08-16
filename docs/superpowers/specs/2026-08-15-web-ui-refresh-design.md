@@ -210,6 +210,10 @@ The token and component layers land **first** and are purely additive — no exi
 
 Raised during implementation review, deliberately not addressed in this refresh:
 
+- **The Method card head is an untranslated literal.** `recipe-method` does not exist in any of the seven locales (`locales/*/recipes.ftl`, `common.ftl`), so `templates/recipe.html` renders the literal string `Method`. Add the key to every locale and swap the literal for `tr.t("recipe-method")`. Inventing a key with no locale entries would have been worse — it renders as the raw key.
+- **The recipe hero image is unchanged.** It keeps `max-h-[500px]` and `mb-6`, so on image-bearing recipes it still consumes the first screen before the compacted layout begins. Shrinking it would serve the tablet-cooking case but was outside this refresh's scope.
+- **`.metaline` separators are CSS `::after` content.** Screen readers may announce the `·` characters. Consider `aria-hidden` wrappers or a different separator mechanism. A wrapped `.metaline` can also leave a separator dangling at the end of a line, since `:last-child` is DOM order rather than visual position.
+
 - **`--ok` is semantically overloaded.** It is both a *status* colour (`.item-status-dot.in-stock` on the pantry page) and a *category* colour (`.cookware-badge` in recipe steps). They are unrelated concerns that happen to want the same green today, so a future change to one silently re-tints the other. A distinct `--cookware-text` token defaulting to the same values would decouple them at zero visual cost.
 - **Inline entities are distinguished mainly by hue.** Ingredients (`--accent-text`, orange) and cookware (`--ok`, green) differ from prose by colour plus `font-weight: 600`. The weight signals "this is an entity", but not *which kind* — and the two hues sit at similar luminance, so readers with deuteranopia or protanopia will struggle to tell them apart. Both clear AA contrast against the page, so this is a hue-discrimination issue rather than a legibility one. `.timer-badge` already carries a shape cue; ingredients and cookware may warrant a similarly cheap non-hue signal.
 

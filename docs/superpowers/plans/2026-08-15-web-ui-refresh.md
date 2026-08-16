@@ -118,6 +118,18 @@ Known occurrences at the time of writing, by owning task:
 
 Re-grep rather than trusting these line numbers — they drift as files are edited.
 
+**4e. JavaScript scrapes template classes — grep before you delete one.** Several JS files reach into rendered markup by class name, so removing a class from a template can silently break behaviour with no CSS symptom and no obvious test failure. Task 6 hit this: `static/js/cooking-mode.js` selected `.md\:col-span-2 ol` and `.leading-8`, both of which that task deleted, and Cook mode began rendering **empty step cards**.
+
+Before deleting or renaming any class in a template, run:
+
+```bash
+grep -rn "the-class-name" static/js/ templates/ tests/
+```
+
+Known scrapers to check against: `static/js/cooking-mode.js` (`captureStepHTML`), `static/js/search.js`, the inline `<script>` blocks in `templates/recipes.html` (the sorter reads `h3`), `templates/shopping_list.html` and `templates/pantry.html`, and `tests/fixtures/test-helpers.ts`.
+
+Also watch for JS that inserts nodes relative to a structural selector — `showRecipeError()` in `recipe.html` targeted `.grid`, which Task 6 replaced with `.recipe-layout`.
+
 **5. Do not rename these class names.** The E2E suite (134 tests) selects on them directly:
 
 | Class | Used by |
