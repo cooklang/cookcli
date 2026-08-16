@@ -628,11 +628,14 @@
        tablet propped in a kitchen, where 26px buttons are not tappable. */
     @media (pointer: coarse) {
         .btn { height: 44px; padding: 0 14px; }
-        .stepper { height: 44px; }
-        .stepper button { width: 40px; }
+        /* 46px outer so the 1px borders leave a 44px content box — the
+           buttons are height:100% of that, so they land on 44, not 42. */
+        .stepper { height: 46px; }
+        .stepper button { width: 44px; }
         .stepper input, .stepper .value { width: 52px; }
-        .icon-btn { width: 40px; height: 40px; }
-        .ref-checkbox { width: 20px; height: 20px; }
+        .icon-btn { width: 44px; height: 44px; }
+        /* 24px is the WCAG 2.2 SC 2.5.8 minimum, not a rounded-down 20. */
+        .ref-checkbox { width: 24px; height: 24px; }
     }
 
     /* Step images in recipes */
