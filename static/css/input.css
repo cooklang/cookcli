@@ -634,8 +634,11 @@
         .stepper button { width: 44px; }
         .stepper input, .stepper .value { width: 52px; }
         .icon-btn { width: 44px; height: 44px; }
-        /* 24px is the WCAG 2.2 SC 2.5.8 minimum, not a rounded-down 20. */
-        .ref-checkbox { width: 24px; height: 24px; }
+        /* 24px is the WCAG 2.2 SC 2.5.8 minimum, not a rounded-down 20.
+           Covers the recipe page's reference checkboxes and the shopping
+           list's item checkboxes, which are rendered from JS with w-4 h-4. */
+        .ref-checkbox,
+        .row input[type="checkbox"] { width: 24px; height: 24px; }
     }
 
     /* Step images in recipes */
