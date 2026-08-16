@@ -1935,6 +1935,23 @@ In `tailwind.config.js`, delete the `colors` block (`primary-orange`, `primary-g
 Run: `grep -rn "primary-orange\|primary-green\|light-orange\|light-blue\|light-green\|light-yellow" templates/ static/css/input.css`
 Expected: no output. If anything matches, convert it to a token first.
 
+- [ ] **Step 3c: Confirm the token now drives the page background**
+
+Until this task, `.dark body { background-color: #111827; }` sat in `base.html`'s unlayered `<style>` block and outranked the `bg-bg` utility on `<body>` (unlayered CSS beats `@layer utilities`), so dark mode's page background was `#111827` rather than the token's `#131519`. Deleting the block should hand control back to the token. Verify:
+
+```bash
+# with the server running and the site in dark mode
+# body background must now compute to rgb(19, 21, 25) = #131519
+```
+
+Check it in a browser's computed styles, or with the Playwright one-liner:
+
+```javascript
+await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+```
+
+If it still reports `rgb(17, 24, 39)`, a `.dark body` rule survived somewhere — find and remove it.
+
 - [ ] **Step 4: Rebuild and check every page in dark mode**
 
 Run: `npm run build-css && cargo build && ./target/debug/cook server ./seed --port 9080`
