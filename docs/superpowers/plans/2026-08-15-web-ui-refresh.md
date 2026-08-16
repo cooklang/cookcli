@@ -697,15 +697,11 @@ Delete the section beginning:
 
 through the end of `.dark .nav-pill.active { … }`.
 
-Delete the section beginning:
+Then delete the single `.dark .recipe-card` rule in the `/* Recipe card specific dark styles */` section.
 
-```css
-        /* Dark mode tag and badge styles */
-```
+**That is all there is to delete here.** An earlier draft of this step claimed a non-print "Dark mode tag and badge styles" section held `.dark .ingredient-badge`, `.dark .cookware-badge`, `.dark .timer-badge`, `.dark .step-number`, `.dark .tag` and `.dark .metadata-pill`. It does not. **Every one of those rules lives inside `@media print`** (the block opens around line 336; the badge rules sit at roughly 401–435). The rules that physically sit near the `/* Dark mode tag and badge styles */` comment outside the print block are generic Tailwind utility overrides — `.dark .text-orange-700`, `.dark .text-orange-600`, `.dark .text-purple-700`, `.dark .bg-gray-100`, and two `.dark .bg-gradient-to-r.*` combinations — which are still actively used by the unmigrated `preferences.html`, `pantry.html`, `recipe.html`, `recipes.html`, `menu.html` and `shopping_list.html`. **Deleting them here breaks dark mode on those pages.** They go in Task 13, once every page has been migrated.
 
-through the end of the `/* Recipe card specific dark styles */` section, i.e. every rule targeting `.dark .ingredient-badge`, `.dark .cookware-badge`, `.dark .timer-badge`, `.dark .step-number`, `.dark .tag`, `.dark .metadata-pill`, and `.dark .recipe-card`.
-
-**Leave the `@media print` block entirely alone.** It contains its own `.dark .ingredient-badge` rules that make badges readable on paper, and they are still needed.
+**Leave the `@media print` block entirely alone.** Its `.dark .ingredient-badge` rules make badges readable on paper and are still needed.
 
 One print rule does go stale in Task 5: `.bg-white.shadow-lg.rounded-2xl.mb-8 { display: none !important; }` targets the old nav wrapper, which becomes `.appbar`. It is harmless dead CSS because the rule above it already hides `nav` outright — remove it in Task 13 along with the rest of the cleanup.
 
