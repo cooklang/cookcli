@@ -229,6 +229,23 @@
         filter: brightness(1.06);
     }
 
+    /* The commit half of a destructive confirmation. Not a second accent:
+       --danger is a distinct token, and the accent must keep meaning "the
+       thing you probably want". Foreground is --accent-ink for the same
+       reason .btn-primary uses it — dark mode's --danger is a light red
+       that cannot carry white text, and --accent-ink is exactly the
+       "ink on a filled token" colour that flips with the theme. */
+    .btn-danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: var(--accent-ink);
+    }
+
+    .btn-danger:hover {
+        background: var(--danger);
+        filter: brightness(1.06);
+    }
+
     .stepper {
         display: inline-flex;
         align-items: center;
@@ -728,36 +745,67 @@
         .pantry-actions { opacity: 1; }
     }
 
-    /* CodeMirror editor dark mode support */
-    .dark .cm-editor {
-        @apply bg-gray-900;
-    }
+}
 
-    .dark .cm-gutters {
-        @apply bg-gray-800 border-gray-700;
-    }
+/* ============================================================
+   CODEMIRROR
+   Token-driven in BOTH themes, replacing the old `.dark .cm-*` block.
 
-    .dark .cm-lineNumbers .cm-gutterElement {
-        @apply text-gray-400;
-    }
+   These rules live OUTSIDE @layer components, and that is the whole
+   point. CodeMirror mounts its base theme as a plain unlayered <style>
+   when the editor initialises — i.e. after this stylesheet's <link> and
+   outside every cascade layer. Unlayered always beats layered no matter
+   the specificity, so the same rules inside @layer components were
+   silently losing (measured: gutters stayed #f5f5f5 in dark mode).
 
-    .dark .cm-activeLineGutter {
-        @apply bg-gray-700;
-    }
+   Being unlayered only gets us a tie; source order then favours
+   CodeMirror, whose compiled selectors look like `.ͼ2 .cm-gutters`
+   (0,2,0). `.cm-editor.cm-editor` is the cheapest honest way to reach
+   0,3,0 and win without !important.
 
-    .dark .cm-activeLine {
-        @apply bg-gray-800/50;
-    }
+   The `.cm-editor` root rule stays at 0,1,0 deliberately: CodeMirror
+   sets no background on the wrapper, so nothing competes for it.
 
-    .dark .cm-content {
-        caret-color: white;
-    }
+   The editor is built without `drawSelection()`, so no `.cm-cursor` or
+   `.cm-selectionBackground` elements exist — the caret and selection are
+   the browser's own. The old `.dark .cm-cursor` / `.dark
+   .cm-selectionBackground` rules were dead code. They are kept so that
+   turning drawSelection() on later stays themed, but the rules doing the
+   work today are `caret-color` on .cm-content and `::selection`.
+   ============================================================ */
+.cm-editor {
+    background: var(--surface);
+    color: var(--text);
+}
 
-    .dark .cm-cursor {
-        border-left-color: white;
-    }
+.cm-editor.cm-editor .cm-gutters {
+    background: var(--surface-sunk);
+    border-color: var(--border);
+    color: var(--text-faint);
+}
 
-    .dark .cm-selectionBackground {
-        @apply bg-blue-800/50!;
-    }
+.cm-editor.cm-editor .cm-activeLineGutter {
+    background: var(--surface-sunk);
+    color: var(--text-muted);
+}
+
+.cm-editor.cm-editor .cm-activeLine {
+    background: color-mix(in srgb, var(--surface-sunk) 60%, transparent);
+}
+
+.cm-editor.cm-editor .cm-content { caret-color: var(--text); }
+
+.cm-editor.cm-editor .cm-cursor,
+.cm-editor.cm-editor .cm-dropCursor {
+    border-left-color: var(--text);
+}
+
+/* CodeMirror's focused-selection rule is 0,5,0
+   (`.ͼ2.cm-focused > .cm-scroller > .cm-selectionLayer
+   .cm-selectionBackground`), which no reasonable selector beats, so this
+   keeps the !important the old rule had. */
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor ::selection {
+    background: color-mix(in srgb, var(--info) 30%, transparent) !important;
 }
