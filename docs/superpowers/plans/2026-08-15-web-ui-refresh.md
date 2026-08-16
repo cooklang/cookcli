@@ -130,6 +130,10 @@ Known scrapers to check against: `static/js/cooking-mode.js` (`captureStepHTML`)
 
 Also watch for JS that inserts nodes relative to a structural selector — `showRecipeError()` in `recipe.html` targeted `.grid`, which Task 6 replaced with `.recipe-layout`.
 
+Worse, some selectors reach **across pages**. The pantry's `applyFilter()` selected its storage sections with `.recipe-card` — a class the recipes index owns — and its item containers with a bare `.grid`. So restyling `.recipe-card` in Task 4 silently changed pantry section styling, and any page adding a `.grid` would have confused the filter. Both were retargeted to page-specific `.pantry-section` / `.pantry-section-items` in Task 9. When you touch a shared class name, grep the whole `static/js/` tree, not just the page you are editing.
+
+A third variant: JS that toggles **raw Tailwind palette classes**. The pantry's `checkOutOfStock()` added and removed fourteen of them (`bg-red-50`, `border-orange-400`, `text-orange-600`, `bg-green-500`, …), none of which flip for dark mode. Such functions must toggle semantic state classes (`out-of-stock`, `low-stock`, `in-stock`) and let CSS supply the colour from tokens.
+
 **5. Do not rename these class names.** The E2E suite (134 tests) selects on them directly:
 
 | Class | Used by |
