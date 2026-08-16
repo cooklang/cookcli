@@ -652,40 +652,80 @@
         @apply w-30 h-30 rounded-full flex items-center justify-center text-white text-5xl;
     }
 
-    /* Pantry item styles with improved dark mode support */
+    /* ---------- Pantry ---------- */
+    /* Not `.row`: the name column here is two lines (name over dates), so the
+       row aligns on the first baseline rather than on centre. */
     .pantry-item {
-        @apply bg-gray-50 dark:bg-gray-800;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: 14px;
     }
 
-    .pantry-item:hover {
-        @apply bg-gray-100 dark:bg-gray-700;
+    .pantry-item + .pantry-item { border-top: 1px solid var(--border); }
+
+    .pantry-item:hover { background: var(--surface-sunk); }
+
+    .pantry-item .quantity-display {
+        white-space: nowrap;
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
     }
 
-    /* Out-of-stock pantry items with better dark mode contrast */
-    .pantry-item.out-of-stock {
-        @apply bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900/50;
+    .pantry-item .pantry-dates {
+        font-size: 12.5px;
+        color: var(--text-faint);
     }
 
-    .pantry-item.out-of-stock:hover {
-        @apply bg-red-100 dark:bg-red-950/40;
+    .pantry-item.out-of-stock .quantity-display { color: var(--text-faint); }
+
+    /* Preflight makes every svg display:block, which would drop the warning
+       icon onto its own line under the quantity. It has to be fixed here
+       rather than with an `inline` utility: `inline` and `hidden` are both
+       display utilities in the same layer and Tailwind emits `inline` last,
+       so the icon could never be hidden. From @layer components this loses
+       to `hidden` and wins against preflight, which is exactly right. */
+    .pantry-item .out-of-stock-icon { display: inline; }
+
+    /* Low stock is a third state the page has always had. There is no warning
+       token, and --danger is spoken for by out-of-stock, so the dot borrows
+       the accent; the warning icon next to the quantity carries the rest. */
+    .item-status-dot.low-stock { background: var(--accent); }
+
+    /* Only the fields an item actually has are rendered visible, so the
+       separator has to key off visibility — a hidden field must not leave a
+       stray middot in front of the next one. */
+    .pantry-date:not(.hidden) ~ .pantry-date:not(.hidden)::before {
+        content: "·";
+        margin: 0 6px;
     }
 
-    /* Pantry text colors for dark mode */
-    .pantry-item .text-gray-900 {
-        @apply dark:text-gray-100;
+    /* Row actions stay out of the way until the row is hovered or something
+       inside it takes focus, so a dense list is not a wall of icons. */
+    .pantry-actions {
+        align-self: center;
+        opacity: 0;
+        transition: opacity .12s ease;
     }
 
-    .pantry-item .text-gray-600 {
-        @apply dark:text-gray-400;
+    .pantry-item:hover .pantry-actions,
+    .pantry-item:focus-within .pantry-actions { opacity: 1; }
+
+    /* While the inline editor is open, Cancel and Save are the row's actions.
+       Focus is inside the row, so :focus-within would otherwise park the edit
+       and delete icons alongside the form. */
+    .pantry-item:has(.item-edit:not(.hidden)) .pantry-actions {
+        opacity: 0;
+        pointer-events: none;
     }
 
-    .pantry-item .text-gray-500 {
-        @apply dark:text-gray-400;
-    }
-
-    /* Out-of-stock text in dark mode */
-    .pantry-item.out-of-stock .quantity-display {
-        @apply text-red-600 dark:text-red-400;
+    /* No hover on touch, so reveal-on-hover would make edit and delete
+       unreachable. */
+    @media (pointer: coarse) {
+        .pantry-actions { opacity: 1; }
     }
 
     /* CodeMirror editor dark mode support */
