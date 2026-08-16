@@ -393,6 +393,71 @@
         color: var(--text-faint);
     }
 
+    /* ---------- App bar ---------- */
+    .appbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 48px;
+        padding: 0 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .appbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -.01em;
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .appbar-nav { display: flex; gap: 2px; }
+
+    .icon-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .icon-btn:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    .search-input {
+        width: 100%;
+        height: 30px;
+        padding: 0 10px 0 30px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: var(--surface-sunk);
+        color: var(--text);
+        font-size: 13px;
+    }
+
+    .search-input::placeholder { color: var(--text-faint); }
+
+    .search-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: none;
+    }
+
     /* Nav items in the app bar. Name kept for the E2E suite. */
     .nav-pill {
         padding: 5px 11px;
@@ -432,12 +497,6 @@
         width: 14px;
         height: 14px;
         margin-right: 4px;
-    }
-
-    /* Search input with colorful focus */
-    .search-input:focus {
-        @apply border-primary-orange;
-        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
     }
 
     /* Step images in recipes */
