@@ -1934,6 +1934,32 @@ The result items are generated in two places — migrate both before deleting an
 
 Replace their hardcoded `text-gray-800` / `text-gray-500` / `border-gray-100` utilities with `text-text` / `text-muted` / `border-line`. Then verify: open the site in dark mode, type `pizza`, and confirm the dropdown's titles, subtitles and row separators are all legible. (The separator is already wrong today — there is no `.dark .border-gray-100` rule — so this fixes a live minor bug too.)
 
+- [ ] **Step 0b: Sweep the remaining raw palette utilities**
+
+Tasks 6–12 converted each page as they touched it, but three files still carry raw palette utilities that the override block is the only thing keeping legible. **Convert all of these before deleting anything.** Measured counts at the time of writing:
+
+| File | Count | What |
+| --- | --- | --- |
+| `templates/base.html` | ~32 outside the print block | mobile overflow dropdown (8 links/buttons), the static-mode footer, and the search-results `innerHTML` template string |
+| `templates/recipes.html` | 9 | breadcrumbs, the "today's menu" purple gradient card, the empty state |
+| `templates/recipe.html` | 5 | breadcrumbs only |
+| `static/js/search.js` | — | static-mode search results, same markup as the inline version |
+
+Use the standard mapping: `text-gray-900/800` → `text-text`, `text-gray-700/600` → `text-muted`, `text-gray-500/400` → `text-faint`, `bg-white` → `bg-surface`, `bg-gray-50/100` → `bg-sunk`, `border-gray-*` → `border-line`, `text-orange-600/700` → `text-accent-text`. Drop every `dark:` variant — the tokens handle both themes.
+
+Two need judgement rather than a mechanical swap:
+
+- **`recipes.html`'s "today's menu" card** is a `from-purple-600 to-pink-600` gradient with white text — the last decorative gradient in the app. Make it a `.card` with an accent left border, or `.card` + `bg-accent-soft`. Do not keep the gradient.
+- **The search-results hover** uses `hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50`. Replace with `hover:bg-sunk`.
+
+Verify with:
+
+```bash
+grep -rnE "(text|bg|border|from|via|to)-(gray|slate|red|orange|amber|yellow|green|emerald|teal|blue|indigo|violet|purple|pink|rose)-[0-9]+" templates/ static/js/ | grep -v "@media print"
+```
+
+Only `src/web/templates.rs`'s API-docs HTTP-verb badges may remain — they are generated in Rust, carry their own `dark:` variants, and `tailwind.config.js` scans `src/**/*.rs`, so they survive the deletion intact.
+
 - [ ] **Step 1: Confirm nothing still relies on the overrides**
 
 Run: `grep -rn "bg-white\|text-gray-[0-9]\|bg-gray-50\|border-gray-[0-9]\|bg-gradient-to-" templates/*.html | grep -v "print:" | grep -v "^templates/base.html:[0-9]*: *\." `
@@ -1949,6 +1975,12 @@ Keep:
 - the `#search-results a.search-selected` rule you retokenised in Task 5
 
 The `.dark { color-scheme: dark; }` declaration moves to `input.css` in Task 1, so it is not lost.
+
+- [ ] **Step 2a: Deal with the `.dark` rules INSIDE `@media print`**
+
+The print block contains its own `.dark .ingredient-badge`, `.dark .cookware-badge`, `.dark .timer-badge`, `.dark .step-number`, `.dark .tag`, `.dark .metadata-pill` and `.dark .recipe-card` rules (roughly lines 401–435 before edits). They were written to make the OLD gradient pills readable on paper. Task 4 replaced those components with flat token styling, and Task 6 added a top-level `@media print` token reset in `input.css` that already handles printing correctly — so these rules now **re-skin the new components with the old orange/green pill backgrounds and gradient tags whenever you print from dark theme.**
+
+Delete them. Keep the rest of the print block. Then confirm by printing a recipe from dark theme that badges render as flat tinted text, not filled pills.
 
 - [ ] **Step 2b: Remove the stale print selector**
 
