@@ -19,7 +19,7 @@
     {% endif %}
 
     <div class="flex items-center justify-between gap-3 mb-4">
-        <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text">
+        <h1 class="text-display font-bold text-text">
             {{ current_name }}
         </h1>
         {% if !static_mode %}
@@ -39,10 +39,10 @@
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2.5 mb-1">
                     <span class="text-lg">📋</span>
-                    <h2 class="text-[15px] font-semibold text-text">{{ tr.t("todays-menu-title") }}</h2>
+                    <h2 class="text-body font-semibold text-text">{{ tr.t("todays-menu-title") }}</h2>
                     <span class="text-xs text-faint">{{ menu.date_display }}</span>
                 </div>
-                <p class="text-[13px] text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
+                <p class="text-ui text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
             <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
@@ -56,7 +56,7 @@
     {% endmatch %}
 
     <div id="sort-controls" class="hidden items-center justify-end gap-2 mb-3">
-        <label for="sort-field" class="text-[13px] text-muted">{{ tr.t("sort-by") }}</label>
+        <label for="sort-field" class="text-ui text-muted">{{ tr.t("sort-by") }}</label>
         <select id="sort-field" class="select">
             <option value="name">{{ tr.t("sort-name") }}</option>
             <option value="modified">{{ tr.t("sort-modified") }}</option>
@@ -71,7 +71,7 @@
         <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
             <span class="recipe-card-icon">📁</span>
             <span class="min-w-0">
-                <h3 class="recipe-card-title">{{ item.name }}</h3>
+                <h2 class="recipe-card-title">{{ item.name }}</h2>
                 {% match item.count %}
                 {% when Some with (count) %}
                 <span class="recipe-card-sub">{{ tr.tn("recipes-count", count) }}</span>
@@ -93,7 +93,7 @@
             <span class="recipe-card-icon">{% if item.is_menu %}📋{% else %}🍽{% endif %}</span>
             {% endmatch %}
             <span class="min-w-0">
-                <h3 class="recipe-card-title">{{ item.name }}</h3>
+                <h2 class="recipe-card-title">{{ item.name }}</h2>
                 <span class="recipe-card-sub">
                     {%- if item.is_menu %}{{ tr.t("recipe-type-menu") }}{% if !item.tags.is_empty() %} · {% endif %}{% endif -%}
                     {%- for tag in item.tags.iter().take(3) %}{{ tag }}{% if !loop.last %} · {% endif %}{% endfor -%}

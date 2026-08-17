@@ -32,7 +32,7 @@
 
         <!-- Title bar with scale and shopping list button -->
         <div class="flex items-start gap-4 mb-1.5">
-            <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text print:text-2xl">
+            <h1 class="text-display font-bold text-text print:text-2xl">
                 {{ name }}
                 <span class="tag align-middle ml-1 print:hidden">{{ tr.t("recipe-type-menu") }}</span>
             </h1>
@@ -168,7 +168,7 @@
                                         </a>
                                         {% match scale %}
                                         {% when Some with (s) %}
-                                            <span class="text-[12.5px] text-faint">(×{{ s }})</span>
+                                            <span class="text-meta text-faint">(×{{ s }})</span>
                                         {% when None %}
                                         {% endmatch %}
                                     </span>
@@ -208,7 +208,7 @@
                                     </a>
                                     {% match scale %}
                                     {% when Some with (s) %}
-                                        <span class="text-[12.5px] text-faint">(×{{ s }})</span>
+                                        <span class="text-meta text-faint">(×{{ s }})</span>
                                     {% when None %}
                                     {% endmatch %}
                                 </span>

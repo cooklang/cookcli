@@ -133,6 +133,88 @@
     --color-inactive:    var(--inactive);
 }
 
+/* ============================================================
+   TYPE SCALE
+   Six steps, each with a role and a line-height chosen for that role.
+   Registered with Tailwind so templates use `text-body` / `text-meta`
+   rather than arbitrary `text-[12.5px]` values.
+
+   This replaces an ad-hoc set of nine sizes — 11.5, 12, 12.5, 13, 13.5,
+   14, 15, 16, 24 — six of which sat inside a 2.5px band. Half-pixel steps
+   are below the threshold at which a reader can tell two sizes apart, so
+   they could not express hierarchy; they only made every new declaration
+   a guess. Each step below is at least 1px from its neighbours and maps
+   to one job.
+
+   Line-height falls as size rises: long-form text needs the leading to
+   track back to the start of the next line, headings do not.
+   ============================================================ */
+@theme {
+    /* Page title. Negative tracking because default spacing looks loose
+       once type gets this large. */
+    --text-display: 24px;
+    --text-display--line-height: 1.25;
+    --text-display--letter-spacing: -.01em;
+
+    /* Section headings below the page title. Collapses what had been five
+       sizes doing one job — 15, 16, 17, 19 and 20px across different
+       templates, none of them a deliberate distinction. */
+    --text-title: 18px;
+    --text-title--line-height: 1.35;
+    --text-title--letter-spacing: -.005em;
+
+    /* The primary reading surface: recipe step text. The only step tuned
+       for continuous prose rather than for UI. */
+    --text-read: 16px;
+    --text-read--line-height: 1.6;
+
+    /* Default. List rows, ingredient names, card titles. */
+    --text-body: 14px;
+    --text-body--line-height: 1.5;
+
+    /* Controls and dense chrome: buttons, inputs, the metadata line. */
+    --text-ui: 13px;
+    --text-ui--line-height: 1.4;
+
+    /* Captions, counts, tags, notes — text that supports something else. */
+    --text-meta: 12px;
+    --text-meta--line-height: 1.4;
+
+    /* Uppercase section labels only. The tracking is part of the step:
+       capitals set at their natural spacing read as cramped, and it is
+       what makes 11px legible in this role. */
+    --text-label: 11px;
+    --text-label--line-height: 1.3;
+    --text-label--letter-spacing: .06em;
+
+    /* Tailwind's own names are still used in ~80 places across the templates.
+       Their sizes already coincided with steps above, but their default
+       line-heights did not, so the same visual size was being set with two
+       different leadings depending on which name the author reached for.
+       Aliasing them here fixes every one of those call sites without touching
+       the markup, and means a future `text-sm` cannot drift off the scale. */
+    --text-xs:   var(--text-meta);
+    --text-xs--line-height: 1.4;
+    --text-sm:   var(--text-body);
+    --text-sm--line-height: 1.5;
+    --text-base: var(--text-read);
+    --text-base--line-height: 1.6;
+    --text-lg:   var(--text-title);
+    --text-lg--line-height: 1.35;
+    --text-2xl:  var(--text-display);
+    --text-2xl--line-height: 1.25;
+}
+
+/* Four real weights. 550 and 650 were in use and do render on macOS, where
+   the system font resolves to variable SF Pro — but 600 to 650 is a ~1%
+   change in advance width, far too fine to signal hierarchy, and it snaps to
+   a neighbouring weight wherever the system font is not variable. Hierarchy
+   that depends on it is therefore inconsistent across platforms. */
+body {
+    font-size: var(--text-body);
+    line-height: 1.5;
+}
+
 /* Component vocabulary. Split out of this file so the theme contract
    (tokens + @theme + the print token reset) stays small and stable while
    the component layer keeps churning. Imported here rather than appended

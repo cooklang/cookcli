@@ -19,12 +19,12 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text">{{ tr.t("pantry-title") }}</h1>
+        <h1 class="text-display font-bold text-text">{{ tr.t("pantry-title") }}</h1>
 
         {% if !sections.is_empty() %}
         <div class="flex items-center gap-3">
-            <span id="out-of-stock-count" class="text-[12.5px] text-faint tabular-nums"></span>
-            <label class="flex items-center gap-2 text-[13.5px] text-muted hover:text-text cursor-pointer">
+            <span id="out-of-stock-count" class="text-meta text-faint tabular-nums"></span>
+            <label class="flex items-center gap-2 text-ui text-muted hover:text-text cursor-pointer">
                 <input type="checkbox" id="filter-out-of-stock" class="w-4 h-4 accent-[var(--accent)]">
                 <span>{{ tr.t("pantry-show-out-of-stock") }}</span>
             </label>
@@ -37,7 +37,7 @@
         <svg class="mx-auto h-10 w-10 text-faint mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
         </svg>
-        <h3 class="text-[15px] font-semibold text-text mb-1">{{ tr.t("pantry-no-config") }}</h3>
+        <h3 class="text-body font-semibold text-text mb-1">{{ tr.t("pantry-no-config") }}</h3>
         <p class="text-sm text-muted">{{ tr.t("pantry-create-config") }}</p>
         <a href="{{ prefix }}/preferences" class="mt-4 inline-block text-sm font-medium text-accent-text hover:underline">
             {{ tr.t("pantry-configure") }}
@@ -66,7 +66,7 @@
                      data-low="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
                     <span class="item-status-dot in-stock"></span>
                     <div class="row-name flex-1 min-w-0">
-                        <h3 class="m-0 font-medium text-[14px]">{{ item.name }}</h3>
+                        <h3 class="m-0 font-medium text-body">{{ item.name }}</h3>
                         <!-- .item-display is what the edit form swaps places with.
                              Each field's hook span is always rendered — the save
                              handler reads all four unconditionally — and the
@@ -134,7 +134,7 @@
     </div>
 
     <div class="mt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div class="text-[12.5px] text-faint">
+        <div class="text-meta text-faint">
             {{ tr.t("pantry-total-sections") }} {{ sections.len() }}
         </div>
         <div class="flex flex-wrap gap-1.5">
@@ -152,10 +152,10 @@
 <!-- Add Item Modal -->
 <div id="add-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
     <div class="card w-full max-w-md mx-4 p-5">
-        <h2 class="text-[16px] leading-tight font-[650] tracking-tight text-text mb-4">{{ tr.t("pantry-add-pantry-item") }}</h2>
+        <h2 class="text-title font-semibold text-text mb-4">{{ tr.t("pantry-add-pantry-item") }}</h2>
         <form id="add-form">
             <div class="mb-3">
-                <label for="add-section" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-section-label") }}</label>
+                <label for="add-section" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-section-label") }}</label>
                 <select id="add-section" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" required>
                     <option value="">{{ tr.t("pantry-section-select") }}</option>
                     {% if sections.is_empty() %}
@@ -172,23 +172,23 @@
                 </select>
             </div>
             <div class="mb-3">
-                <label for="add-name" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-item-name") }}</label>
+                <label for="add-name" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-item-name") }}</label>
                 <input type="text" id="add-name" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" required>
             </div>
             <div class="mb-3">
-                <label for="add-quantity" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-item-quantity") }} ({{ tr.t("pantry-optional") }})</label>
+                <label for="add-quantity" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-item-quantity") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-quantity" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" placeholder="e.g., 500%g or 2%L">
             </div>
             <div class="mb-3">
-                <label for="add-bought" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-item-bought-date") }} ({{ tr.t("pantry-optional") }})</label>
+                <label for="add-bought" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-item-bought-date") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-bought" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" placeholder="DD.MM.YYYY">
             </div>
             <div class="mb-3">
-                <label for="add-expire" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-item-expire-date") }} ({{ tr.t("pantry-optional") }})</label>
+                <label for="add-expire" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-item-expire-date") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-expire" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" placeholder="DD.MM.YYYY">
             </div>
             <div class="mb-4">
-                <label for="add-low" class="block text-[12.5px] font-medium text-muted mb-1">{{ tr.t("pantry-item-low-threshold") }} ({{ tr.t("pantry-optional") }})</label>
+                <label for="add-low" class="block text-meta font-medium text-muted mb-1">{{ tr.t("pantry-item-low-threshold") }} ({{ tr.t("pantry-optional") }})</label>
                 <input type="text" id="add-low" class="w-full px-2.5 py-2 text-sm border border-line rounded-[6px] bg-surface text-text" placeholder="e.g., 100%g or 2">
             </div>
             <div class="flex justify-end gap-1.5">

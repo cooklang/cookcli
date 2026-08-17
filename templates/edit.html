@@ -12,7 +12,7 @@
             </svg>
             <span>{{ tr.t("action-back") }}</span>
         </a>
-        <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text truncate">{{ recipe_name }}</h1>
+        <h1 class="text-display font-bold text-text truncate">{{ recipe_name }}</h1>
         <div class="ml-auto flex items-center gap-3">
             <span id="save-status" class="text-sm text-faint"></span>
             <button onclick="showDeleteModal()" class="btn text-danger">
@@ -33,7 +33,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                     </svg>
                 </div>
-                <h2 class="text-[17px] leading-tight font-[650] tracking-tight text-text">{{ tr.t("delete-recipe") }}</h2>
+                <h2 class="text-title font-semibold text-text">{{ tr.t("delete-recipe") }}</h2>
             </div>
             <p class="text-muted mb-1.5">{{ tr.t("delete-recipe-confirm") }}</p>
             <p class="text-sm text-danger mb-5">{{ tr.t("delete-recipe-warning") }}</p>
@@ -52,7 +52,7 @@
     <div id="editor-container" class="flex-1 card overflow-hidden"></div>
 
     <!-- Status bar -->
-    <div id="status-bar" class="mt-2 px-3.5 py-1.5 bg-sunk border border-line rounded-[6px] flex items-center justify-between text-[13px] text-muted">
+    <div id="status-bar" class="mt-2 px-3.5 py-1.5 bg-sunk border border-line rounded-[6px] flex items-center justify-between text-ui text-muted">
         <div class="flex items-center gap-2">
             <span id="lsp-status" class="flex items-center gap-1.5">
                 <span id="lsp-indicator" class="item-status-dot bg-faint"></span>

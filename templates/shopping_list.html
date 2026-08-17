@@ -44,7 +44,7 @@
              than in the JS-rendered list so the buttons stay put while the list
              below them re-renders. -->
         <div id="shopping-list-header" class="hidden flex-wrap items-center justify-between gap-3 mb-3">
-            <h2 class="text-[20px] leading-tight font-[650] tracking-tight text-text">{{ tr.t("shopping-title") }}</h2>
+            <h1 class="text-title font-semibold text-text">{{ tr.t("shopping-title") }}</h1>
             <div class="flex items-center gap-1.5">
                 <!-- Split button: the left half copies, the right half opens the
                      checkboxes that decide what the copied text contains. -->
@@ -165,7 +165,7 @@ function renderSelectedRecipes() {
         <ul class="mt-1 pl-2.5 border-l border-line space-y-0.5">
             ${refs.map(ref => {
                 const refName = ref.split('/').pop();
-                return `<li class="text-[12.5px] text-faint">
+                return `<li class="text-meta text-faint">
                     <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
                 </li>`;
             }).join('')}
@@ -175,7 +175,7 @@ function renderSelectedRecipes() {
         // Plan/menu entry — show nested recipes
         if (item.recipes) {
             const recipesHtml = item.recipes.map(recipe => {
-                return `<li class="text-[13px] text-muted">
+                return `<li class="text-ui text-muted">
                     <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}" class="hover:text-accent-text hover:underline">${escHtml(recipe.name)}</a>
                     <span class="text-faint text-xs">×${escHtml(recipe.scale)}</span>
                     ${renderRefs(recipe.included_references || [])}

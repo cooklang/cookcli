@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="max-w-xl mx-auto">
-    <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text mb-5">{{ tr.t("new-recipe") }}</h1>
+    <h1 class="text-display font-bold text-text mb-5">{{ tr.t("new-recipe") }}</h1>
 
     {% if let Some(err) = error %}
     <div class="mb-5 card p-3.5 border-l-[3px] border-l-danger">

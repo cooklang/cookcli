@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="max-w-5xl">
-    <h1 class="text-[24px] leading-tight font-[650] tracking-tight text-text mb-1.5">Server API</h1>
+    <h1 class="text-display font-bold text-text mb-1.5">Server API</h1>
     <p class="text-muted mb-5">
         {{ preamble.intro }}
     </p>
@@ -63,7 +63,7 @@
     <!-- Endpoints -->
     {% for section in sections %}
     <section id="{{ section.id }}" class="mb-8 scroll-mt-24">
-        <h2 class="text-[19px] leading-tight font-[650] tracking-tight text-text mb-1">{{ section.title }}</h2>
+        <h2 class="text-title font-semibold text-text mb-1">{{ section.title }}</h2>
         <p class="text-sm text-muted mb-3">{{ section.description|inline_code|safe }}</p>
 
         <div class="space-y-3">

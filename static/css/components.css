@@ -41,8 +41,8 @@
     .card-head h2,
     .card-head h3 {
         margin: 0;
-        font-size: 11.5px;
-        font-weight: 650;
+        font-size: var(--text-label);
+        font-weight: 600;
         letter-spacing: .06em;
         text-transform: uppercase;
         color: var(--text-muted);
@@ -52,7 +52,7 @@
        (aisle categories, pantry locations) rather than fixed chrome. */
     .card-head.plain h2,
     .card-head.plain h3 {
-        font-size: 13px;
+        font-size: var(--text-body);
         font-weight: 600;
         letter-spacing: 0;
         text-transform: none;
@@ -60,7 +60,7 @@
     }
 
     .card-head .count {
-        font-size: 12px;
+        font-size: var(--text-meta);
         color: var(--text-faint);
         font-variant-numeric: tabular-nums;
     }
@@ -73,8 +73,8 @@
         height: 32px;
         padding: 0 11px;
         border-radius: var(--radius-control);
-        font-size: 13.5px;
-        font-weight: 550;
+        font-size: var(--text-ui);
+        font-weight: 500;
         white-space: nowrap;
         cursor: pointer;
         text-decoration: none;
@@ -143,8 +143,8 @@
         border: 1px solid var(--border-strong);
         background: var(--surface);
         color: var(--text);
-        font-size: 13.5px;
-        font-weight: 550;
+        font-size: var(--text-ui);
+        font-weight: 500;
         cursor: pointer;
     }
 
@@ -167,7 +167,7 @@
         background: transparent;
         color: var(--text-muted);
         cursor: pointer;
-        font-size: 14px;
+        font-size: var(--text-body);
     }
 
     .stepper button:hover {
@@ -185,7 +185,7 @@
         background: transparent;
         color: var(--text);
         text-align: center;
-        font-size: 13.5px;
+        font-size: var(--text-ui);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         -moz-appearance: textfield;
@@ -211,7 +211,7 @@
         align-items: center;
         gap: 10px;
         padding: 7px 14px;
-        font-size: 14px;
+        font-size: var(--text-body);
     }
 
     .row + .row { border-top: 1px solid var(--border); }
@@ -221,14 +221,14 @@
     .row .row-value {
         white-space: nowrap;
         font-weight: 600;
-        font-size: 13.5px;
+        font-size: var(--text-ui);
         color: var(--accent-text);
         font-variant-numeric: tabular-nums;
     }
 
     .row .row-note {
         color: var(--text-faint);
-        font-size: 12.5px;
+        font-size: var(--text-meta);
     }
 
     /* ---------- Text ---------- */
@@ -238,7 +238,7 @@
         flex-wrap: wrap;
         align-items: center;
         gap: 6px 0;
-        font-size: 13px;
+        font-size: var(--text-ui);
         color: var(--text-muted);
     }
 
@@ -260,8 +260,8 @@
     a.text-info { text-decoration: underline; text-underline-offset: 2px; }
 
     .section-label {
-        font-size: 11.5px;
-        font-weight: 650;
+        font-size: var(--text-label);
+        font-weight: 600;
         letter-spacing: .06em;
         text-transform: uppercase;
         color: var(--text-faint);
@@ -329,8 +329,8 @@
         background: var(--surface-sunk);
         border: 1px solid var(--border);
         color: var(--text-muted);
-        font-size: 12px;
-        font-weight: 650;
+        font-size: var(--text-meta);
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
 
@@ -338,7 +338,7 @@
         display: inline-block;
         padding: 1px 8px;
         border-radius: 9999px;
-        font-size: 12px;
+        font-size: var(--text-meta);
         font-weight: 500;
         background: var(--surface-sunk);
         border: 1px solid var(--border);
@@ -371,16 +371,19 @@
         border-radius: 6px;
         background: var(--surface-sunk);
         border: 1px solid var(--border);
-        font-size: 15px;
+        font-size: var(--text-read);
     }
 
-    /* MUST be applied to an <h3>. The client-side sorter in
-       recipes.html reads `el.querySelector('h3')?.textContent`
-       to sort by name; any other element silently breaks sorting. */
+    /* An <h2>, not an <h3>: the index has an <h1> and nothing between, so an
+       h3 skipped a level in the document outline.
+       The old warning here — that this element had to stay an <h3> because
+       the sorter read `querySelector('h3').textContent` — no longer applies.
+       The sorter reads data-name, and the E2E suite selects this class rather
+       than the tag, so the heading level is free to follow the outline. */
     .recipe-card .recipe-card-title {
         display: block;
         margin: 0;
-        font-size: 14px;
+        font-size: var(--text-body);
         font-weight: 600;
         line-height: 1.3;
         color: var(--text);
@@ -389,7 +392,7 @@
     .recipe-card .recipe-card-sub {
         display: block;
         margin-top: 1px;
-        font-size: 12px;
+        font-size: var(--text-meta);
         color: var(--text-faint);
     }
 
@@ -411,8 +414,8 @@
         display: flex;
         align-items: center;
         gap: 7px;
-        font-size: 14px;
-        font-weight: 650;
+        font-size: var(--text-body);
+        font-weight: 600;
         letter-spacing: -.01em;
         color: var(--text);
         text-decoration: none;
@@ -448,7 +451,7 @@
         border: 1px solid var(--border-strong);
         background: var(--surface);
         color: var(--text);
-        font-size: 13px;
+        font-size: var(--text-ui);
     }
 
     .search-input::placeholder { color: var(--text-faint); }
@@ -464,7 +467,7 @@
     .nav-pill {
         padding: 5px 11px;
         border-radius: var(--radius-control);
-        font-size: 13.5px;
+        font-size: var(--text-ui);
         font-weight: 500;
         color: var(--text-muted);
         text-decoration: none;
@@ -488,7 +491,7 @@
         align-items: center;
         padding: 1px 8px;
         border-radius: 9999px;
-        font-size: 12px;
+        font-size: var(--text-meta);
         font-weight: 500;
         white-space: nowrap;
         background: var(--surface-sunk);
@@ -545,14 +548,22 @@
 
     .step-list > li + li { border-top: 1px solid var(--border); }
 
-    .step-body { font-size: 15px; line-height: 1.6; }
+    /* Measure. Unconstrained, step text ran to 84 characters per line on a
+       wide viewport; past roughly 75 the eye loses the start of the next line
+       on the return sweep. 68ch is inside the comfortable band and, being a
+       ch unit, it tracks the font size rather than freezing a pixel width. */
+    .step-body {
+        font-size: var(--text-read);
+        line-height: 1.6;
+        max-width: 68ch;
+    }
 
     .step-refs {
         margin-top: 7px;
         display: flex;
         flex-wrap: wrap;
         gap: 2px 14px;
-        font-size: 12.5px;
+        font-size: var(--text-meta);
         color: var(--text-faint);
     }
 
@@ -611,7 +622,7 @@
         align-items: baseline;
         gap: 10px;
         padding: 7px 14px;
-        font-size: 14px;
+        font-size: var(--text-body);
     }
 
     .pantry-item + .pantry-item { border-top: 1px solid var(--border); }
@@ -621,13 +632,13 @@
     .pantry-item .quantity-display {
         white-space: nowrap;
         font-weight: 600;
-        font-size: 13.5px;
+        font-size: var(--text-ui);
         color: var(--accent-text);
         font-variant-numeric: tabular-nums;
     }
 
     .pantry-item .pantry-dates {
-        font-size: 12.5px;
+        font-size: var(--text-meta);
         color: var(--text-faint);
     }
 
