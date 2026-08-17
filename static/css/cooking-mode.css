@@ -3,8 +3,8 @@
    is listed alongside .dark in input.css, so the tokens below always resolve to
    their dark values — cook mode is deliberately dark whatever the site theme is,
    because it is read at arm's length in a bright kitchen.
-   Elevation follows the same neumorphic vocabulary as the rest of the app:
-   cards and controls are raised, wells and progress tracks are inset. */
+   Structure follows the rest of the app: flat surfaces, hairline borders, no
+   elevation. */
 .cooking-overlay {
     position: fixed;
     inset: 0;
@@ -26,7 +26,7 @@
     justify-content: space-between;
     padding: 12px 20px;
     background: var(--surface);
-    box-shadow: 0 3px 8px var(--neu-dark);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     gap: 12px;
     z-index: 2;
@@ -66,20 +66,17 @@
     background: var(--surface);
     color: var(--text-muted);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-raised-sm);
-    transition: box-shadow 0.2s, color 0.2s;
 }
 
 .cooking-section-pill:hover {
     color: var(--text);
-    box-shadow: var(--shadow-raised);
+    background: var(--surface-sunk);
 }
 
 .cooking-section-pill.active {
     background: var(--accent);
     color: var(--accent-ink);
     border-color: var(--accent);
-    box-shadow: var(--shadow-inset-sm);
 }
 
 .cooking-close-btn {
@@ -89,22 +86,16 @@
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--text);
-    box-shadow: var(--shadow-raised-sm);
     font-size: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: box-shadow 0.2s;
 }
 
 .cooking-close-btn:hover {
-    box-shadow: var(--shadow-raised);
-}
-
-.cooking-close-btn:active {
-    box-shadow: var(--shadow-inset-sm);
+    background: var(--surface-sunk);
 }
 
 /* Carousel container */
@@ -136,7 +127,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    border-radius: 20px;
+    border-radius: 6px;
     padding: 32px;
     transition: transform 0.3s ease-out, opacity 0.3s ease-out;
     scrollbar-width: thin;
@@ -188,7 +179,6 @@
 .cooking-card-section {
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-raised);
     text-align: center;
 }
 
@@ -215,8 +205,8 @@
     align-items: baseline;
     padding: 8px 12px;
     background: var(--surface-sunk);
-    box-shadow: var(--shadow-inset-sm);
-    border-radius: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
     gap: 8px;
     cursor: pointer;
     transition: opacity 0.2s;
@@ -249,7 +239,6 @@
 .cooking-card-step {
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-raised);
 }
 
 .cooking-step-number {
@@ -311,7 +300,6 @@
 .cooking-card-done {
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-raised);
     text-align: center;
 }
 
@@ -328,23 +316,18 @@
 .cooking-done-close-btn {
     margin-top: 28px;
     padding: 12px 40px;
-    border-radius: 12px;
+    border-radius: 6px;
     border: none;
     background: var(--accent);
     color: var(--accent-ink);
-    box-shadow: var(--shadow-raised-sm);
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
-    transition: box-shadow 0.2s;
+    transition: filter 0.2s;
 }
 
 .cooking-done-close-btn:hover {
-    box-shadow: var(--shadow-raised);
-}
-
-.cooking-done-close-btn:active {
-    box-shadow: var(--shadow-inset-sm);
+    filter: brightness(1.06);
 }
 
 /* Progress bar */
@@ -385,7 +368,7 @@
         width: calc(100% - 24px);
         padding: 20px 16px;
         max-height: 75vh;
-        border-radius: 16px;
+        border-radius: 6px;
     }
 
     .cooking-card-section h2 {

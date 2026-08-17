@@ -11,10 +11,8 @@
 /* Custom component classes */
 @layer components {
     /* ---------- Focus ---------- */
-    /* Neumorphism removes almost every hard edge, which takes the default
-       focus ring's contrast down with it. A solid two-pixel accent outline is
-       the one place in this design that is deliberately not soft. It is
-       :focus-visible so pointer users never see it. */
+    /* :focus-visible so pointer users never see it. Primer's own ring is a
+       2px solid accent outline; this is the same idea in --accent. */
     :focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
@@ -22,14 +20,14 @@
     }
 
     /* ---------- Surfaces ---------- */
-    /* The hairline border is doing nothing in light mode (about 1.1:1) and is
-       load-bearing in dark, where --neu-light is only 5% white and cannot
-       describe a top edge on its own. */
+    /* Border first, elevation almost never. --shadow-card is a 4%-alpha
+       one-pixel edge in light mode and `none` in dark; if it were deleted
+       entirely the design would barely change, which is the intent. */
     .card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-card);
-        box-shadow: var(--shadow-raised);
+        box-shadow: var(--shadow-card);
     }
 
     .card-head {
@@ -82,27 +80,28 @@
         text-decoration: none;
         background: var(--surface);
         color: var(--text);
-        border: 1px solid var(--border);
-        box-shadow: var(--shadow-raised-sm);
-        transition: box-shadow .12s ease;
+        border: 1px solid var(--border-strong);
     }
 
-    .btn:hover { background: var(--surface); box-shadow: var(--shadow-raised); }
+    /* Flat controls signal state with fill, not elevation.
+       Deliberately not transitioned. Any transition on a property whose value
+       is a theme token races Chrome's custom-property invalidation when .dark
+       is toggled: the element intermittently keeps the outgoing theme's colour
+       and only corrects on the next unrelated style recalc. Observed as
+       recipe cards staying white on a dark page. Hover feedback is instant
+       instead, which is what a flat design wants anyway. */
+    .btn:hover {
+        background: var(--surface-sunk);
+        border-color: var(--border-strong);
+    }
 
-    /* The press. A neumorphic control does not change colour when activated,
-       it sinks — the raised shadow inverts to an inset one. This is the
-       interaction the whole style is built around, so every pressable
-       surface below repeats it. */
-    .btn:active { box-shadow: var(--shadow-inset-sm); }
+    .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
 
     .btn svg { width: 15px; height: 15px; }
 
     /* One accent-filled button per view. Everything else is neutral.
-       Kept as a solid fill rather than a raised neutral: neumorphism has no
-       native way to say "this is the one you want", and a page where the CTA
-       is the same colour as everything else is worse than a slightly impure
-       one. --accent-ink is the design system's near-black, which clears AA on
-       the accent fill where white (3.7:1) would not. */
+       --accent-ink is the design system's near-black, which clears AA on the
+       accent fill (5.0:1) where white (3.7:1) would not. */
     .btn-primary {
         background: var(--accent);
         border-color: var(--accent);
@@ -138,9 +137,8 @@
         height: 32px;
         overflow: hidden;
         background: var(--surface);
-        border: 1px solid var(--border);
+        border: 1px solid var(--border-strong);
         border-radius: var(--radius-control);
-        box-shadow: var(--shadow-raised-sm);
     }
 
     .stepper button {
@@ -158,10 +156,7 @@
         color: var(--text);
     }
 
-    /* Sinks the whole control rather than the button alone: overflow:hidden
-       on the parent would clip an inset shadow drawn on the child, so the
-       press has to be expressed by the element that owns the rounded box. */
-    .stepper:has(button:active) { box-shadow: var(--shadow-inset-sm); }
+    .stepper button:active { background: var(--surface-sunk); filter: brightness(.97); }
 
     .stepper input,
     .stepper .value {
@@ -293,14 +288,12 @@
         text-underline-offset: 3px;
     }
 
-    /* Chips read as pressed into the page rather than laid on top of it.
-       They use the -sm inset: a full-strength one on a 22px circle collapses
-       into a dark ring with no flat centre left. */
+    /* Flat tinted chips with a hairline, the way Primer draws Label. */
     .timer-badge {
-        padding: 2px 7px;
-        border-radius: 6px;
+        padding: 1px 6px;
+        border-radius: 5px;
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border);
         color: var(--text);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
@@ -308,14 +301,14 @@
     }
 
     .step-number {
-        flex: 0 0 24px;
-        height: 24px;
+        flex: 0 0 22px;
+        height: 22px;
         margin-top: 1px;
         border-radius: 50%;
         display: grid;
         place-items: center;
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border);
         color: var(--text-muted);
         font-size: 12px;
         font-weight: 650;
@@ -324,12 +317,12 @@
 
     .tag {
         display: inline-block;
-        padding: 2px 9px;
+        padding: 1px 8px;
         border-radius: 9999px;
         font-size: 12px;
         font-weight: 500;
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border);
         color: var(--text-muted);
     }
 
@@ -343,25 +336,22 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-card);
-        box-shadow: var(--shadow-raised-sm);
-        transition: box-shadow .12s ease;
     }
 
-    /* Rises on hover, sinks on press. The background deliberately does not
-       change: shifting fill *and* elevation at once reads as two separate
-       things happening. */
-    .recipe-card:hover { box-shadow: var(--shadow-raised); }
-
-    .recipe-card:active { box-shadow: var(--shadow-inset-sm); }
+    /* No transition here either — see the note on .btn:hover. */
+    .recipe-card:hover {
+        background: var(--surface-sunk);
+        border-color: var(--border-strong);
+    }
 
     .recipe-card .recipe-card-icon {
-        flex: 0 0 32px;
-        height: 32px;
+        flex: 0 0 30px;
+        height: 30px;
         display: grid;
         place-items: center;
-        border-radius: 10px;
+        border-radius: 6px;
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border);
         font-size: 15px;
     }
 
@@ -395,11 +385,7 @@
         height: var(--appbar-h);
         padding: 0 16px;
         background: var(--surface);
-        /* A one-directional drop shadow, not the dual pair. The bar is flush
-           against the top of the viewport, so there is no top edge for a
-           highlight to describe, and the full --shadow-raised would cast a
-           bright band across the first row of content. */
-        box-shadow: 0 3px 8px var(--neu-dark);
+        border-bottom: 1px solid var(--border);
     }
 
     .appbar-brand {
@@ -428,25 +414,20 @@
     }
 
     .icon-btn:hover {
-        background: var(--surface);
-        box-shadow: var(--shadow-raised-sm);
+        background: var(--surface-sunk);
         color: var(--text);
     }
 
-    .icon-btn:active { box-shadow: var(--shadow-inset-sm); }
-
     .icon-btn svg { width: 16px; height: 16px; }
 
-    /* Text fields are the clearest case for an inset: a field you type into
-       is a well, and the style says so without needing a border. */
+    /* Bordered field on the surface colour, not a sunken well. */
     .search-input {
         width: 100%;
-        height: 32px;
+        height: 30px;
         padding: 0 10px 0 30px;
         border-radius: var(--radius-control);
-        border: 1px solid transparent;
-        background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
         color: var(--text);
         font-size: 13px;
     }
@@ -458,7 +439,6 @@
     .search-input:focus {
         outline: none;
         border-color: var(--accent);
-        box-shadow: var(--shadow-inset-sm);
     }
 
     /* Nav items in the app bar. Name kept for the E2E suite. */
@@ -472,16 +452,12 @@
     }
 
     .nav-pill:hover {
-        background: var(--surface);
-        box-shadow: var(--shadow-raised-sm);
+        background: var(--surface-sunk);
         color: var(--text);
     }
 
-    /* Current page reads as held down — the inverse of the hover lift, which
-       is how neumorphism expresses a selected state. */
     .nav-pill.active {
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
         color: var(--text);
         font-weight: 600;
     }
@@ -497,7 +473,7 @@
         font-weight: 500;
         white-space: nowrap;
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
+        border: 1px solid var(--border);
         color: var(--text-muted);
     }
 
@@ -567,10 +543,10 @@
         display: flex;
         gap: 8px;
         padding: 12px 14px;
-        border-radius: var(--radius-control);
+        border-radius: var(--radius-card);
+        border: 1px solid var(--border);
         border-left: 3px solid var(--accent);
         background: var(--surface-sunk);
-        box-shadow: var(--shadow-inset-sm);
         color: var(--text-muted);
         font-style: italic;
     }
@@ -601,8 +577,8 @@
        the last raw hex outside @media print and did not flip with the theme.
        A raised token surface with the accent glyph carries the same weight. */
     .recipe-image-placeholder {
-        background: var(--surface);
-        box-shadow: var(--shadow-raised);
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
         color: var(--accent-text);
         @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
     }

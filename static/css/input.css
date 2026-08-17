@@ -16,16 +16,15 @@
    carry white text at AA contrast.
    ============================================================ */
 :root {
-    /* Warm neutral base from the Cooklang design system. --surface sits a
-       few percent above --bg rather than being identical to it: strict
-       neumorphism uses one value for both, but the small lift lets raised
-       elements catch light and keeps cards legible when a viewport is
-       colour-managed or dimmed. */
-    --bg:            #ebe5e0;
-    --surface:       #efeae6;
-    --surface-sunk:  #e4ddd7;
-    --border:        #dcd3cb;
-    --border-strong: #c4b9ae;
+    /* Primer's structural convention on the Cooklang palette: a near-white
+       canvas, white surfaces, and a hairline border on everything. The border
+       is what defines a surface here — not elevation — so --border carries
+       real weight and is never decorative. */
+    --bg:            #fcfcfb;
+    --surface:       #ffffff;
+    --surface-sunk:  #f5f3f0;
+    --border:        #e4e0da;
+    --border-strong: #c3bcb1;
     --text:          #16161d;   /* DS Text/Primary */
     --text-muted:    #5f5a51;   /* DS Text/Secondary, darkened for AA */
     --text-faint:    #6a645b;
@@ -47,22 +46,16 @@
     --disabled:      #d3cdcb;   /* DS Controls/Disabled */
     --inactive:      #8a8075;   /* DS Controls/Inactive, darkened for AA */
 
-    /* Neumorphic elevation. Every raised or inset surface is built from this
-       pair — a light source at the top-left and its shadow at the
-       bottom-right — so elevation reads consistently across the UI. */
-    --neu-light:     rgba(255, 255, 255, .95);
-    --neu-dark:      rgba(163, 146, 131, .42);
+    --radius-control: 6px;
+    --radius-card:   6px;
 
-    --radius-control: 10px;
-    --radius-card:   16px;
-
-    --shadow-raised:    6px 6px 12px var(--neu-dark), -6px -6px 12px var(--neu-light);
-    --shadow-raised-sm: 3px 3px 6px var(--neu-dark), -3px -3px 6px var(--neu-light);
-    --shadow-inset:     inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
-    --shadow-inset-sm:  inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light);
-    /* Retained so anything still asking for the old flat elevation gets the
-       neumorphic one instead of nothing. */
-    --shadow-card:   var(--shadow-raised);
+    /* Two elevations, and that is the whole scale. In-flow surfaces get
+       --shadow-card, which is barely a shadow at all — the border does the
+       work. --shadow-overlay is only for things genuinely floating above the
+       page: dropdowns, dialogs, the search results panel. Nothing in the
+       document flow should ever use it. */
+    --shadow-card:    0 1px 0 rgba(27, 31, 36, .04);
+    --shadow-overlay: 0 8px 24px rgba(27, 31, 36, .12);
 
     /* Height of the sticky app bar. Used by .appbar itself and by anything
        that has to sit clear of it (the sticky ingredient rail). */
@@ -80,11 +73,14 @@
 .dark,
 .cooking-overlay {
     color-scheme: dark;
-    --bg:            #202027;
-    --surface:       #26262e;
-    --surface-sunk:  #1a1a20;
-    --border:        #35353f;
-    --border-strong: #474753;
+    /* --bg is the design system's own #16161D. It is listed under Text in the
+       palette, but it is the only near-black the system defines and it makes a
+       better warm canvas than an invented one. */
+    --bg:            #16161d;
+    --surface:       #1c1c24;
+    --surface-sunk:  #23232c;
+    --border:        #30303b;
+    --border-strong: #43434f;
     --text:          #efeae6;
     --text-muted:    #ada69b;
     --text-faint:    #948d83;
@@ -101,26 +97,11 @@
     --disabled:      #4a4a55;
     --inactive:      #8f8880;
 
-    /* Dark neumorphism inverts the ratio: the highlight is barely there and
-       the shadow does nearly all the work, because a light rim on a dark
-       surface reads as a border rather than as a lit edge. */
-    --neu-light:     rgba(255, 255, 255, .055);
-    --neu-dark:      rgba(0, 0, 0, .55);
-
-    /* These four are redeclared verbatim from :root, and they have to be.
-       A custom property whose value contains var() is resolved at the element
-       that DECLARES it, not at the element that uses it — so --shadow-raised
-       computed against :root's --neu-* and inherited down already flattened.
-       Redefining --neu-* alone therefore changes nothing for any descendant.
-       .dark gets away with it by accident (it lands on <html>, the same
-       element as :root); .cooking-overlay is a descendant and does not, which
-       is how this surfaced: a white 95%-opacity halo around every cook-mode
-       card while the site was in light theme. */
-    --shadow-raised:    6px 6px 12px var(--neu-dark), -6px -6px 12px var(--neu-light);
-    --shadow-raised-sm: 3px 3px 6px var(--neu-dark), -3px -3px 6px var(--neu-light);
-    --shadow-inset:     inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
-    --shadow-inset-sm:  inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light);
-    --shadow-card:      var(--shadow-raised);
+    /* On a dark canvas the border already reads as a raised edge, so the
+       in-flow shadow goes away entirely. The overlay shadow stays and gets
+       heavier — a floating panel needs to separate from a dark page too. */
+    --shadow-card:    none;
+    --shadow-overlay: 0 8px 24px rgba(0, 0, 0, .5);
 }
 
 /* Register tokens with Tailwind so they generate real utilities
@@ -188,16 +169,8 @@
         --disabled:      #cccccc;
         --inactive:      #767676;
 
-        /* Neumorphism does not survive a printer — soft dual shadows render as
-           grey smudge and cost toner for no information. Flatten every
-           elevation to nothing and let the hairline borders define edges. */
-        --neu-light:        transparent;
-        --neu-dark:         transparent;
-        --shadow-raised:    none;
-        --shadow-raised-sm: none;
-        --shadow-inset:     none;
-        --shadow-inset-sm:  none;
-        --shadow-card:      none;
+        --shadow-card:    none;
+        --shadow-overlay: none;
     }
 
     .card,
