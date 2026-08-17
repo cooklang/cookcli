@@ -55,10 +55,20 @@
     {% when None %}
     {% endmatch %}
 
+    <div id="sort-controls" class="hidden items-center justify-end gap-2 mb-3">
+        <label for="sort-field" class="text-[13px] text-muted">{{ tr.t("sort-by") }}</label>
+        <select id="sort-field" class="select">
+            <option value="name">{{ tr.t("sort-name") }}</option>
+            <option value="modified">{{ tr.t("sort-modified") }}</option>
+            <option value="created" id="sort-created-option">{{ tr.t("sort-created") }}</option>
+        </select>
+        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}">↑</button>
+    </div>
+
     <div id="recipes-grid" class="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
         {% for item in items %}
         {% if item.is_directory %}
-        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" class="recipe-card">
+        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
             <span class="recipe-card-icon">📁</span>
             <span class="min-w-0">
                 <h3 class="recipe-card-title">{{ item.name }}</h3>
@@ -72,6 +82,7 @@
         {% else %}
         <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
            data-type="recipe"
+           data-name="{{ item.name }}"
            {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
            {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
            class="recipe-card">
@@ -99,5 +110,139 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const grid = document.getElementById('recipes-grid');
+    const controls = document.getElementById('sort-controls');
+    const fieldSelect = document.getElementById('sort-field');
+    const dirBtn = document.getElementById('sort-dir');
+    const createdOption = document.getElementById('sort-created-option');
+
+    if (!grid || !controls || !fieldSelect || !dirBtn) return;
+
+    // Sorting is client-side because this template is also rendered by the
+    // static site builder, where there is no server to answer a ?sort= query.
+    const STORE_KEY = 'recipes-sort';
+
+    let sortField = 'name';
+    let sortDir = 'asc';
+
+    const recipeCards = Array.from(grid.querySelectorAll('[data-type="recipe"]'));
+
+    // "Created" is only offered when every recipe has a creation date;
+    // otherwise the column is partly empty and the ordering is arbitrary.
+    const allHaveCreated = recipeCards.length > 0 &&
+        recipeCards.every(el => el.hasAttribute('data-created'));
+    if (!allHaveCreated && createdOption) {
+        createdOption.remove();
+    }
+
+    // Nothing to sort with fewer than two recipes.
+    if (recipeCards.length < 2) return;
+    controls.classList.remove('hidden');
+    controls.classList.add('flex');
+
+    function restore() {
+        let saved = null;
+        try {
+            saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
+        } catch (e) {
+            // Corrupt value: fall through to the defaults.
+        }
+        if (!saved) return;
+        // The saved field may not exist here — "created" is removed on pages
+        // where not every recipe has a date.
+        const valid = Array.from(fieldSelect.options).some(o => o.value === saved.field);
+        if (valid) {
+            sortField = saved.field;
+            fieldSelect.value = saved.field;
+        }
+        if (saved.dir === 'asc' || saved.dir === 'desc') {
+            sortDir = saved.dir;
+        }
+    }
+
+    function persist() {
+        try {
+            sessionStorage.setItem(STORE_KEY, JSON.stringify({ field: sortField, dir: sortDir }));
+        } catch (e) {
+            // Private browsing or a full quota: sorting still works, it just
+            // does not survive navigation.
+        }
+    }
+
+    function getValue(el) {
+        if (sortField === 'name') {
+            // Reads data-name rather than the heading's text. The previous
+            // version used el.querySelector('h3').textContent, which silently
+            // broke sorting whenever the card markup changed.
+            return (el.getAttribute('data-name') || '').trim();
+        }
+        const raw = el.getAttribute(sortField === 'modified' ? 'data-modified' : 'data-created');
+        if (raw === null) return null;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? null : n;
+    }
+
+    // numeric so "Recipe 10" sorts after "Recipe 9", and sensitivity 'base'
+    // so case and accents do not split otherwise-equal names.
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+    function compare(a, b) {
+        const av = getValue(a);
+        const bv = getValue(b);
+        // Missing values sort last in both directions rather than flipping to
+        // the top when the direction is reversed.
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        const cmp = typeof av === 'string' ? collator.compare(av, bv) : av - bv;
+        return sortDir === 'asc' ? cmp : -cmp;
+    }
+
+    function applySort() {
+        const all = Array.from(grid.children);
+        const dirs = all.filter(el => el.dataset.type === 'directory');
+        const recipes = all.filter(el => el.dataset.type === 'recipe');
+        const others = all.filter(el => !el.dataset.type);
+
+        recipes.sort(compare);
+        // Directories stay grouped above recipes, but sort among themselves by
+        // name so their order is deterministic instead of source order.
+        dirs.sort((a, b) => {
+            const cmp = collator.compare(a.getAttribute('data-name') || '', b.getAttribute('data-name') || '');
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+
+        const frag = document.createDocumentFragment();
+        dirs.forEach(el => frag.appendChild(el));
+        recipes.forEach(el => frag.appendChild(el));
+        others.forEach(el => frag.appendChild(el));
+        grid.appendChild(frag);
+
+        dirBtn.textContent = sortDir === 'asc' ? '↑' : '↓';
+    }
+
+    fieldSelect.addEventListener('change', function () {
+        sortField = this.value;
+        // Dates default to newest first; names to A–Z.
+        sortDir = sortField === 'name' ? 'asc' : 'desc';
+        applySort();
+        persist();
+    });
+
+    dirBtn.addEventListener('click', function () {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        applySort();
+        persist();
+    });
+
+    restore();
+    applySort();
+})();
+</script>
 {% endblock %}
 

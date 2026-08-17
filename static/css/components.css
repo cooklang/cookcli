@@ -131,6 +131,25 @@
         filter: brightness(1.06);
     }
 
+    /* Matches .btn's box so a select and a button sit level beside each other.
+       The dropdown arrow is left to the platform: a custom SVG arrow would
+       have to be a data URI, which cannot reference a token and so would not
+       flip with the theme. `color-scheme` on .dark already makes the native
+       control render correctly in both themes. */
+    .select {
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 13.5px;
+        font-weight: 550;
+        cursor: pointer;
+    }
+
+    .select:hover { background: var(--surface-sunk); }
+
     .stepper {
         display: inline-flex;
         align-items: center;
@@ -555,6 +574,7 @@
        tablet propped in a kitchen, where 26px buttons are not tappable. */
     @media (pointer: coarse) {
         .btn { height: 44px; padding: 0 14px; }
+        .select { height: 44px; }
         /* 46px outer so the 1px borders leave a 44px content box — the
            buttons are height:100% of that, so they land on 44, not 42. */
         .stepper { height: 46px; }
