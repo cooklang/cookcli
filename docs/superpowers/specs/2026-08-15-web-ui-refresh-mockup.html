@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup</title>
+<style>
+/* ============================================================
+   TOKENS — defined once. No .dark .bg-white overrides anywhere.
+   ============================================================ */
+:root {
+  --bg:            #faf9f7;
+  --surface:       #ffffff;
+  --surface-sunk:  #f4f2ef;
+  --border:        #e6e2dc;
+  --border-strong: #d5cfc6;
+  --text:          #1b1917;
+  --text-muted:    #6f6862;
+  --text-faint:    #9a938c;
+  --accent:        #d9541c;
+  --accent-text:   #b0400f;
+  --accent-soft:   #fdefe6;
+  --ok:            #2f7d55;
+  --ok-soft:       #e7f4ec;
+  --info:          #2b6cb0;
+  --radius:   10px;
+  --radius-sm: 7px;
+  --shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+[data-theme="dark"] {
+  --bg:            #131519;
+  --surface:       #1a1d22;
+  --surface-sunk:  #212530;
+  --border:        #2b3038;
+  --border-strong: #3a414b;
+  --text:          #eceef1;
+  --text-muted:    #9aa2ac;
+  --text-faint:    #6f7883;
+  --accent:        #ff7a45;
+  --accent-text:   #ff9166;
+  --accent-soft:   #2c1e17;
+  --ok:            #5fbe8b;
+  --ok-soft:       #17271f;
+  --info:          #7ab3ea;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+
+/* ============================================================
+   APP CHROME — one compact bar, 48px instead of ~100px
+   ============================================================ */
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display:flex; align-items:center; gap:7px; font-weight:650; font-size:14px; letter-spacing:-.01em; }
+.brand-mark {
+  width:22px; height:22px; border-radius:6px; background: var(--accent);
+  display:grid; place-items:center; color:#fff; font-size:12px;
+}
+.appnav { display:flex; gap:2px; margin-left:8px; }
+.appnav a {
+  padding: 5px 11px; border-radius: 7px; font-size: 13.5px; font-weight: 500;
+  color: var(--text-muted); text-decoration: none;
+}
+.appnav a:hover { background: var(--surface-sunk); color: var(--text); }
+.appnav a[aria-current] { background: var(--surface-sunk); color: var(--text); font-weight: 600; }
+.appsearch {
+  margin-left: auto; display:flex; align-items:center; gap:6px;
+  width: 200px; padding: 5px 10px; border-radius: 7px;
+  background: var(--surface-sunk); border: 1px solid transparent;
+  color: var(--text-faint); font-size: 13px;
+}
+.appsearch:focus-within { border-color: var(--accent); }
+.iconbtn {
+  width:28px; height:28px; border-radius:7px; border:0; background:transparent;
+  color: var(--text-muted); display:grid; place-items:center; cursor:pointer; font-size:14px;
+}
+.iconbtn:hover { background: var(--surface-sunk); color: var(--text); }
+
+/* ============================================================
+   PAGE
+   ============================================================ */
+.page { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.crumbs { font-size: 12.5px; color: var(--text-faint); margin-bottom: 8px; }
+.crumbs a { text-decoration: none; }
+.crumbs a:hover { color: var(--text); }
+.crumbs span { margin: 0 5px; }
+
+.pagehead { display:flex; align-items:flex-start; gap:16px; margin-bottom: 6px; }
+.pagehead h1 {
+  margin: 0; font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -.02em;
+}
+.actions { margin-left:auto; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  height: 32px; padding: 0 11px; border-radius: var(--radius-sm);
+  font-size: 13.5px; font-weight: 550; white-space: nowrap; cursor: pointer;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-strong); text-decoration:none;
+}
+.btn:hover { background: var(--surface-sunk); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color:#fff; }
+.btn-primary:hover { filter: brightness(1.06); background: var(--accent); }
+.btn svg { width:15px; height:15px; }
+
+.stepper {
+  display:inline-flex; align-items:center; height:32px;
+  border:1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--surface); overflow:hidden;
+}
+.stepper button { width:26px; height:100%; border:0; background:transparent; color:var(--text-muted); cursor:pointer; font-size:14px; }
+.stepper button:hover { background: var(--surface-sunk); color:var(--text); }
+.stepper span { min-width:34px; text-align:center; font-size:13.5px; font-weight:600; font-variant-numeric: tabular-nums; }
+
+/* Meta: one quiet line, not 6 coloured pills */
+.metaline {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px 0;
+  font-size: 13px; color: var(--text-muted); margin-bottom: 14px;
+}
+.metaline > *:not(:last-child)::after {
+  content: "·"; margin: 0 8px; color: var(--text-faint);
+}
+.metaline b { font-weight: 600; color: var(--text); }
+.metaline a { color: var(--info); text-decoration:none; }
+.tags { display:flex; gap:5px; }
+.tag {
+  font-size:12px; padding:1px 8px; border-radius:999px;
+  background: var(--surface-sunk); color: var(--text-muted); font-weight:500;
+}
+
+/* ============================================================
+   LAYOUT — fixed-width ingredient rail so names never wrap
+   ============================================================ */
+.recipe-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 700px) {
+  .recipe-grid { grid-template-columns: 264px minmax(0,1fr); align-items:start; }
+  .rail { position: sticky; top: 64px; }
+}
+@media (min-width: 1024px) {
+  .recipe-grid { grid-template-columns: 300px minmax(0,1fr); }
+}
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.card + .card { margin-top: 12px; }
+.card-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+}
+.card-head h2 {
+  margin:0; font-size: 11.5px; font-weight: 650; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.card-head .count { font-size:12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* Ingredient rows: hairlines, not filled gradient chips */
+.ing { list-style:none; margin:0; padding: 4px 0; }
+.ing li {
+  display:flex; align-items:baseline; gap:10px;
+  padding: 7px 14px; font-size: 14px;
+}
+.ing li + li { border-top: 1px solid var(--border); }
+.ing .name { flex:1; min-width:0; }
+.ing .qty {
+  font-variant-numeric: tabular-nums; font-weight:600; font-size:13.5px;
+  color: var(--accent-text); white-space:nowrap;
+}
+.ing .ref { color: var(--info); text-decoration:none; }
+.ing .ref:hover { text-decoration:underline; }
+.ing .note { color: var(--text-faint); font-size:12.5px; }
+.ing input[type=checkbox] { accent-color: var(--accent); margin:0; }
+
+/* ============================================================
+   STEPS — no nested boxes, hairline separated
+   ============================================================ */
+.steps { list-style:none; margin:0; padding:0; }
+.steps > li { display:flex; gap: 12px; padding: 14px; }
+.steps > li + li { border-top: 1px solid var(--border); }
+.num {
+  flex: 0 0 22px; height:22px; border-radius:50%;
+  display:grid; place-items:center;
+  background: var(--surface-sunk); color: var(--text-muted);
+  font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.steptext { font-size: 15px; line-height: 1.6; }
+.steptext p { margin: 0; }
+.stepings {
+  margin-top: 7px; font-size: 12.5px; color: var(--text-faint);
+  display:flex; flex-wrap:wrap; gap: 2px 14px;
+}
+.stepings b { font-weight:600; color: var(--text-muted); }
+
+/* Inline entities: tint + weight, not gradient pills with borders */
+.i-ing  { color: var(--accent-text); font-weight: 600; }
+.i-cook { color: var(--ok); font-weight: 600; }
+.i-time {
+  font-weight:600; background: var(--surface-sunk);
+  padding: 1px 6px; border-radius: 5px; font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   RECIPE LIST — dense rows instead of 190px cards
+   ============================================================ */
+.listgrid { display:grid; gap:10px; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); }
+.rcard {
+  display:flex; align-items:center; gap:10px;
+  padding: 10px 12px; text-decoration:none;
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+}
+.rcard:hover { border-color: var(--border-strong); background: var(--surface-sunk); }
+.rcard .ico {
+  flex:0 0 30px; height:30px; border-radius: 8px; display:grid; place-items:center;
+  background: var(--surface-sunk); font-size:15px;
+}
+.rcard .t { display:block; font-weight: 600; font-size: 14px; line-height:1.3; }
+.rcard .s { display:block; font-size: 12px; color: var(--text-faint); margin-top:1px; }
+.toolbar { display:flex; align-items:center; gap:8px; margin: 12px 0; font-size:13px; color:var(--text-muted); }
+select, .sel {
+  height:30px; border-radius: var(--radius-sm); border:1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); font-size:13px; padding: 0 8px;
+}
+.sectionlabel {
+  font-size:11.5px; font-weight:650; letter-spacing:.06em; text-transform:uppercase;
+  color: var(--text-faint); margin: 18px 0 8px;
+}
+.hidden { display:none; }
+</style>
+</head>
+<body>
+
+<div class="appbar">
+  <div class="brand"><span class="brand-mark">🍳</span> Cook</div>
+  <nav class="appnav">
+    <a href="#" onclick="show('recipe');return false" id="nav-recipe" aria-current="page">Recipes</a>
+    <a href="#">Shopping</a>
+    <a href="#">Pantry</a>
+  </nav>
+  <div class="appsearch">🔍 Search…</div>
+  <button class="iconbtn" onclick="show(view==='recipe'?'list':'recipe')" title="Toggle page">⇄</button>
+  <button class="iconbtn" onclick="toggleTheme()" title="Toggle theme">◐</button>
+  <button class="iconbtn" title="Settings">⚙</button>
+</div>
+
+<!-- =================== RECIPE PAGE =================== -->
+<div class="page" id="view-recipe">
+  <div class="crumbs"><a href="#">Recipes</a><span>/</span>Neapolitan Pizza</div>
+
+  <div class="pagehead">
+    <h1>Neapolitan Pizza</h1>
+    <div class="actions">
+      <div class="stepper"><button>−</button><span>1×</span><button>+</button></div>
+      <button class="btn">Edit</button>
+      <button class="btn">Add to list</button>
+      <button class="btn btn-primary">▶ Cook</button>
+    </div>
+  </div>
+
+  <div class="metaline">
+    <span><b>6</b> servings</span>
+    <span><b>20 min</b></span>
+    <span>Italian</span>
+    <span>Advanced</span>
+    <span><a href="#">stadlermade.com</a></span>
+    <span class="tags"><i class="tag">italian</i><i class="tag">pizza</i></span>
+  </div>
+
+  <div class="recipe-grid">
+    <div class="rail">
+      <div class="card">
+        <div class="card-head"><h2>Ingredients</h2><span class="count">6</span></div>
+        <ul class="ing">
+          <li><input type="checkbox" checked><span class="name"><a class="ref" href="#">Pizza Dough</a></span><span class="qty">6 balls</span></li>
+          <li><span class="name">San Marzano tomato sauce</span><span class="qty">5 tbsp</span></li>
+          <li><span class="name">mozzarella cheese</span><span class="qty">100 g</span></li>
+          <li><span class="name">basil leaves</span><span class="qty"></span></li>
+          <li><span class="name">flour</span><span class="qty"></span></li>
+          <li><span class="name">semolina</span><span class="qty"></span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Cookware</h2><span class="count">2</span></div>
+        <ul class="ing">
+          <li><span class="name">outdoor oven</span></li>
+          <li><span class="name">spatula</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Method</h2><span class="count">6 steps</span></div>
+      <ol class="steps">
+        <li>
+          <div class="num">1</div>
+          <div class="steptext">
+            <p>Preheat your <span class="i-cook">outdoor oven</span> so it's around 450/500°C (842/932°F).</p>
+          </div>
+        </li>
+        <li>
+          <div class="num">2</div>
+          <div class="steptext">
+            <p>Prepare your pizza toppings because from now on you wanna work fast. Sprinkle some <span class="i-ing">semolina</span> on your work surface.</p>
+            <div class="stepings"><span><b>semolina</b></span></div>
+          </div>
+        </li>
+        <li>
+          <div class="num">3</div>
+          <div class="steptext">
+            <p>Use a <span class="i-cook">spatula</span> to remove the <span class="i-ing">Pizza Dough</span> from the dough box and place it upside down in the <span class="i-ing">flour</span>. Sprinkle the bottom of the dough ball generously with <span class="i-ing">semolina</span>, then flip it over again so that the top remains the top.</p>
+            <div class="stepings"><span><b>Pizza Dough</b> 6 balls</span><span><b>flour</b></span><span><b>semolina</b></span></div>
+          </div>
+        </li>
+        <li>
+          <div class="num">4</div>
+          <div class="steptext">
+            <p>Press with your fingertips from both hands in the center of the dough ball towards the outer edges so that the air goes to the crust. Rotate the dough clockwise and make the same movement again until you have gone all around and a nice crust has formed.</p>
+          </div>
+        </li>
+        <li>
+          <div class="num">5</div>
+          <div class="steptext">
+            <p>Place the base on a lightly floured surface and spread <span class="i-ing">San Marzano tomato sauce</span> on it. Add some fresh <span class="i-ing">basil leaves</span> and fresh <span class="i-ing">mozzarella cheese</span>. Bake for <span class="i-time">⏱ 90 sec</span>.</p>
+            <div class="stepings"><span><b>San Marzano tomato sauce</b> 5 tbsp</span><span><b>basil leaves</b></span><span><b>mozzarella cheese</b> 100 g</span></div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- =================== RECIPE LIST =================== -->
+<div class="page hidden" id="view-list">
+  <div class="pagehead">
+    <h1>All Recipes</h1>
+    <div class="actions"><button class="btn btn-primary">+ New Recipe</button></div>
+  </div>
+  <div class="toolbar">
+    Sort <select><option>Name</option><option>Recent</option></select>
+    <button class="iconbtn" style="border:1px solid var(--border-strong)">↑</button>
+  </div>
+
+  <div class="sectionlabel">Folders</div>
+  <div class="listgrid">
+    <a class="rcard" href="#"><span class="ico">📁</span><span><span class="t">Breakfast</span><span class="s">3 recipes</span></span></a>
+    <a class="rcard" href="#"><span class="ico">📁</span><span><span class="t">Salads</span><span class="s">1 recipe</span></span></a>
+    <a class="rcard" href="#"><span class="ico">📁</span><span><span class="t">Shared</span><span class="s">4 recipes</span></span></a>
+  </div>
+
+  <div class="sectionlabel">Menus</div>
+  <div class="listgrid">
+    <a class="rcard" href="#"><span class="ico">📋</span><span><span class="t">2 Day Plan</span><span class="s">Menu</span></span></a>
+    <a class="rcard" href="#"><span class="ico">📋</span><span><span class="t">Weekly Plan</span><span class="s">Menu</span></span></a>
+  </div>
+
+  <div class="sectionlabel">Recipes</div>
+  <div class="listgrid">
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Classic Risotto alla Milanese</span><span class="s">italian · rice · comfort food</span></span></a>
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Neapolitan Pizza</span><span class="s">italian · pizza</span></span></a>
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Thai Green Curry</span><span class="s">thai · curry</span></span></a>
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Pizza Dough</span><span class="s">italian</span></span></a>
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Caesar Salad</span><span class="s">salad</span></span></a>
+    <a class="rcard" href="#"><span class="ico">🍽</span><span><span class="t">Pancakes</span><span class="s">breakfast · sweet</span></span></a>
+  </div>
+</div>
+
+<script>
+let view = 'recipe';
+function show(v){
+  view = v;
+  document.getElementById('view-recipe').classList.toggle('hidden', v!=='recipe');
+  document.getElementById('view-list').classList.toggle('hidden', v!=='list');
+}
+function toggleTheme(){
+  const r = document.documentElement;
+  r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+</script>
+</body>
+</html>

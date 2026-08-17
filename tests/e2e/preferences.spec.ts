@@ -228,9 +228,9 @@ test.describe('Feature toggles in preferences', () => {
     await expect(shoppingBtn).toBeVisible();
     await expect(pantryBtn).toBeVisible();
 
-    // Both enabled → should have the active (orange gradient) classes
-    await expect(shoppingBtn).toHaveClass(/from-orange-500/);
-    await expect(pantryBtn).toHaveClass(/from-orange-500/);
+    // Both enabled → toggles report active state
+    await expect(shoppingBtn).toHaveAttribute('data-active', 'true');
+    await expect(pantryBtn).toHaveAttribute('data-active', 'true');
   });
 
   test('toggling Shopping List off removes it from nav', async ({ page }) => {
@@ -242,7 +242,7 @@ test.describe('Feature toggles in preferences', () => {
 
     // Button is now inactive
     const shoppingBtn = page.getByRole('button', { name: /Shopping/i });
-    await expect(shoppingBtn).not.toHaveClass(/from-orange-500/);
+    await expect(shoppingBtn).toHaveAttribute('data-active', 'false');
 
     // Nav no longer shows Shopping List
     await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).not.toBeVisible();

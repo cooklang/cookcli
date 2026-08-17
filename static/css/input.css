@@ -5,213 +5,346 @@
    darkMode: 'class' and the content globs) authoritative. */
 @config "../../tailwind.config.js";
 
-/* Custom component classes */
-@layer components {
-    /* Recipe cards with colorful borders */
-    .recipe-card {
-        @apply relative overflow-hidden;
+/* ============================================================
+   DESIGN TOKENS
+   Seventeen semantic names, defined once per theme. Every colour
+   in the UI resolves through one of these. Do not introduce raw
+   hex values or Tailwind palette utilities in templates.
+   --accent-ink is the foreground colour for text and icons sitting ON a
+   filled --accent background. It is white in light mode and near-black in
+   dark mode, because the dark accent is deliberately vivid and cannot
+   carry white text at AA contrast.
+   ============================================================ */
+:root {
+    /* Primer's structural convention on the Cooklang palette: a near-white
+       canvas, white surfaces, and a hairline border on everything. The border
+       is what defines a surface here — not elevation — so --border carries
+       real weight and is never decorative. */
+    --bg:            #fcfcfb;
+    --surface:       #ffffff;
+    --surface-sunk:  #f5f3f0;
+    --border:        #e4e0da;
+    --border-strong: #c3bcb1;
+    --text:          #16161d;   /* DS Text/Primary */
+    --text-muted:    #5f5a51;   /* DS Text/Secondary, darkened for AA */
+    --text-faint:    #6a645b;
+    --accent:        #e15a29;   /* DS Controls/Primary, Icons/Primary, Forms/Stroke */
+    --accent-text:   #715329;   /* DS Text/Tags — the DS colour for tag/badge text */
+    --accent-soft:   #f5dacf;   /* DS Background/UI One */
+    --accent-ink:    #16161d;
+    --ok:            #3d6849;
+    --ok-soft:       #e2e8df;
+    --danger:        #c4261c;   /* DS Text/Warning, darkened for AA on light */
+    --danger-soft:   #f7dfdc;
+    --danger-ink:    #ffffff;
+    /* Links. The design system is entirely warm — no blue anywhere — so the
+       conventional link colour would be the one thing on screen that is
+       visibly not from the palette. This is the dark end of the DS orange
+       instead, and every link carries an underline so the affordance never
+       rests on hue alone. */
+    --info:          #8a3d14;
+    --disabled:      #d3cdcb;   /* DS Controls/Disabled */
+    --inactive:      #8a8075;   /* DS Controls/Inactive, darkened for AA */
+
+    --radius-control: 6px;
+    --radius-card:   6px;
+
+    /* Two elevations, and that is the whole scale. In-flow surfaces get
+       --shadow-card, which is barely a shadow at all — the border does the
+       work. --shadow-overlay is only for things genuinely floating above the
+       page: dropdowns, dialogs, the search results panel. Nothing in the
+       document flow should ever use it. */
+    --shadow-card:    0 1px 0 rgba(27, 31, 36, .04);
+    --shadow-overlay: 0 8px 24px rgba(27, 31, 36, .12);
+
+    /* Height of the sticky app bar. Used by .appbar itself and by anything
+       that has to sit clear of it (the sticky ingredient rail). */
+    --appbar-h: 48px;
+}
+
+/* .cooking-overlay is listed here deliberately. Cook mode's chrome is always
+   dark regardless of the site theme, so the tokens must resolve to their dark
+   values inside it. Without this, inline entity badges — which carry no
+   background of their own since Task 4 — inherit the LIGHT theme's
+   --accent-text / --ok and render at roughly 2.5:1 on cook mode's navy card. */
+/* The design system supplies Light values only. These are derived in the same
+   warm-neutral family: --accent and --accent-ink carry over unchanged, and the
+   text/status colours are lifted until they clear AA against the dark base. */
+.dark,
+.cooking-overlay {
+    color-scheme: dark;
+    /* --bg is the design system's own #16161D. It is listed under Text in the
+       palette, but it is the only near-black the system defines and it makes a
+       better warm canvas than an invented one. */
+    --bg:            #16161d;
+    --surface:       #1c1c24;
+    --surface-sunk:  #23232c;
+    --border:        #30303b;
+    --border-strong: #43434f;
+    --text:          #efeae6;
+    --text-muted:    #ada69b;
+    --text-faint:    #948d83;
+    --accent:        #e15a29;
+    --accent-text:   #f08050;
+    --accent-soft:   #3a2820;
+    --accent-ink:    #16161d;
+    --ok:            #6fb283;
+    --ok-soft:       #1e2a22;
+    --danger:        #ff6b60;
+    --danger-soft:   #2e1b1a;
+    --danger-ink:    #16161d;
+    --info:          #e59a6d;
+    --disabled:      #4a4a55;
+    --inactive:      #8f8880;
+
+    /* On a dark canvas the border already reads as a raised edge, so the
+       in-flow shadow goes away entirely. The overlay shadow stays and gets
+       heavier — a floating panel needs to separate from a dark page too. */
+    --shadow-card:    none;
+    --shadow-overlay: 0 8px 24px rgba(0, 0, 0, .5);
+}
+
+/* Register tokens with Tailwind so they generate real utilities
+   (bg-surface, text-muted, border-line, …). `inline` makes the
+   generated utilities reference the custom property, so they flip
+   automatically under .dark with no override rules.
+   Border tokens are named `line` so the utility reads `border-line`
+   rather than `border-border`. */
+@theme inline {
+    --color-bg:          var(--bg);
+    --color-surface:     var(--surface);
+    --color-sunk:        var(--surface-sunk);
+    --color-line:        var(--border);
+    --color-line-strong: var(--border-strong);
+    --color-text:        var(--text);
+    --color-muted:       var(--text-muted);
+    --color-faint:       var(--text-faint);
+    --color-accent:      var(--accent);
+    --color-accent-text: var(--accent-text);
+    --color-accent-soft: var(--accent-soft);
+    --color-accent-ink:  var(--accent-ink);
+    --color-ok:          var(--ok);
+    --color-ok-soft:     var(--ok-soft);
+    --color-danger:      var(--danger);
+    --color-danger-soft: var(--danger-soft);
+    --color-danger-ink:  var(--danger-ink);
+    --color-info:        var(--info);
+    --color-disabled:    var(--disabled);
+    --color-inactive:    var(--inactive);
+}
+
+/* ============================================================
+   TYPE SCALE
+   Six steps, each with a role and a line-height chosen for that role.
+   Registered with Tailwind so templates use `text-body` / `text-meta`
+   rather than arbitrary `text-[12.5px]` values.
+
+   This replaces an ad-hoc set of nine sizes — 11.5, 12, 12.5, 13, 13.5,
+   14, 15, 16, 24 — six of which sat inside a 2.5px band. Half-pixel steps
+   are below the threshold at which a reader can tell two sizes apart, so
+   they could not express hierarchy; they only made every new declaration
+   a guess. Each step below is at least 1px from its neighbours and maps
+   to one job.
+
+   Line-height falls as size rises: long-form text needs the leading to
+   track back to the start of the next line, headings do not.
+   ============================================================ */
+@theme {
+    /* Page title. Negative tracking because default spacing looks loose
+       once type gets this large. */
+    --text-display: 24px;
+    --text-display--line-height: 1.25;
+    --text-display--letter-spacing: -.01em;
+
+    /* Section headings below the page title. Collapses what had been five
+       sizes doing one job — 15, 16, 17, 19 and 20px across different
+       templates, none of them a deliberate distinction. */
+    --text-title: 18px;
+    --text-title--line-height: 1.35;
+    --text-title--letter-spacing: -.005em;
+
+    /* The primary reading surface: recipe step text. The only step tuned
+       for continuous prose rather than for UI. */
+    --text-read: 16px;
+    --text-read--line-height: 1.6;
+
+    /* Default. List rows, ingredient names, card titles. */
+    --text-body: 14px;
+    --text-body--line-height: 1.5;
+
+    /* Controls and dense chrome: buttons, inputs, the metadata line. */
+    --text-ui: 13px;
+    --text-ui--line-height: 1.4;
+
+    /* Captions, counts, tags, notes — text that supports something else. */
+    --text-meta: 12px;
+    --text-meta--line-height: 1.4;
+
+    /* Uppercase section labels only. The tracking is part of the step:
+       capitals set at their natural spacing read as cramped, and it is
+       what makes 11px legible in this role. */
+    --text-label: 11px;
+    --text-label--line-height: 1.3;
+    --text-label--letter-spacing: .06em;
+
+    /* Tailwind's own names are still used in ~80 places across the templates.
+       Their sizes already coincided with steps above, but their default
+       line-heights did not, so the same visual size was being set with two
+       different leadings depending on which name the author reached for.
+       Aliasing them here fixes every one of those call sites without touching
+       the markup, and means a future `text-sm` cannot drift off the scale. */
+    --text-xs:   var(--text-meta);
+    --text-xs--line-height: 1.4;
+    --text-sm:   var(--text-body);
+    --text-sm--line-height: 1.5;
+    --text-base: var(--text-read);
+    --text-base--line-height: 1.6;
+    --text-lg:   var(--text-title);
+    --text-lg--line-height: 1.35;
+    --text-2xl:  var(--text-display);
+    --text-2xl--line-height: 1.25;
+}
+
+/* Four real weights. 550 and 650 were in use and do render on macOS, where
+   the system font resolves to variable SF Pro — but 600 to 650 is a ~1%
+   change in advance width, far too fine to signal hierarchy, and it snaps to
+   a neighbouring weight wherever the system font is not variable. Hierarchy
+   that depends on it is therefore inconsistent across platforms. */
+body {
+    font-size: var(--text-body);
+    line-height: 1.5;
+}
+
+/* Component vocabulary. Split out of this file so the theme contract
+   (tokens + @theme + the print token reset) stays small and stable while
+   the component layer keeps churning. Imported here rather than appended
+   so it still lands inside the same build. */
+@import "./components.css";
+
+/* Print: force the light token values regardless of the active theme, and
+   flatten the recipe grid. The print rules in base.html were written against
+   pre-refresh markup (`.bg-white`, `.grid`, `.md\:col-span-*`) and no longer
+   match anything, so without this a dark-theme recipe prints as near-black
+   text on a near-black card. */
+@media print {
+    :root,
+    .dark,
+    .cooking-overlay {
+        --bg:            #ffffff;
+        --surface:       #ffffff;
+        --surface-sunk:  #f5f4f2;
+        --border:        #dddad5;
+        --border-strong: #bbb6ae;
+        --text:          #111111;
+        --text-muted:    #444444;
+        --text-faint:    #666666;
+        --accent:        #a8380c;
+        --accent-text:   #a8380c;
+        --accent-soft:   #f7ece5;
+        --accent-ink:    #ffffff;
+        --ok:            #23624a;
+        --ok-soft:       #eaf3ee;
+        --danger:        #96201a;
+        --danger-soft:   #f8eae9;
+        --danger-ink:    #ffffff;
+        --info:          #1f4f86;
+        --disabled:      #cccccc;
+        --inactive:      #767676;
+
+        --shadow-card:    none;
+        --shadow-overlay: none;
     }
 
-    .recipe-card::before {
-        content: '';
-        @apply absolute top-0 left-0 right-0 h-1;
-        background: linear-gradient(90deg, #ff6b35, #fbbf24, #4ade80);
+    .card,
+    .btn,
+    .stepper,
+    .recipe-card,
+    .appbar {
+        border: 1px solid var(--border) !important;
+        box-shadow: none !important;
     }
 
-    /* Ingredient badges */
-    .ingredient-badge {
-        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
-        background: linear-gradient(135deg, #fef3c7, #fed7aa);
-        @apply text-orange-700 border border-orange-400;
+    .card {
+        break-inside: avoid;
     }
 
-    .cookware-badge {
-        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
-        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-        @apply text-green-900 border border-green-400;
+    /* Single column on paper; the rail must not stay sticky. */
+    .recipe-layout {
+        display: block !important;
     }
 
-    .timer-badge {
-        @apply inline-block align-middle px-2 py-0.5 rounded-full text-sm font-medium whitespace-nowrap;
-        background: linear-gradient(135deg, #fee2e2, #fecaca);
-        @apply text-red-900 border border-red-400;
+    .recipe-rail {
+        position: static !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin-bottom: 16px;
     }
 
-    /* Enhanced buttons */
-    .btn-primary {
-        background: linear-gradient(135deg, #ff6b35, #f97316);
-        @apply shadow-lg hover:-translate-y-0.5 transition-all;
+    .step-list > li {
+        break-inside: avoid;
     }
+}
 
-    .btn-primary:hover {
-        box-shadow: 0 6px 20px 0 rgba(255, 107, 53, 0.4);
-    }
 
-    /* Step numbers with colorful circles */
-    .step-number {
-        @apply w-8 h-8 flex items-center justify-center rounded-full text-white font-bold shrink-0;
-        background: linear-gradient(135deg, #ff6b35, #f97316);
-    }
+/* ============================================================
+   CODEMIRROR
+   Token-driven in BOTH themes, replacing the old `.dark .cm-*` block.
 
-    /* Tags styling */
-    .tag {
-        @apply inline-block px-3 py-1 rounded-full text-xs font-medium mr-2;
-        background: linear-gradient(135deg, #fbbf24, #fb923c);
-        @apply text-white shadow-xs;
-    }
+   These rules live OUTSIDE @layer components, and that is the whole
+   point. CodeMirror mounts its base theme as a plain unlayered <style>
+   when the editor initialises — i.e. after this stylesheet's <link> and
+   outside every cascade layer. Unlayered always beats layered no matter
+   the specificity, so the same rules inside @layer components were
+   silently losing (measured: gutters stayed #f5f5f5 in dark mode).
 
-    /* Navigation pills */
-    .nav-pill {
-        @apply px-5 py-2 rounded-full transition-all font-medium text-gray-500 relative;
-    }
+   Being unlayered only gets us a tie; source order then favours
+   CodeMirror, whose compiled selectors look like `.ͼ2 .cm-gutters`
+   (0,2,0). `.cm-editor.cm-editor` is the cheapest honest way to reach
+   0,3,0 and win without !important.
 
-    .nav-pill:hover {
-        background: linear-gradient(135deg, #fef3c7, #fed7aa);
-        @apply text-orange-700 -translate-y-0.5 shadow-md;
-    }
+   The `.cm-editor` root rule stays at 0,1,0 deliberately: CodeMirror
+   sets no background on the wrapper, so nothing competes for it.
 
-    .nav-pill.active {
-        background: linear-gradient(135deg, #ff6b35, #f97316);
-        @apply text-white font-bold shadow-lg;
-    }
+   The editor is built without `drawSelection()`, so no `.cm-cursor` or
+   `.cm-selectionBackground` elements exist — the caret and selection are
+   the browser's own. The old `.dark .cm-cursor` / `.dark
+   .cm-selectionBackground` rules were dead code. They are kept so that
+   turning drawSelection() on later stays themed, but the rules doing the
+   work today are `caret-color` on .cm-content and `::selection`.
+   ============================================================ */
+.cm-editor {
+    background: var(--surface);
+    color: var(--text);
+}
 
-    /* Recipe metadata pills - simple outline style */
-    .metadata-pill {
-        @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap border bg-white;
-    }
+.cm-editor.cm-editor .cm-gutters {
+    background: var(--surface-sunk);
+    border-color: var(--border);
+    color: var(--text-faint);
+}
 
-    .metadata-servings {
-        @apply text-gray-600 border-gray-300;
-    }
+.cm-editor.cm-editor .cm-activeLineGutter {
+    background: var(--surface-sunk);
+    color: var(--text-muted);
+}
 
-    .metadata-time {
-        @apply text-blue-600 border-blue-300;
-    }
+.cm-editor.cm-editor .cm-activeLine {
+    background: color-mix(in srgb, var(--surface-sunk) 60%, transparent);
+}
 
-    .metadata-difficulty {
-        @apply text-yellow-600 border-yellow-300;
-    }
+.cm-editor.cm-editor .cm-content { caret-color: var(--text); }
 
-    .metadata-course {
-        @apply text-orange-600 border-orange-300;
-    }
+.cm-editor.cm-editor .cm-cursor,
+.cm-editor.cm-editor .cm-dropCursor {
+    border-left-color: var(--text);
+}
 
-    .metadata-prep {
-        @apply text-indigo-600 border-indigo-300;
-    }
-
-    .metadata-cook {
-        @apply text-red-600 border-red-300;
-    }
-
-    .metadata-cuisine {
-        @apply text-green-600 border-green-300;
-    }
-
-    .metadata-diet {
-        @apply text-lime-600 border-lime-300;
-    }
-
-    .metadata-author {
-        @apply text-pink-600 border-pink-300;
-    }
-
-    .metadata-custom {
-        @apply text-purple-600 border-purple-300;
-    }
-
-    /* Search input with colorful focus */
-    .search-input:focus {
-        @apply border-primary-orange;
-        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
-    }
-
-    /* Step images in recipes */
-    .image-step {
-        @apply w-full max-h-80 object-contain rounded-xl;
-    }
-
-    /* Recipe image placeholder with gradient */
-    .recipe-image-placeholder {
-        background: linear-gradient(135deg, #ff6b35, #fbbf24);
-        @apply w-30 h-30 rounded-full flex items-center justify-center text-white text-5xl;
-    }
-
-    /* Pantry item styles with improved dark mode support */
-    .pantry-item {
-        @apply bg-gray-50 dark:bg-gray-800;
-    }
-
-    .pantry-item:hover {
-        @apply bg-gray-100 dark:bg-gray-700;
-    }
-
-    /* Out-of-stock pantry items with better dark mode contrast */
-    .pantry-item.out-of-stock {
-        @apply bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900/50;
-    }
-
-    .pantry-item.out-of-stock:hover {
-        @apply bg-red-100 dark:bg-red-950/40;
-    }
-
-    /* Pantry text colors for dark mode */
-    .pantry-item .text-gray-900 {
-        @apply dark:text-gray-100;
-    }
-
-    .pantry-item .text-gray-600 {
-        @apply dark:text-gray-400;
-    }
-
-    .pantry-item .text-gray-500 {
-        @apply dark:text-gray-400;
-    }
-
-    /* Out-of-stock text in dark mode */
-    .pantry-item.out-of-stock .quantity-display {
-        @apply text-red-600 dark:text-red-400;
-    }
-
-    /* Status dots with dark mode support */
-    .item-status-dot.in-stock {
-        @apply bg-green-500 dark:bg-green-400;
-    }
-
-    .item-status-dot.out-of-stock {
-        @apply bg-red-500 dark:bg-red-400;
-    }
-
-    /* CodeMirror editor dark mode support */
-    .dark .cm-editor {
-        @apply bg-gray-900;
-    }
-
-    .dark .cm-gutters {
-        @apply bg-gray-800 border-gray-700;
-    }
-
-    .dark .cm-lineNumbers .cm-gutterElement {
-        @apply text-gray-400;
-    }
-
-    .dark .cm-activeLineGutter {
-        @apply bg-gray-700;
-    }
-
-    .dark .cm-activeLine {
-        @apply bg-gray-800/50;
-    }
-
-    .dark .cm-content {
-        caret-color: white;
-    }
-
-    .dark .cm-cursor {
-        border-left-color: white;
-    }
-
-    .dark .cm-selectionBackground {
-        @apply bg-blue-800/50!;
-    }
+/* CodeMirror's focused-selection rule is 0,5,0
+   (`.ͼ2.cm-focused > .cm-scroller > .cm-selectionLayer
+   .cm-selectionBackground`), which no reasonable selector beats, so this
+   keeps the !important the old rule had. */
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor ::selection {
+    background: color-mix(in srgb, var(--info) 30%, transparent) !important;
 }

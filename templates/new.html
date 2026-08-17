@@ -4,22 +4,22 @@
 
 {% block content %}
 <div class="max-w-xl mx-auto">
-    <h1 class="text-3xl font-bold text-gray-800 mb-8">{{ tr.t("new-recipe") }}</h1>
+    <h1 class="text-display font-bold text-text mb-5">{{ tr.t("new-recipe") }}</h1>
 
     {% if let Some(err) = error %}
-    <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-        <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="mb-5 card p-3.5 border-l-[3px] border-l-danger">
+        <div class="flex items-center gap-2.5">
+            <svg class="w-5 h-5 text-danger shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
-            <p class="text-red-700">{{ err }}</p>
+            <p class="text-danger text-sm">{{ err }}</p>
         </div>
     </div>
     {% endif %}
 
-    <form action="{{ prefix }}/new" method="POST" class="space-y-6">
+    <form action="{{ prefix }}/new" method="POST" class="space-y-5">
         <div>
-            <label for="filename" class="block text-sm font-medium text-gray-700 mb-2">
+            <label for="filename" class="block text-sm font-medium text-muted mb-1.5">
                 {{ tr.t("new-recipe-path") }}
             </label>
             <div class="flex items-center gap-2">
@@ -31,18 +31,18 @@
                     pattern="[a-zA-Z0-9_/ -]+"
                     placeholder="{{ tr.t("new-recipe-placeholder") }}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
-                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-hidden{% if error.is_some() %} border-red-300{% endif %}"
+                    class="flex-1 h-10 px-3 text-sm bg-surface text-text border rounded-[6px] focus:border-accent outline-hidden {% if error.is_some() %}border-danger{% else %}border-line-strong{% endif %}"
                 >
-                <span class="text-gray-500">.cook</span>
+                <span class="text-faint text-sm">.cook</span>
             </div>
-            <p class="mt-2 text-sm text-gray-500">{{ tr.t("new-recipe-hint") }}</p>
+            <p class="mt-1.5 text-sm text-faint">{{ tr.t("new-recipe-hint") }}</p>
         </div>
 
-        <div class="flex gap-4">
-            <a href="{{ prefix }}/" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+        <div class="flex gap-2">
+            <a href="{{ prefix }}/" class="btn">
                 {{ tr.t("action-cancel") }}
             </a>
-            <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md">
+            <button type="submit" class="btn btn-primary">
                 {{ tr.t("new-recipe-create") }}
             </button>
         </div>

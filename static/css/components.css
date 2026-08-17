@@ -1,0 +1,693 @@
+/* ============================================================
+   COMPONENT LAYER
+   Split out of input.css (which owns the design tokens and the
+   @theme registration). Imported from input.css immediately after
+   @theme inline, so token utilities and these components compile
+   into the same stylesheet.
+   Everything here resolves through the tokens defined in input.css;
+   never introduce raw hex values or Tailwind palette utilities.
+   ============================================================ */
+
+/* Custom component classes */
+@layer components {
+    /* ---------- Focus ---------- */
+    /* :focus-visible so pointer users never see it. Primer's own ring is a
+       2px solid accent outline; this is the same idea in --accent. */
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+    }
+
+    /* ---------- Surfaces ---------- */
+    /* Border first, elevation almost never. --shadow-card is a 4%-alpha
+       one-pixel edge in light mode and `none` in dark; if it were deleted
+       entirely the design would barely change, which is the intent. */
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .card-head h2,
+    .card-head h3 {
+        margin: 0;
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    /* Escape hatch: card heads whose text is user-authored data
+       (aisle categories, pantry locations) rather than fixed chrome. */
+    .card-head.plain h2,
+    .card-head.plain h3 {
+        font-size: var(--text-body);
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--text);
+    }
+
+    .card-head .count {
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- Controls ---------- */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 11px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+    }
+
+    /* Flat controls signal state with fill, not elevation.
+       Deliberately not transitioned. Any transition on a property whose value
+       is a theme token races Chrome's custom-property invalidation when .dark
+       is toggled: the element intermittently keeps the outgoing theme's colour
+       and only corrects on the next unrelated style recalc. Observed as
+       recipe cards staying white on a dark page. Hover feedback is instant
+       instead, which is what a flat design wants anyway. */
+    .btn:hover {
+        background: var(--surface-sunk);
+        border-color: var(--border-strong);
+    }
+
+    .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
+
+    .btn svg { width: 15px; height: 15px; }
+
+    /* One accent-filled button per view. Everything else is neutral.
+       --accent-ink is the design system's near-black, which clears AA on the
+       accent fill (5.0:1) where white (3.7:1) would not. */
+    .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-ink);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent);
+        filter: brightness(1.06);
+    }
+
+    /* The commit half of a destructive confirmation. Not a second accent:
+       --danger is a distinct token, and the accent must keep meaning "the
+       thing you probably want".
+       This takes --danger-ink, not --accent-ink. The two used to be the same
+       colour but no longer are: --accent is now a bright orange needing dark
+       ink, while light mode's --danger is a deep red needing white. They only
+       agree in dark mode. */
+    .btn-danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: var(--danger-ink);
+    }
+
+    .btn-danger:hover {
+        background: var(--danger);
+        filter: brightness(1.06);
+    }
+
+    /* Matches .btn's box so a select and a button sit level beside each other.
+       The dropdown arrow is left to the platform: a custom SVG arrow would
+       have to be a data URI, which cannot reference a token and so would not
+       flip with the theme. `color-scheme` on .dark already makes the native
+       control render correctly in both themes. */
+    .select {
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-ui);
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .select:hover { background: var(--surface-sunk); }
+
+    .stepper {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+    }
+
+    .stepper button {
+        width: 26px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: var(--text-body);
+    }
+
+    .stepper button:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .stepper button:active { background: var(--surface-sunk); filter: brightness(.97); }
+
+    .stepper input,
+    .stepper .value {
+        width: 44px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        text-align: center;
+        font-size: var(--text-ui);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+    /* Suppress native spin buttons — they appear on hover/focus, widen the
+       input and overflow the stepper's rounded corner. The −/+ buttons are
+       the intended affordance. */
+    .stepper input::-webkit-outer-spin-button,
+    .stepper input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .stepper input:focus { outline: none; }
+
+    /* ---------- Lists ---------- */
+    /* center, not baseline: .row children include non-text controls
+       (checkboxes, status dots) and all content is single-line. */
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: var(--text-body);
+    }
+
+    .row + .row { border-top: 1px solid var(--border); }
+
+    .row .row-name { flex: 1; min-width: 0; }
+
+    .row .row-value {
+        white-space: nowrap;
+        font-weight: 600;
+        font-size: var(--text-ui);
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .row .row-note {
+        color: var(--text-faint);
+        font-size: var(--text-meta);
+    }
+
+    /* ---------- Text ---------- */
+    /* One quiet dot-separated line, replacing rows of coloured pills. */
+    .metaline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 0;
+        font-size: var(--text-ui);
+        color: var(--text-muted);
+    }
+
+    .metaline > *:not(:last-child)::after {
+        content: "·";
+        margin: 0 8px;
+        color: var(--text-faint);
+    }
+
+    .metaline b { font-weight: 600; color: var(--text); }
+
+    .metaline a { color: var(--info); text-decoration: underline; text-underline-offset: 2px; }
+
+    .metaline a:hover { color: var(--accent-text); }
+
+    /* Recipe-reference links (a step or ingredient pointing at another
+       recipe). Carries the underline for the same reason .metaline a does:
+       --info is a warm orange now and must not be the sole link signal. */
+    a.text-info { text-decoration: underline; text-underline-offset: 2px; }
+
+    .section-label {
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin: 18px 0 8px;
+        /* Baked in so every call site does not have to remember px-3.5;
+           it aligns the label with .row / .card-head padding. */
+        padding: 0 14px;
+    }
+
+    /* ---------- Status ---------- */
+    /* Shared by the pantry page and the shopping list's pantry sidebar,
+       so stock state reads identically in both places. Defined here
+       rather than in the pantry task because Task 8 consumes it first. */
+    .item-status-dot {
+        flex: 0 0 auto;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+    }
+
+    .item-status-dot.in-stock { background: var(--ok); }
+
+    .item-status-dot.out-of-stock { background: var(--danger); }
+
+    /* Inline recipe entities: weight + tint, not bordered gradient pills,
+       so they stop competing with the prose they sit inside. */
+    .ingredient-badge {
+        color: var(--accent-text);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* Distinguished from an ingredient by texture, not hue. It used to be
+       green, which is not a colour the design system has, and which made the
+       ingredient/cookware split invisible to the ~8% of men with a red-green
+       deficiency — brown and green being exactly the confusable pair. A
+       dotted underline survives both problems. */
+    .cookware-badge {
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+        text-decoration: underline dotted var(--inactive);
+        text-underline-offset: 3px;
+    }
+
+    /* Flat tinted chips with a hairline, the way Primer draws Label. */
+    .timer-badge {
+        padding: 1px 6px;
+        border-radius: 5px;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .step-number {
+        flex: 0 0 22px;
+        height: 22px;
+        margin-top: 1px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: var(--text-meta);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 500;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    /* Card in the recipes/menu index. No gradient top border. */
+    .recipe-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        text-decoration: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+    }
+
+    /* No transition here either — see the note on .btn:hover. */
+    .recipe-card:hover {
+        background: var(--surface-sunk);
+        border-color: var(--border-strong);
+    }
+
+    .recipe-card .recipe-card-icon {
+        flex: 0 0 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        font-size: var(--text-read);
+    }
+
+    /* An <h2>, not an <h3>: the index has an <h1> and nothing between, so an
+       h3 skipped a level in the document outline.
+       The old warning here — that this element had to stay an <h3> because
+       the sorter read `querySelector('h3').textContent` — no longer applies.
+       The sorter reads data-name, and the E2E suite selects this class rather
+       than the tag, so the heading level is free to follow the outline. */
+    .recipe-card .recipe-card-title {
+        display: block;
+        margin: 0;
+        font-size: var(--text-body);
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--text);
+    }
+
+    .recipe-card .recipe-card-sub {
+        display: block;
+        margin-top: 1px;
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+    }
+
+    /* ---------- App bar ---------- */
+    .appbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--appbar-h);
+        padding: 0 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .appbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: var(--text-body);
+        font-weight: 600;
+        letter-spacing: -.01em;
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .appbar-nav { display: flex; gap: 2px; }
+
+    .icon-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .icon-btn:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    /* Bordered field on the surface colour, not a sunken well. */
+    .search-input {
+        width: 100%;
+        height: 30px;
+        padding: 0 10px 0 30px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-ui);
+    }
+
+    .search-input::placeholder { color: var(--text-faint); }
+
+    /* Keeps its own accent border on :focus (not just :focus-visible) so the
+       active field is marked while typing, when the global ring is suppressed. */
+    .search-input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    /* Nav items in the app bar. Name kept for the E2E suite. */
+    .nav-pill {
+        padding: 5px 11px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        font-weight: 500;
+        color: var(--text-muted);
+        text-decoration: none;
+    }
+
+    .nav-pill:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .nav-pill.active {
+        background: var(--surface-sunk);
+        color: var(--text);
+        font-weight: 600;
+    }
+
+    /* Kept for custom metadata key/value chips inside .metaline.
+       test-helpers.ts selects .metadata-pill by "key: value" text. */
+    .metadata-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 500;
+        white-space: nowrap;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    .metadata-pill svg {
+        width: 14px;
+        height: 14px;
+        margin-right: 4px;
+    }
+
+    /* ---------- Recipe page ---------- */
+    /* The fixed-width rail keeps typical ingredient rows — name on the left,
+       quantity on the right — on a single line in the 768–1023px tablet band.
+       Long names still wrap, which is the intended behaviour. */
+    .recipe-layout {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 700px) {
+        .recipe-layout {
+            grid-template-columns: 264px minmax(0, 1fr);
+            align-items: start;
+        }
+
+        /* A rail taller than the viewport would otherwise hide its own bottom
+           for the whole scroll, so it scrolls internally instead. */
+        .recipe-rail {
+            position: sticky;
+            top: calc(var(--appbar-h) + 16px);
+            max-height: calc(100vh - var(--appbar-h) - 32px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .recipe-layout { grid-template-columns: 300px minmax(0, 1fr); }
+    }
+
+    .ingredient-list { list-style: none; margin: 0; padding: 4px 0; }
+
+    .step-list { list-style: none; margin: 0; padding: 0; }
+
+    .step-list > li {
+        display: flex;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .step-list > li + li { border-top: 1px solid var(--border); }
+
+    /* Measure. Unconstrained, step text ran to 84 characters per line on a
+       wide viewport; past roughly 75 the eye loses the start of the next line
+       on the return sweep. 68ch is inside the comfortable band and, being a
+       ch unit, it tracks the font size rather than freezing a pixel width. */
+    .step-body {
+        font-size: var(--text-read);
+        line-height: 1.6;
+        max-width: 68ch;
+    }
+
+    .step-refs {
+        margin-top: 7px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 14px;
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+    }
+
+    .step-refs b { font-weight: 600; color: var(--text-muted); }
+
+    .recipe-note {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        background: var(--surface-sunk);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    /* Coarse pointers get real touch targets. The stated use case is a
+       tablet propped in a kitchen, where 26px buttons are not tappable. */
+    @media (pointer: coarse) {
+        .btn { height: 44px; padding: 0 14px; }
+        .select { height: 44px; }
+        /* 46px outer so the 1px borders leave a 44px content box — the
+           buttons are height:100% of that, so they land on 44, not 42. */
+        .stepper { height: 46px; }
+        .stepper button { width: 44px; }
+        .stepper input, .stepper .value { width: 52px; }
+        .icon-btn { width: 44px; height: 44px; }
+        /* 24px is the WCAG 2.2 SC 2.5.8 minimum, not a rounded-down 20.
+           Covers the recipe page's reference checkboxes and the shopping
+           list's item checkboxes, which are rendered from JS with w-4 h-4. */
+        .ref-checkbox,
+        .row input[type="checkbox"] { width: 24px; height: 24px; }
+    }
+
+    /* Step images in recipes */
+    .image-step {
+        @apply w-full max-h-80 object-contain rounded-xl;
+    }
+
+    /* Recipe image placeholder. The old hardcoded orange/amber gradient was
+       the last raw hex outside @media print and did not flip with the theme.
+       A raised token surface with the accent glyph carries the same weight. */
+    .recipe-image-placeholder {
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--accent-text);
+        @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
+    }
+
+    /* ---------- Pantry ---------- */
+    /* Not `.row`: the name column here is two lines (name over dates), so the
+       row aligns on the first baseline rather than on centre. */
+    .pantry-item {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: var(--text-body);
+    }
+
+    .pantry-item + .pantry-item { border-top: 1px solid var(--border); }
+
+    .pantry-item:hover { background: var(--surface-sunk); }
+
+    .pantry-item .quantity-display {
+        white-space: nowrap;
+        font-weight: 600;
+        font-size: var(--text-ui);
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .pantry-item .pantry-dates {
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+    }
+
+    .pantry-item.out-of-stock .quantity-display { color: var(--text-faint); }
+
+    /* Preflight makes every svg display:block, which would drop the warning
+       icon onto its own line under the quantity. It has to be fixed here
+       rather than with an `inline` utility: `inline` and `hidden` are both
+       display utilities in the same layer and Tailwind emits `inline` last,
+       so the icon could never be hidden. From @layer components this loses
+       to `hidden` and wins against preflight, which is exactly right. */
+    .pantry-item .out-of-stock-icon { display: inline; }
+
+    /* Low stock is a third state the page has always had. There is no warning
+       token, and --danger is spoken for by out-of-stock, so the dot borrows
+       the accent; the warning icon next to the quantity carries the rest. */
+    .item-status-dot.low-stock { background: var(--accent); }
+
+    /* Only the fields an item actually has are rendered visible, so the
+       separator has to key off visibility — a hidden field must not leave a
+       stray middot in front of the next one. */
+    .pantry-date:not(.hidden) ~ .pantry-date:not(.hidden)::before {
+        content: "·";
+        margin: 0 6px;
+    }
+
+    /* Row actions stay out of the way until the row is hovered or something
+       inside it takes focus, so a dense list is not a wall of icons. */
+    .pantry-actions {
+        align-self: center;
+        opacity: 0;
+        transition: opacity .12s ease;
+    }
+
+    .pantry-item:hover .pantry-actions,
+    .pantry-item:focus-within .pantry-actions { opacity: 1; }
+
+    /* While the inline editor is open, Cancel and Save are the row's actions.
+       Focus is inside the row, so :focus-within would otherwise park the edit
+       and delete icons alongside the form. */
+    .pantry-item:has(.item-edit:not(.hidden)) .pantry-actions {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /* No hover on touch, so reveal-on-hover would make edit and delete
+       unreachable. */
+    @media (pointer: coarse) {
+        .pantry-actions { opacity: 1; }
+    }
+
+}
