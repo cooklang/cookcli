@@ -16,27 +16,53 @@
    carry white text at AA contrast.
    ============================================================ */
 :root {
-    --bg:            #faf9f7;
-    --surface:       #ffffff;
-    --surface-sunk:  #f4f2ef;
-    --border:        #e6e2dc;
-    --border-strong: #d5cfc6;
-    --text:          #1b1917;
-    --text-muted:    #6f6862;
-    --text-faint:    #736c66;
-    --accent:        #c2410c;
-    --accent-text:   #b0400f;
-    --accent-soft:   #fdefe6;
-    --accent-ink:    #ffffff;
-    --ok:            #2f7d55;
-    --ok-soft:       #e7f4ec;
-    --danger:        #b42318;
-    --danger-soft:   #fdecea;
-    --info:          #2b6cb0;
+    /* Warm neutral base from the Cooklang design system. --surface sits a
+       few percent above --bg rather than being identical to it: strict
+       neumorphism uses one value for both, but the small lift lets raised
+       elements catch light and keeps cards legible when a viewport is
+       colour-managed or dimmed. */
+    --bg:            #ebe5e0;
+    --surface:       #efeae6;
+    --surface-sunk:  #e4ddd7;
+    --border:        #dcd3cb;
+    --border-strong: #c4b9ae;
+    --text:          #16161d;   /* DS Text/Primary */
+    --text-muted:    #5f5a51;   /* DS Text/Secondary, darkened for AA */
+    --text-faint:    #6a645b;
+    --accent:        #e15a29;   /* DS Controls/Primary, Icons/Primary, Forms/Stroke */
+    --accent-text:   #715329;   /* DS Text/Tags — the DS colour for tag/badge text */
+    --accent-soft:   #f5dacf;   /* DS Background/UI One */
+    --accent-ink:    #16161d;
+    --ok:            #3d6849;
+    --ok-soft:       #e2e8df;
+    --danger:        #c4261c;   /* DS Text/Warning, darkened for AA on light */
+    --danger-soft:   #f7dfdc;
+    --danger-ink:    #ffffff;
+    /* Links. The design system is entirely warm — no blue anywhere — so the
+       conventional link colour would be the one thing on screen that is
+       visibly not from the palette. This is the dark end of the DS orange
+       instead, and every link carries an underline so the affordance never
+       rests on hue alone. */
+    --info:          #8a3d14;
+    --disabled:      #d3cdcb;   /* DS Controls/Disabled */
+    --inactive:      #8a8075;   /* DS Controls/Inactive, darkened for AA */
 
-    --radius-control: 6px;
-    --radius-card:   10px;
-    --shadow-card:   0 1px 2px rgba(0, 0, 0, .04);
+    /* Neumorphic elevation. Every raised or inset surface is built from this
+       pair — a light source at the top-left and its shadow at the
+       bottom-right — so elevation reads consistently across the UI. */
+    --neu-light:     rgba(255, 255, 255, .95);
+    --neu-dark:      rgba(163, 146, 131, .42);
+
+    --radius-control: 10px;
+    --radius-card:   16px;
+
+    --shadow-raised:    6px 6px 12px var(--neu-dark), -6px -6px 12px var(--neu-light);
+    --shadow-raised-sm: 3px 3px 6px var(--neu-dark), -3px -3px 6px var(--neu-light);
+    --shadow-inset:     inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
+    --shadow-inset-sm:  inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light);
+    /* Retained so anything still asking for the old flat elevation gets the
+       neumorphic one instead of nothing. */
+    --shadow-card:   var(--shadow-raised);
 
     /* Height of the sticky app bar. Used by .appbar itself and by anything
        that has to sit clear of it (the sticky ingredient rail). */
@@ -48,28 +74,53 @@
    values inside it. Without this, inline entity badges — which carry no
    background of their own since Task 4 — inherit the LIGHT theme's
    --accent-text / --ok and render at roughly 2.5:1 on cook mode's navy card. */
+/* The design system supplies Light values only. These are derived in the same
+   warm-neutral family: --accent and --accent-ink carry over unchanged, and the
+   text/status colours are lifted until they clear AA against the dark base. */
 .dark,
 .cooking-overlay {
     color-scheme: dark;
-    --bg:            #131519;
-    --surface:       #1a1d22;
-    --surface-sunk:  #212530;
-    --border:        #2b3038;
-    --border-strong: #3a414b;
-    --text:          #eceef1;
-    --text-muted:    #9aa2ac;
-    --text-faint:    #858e99;
-    --accent:        #ff7a45;
-    --accent-text:   #ff9166;
-    --accent-soft:   #2c1e17;
-    --accent-ink:    #131519;
-    --ok:            #5fbe8b;
-    --ok-soft:       #17271f;
-    --danger:        #ff8a8a;
-    --danger-soft:   #2a1618;
-    --info:          #7ab3ea;
+    --bg:            #202027;
+    --surface:       #26262e;
+    --surface-sunk:  #1a1a20;
+    --border:        #35353f;
+    --border-strong: #474753;
+    --text:          #efeae6;
+    --text-muted:    #ada69b;
+    --text-faint:    #948d83;
+    --accent:        #e15a29;
+    --accent-text:   #f08050;
+    --accent-soft:   #3a2820;
+    --accent-ink:    #16161d;
+    --ok:            #6fb283;
+    --ok-soft:       #1e2a22;
+    --danger:        #ff6b60;
+    --danger-soft:   #2e1b1a;
+    --danger-ink:    #16161d;
+    --info:          #e59a6d;
+    --disabled:      #4a4a55;
+    --inactive:      #8f8880;
 
-    --shadow-card:   none;
+    /* Dark neumorphism inverts the ratio: the highlight is barely there and
+       the shadow does nearly all the work, because a light rim on a dark
+       surface reads as a border rather than as a lit edge. */
+    --neu-light:     rgba(255, 255, 255, .055);
+    --neu-dark:      rgba(0, 0, 0, .55);
+
+    /* These four are redeclared verbatim from :root, and they have to be.
+       A custom property whose value contains var() is resolved at the element
+       that DECLARES it, not at the element that uses it — so --shadow-raised
+       computed against :root's --neu-* and inherited down already flattened.
+       Redefining --neu-* alone therefore changes nothing for any descendant.
+       .dark gets away with it by accident (it lands on <html>, the same
+       element as :root); .cooking-overlay is a descendant and does not, which
+       is how this surfaced: a white 95%-opacity halo around every cook-mode
+       card while the site was in light theme. */
+    --shadow-raised:    6px 6px 12px var(--neu-dark), -6px -6px 12px var(--neu-light);
+    --shadow-raised-sm: 3px 3px 6px var(--neu-dark), -3px -3px 6px var(--neu-light);
+    --shadow-inset:     inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
+    --shadow-inset-sm:  inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light);
+    --shadow-card:      var(--shadow-raised);
 }
 
 /* Register tokens with Tailwind so they generate real utilities
@@ -95,7 +146,10 @@
     --color-ok-soft:     var(--ok-soft);
     --color-danger:      var(--danger);
     --color-danger-soft: var(--danger-soft);
+    --color-danger-ink:  var(--danger-ink);
     --color-info:        var(--info);
+    --color-disabled:    var(--disabled);
+    --color-inactive:    var(--inactive);
 }
 
 /* Component vocabulary. Split out of this file so the theme contract
@@ -129,13 +183,33 @@
         --ok-soft:       #eaf3ee;
         --danger:        #96201a;
         --danger-soft:   #f8eae9;
+        --danger-ink:    #ffffff;
         --info:          #1f4f86;
-        --shadow-card:   none;
+        --disabled:      #cccccc;
+        --inactive:      #767676;
+
+        /* Neumorphism does not survive a printer — soft dual shadows render as
+           grey smudge and cost toner for no information. Flatten every
+           elevation to nothing and let the hairline borders define edges. */
+        --neu-light:        transparent;
+        --neu-dark:         transparent;
+        --shadow-raised:    none;
+        --shadow-raised-sm: none;
+        --shadow-inset:     none;
+        --shadow-inset-sm:  none;
+        --shadow-card:      none;
+    }
+
+    .card,
+    .btn,
+    .stepper,
+    .recipe-card,
+    .appbar {
+        border: 1px solid var(--border) !important;
+        box-shadow: none !important;
     }
 
     .card {
-        border-color: var(--border) !important;
-        box-shadow: none !important;
         break-inside: avoid;
     }
 

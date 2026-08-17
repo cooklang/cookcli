@@ -10,12 +10,26 @@
 
 /* Custom component classes */
 @layer components {
+    /* ---------- Focus ---------- */
+    /* Neumorphism removes almost every hard edge, which takes the default
+       focus ring's contrast down with it. A solid two-pixel accent outline is
+       the one place in this design that is deliberately not soft. It is
+       :focus-visible so pointer users never see it. */
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+    }
+
     /* ---------- Surfaces ---------- */
+    /* The hairline border is doing nothing in light mode (about 1.1:1) and is
+       load-bearing in dark, where --neu-light is only 5% white and cannot
+       describe a top edge on its own. */
     .card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-card);
-        box-shadow: var(--shadow-card);
+        box-shadow: var(--shadow-raised);
     }
 
     .card-head {
@@ -68,14 +82,27 @@
         text-decoration: none;
         background: var(--surface);
         color: var(--text);
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-raised-sm);
+        transition: box-shadow .12s ease;
     }
 
-    .btn:hover { background: var(--surface-sunk); }
+    .btn:hover { background: var(--surface); box-shadow: var(--shadow-raised); }
+
+    /* The press. A neumorphic control does not change colour when activated,
+       it sinks — the raised shadow inverts to an inset one. This is the
+       interaction the whole style is built around, so every pressable
+       surface below repeats it. */
+    .btn:active { box-shadow: var(--shadow-inset-sm); }
 
     .btn svg { width: 15px; height: 15px; }
 
-    /* One accent-filled button per view. Everything else is neutral. */
+    /* One accent-filled button per view. Everything else is neutral.
+       Kept as a solid fill rather than a raised neutral: neumorphism has no
+       native way to say "this is the one you want", and a page where the CTA
+       is the same colour as everything else is worse than a slightly impure
+       one. --accent-ink is the design system's near-black, which clears AA on
+       the accent fill where white (3.7:1) would not. */
     .btn-primary {
         background: var(--accent);
         border-color: var(--accent);
@@ -89,14 +116,15 @@
 
     /* The commit half of a destructive confirmation. Not a second accent:
        --danger is a distinct token, and the accent must keep meaning "the
-       thing you probably want". Foreground is --accent-ink for the same
-       reason .btn-primary uses it — dark mode's --danger is a light red
-       that cannot carry white text, and --accent-ink is exactly the
-       "ink on a filled token" colour that flips with the theme. */
+       thing you probably want".
+       This takes --danger-ink, not --accent-ink. The two used to be the same
+       colour but no longer are: --accent is now a bright orange needing dark
+       ink, while light mode's --danger is a deep red needing white. They only
+       agree in dark mode. */
     .btn-danger {
         background: var(--danger);
         border-color: var(--danger);
-        color: var(--accent-ink);
+        color: var(--danger-ink);
     }
 
     .btn-danger:hover {
@@ -110,8 +138,9 @@
         height: 32px;
         overflow: hidden;
         background: var(--surface);
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--border);
         border-radius: var(--radius-control);
+        box-shadow: var(--shadow-raised-sm);
     }
 
     .stepper button {
@@ -128,6 +157,11 @@
         background: var(--surface-sunk);
         color: var(--text);
     }
+
+    /* Sinks the whole control rather than the button alone: overflow:hidden
+       on the parent would clip an inset shadow drawn on the child, so the
+       press has to be expressed by the element that owns the rounded box. */
+    .stepper:has(button:active) { box-shadow: var(--shadow-inset-sm); }
 
     .stepper input,
     .stepper .value {
@@ -202,9 +236,14 @@
 
     .metaline b { font-weight: 600; color: var(--text); }
 
-    .metaline a { color: var(--info); text-decoration: none; }
+    .metaline a { color: var(--info); text-decoration: underline; text-underline-offset: 2px; }
 
-    .metaline a:hover { text-decoration: underline; }
+    .metaline a:hover { color: var(--accent-text); }
+
+    /* Recipe-reference links (a step or ingredient pointing at another
+       recipe). Carries the underline for the same reason .metaline a does:
+       --info is a warm orange now and must not be the sole link signal. */
+    a.text-info { text-decoration: underline; text-underline-offset: 2px; }
 
     .section-label {
         font-size: 11.5px;
@@ -241,16 +280,27 @@
         white-space: nowrap;
     }
 
+    /* Distinguished from an ingredient by texture, not hue. It used to be
+       green, which is not a colour the design system has, and which made the
+       ingredient/cookware split invisible to the ~8% of men with a red-green
+       deficiency — brown and green being exactly the confusable pair. A
+       dotted underline survives both problems. */
     .cookware-badge {
-        color: var(--ok);
+        color: var(--text);
         font-weight: 600;
         white-space: nowrap;
+        text-decoration: underline dotted var(--inactive);
+        text-underline-offset: 3px;
     }
 
+    /* Chips read as pressed into the page rather than laid on top of it.
+       They use the -sm inset: a full-strength one on a 22px circle collapses
+       into a dark ring with no flat centre left. */
     .timer-badge {
-        padding: 1px 6px;
-        border-radius: 5px;
+        padding: 2px 7px;
+        border-radius: 6px;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
@@ -258,13 +308,14 @@
     }
 
     .step-number {
-        flex: 0 0 22px;
-        height: 22px;
+        flex: 0 0 24px;
+        height: 24px;
         margin-top: 1px;
         border-radius: 50%;
         display: grid;
         place-items: center;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text-muted);
         font-size: 12px;
         font-weight: 650;
@@ -273,11 +324,12 @@
 
     .tag {
         display: inline-block;
-        padding: 1px 8px;
+        padding: 2px 9px;
         border-radius: 9999px;
         font-size: 12px;
         font-weight: 500;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text-muted);
     }
 
@@ -291,20 +343,25 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-card);
+        box-shadow: var(--shadow-raised-sm);
+        transition: box-shadow .12s ease;
     }
 
-    .recipe-card:hover {
-        background: var(--surface-sunk);
-        border-color: var(--border-strong);
-    }
+    /* Rises on hover, sinks on press. The background deliberately does not
+       change: shifting fill *and* elevation at once reads as two separate
+       things happening. */
+    .recipe-card:hover { box-shadow: var(--shadow-raised); }
+
+    .recipe-card:active { box-shadow: var(--shadow-inset-sm); }
 
     .recipe-card .recipe-card-icon {
-        flex: 0 0 30px;
-        height: 30px;
+        flex: 0 0 32px;
+        height: 32px;
         display: grid;
         place-items: center;
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         font-size: 15px;
     }
 
@@ -338,7 +395,11 @@
         height: var(--appbar-h);
         padding: 0 16px;
         background: var(--surface);
-        border-bottom: 1px solid var(--border);
+        /* A one-directional drop shadow, not the dual pair. The bar is flush
+           against the top of the viewport, so there is no top edge for a
+           highlight to describe, and the full --shadow-raised would cast a
+           bright band across the first row of content. */
+        box-shadow: 0 3px 8px var(--neu-dark);
     }
 
     .appbar-brand {
@@ -367,35 +428,43 @@
     }
 
     .icon-btn:hover {
-        background: var(--surface-sunk);
+        background: var(--surface);
+        box-shadow: var(--shadow-raised-sm);
         color: var(--text);
     }
 
+    .icon-btn:active { box-shadow: var(--shadow-inset-sm); }
+
     .icon-btn svg { width: 16px; height: 16px; }
 
+    /* Text fields are the clearest case for an inset: a field you type into
+       is a well, and the style says so without needing a border. */
     .search-input {
         width: 100%;
-        height: 30px;
+        height: 32px;
         padding: 0 10px 0 30px;
-        border-radius: 7px;
+        border-radius: var(--radius-control);
         border: 1px solid transparent;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text);
         font-size: 13px;
     }
 
     .search-input::placeholder { color: var(--text-faint); }
 
+    /* Keeps its own accent border on :focus (not just :focus-visible) so the
+       active field is marked while typing, when the global ring is suppressed. */
     .search-input:focus {
         outline: none;
         border-color: var(--accent);
-        box-shadow: none;
+        box-shadow: var(--shadow-inset-sm);
     }
 
     /* Nav items in the app bar. Name kept for the E2E suite. */
     .nav-pill {
         padding: 5px 11px;
-        border-radius: 7px;
+        border-radius: var(--radius-control);
         font-size: 13.5px;
         font-weight: 500;
         color: var(--text-muted);
@@ -403,12 +472,16 @@
     }
 
     .nav-pill:hover {
-        background: var(--surface-sunk);
+        background: var(--surface);
+        box-shadow: var(--shadow-raised-sm);
         color: var(--text);
     }
 
+    /* Current page reads as held down — the inverse of the hover lift, which
+       is how neumorphism expresses a selected state. */
     .nav-pill.active {
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text);
         font-weight: 600;
     }
@@ -424,6 +497,7 @@
         font-weight: 500;
         white-space: nowrap;
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text-muted);
     }
 
@@ -493,8 +567,10 @@
         display: flex;
         gap: 8px;
         padding: 12px 14px;
-        border-left: 3px solid var(--border-strong);
+        border-radius: var(--radius-control);
+        border-left: 3px solid var(--accent);
         background: var(--surface-sunk);
+        box-shadow: var(--shadow-inset-sm);
         color: var(--text-muted);
         font-style: italic;
     }
@@ -521,10 +597,14 @@
         @apply w-full max-h-80 object-contain rounded-xl;
     }
 
-    /* Recipe image placeholder with gradient */
+    /* Recipe image placeholder. The old hardcoded orange/amber gradient was
+       the last raw hex outside @media print and did not flip with the theme.
+       A raised token surface with the accent glyph carries the same weight. */
     .recipe-image-placeholder {
-        background: linear-gradient(135deg, #ff6b35, #fbbf24);
-        @apply w-30 h-30 rounded-full flex items-center justify-center text-white text-5xl;
+        background: var(--surface);
+        box-shadow: var(--shadow-raised);
+        color: var(--accent-text);
+        @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
     }
 
     /* ---------- Pantry ---------- */
