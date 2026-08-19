@@ -108,7 +108,7 @@ impl ScaledRecipe {
 }
 
 /// What to put on the shopping list.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GenerateRequest {
     /// The recipes to include, each with its own scaling factor.
     pub recipes: Vec<ScaledRecipe>,
@@ -117,6 +117,17 @@ pub struct GenerateRequest {
     /// This does not drop the reference: it stays on the list as an item named
     /// after the referenced recipe, with no quantity.
     pub ignore_references: bool,
+    /// Extra items to add to the list that no recipe calls for — the paper
+    /// towels and bin bags that belong on the same shopping trip.
+    ///
+    /// Each entry is a Cooklang ingredient written without its leading `@`: a
+    /// bare name (`paper towels`) for something with no amount, or the brace
+    /// form (`flour{200%g}`, `eggs{12}`) to give one. They are aggregated with
+    /// the recipe ingredients rather than kept apart, so an extra item sharing
+    /// a name with one a recipe already asks for merges into it, lands in its
+    /// aisle category, and is subtracted from by the pantry — exactly as that
+    /// ingredient would be.
+    pub extra_items: Vec<String>,
 }
 
 /// How [`extract_ingredients`] should treat recipe references.
@@ -298,6 +309,17 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         diagnostics.extend(extract_ingredients(ctx, recipe, &options, &mut list)?);
     }
 
+    // Extra items join the list after the recipes, so they keep the order the
+    // user wrote them in and fall below the ingredients on the uncategorised
+    // view. From here on they are indistinguishable from a recipe ingredient:
+    // `use_common_names`, categorisation and the pantry all treat them the
+    // same, which is what lets an extra "milk" merge with a recipe's.
+    for spec in &req.extra_items {
+        let outcome = parse_extra_item(spec)?;
+        diagnostics.extend(outcome.diagnostics);
+        list.add_recipe(&outcome.value, PARSER.converter(), false);
+    }
+
     let mut list = list.use_common_names(&aisle, PARSER.converter());
     if let Some(pantry) = &pantry {
         list = list.subtract_pantry(pantry, PARSER.converter());
@@ -307,6 +329,29 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         AggregatedList::build(list, &aisle),
         diagnostics,
     ))
+}
+
+/// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient
+/// recipe.
+///
+/// The text is a Cooklang ingredient with the leading `@` left off, so an `@`
+/// the user typed anyway is tolerated rather than doubled. A name with no
+/// braces is one ingredient however many words long, but only when a `{}`
+/// closes it — otherwise `paper towels` parses as `paper` followed by the loose
+/// word `towels`. So the empty braces are supplied when the entry carries no
+/// amount of its own, and left to the user when it does (`flour{200%g}`).
+///
+/// Errors as [`CoreError::Parse`], naming the entry as the user wrote it, when
+/// the result is not a valid ingredient — an empty entry, or braces that do not
+/// close.
+fn parse_extra_item(spec: &str) -> Result<Outcome<Recipe>, CoreError> {
+    let body = spec.trim().strip_prefix('@').unwrap_or(spec.trim()).trim();
+    let line = if body.contains('{') {
+        format!("@{body}")
+    } else {
+        format!("@{body}{{}}")
+    };
+    parse_unscaled(&line, spec, None)
 }
 
 /// Parse an aisle configuration, degrading to an empty one rather than failing.

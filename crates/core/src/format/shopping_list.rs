@@ -265,6 +265,7 @@ mod tests {
                     ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
                 ],
                 ignore_references: false,
+                extra_items: Vec::new(),
             },
         )
         .expect("generates")
@@ -438,6 +439,7 @@ mod tests {
                         ScaledRecipe::new(RecipeSource::Path("b.cook".into())),
                     ],
                     ignore_references: false,
+                    extra_items: Vec::new(),
                 },
             )
             .expect("generates")

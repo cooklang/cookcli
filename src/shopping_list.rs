@@ -133,6 +133,24 @@ pub struct ShoppingListArgs {
     /// Display only ingredient names, one per line, without amounts
     #[arg(long)]
     ingredients_only: bool,
+
+    /// Add an extra item that no recipe calls for
+    ///
+    /// For the paper towels and bin bags you want on the same shopping trip.
+    /// Repeat the flag for each item. Each value is a Cooklang ingredient
+    /// written without the leading `@`: a bare name for something with no
+    /// amount, or the brace form to give one.
+    ///
+    /// Examples:
+    ///   --extra "paper towels"        # no amount
+    ///   --extra "eggs{12}"            # a count
+    ///   --extra "flour{200%g}"        # an amount and unit
+    ///
+    /// Extra items are merged with the recipe ingredients, so one that shares a
+    /// name with an ingredient a recipe already needs adds to it, is grouped
+    /// into its aisle category, and is subtracted from by the pantry.
+    #[arg(long, value_name = "ITEM")]
+    extra: Vec<String>,
 }
 
 impl ShoppingListArgs {
@@ -243,6 +261,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         GenerateRequest {
             recipes,
             ignore_references: args.ignore_references,
+            extra_items: args.extra,
         },
     )
     .map_err(cli_error)?;

@@ -26,6 +26,7 @@ cook shopping-list [OPTIONS] [RECIPES]...
 | `-a, --aisle <FILE>` | Path to aisle configuration file |
 | `-i, --ignore-references` | Don't expand referenced recipes |
 | `--ingredients-only` | Display only ingredient names without quantities |
+| `--extra <ITEM>` | Add an extra item no recipe calls for. Repeat for each item. A bare name (`"paper towels"`) has no amount; the brace form (`"eggs{12}"`, `"flour{200%g}"`) gives one. |
 
 ## Examples
 
@@ -48,6 +49,9 @@ cook shopping-list "Cake.cook" --ingredients-only
 # Use custom aisle config
 cook shopping-list "Recipe.cook" -a ~/my-store.conf
 
+# Add items no recipe calls for
+cook shopping-list "Pizza.cook" --extra "paper towels" --extra "eggs{12}"
+
 # From a menu file
 cook shopping-list "2 Day Plan.menu"
 ```
@@ -61,3 +65,6 @@ cook shopping-list "2 Day Plan.menu"
 - Referenced recipes (`@./sauce{}`) are expanded into their ingredients; a
   reference leading back to a recipe already being expanded is skipped with a
   warning, so a cycle cannot inflate the quantities
+- `--extra` items are merged with the recipe ingredients, so an extra sharing a
+  name with one a recipe already needs adds to it, is grouped into its aisle
+  category, and is subtracted from by the pantry
