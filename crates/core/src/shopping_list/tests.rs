@@ -41,6 +41,7 @@ fn request(names: &[&str]) -> GenerateRequest {
     GenerateRequest {
         recipes: names.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
+        extra_items: Vec::new(),
     }
 }
 
@@ -151,6 +152,7 @@ fn the_request_scale_is_applied_per_recipe() {
                 ScaledRecipe::scaled(RecipeSource::Path("b.cook".into()), 10.0),
             ],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -389,6 +391,7 @@ fn ignore_references_leaves_the_reference_as_a_bare_item() {
         GenerateRequest {
             recipes: vec![at_path("main.cook")],
             ignore_references: true,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -786,6 +789,7 @@ fn in_memory_recipe_text_reaches_the_list() {
                 name: "unsaved buffer".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -815,6 +819,7 @@ fn two_in_memory_recipes_aggregate_into_one_list() {
                 }),
             ],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -846,6 +851,7 @@ fn a_buffer_and_a_file_aggregate_together() {
                 }),
             ],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -870,6 +876,7 @@ fn an_in_memory_recipe_expands_references_from_disk() {
                 name: "buffer".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -899,6 +906,7 @@ fn a_reference_from_a_buffer_to_an_unsaved_recipe_is_not_found() {
                 name: "buffer".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     ) {
         Err(CoreError::RecipeNotFound { name }) => assert!(name.contains("sauce"), "{name}"),
@@ -921,6 +929,7 @@ fn in_memory_text_is_used_and_the_name_is_never_looked_up() {
                 name: "decoy.cook".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -950,6 +959,7 @@ fn the_request_scale_applies_to_an_in_memory_recipe() {
                 4.0,
             )],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("generates")
@@ -974,6 +984,7 @@ fn a_broken_buffer_is_a_parse_error_naming_the_supplied_name() {
                 name: "Untitled-1".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     ) {
         Err(CoreError::Parse {
@@ -1009,6 +1020,7 @@ fn a_warning_from_a_buffer_carries_no_file() {
                 name: "buffer".to_string(),
             })],
             ignore_references: false,
+            extra_items: Vec::new(),
         },
     )
     .expect("parses despite warning");
@@ -1021,4 +1033,176 @@ fn a_warning_from_a_buffer_carries_no_file() {
     let location = diagnostic.location.as_ref().expect("filtered for Some");
     assert_eq!(location.file, None, "{diagnostic:?}");
     assert!(location.span.is_some(), "{diagnostic:?}");
+}
+
+// ---------------------------------------------------------------------------
+// Extra items
+// ---------------------------------------------------------------------------
+
+/// Build a request for `recipes` that also carries some extra items.
+fn request_with_extras(recipes: &[&str], extras: &[&str]) -> GenerateRequest {
+    GenerateRequest {
+        recipes: recipes.iter().map(|n| at_path(n)).collect(),
+        ignore_references: false,
+        extra_items: extras.iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+/// The whole point of the feature: something no recipe mentions still reaches
+/// the list. With no amount of its own it lands there unquantified, the same as
+/// an ingredient a recipe named without braces.
+#[test]
+fn a_bare_extra_item_is_added_without_an_amount() {
+    let dir = dir_with(&[("a.cook", "Add @tomatoes{2}.\n")]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_with_extras(&["a.cook"], &["paper towels"]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(
+        quantities(&list, "paper towels"),
+        Some(vec![]),
+        "the extra item is listed with no quantity"
+    );
+    // The recipe's own ingredient is untouched.
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["2".to_string()]));
+}
+
+/// A multi-word name survives whole. Cooklang reads `@paper towels` as `paper`
+/// plus loose text, so the item is closed with `{}` before it is parsed; this
+/// pins that the closing actually happens.
+#[test]
+fn a_multiword_extra_item_keeps_every_word() {
+    let dir = dir_with(&[]);
+
+    let list = generate(&ctx(&dir), request_with_extras(&[], &["kitchen roll"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        list.items
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["kitchen roll"],
+        "the whole name is one item, not two"
+    );
+}
+
+/// An extra item may carry its own amount in the brace form, and it renders the
+/// same way a recipe ingredient's amount would.
+#[test]
+fn an_extra_item_can_carry_its_own_amount() {
+    let dir = dir_with(&[]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_with_extras(&[], &["eggs{12}", "flour{200%g}"]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "eggs"), Some(vec!["12".to_string()]));
+    assert_eq!(quantities(&list, "flour"), Some(vec!["200 g".to_string()]));
+}
+
+/// An extra item is not kept apart from the recipes: one that shares a name
+/// with an ingredient a recipe already asks for merges into it, adding the
+/// amounts just as two recipes naming it would.
+#[test]
+fn an_extra_item_merges_with_a_matching_recipe_ingredient() {
+    let dir = dir_with(&[("a.cook", "Pour @milk{500%ml}.\n")]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_with_extras(&["a.cook"], &["milk{250%ml}"]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(
+        list.items.len(),
+        1,
+        "the extra milk folds into the recipe's, not a second line: {:?}",
+        list.items
+    );
+    assert_eq!(quantities(&list, "milk"), Some(vec!["750 ml".to_string()]));
+}
+
+/// Because it is a first-class ingredient, an extra item is grouped by the
+/// aisle configuration like any other; one the configuration does not mention
+/// falls to "other".
+#[test]
+fn an_extra_item_is_grouped_by_the_aisle_configuration() {
+    let dir = dir_with(&[]);
+    let ctx = ctx(&dir).with_aisle(ConfigSource::Inline(AISLE.to_string()));
+
+    let list = generate(&ctx, request_with_extras(&[], &["milk{1%l}", "batteries"]))
+        .expect("generates")
+        .value;
+
+    let dairy = list
+        .categories
+        .iter()
+        .find(|c| c.name == "dairy")
+        .expect("a dairy category");
+    assert_eq!(dairy.items[0].name, "milk");
+
+    let other = list
+        .categories
+        .iter()
+        .find(|c| c.name == "other")
+        .expect("an other category");
+    assert_eq!(other.items[0].name, "batteries");
+}
+
+/// The pantry is subtracted from extra items too, so adding one already in
+/// stock does not put it on the list.
+#[test]
+fn an_extra_item_the_pantry_already_holds_is_subtracted() {
+    let dir = dir_with(&[]);
+    let ctx = ctx(&dir).with_pantry(ConfigSource::Inline(
+        "[cupboard]\nsugar = \"500%g\"\n".to_string(),
+    ));
+
+    let list = generate(&ctx, request_with_extras(&[], &["sugar{200%g}"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        quantities(&list, "sugar"),
+        None,
+        "the pantry covers the extra sugar, so it never reaches the list"
+    );
+}
+
+/// A stray `@` — the sigil a Cooklang user reaches for out of habit — is
+/// tolerated rather than doubled into the name.
+#[test]
+fn a_leading_at_sign_on_an_extra_item_is_tolerated() {
+    let dir = dir_with(&[]);
+
+    let list = generate(&ctx(&dir), request_with_extras(&[], &["@napkins"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "napkins"), Some(vec![]));
+}
+
+/// An entry that is not a valid ingredient is an error, named as the user
+/// wrote it so the message points back at what they typed.
+#[test]
+fn an_empty_extra_item_is_an_error() {
+    let dir = dir_with(&[("a.cook", "Add @tomatoes{2}.\n")]);
+
+    let err = generate(&ctx(&dir), request_with_extras(&["a.cook"], &["   "]))
+        .expect_err("an empty extra item cannot be an ingredient");
+
+    match err {
+        CoreError::Parse { name, .. } => assert_eq!(name, "   "),
+        other => panic!("expected CoreError::Parse, got {other:?}"),
+    }
 }
