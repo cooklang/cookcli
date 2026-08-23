@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.34.0](https://github.com/cooklang/cookcli/compare/v0.33.1...v0.34.0) (2026-08-23)
+
+
+### Features
+
+* **core:** extract command logic into a cookcli-core library crate ([7273ce1](https://github.com/cooklang/cookcli/commit/7273ce1f1eede92f110ffb174658b7e178d56932))
+* **core:** let a shopping list be built from in-memory recipe text ([9a1548a](https://github.com/cooklang/cookcli/commit/9a1548aea9ab17a9cc1e4163b96b575ff5ae0491))
+* **format:** publish the recipe converters as cooklang-format ([fc80939](https://github.com/cooklang/cookcli/commit/fc809391dc6c48b84d860569c5737b8a2a9c831c))
+* **release:** publish a source tarball with the compiled assets ([#454](https://github.com/cooklang/cookcli/issues/454)) ([09be8d3](https://github.com/cooklang/cookcli/commit/09be8d3d61b3457dbc71c83a6fb0c8359f5e5b27))
+* **search:** require every term to match ([ade5e0a](https://github.com/cooklang/cookcli/commit/ade5e0a466191364c921c4112727e8c6c53a18d0)), closes [#425](https://github.com/cooklang/cookcli/issues/425)
+* **shopping-list:** add --extra for items no recipe calls for ([#457](https://github.com/cooklang/cookcli/issues/457)) ([edab519](https://github.com/cooklang/cookcli/commit/edab519f69ca154dd5ee081de1973cffd36d2998)), closes [#175](https://github.com/cooklang/cookcli/issues/175)
+
+
+### Bug Fixes
+
+* build recipe reference paths with '/' on every platform ([caad01a](https://github.com/cooklang/cookcli/commit/caad01a6c5749051fe22562346bd38f83f355c2d)), closes [#442](https://github.com/cooklang/cookcli/issues/442)
+* **ci:** skip the Claude review when its token is unavailable ([#455](https://github.com/cooklang/cookcli/issues/455)) ([def1aae](https://github.com/cooklang/cookcli/commit/def1aaee0d5cbaf764d3697a01e3375676340352))
+* **ci:** tolerate CRLF checkouts in the api docs freshness test ([#439](https://github.com/cooklang/cookcli/issues/439)) ([1fec807](https://github.com/cooklang/cookcli/commit/1fec8070acb2b0617a230fe1243ec7bf7dcc2631))
+* clear the help-wanted backlog ([04c969c](https://github.com/cooklang/cookcli/commit/04c969cba859531082990e74e575be3ecb6b22d5))
+* disable bundled_units so quantities keep their authored units ([#433](https://github.com/cooklang/cookcli/issues/433)) ([af80644](https://github.com/cooklang/cookcli/commit/af80644bbb09b94fe2487407434920af810a0993))
+* **doctor:** attribute a broken reference to the recipe that wrote it ([8ecbf68](https://github.com/cooklang/cookcli/commit/8ecbf689f4c1a8faa8796f6afcfbdc5bdbcf6fed)), closes [#437](https://github.com/cooklang/cookcli/issues/437)
+* **pantry:** edit pantry.conf in place instead of rewriting it ([a2e32fe](https://github.com/cooklang/cookcli/commit/a2e32fe129ee5110f11283359061bd6d5e887168)), closes [#429](https://github.com/cooklang/cookcli/issues/429)
+* **recipe:** keep the cooklang formatter idempotent ([a2bdf28](https://github.com/cooklang/cookcli/commit/a2bdf286a8de0ac159bf1c664fe5b556df335b38)), closes [#414](https://github.com/cooklang/cookcli/issues/414)
+* **recipe:** order cookware amounts deterministically too ([a84bfa8](https://github.com/cooklang/cookcli/commit/a84bfa866d7b3e84b6dfba2457782029354e7c00))
+* **report:** resolve the recipe argument like every other command ([3ffb014](https://github.com/cooklang/cookcli/commit/3ffb014fe44b411b468fcb3bb316aeda630d9e61)), closes [#430](https://github.com/cooklang/cookcli/issues/430)
+* **server:** order shopping list quantity components deterministically ([007ea19](https://github.com/cooklang/cookcli/commit/007ea194be23b9ea12a1fb95d99919a81dc6cdf3)), closes [#441](https://github.com/cooklang/cookcli/issues/441)
+* **server:** saturate the pantry expiring threshold instead of panicking ([fd36745](https://github.com/cooklang/cookcli/commit/fd3674542011ca86d4bb16c68c5a526ecb137a1a)), closes [#428](https://github.com/cooklang/cookcli/issues/428)
+* **shopping-list:** honour --plain in the YAML writer ([08f40cb](https://github.com/cooklang/cookcli/commit/08f40cbaaa10b03daab2cf191305208d1e89cc15)), closes [#419](https://github.com/cooklang/cookcli/issues/419)
+* **shopping-list:** order quantity components deterministically ([8c180df](https://github.com/cooklang/cookcli/commit/8c180df2bdadf484dd58445e36c4e8876b3cbd61))
+* **shopping-list:** stop expanding a reference that leads back on itself ([4170911](https://github.com/cooklang/cookcli/commit/417091184ddfc5b75b3f50101affda6cf18d82de)), closes [#424](https://github.com/cooklang/cookcli/issues/424)
+
 ## [0.33.1](https://github.com/cooklang/cookcli/compare/v0.33.0...v0.33.1) (2026-08-12)
 
 
