@@ -1,6 +1,6 @@
 [package]
 name = "cooklang-format"
-version = "0.1.0"
+version = "0.34.0"
 edition = "2021"
 description = "Render Cooklang recipes as Markdown, LaTeX, Typst, JSON, terminal text, or Cooklang source"
 license = "MIT"
