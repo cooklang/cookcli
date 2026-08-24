@@ -33,6 +33,7 @@ pub mod builders;
 mod i18n;
 pub mod language;
 pub mod menus;
+mod nutrition;
 pub mod templates;
 
 /// API reference content for the `/api-docs` page. Server-only.

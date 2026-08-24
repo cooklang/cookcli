@@ -589,6 +589,9 @@ pub struct RecipeItem {
     pub count: Option<usize>,
     pub description: Option<String>,
     pub tags: Vec<String>,
+    /// Calorie entry from a `nutrition:` metadata list (e.g. `"258 kcal"`),
+    /// shown as a compact badge next to the tags.
+    pub nutrition_kcal: Option<String>,
     pub image_path: Option<String>,
     pub is_menu: bool,
     pub modified_at: Option<u64>,
@@ -616,6 +619,24 @@ pub struct RecipeMetadata {
     pub source: Option<String>,
     pub source_url: Option<String>,
     pub custom: Vec<(String, String)>,
+    /// Non-standard metadata keys whose value is a YAML list (e.g. `nutrition:`),
+    /// one entry per family, rendered as one line each below the tags.
+    pub custom_lists: Vec<MetaListFamily>,
+}
+
+/// One family line of list-valued custom metadata (e.g. `nutrition`).
+#[derive(Debug, Clone, Serialize)]
+pub struct MetaListFamily {
+    pub label: String,
+    pub items: Vec<MetaListItem>,
+}
+
+/// One entry within a [`MetaListFamily`] (e.g. `"258 kcal"`).
+#[derive(Debug, Clone, Serialize)]
+pub struct MetaListItem {
+    /// Inline SVG markup (Tabler Icons, MIT), or `None` for a plain bullet.
+    pub icon: Option<String>,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
