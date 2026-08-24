@@ -53,7 +53,7 @@ cook server --host
 
 ## Custom Metadata Families (e.g. Nutrition)
 
-Beyond the [standard Cooklang metadata keys](https://cooklang.org/docs/spec/#canonical-metadata) (`servings`, `time`, `course`, `author`, ...), any YAML frontmatter key whose value is a **list** is shown on the recipe page as its own line below the tags, grouped by key — one line per family.
+Beyond the [standard Cooklang metadata keys](https://cooklang.org/docs/spec/#canonical-metadata) (`servings`, `time`, `course`, `author`, ...), any YAML frontmatter key whose value is a **list** or a **mapping** is shown on the recipe page as its own line below the tags, grouped by key — one line per family. This works for any such key, not just `nutrition` — e.g. `allergens:` below renders as its own "Allergens" line automatically, with no code changes required.
 
 ```yaml
 ---
@@ -61,20 +61,40 @@ tags:
   - vegan
   - gluten-free
 nutrition:
-  - 258%kcal
-  - 4.2%g of proteins
-  - 4.8%g of lipids
-  - 39.4%g of sugars
-  - 5.3%g of fibers
+  kcal: 258
+  proteins: 4.2
+  lipids: 4.8
+  sugars: 39.4
+  fibers: 5.3
+file:
+  created-by: Yannick
+  created-at: 2026-08-20
+  modified-by: Yannick
+  modified-at: 2026-08-24
 allergens:
   - gluten
   - tree nuts
 ---
 ```
 
-- Each entry is written as `value%unit` (e.g. `258%kcal`); the `%` is replaced with a space when displayed (`258 kcal`). Entries without a `%` are shown as-is.
-- The family label is the YAML key, capitalized (`nutrition` → `Nutrition`).
-- `tags` is never treated as a custom family — it keeps its own dedicated row above.
-- Icons are only attached to the `nutrition` family, matched by keyword in the unit text: `kcal`/`cal`/`energy` (flame), `protein` (meat), `lipid`/`fat` (droplet), `sugar` (candy), `fiber`/`fibre` (wheat). Any other family, or an unrecognized nutrition unit, renders as a plain bullet with no icon.
-- On the recipe **list** page, only the calorie entry from `nutrition` (the item containing `kcal`) is shown, as a compact badge next to the tags — the other custom families are only shown on the recipe detail page, to keep list cards compact.
-- This works for any list-valued key, not just `nutrition` — e.g. `allergens:` above renders as its own "Allergens" line automatically, with no code changes required.
+### Two forms
+
+- **Mapping** (recommended, shown above): `field: value`. A bare number gets its unit inferred from the field name for `nutrition` (`kcal` → `kcal`, everything else → `g`); `field: "45.3%g"` also works if you want to spell out a different unit.
+- **List** (legacy, still supported): `- "258%kcal"`. The `%` is replaced with a space when displayed (`258 kcal`); entries without a `%` are shown as-is. Because list entries are free text, they aren't translated — write them in whichever language you want displayed.
+
+### Hiding a family or a single entry
+
+Prefix a key with `.` to hide it from the recipe page: `.internal-notes:` hides the whole family, and `.lipids:` (inside `nutrition:`) hides just that one entry while the rest of the family still shows. `tags` is never treated as a custom family — it keeps its own dedicated row above, and can't be hidden this way.
+
+### Specific renderers: `nutrition` and `file`/`meta`
+
+Two families get dedicated icons and (for `nutrition`) localized labels, matched on their fields:
+
+- **`nutrition`**: `kcal`/`cal`/`energy` (flame), `proteins` (meat), `lipids`/`fat` (droplet), `saturated-fat` (filled droplet), `carbohydrates`/`carbs` (bread), `sugars` (candy), `fibers`/`fibre` (wheat), `salt`/`sodium` (salt shaker). The nutrient name (everything but `kcal`, which needs none) is translated into the viewer's UI language — see [Localization](build.md#localization) for the supported locales.
+- **`file`** (or `meta`, both work): `created-by`/`created-at`/`modified-by`/`modified-at` — person, calendar, pencil, and history icons respectively, with a translated `"Label: value"` line (e.g. `"Modified at: 2026-08-24"`, `"Modifié le : 2026-08-24"` in French, with the French space before `:`).
+
+Every other family (like `allergens` above) falls back to a generic rendering: list entries as-authored, mapping entries as `"field: value"`, no icon. Adding a third specific renderer means adding a case in `src/web/family_renderers/mod.rs`'s `renderer_for` plus a small renderer file next to `nutrition.rs`/`file.rs` — there's no filename-based auto-discovery (Rust has no runtime filesystem scanning for this), so that match statement is always the definitive list of which families get special treatment.
+
+### Recipe list page
+
+Only the calorie entry from `nutrition` (`kcal`) is shown, as a compact badge next to the tags — the other custom families are only shown on the recipe detail page, to keep list cards compact.

@@ -108,7 +108,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
 
                 (
                     recipe.tags(),
-                    crate::web::nutrition::extract_nutrition_kcal(recipe.metadata()),
+                    crate::web::family_renderers::extract_nutrition_kcal(recipe.metadata()),
                     img_path,
                     recipe.is_menu(),
                     modified_at,
@@ -717,13 +717,19 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
+                // A key prefixed with "." is hidden from the recipe page.
+                if key_str.starts_with('.') {
+                    continue;
+                }
 
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
 
-        let custom_lists =
-            crate::web::nutrition::build_custom_list_families(recipe.metadata.map_filtered());
+        let custom_lists = crate::web::family_renderers::build_custom_list_families(
+            recipe.metadata.map_filtered(),
+            &lang,
+        );
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
@@ -1013,12 +1019,18 @@ fn build_menu_template_inner(
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
             if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                // A key prefixed with "." is hidden from the recipe page.
+                if key_str.starts_with('.') {
+                    continue;
+                }
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
 
-        let custom_lists =
-            crate::web::nutrition::build_custom_list_families(recipe.metadata.map_filtered());
+        let custom_lists = crate::web::family_renderers::build_custom_list_families(
+            recipe.metadata.map_filtered(),
+            &lang,
+        );
 
         Some(RecipeMetadata {
             servings: get_field("servings"),

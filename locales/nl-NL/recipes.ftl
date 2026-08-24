@@ -36,6 +36,19 @@ meta-total-time = Totale tijd
 meta-servings = Porties
 meta-difficulty = Moeilijkheidsgraad
 meta-description = Beschrijving
+meta-created-by = Aangemaakt door
+meta-created-at = Aangemaakt op
+meta-modified-by = Gewijzigd door
+meta-modified-at = Gewijzigd op
+
+# Nutrition (aangepaste `nutrition:`-metadata)
+nutrition-proteins = eiwitten
+nutrition-lipids = vetten
+nutrition-saturated-fat = verzadigd vet
+nutrition-carbohydrates = koolhydraten
+nutrition-sugars = suikers
+nutrition-fibers = vezels
+nutrition-salt = zout
 
 # Recipe Types
 recipe-type-menu = Menu

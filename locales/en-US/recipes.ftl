@@ -36,6 +36,19 @@ meta-total-time = Total Time
 meta-servings = Servings
 meta-difficulty = Difficulty
 meta-description = Description
+meta-created-by = Created by
+meta-created-at = Created at
+meta-modified-by = Modified by
+meta-modified-at = Modified at
+
+# Nutrition (custom `nutrition:` metadata)
+nutrition-proteins = proteins
+nutrition-lipids = fat
+nutrition-saturated-fat = saturated fat
+nutrition-carbohydrates = carbohydrates
+nutrition-sugars = sugars
+nutrition-fibers = fiber
+nutrition-salt = salt
 
 # Recipe Types
 recipe-type-menu = Menu
