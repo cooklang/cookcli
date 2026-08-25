@@ -42,6 +42,7 @@ meta-modified-by = Modified by
 meta-modified-at = Modified at
 
 # Nutrition (custom `nutrition:` metadata)
+nutrition-per-serving = per serving
 nutrition-proteins = proteins
 nutrition-lipids = fat
 nutrition-saturated-fat = saturated fat

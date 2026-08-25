@@ -198,7 +198,14 @@
             <div class="space-y-1.5">
                 {% for family in metadata.custom_lists %}
                 <div class="flex items-start gap-2 text-sm">
-                    <span class="uppercase tracking-wide text-xs text-gray-500 min-w-[80px] pt-1">{{ family.label }}</span>
+                    <div class="min-w-[80px] pt-1">
+                        <span class="block uppercase tracking-wide text-xs text-gray-500">{{ family.label }}</span>
+                        {% match family.note %}
+                        {% when Some with (note) %}
+                        <span class="block text-[9px] leading-tight text-gray-400 italic">{{ note }}</span>
+                        {% when None %}
+                        {% endmatch %}
+                    </div>
                     <div class="flex flex-wrap gap-2">
                         {% for item in family.items %}
                         <span class="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-gray-700">

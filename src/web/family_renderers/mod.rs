@@ -109,6 +109,12 @@ trait FamilyRenderer {
     fn format_mapping_entry(&self, field: &str, raw: &str, _lang: &LanguageIdentifier) -> String {
         format_mapping_entry_default(field, raw)
     }
+
+    /// Small translated qualifier shown under the family's label (e.g.
+    /// `nutrition`'s "per serving"). `None` shows no second line.
+    fn note(&self, _lang: &LanguageIdentifier) -> Option<String> {
+        None
+    }
 }
 
 /// The renderer "registry": maps a family's YAML key to its
@@ -175,6 +181,7 @@ pub fn build_custom_list_families<'a>(
         if !items.is_empty() {
             families.push(MetaListFamily {
                 label: capitalize(key_str),
+                note: renderer.note(lang),
                 items,
             });
         }

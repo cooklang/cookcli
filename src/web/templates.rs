@@ -628,6 +628,9 @@ pub struct RecipeMetadata {
 #[derive(Debug, Clone, Serialize)]
 pub struct MetaListFamily {
     pub label: String,
+    /// Small translated qualifier shown under the label (e.g. `nutrition`'s
+    /// "per serving"), or `None` for families without one.
+    pub note: Option<String>,
     pub items: Vec<MetaListItem>,
 }
 

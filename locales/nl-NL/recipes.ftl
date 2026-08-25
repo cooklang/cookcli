@@ -42,6 +42,7 @@ meta-modified-by = Gewijzigd door
 meta-modified-at = Gewijzigd op
 
 # Nutrition (aangepaste `nutrition:`-metadata)
+nutrition-per-serving = per portie
 nutrition-proteins = eiwitten
 nutrition-lipids = vetten
 nutrition-saturated-fat = verzadigd vet

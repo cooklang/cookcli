@@ -42,6 +42,7 @@ meta-modified-by = Aldatzailea
 meta-modified-at = Aldatze data
 
 # Nutrizioa (`nutrition:` metadatu pertsonalizatuak)
+nutrition-per-serving = anoko
 nutrition-proteins = proteinak
 nutrition-lipids = gantzak
 nutrition-saturated-fat = gantz aseak

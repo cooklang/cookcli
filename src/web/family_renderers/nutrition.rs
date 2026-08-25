@@ -101,6 +101,10 @@ impl FamilyRenderer for NutritionRenderer {
             format_with_label(amount, &unit, &label)
         }
     }
+
+    fn note(&self, lang: &LanguageIdentifier) -> Option<String> {
+        Some(crate::web::i18n::LOCALES.lookup(lang, "nutrition-per-serving"))
+    }
 }
 
 /// The unit implied by a nutrient field name when the recipe author wrote a

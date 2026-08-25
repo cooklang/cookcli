@@ -42,6 +42,7 @@ meta-modified-by = Modificado por
 meta-modified-at = Modificado el
 
 # Nutrición (metadatos personalizados `nutrition:`)
+nutrition-per-serving = por porción
 nutrition-proteins = proteínas
 nutrition-lipids = grasas
 nutrition-saturated-fat = grasas saturadas

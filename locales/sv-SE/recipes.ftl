@@ -42,6 +42,7 @@ meta-modified-by = Ändrad av
 meta-modified-at = Ändrad
 
 # Nutrition (anpassad `nutrition:`-metadata)
+nutrition-per-serving = per portion
 nutrition-proteins = protein
 nutrition-lipids = fett
 nutrition-saturated-fat = mättat fett
