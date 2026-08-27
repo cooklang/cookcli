@@ -1,0 +1,71 @@
+# Build RPMs on demand (and for packaging-related PRs), so the Fedora
+# packaging can be exercised without cutting a release. The release workflow
+# runs the same script for every GitHub release and attaches the RPMs there.
+name: RPM
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packaging/fedora/**
+      - .github/workflows/rpm.yaml
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 5
+
+permissions:
+  contents: read
+
+jobs:
+  rpm:
+    name: Build RPM (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: fedora:latest
+    steps:
+      # actions/checkout needs git, so the tools come first.
+      - name: Setup | Install tools
+        run: dnf install -y rpm-build gcc git tar xz curl npm
+
+      - name: Setup | Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup | Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # The same source drop the release workflow attaches: `git archive` plus
+      # the two npm-generated web assets, so no Node.js is needed inside the
+      # RPM build itself.
+      - name: Build | RPM
+        run: |
+          npm install
+          npm run build-css
+          npm run build-js
+
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          prefix="cookcli-$version"
+          mkdir -p dist
+          git archive --format=tar --prefix="$prefix/" HEAD | tar -x -C dist
+          install -D static/css/output.css "dist/$prefix/static/css/output.css"
+          install -D static/js/editor.bundle.js "dist/$prefix/static/js/editor.bundle.js"
+          tar -czf "cook-$version-source.tar.gz" -C dist "$prefix"
+
+          ./packaging/fedora/build-rpm.sh "cook-$version-source.tar.gz"
+
+      - name: Upload | RPMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: cook-rpm-${{ matrix.arch }}
+          if-no-files-found: error
+          path: dist/rpm/*.rpm

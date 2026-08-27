@@ -160,6 +160,19 @@ Using Homebrew:
 brew install cookcli
 ```
 
+### Fedora / RPM-based Linux
+
+Every [release](https://github.com/cooklang/CookCLI/releases) ships RPMs built
+in Fedora containers (x86_64 and aarch64). Download the one for your Fedora
+version and install it:
+
+```bash
+sudo dnf install ./cookcli-<version>-1.fcXX.x86_64.rpm
+```
+
+The package installs the `cook` binary and shell completions. To build the RPM
+yourself (or to set up a COPR repository), see [packaging/fedora](packaging/fedora).
+
 ### Install with Cargo
 
 If you have Rust installed:
