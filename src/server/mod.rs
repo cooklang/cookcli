@@ -142,6 +142,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
                 Ok(db_path) => {
                     match crate::sync::start_sync(session, state.base_path.to_string(), db_path) {
                         Ok(handle) => {
+                            *state.last_sync_reason.lock().unwrap() = None;
                             // Safe to use try_lock here: no contention before the server accepts connections
                             if let Ok(mut guard) = state.sync_handle.try_lock() {
                                 *guard = Some(handle);
@@ -316,6 +317,8 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
+        last_sync_reason: Arc::new(Mutex::new(None)),
+        #[cfg(feature = "sync")]
         pending_device_flow: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
         session_path,
@@ -369,6 +372,12 @@ pub struct AppState {
     pub sync_session: Arc<Mutex<Option<crate::sync::SyncSession>>>,
     #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<crate::sync::SyncHandle>>>,
+    /// Reason the most recent sync task stopped, surfaced by the status
+    /// endpoint after the (now finished) `SyncHandle` that observed it has
+    /// been cleaned up. Cleared whenever a new sync task starts or the user
+    /// logs out.
+    #[cfg(feature = "sync")]
+    pub last_sync_reason: Arc<Mutex<Option<crate::sync::SyncFailureReason>>>,
     #[cfg(feature = "sync")]
     pub pending_device_flow: Arc<tokio::sync::Mutex<Option<crate::sync::PendingDeviceFlow>>>,
     #[cfg(feature = "sync")]
@@ -379,9 +388,11 @@ pub struct AppState {
 
 #[cfg(feature = "sync")]
 impl AppState {
-    /// Check sync status: returns (logged_in, email, syncing).
+    /// Check sync status: returns (logged_in, email, syncing, reason).
+    /// `reason` explains why sync is off (e.g. `"payment_required"`), and is
+    /// `None` while syncing or when the last stop wasn't a known condition.
     /// Cleans up finished sync handles as a side effect.
-    pub async fn sync_status(&self) -> (bool, Option<String>, bool) {
+    pub async fn sync_status(&self) -> (bool, Option<String>, bool, Option<String>) {
         let (logged_in, email) = {
             let session = self.sync_session.lock().unwrap();
             (
@@ -393,14 +404,25 @@ impl AppState {
             let mut guard = self.sync_handle.lock().await;
             match guard.as_ref() {
                 Some(handle) if handle.is_running() => true,
-                Some(_) => {
+                Some(handle) => {
+                    if let Some(reason) = handle.last_error_reason() {
+                        *self.last_sync_reason.lock().unwrap() = Some(reason);
+                    }
                     guard.take();
                     false
                 }
                 None => false,
             }
         };
-        (logged_in, email, syncing)
+        let reason = if syncing {
+            None
+        } else {
+            self.last_sync_reason
+                .lock()
+                .unwrap()
+                .map(|r| r.as_str().to_string())
+        };
+        (logged_in, email, syncing, reason)
     }
 }
 

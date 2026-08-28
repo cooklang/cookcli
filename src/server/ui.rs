@@ -526,7 +526,7 @@ async fn preferences_page(
     Extension(features): Extension<FeatureFlags>,
 ) -> impl askama_axum::IntoResponse {
     #[cfg(feature = "sync")]
-    let (sync_logged_in, sync_email, sync_syncing) = state.sync_status().await;
+    let (sync_logged_in, sync_email, sync_syncing, _sync_reason) = state.sync_status().await;
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
