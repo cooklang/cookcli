@@ -97,7 +97,7 @@ pub struct ServerArgs {
     open: bool,
 
     /// Enable cors verification
-    /// 
+    ///
     /// When enabled, the POST /new path require a seemless
     /// Origin and Host header.
     #[arg(long = "no-cors", action = clap::ArgAction::SetFalse)]
