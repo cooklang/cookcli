@@ -300,7 +300,7 @@ async fn create_recipe(
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
     // CSRF protection: verify request came from same origin
-    if !validate_same_origin(&headers, &host) {
+    if state.cors && !validate_same_origin(&headers, &host) {
         tracing::warn!("CSRF validation failed for create_recipe request");
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }
