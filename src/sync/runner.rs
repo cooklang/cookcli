@@ -392,6 +392,7 @@ async fn refresh_token(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn payment_required_reason_has_stable_wire_value() {
@@ -496,13 +497,8 @@ mod tests {
 
     #[test]
     fn file_age_secs_reports_recent_write_as_near_zero() {
-        let dir = std::env::temp_dir().join(format!(
-            "cookcli-runner-test-{}-{:?}",
-            std::process::id(),
-            Instant::now()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.json");
+        let path = temp_session_path("file-age");
+        let dir = path.parent().unwrap().to_path_buf();
         std::fs::write(&path, "{}").unwrap();
 
         let age = file_age_secs(&path).expect("metadata should be readable");
@@ -550,11 +546,17 @@ mod tests {
         }
     }
 
+    /// A fresh temp directory for one test, plus the session path inside it.
+    ///
+    /// The suffix has to stay filesystem-safe on every platform: Windows
+    /// rejects `:`, spaces and braces in path components, so no `Debug`
+    /// formatting of clocks here - just a pid and a per-process counter.
     fn temp_session_path(label: &str) -> std::path::PathBuf {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "cookcli-runner-test-{label}-{}-{:?}",
+            "cookcli-runner-test-{label}-{}-{}",
             std::process::id(),
-            Instant::now()
+            COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("session.json")
