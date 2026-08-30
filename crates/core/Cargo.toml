@@ -1,6 +1,6 @@
 [package]
 name = "cookcli-core"
-version = "0.34.0"
+version = "0.35.0"
 edition = "2021"
 description = "Recipe, shopping list, pantry and report operations for Cooklang, extracted from CookCLI"
 license = "MIT"
@@ -28,7 +28,7 @@ cooklang-find = { version = "0.6.1", default-features = false }
 # The output formatters, split out so other projects can render recipes
 # without depending on the CLI's internals. `version` + `path`: local builds
 # use the workspace copy, the published crate resolves from crates.io.
-cooklang-format = { version = "0.34.0", path = "../format" }
+cooklang-format = { version = "0.35.0", path = "../format" }
 # Jinja2 report rendering. Keep this declaration in step with the root
 # manifest's, so both crates resolve the same version.
 cooklang-reports = "0.5.1"

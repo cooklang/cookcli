@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.35.0](https://github.com/cooklang/cookcli/compare/v0.34.0...v0.35.0) (2026-08-30)
+
+
+### Features
+
+* add the --no-cors argument to bypass cors verification ([47a21dc](https://github.com/cooklang/cookcli/commit/47a21dc19c530ce5e90183baf704e22237312275))
+* add the --no-cors argument to bypass cors verification ([1c60836](https://github.com/cooklang/cookcli/commit/1c60836fcf4fcae226e5aee6216d0be7e64f9de8))
+
+
+### Bug Fixes
+
+* formating ([dfec70f](https://github.com/cooklang/cookcli/commit/dfec70f7af4d77c3d11c79ff8b4fe22dadf3f16d))
+
 ## [0.34.0](https://github.com/cooklang/cookcli/compare/v0.33.1...v0.34.0) (2026-08-23)
 
 
