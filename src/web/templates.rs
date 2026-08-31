@@ -28,7 +28,6 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
-    #[cfg(feature = "server")]
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
