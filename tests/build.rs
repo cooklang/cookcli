@@ -98,6 +98,45 @@ fn build_lang_arg_changes_ui_locale() {
 }
 
 #[test]
+fn build_lang_arg_sets_html_lang_attribute() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--lang",
+            "fr-FR",
+        ])
+        .assert()
+        .success();
+
+    // The resolved build language must be reflected on <html lang>, not left
+    // hardcoded to en. Screen readers and search engines rely on it.
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        index.contains(r#"<html lang="fr-FR""#),
+        "index should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+    assert!(
+        !index.contains(r#"<html lang="en""#),
+        "index must not keep the hardcoded lang=\"en\""
+    );
+
+    let recipe = std::fs::read_to_string(out.join("recipe/Risotto.html")).unwrap();
+    assert!(
+        recipe.contains(r#"<html lang="fr-FR""#),
+        "recipe page should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+}
+
+#[test]
 fn build_lang_arg_rejects_unsupported() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
