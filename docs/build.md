@@ -115,7 +115,9 @@ Use `--base-url` only if your host serves the site under a fixed subpath and you
 
 ## Notes
 
-- The generated site has no server dependency — it works fully offline via `file://`.
+- The generated site has no server dependency: it works fully offline via `file://`.
+  Not with `--base-url` though. That flag makes every asset reference absolute, so from
+  disk the page gets no stylesheet, no icons and no search. Use it only for HTTP hosting.
 - Search runs entirely in the browser by loading `static/search-index.js`. It is a script
   rather than JSON so that search also works over `file://`, where browsers block
   `fetch()` between local files.

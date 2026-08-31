@@ -16,10 +16,13 @@
       var script = document.createElement("script");
       script.src = prefix + "/static/search-index.js";
       script.onload = function () {
+        if (!window.__SEARCH_INDEX__) {
+          console.error("search-index loaded but set no index: " + script.src);
+        }
         resolve(window.__SEARCH_INDEX__ || []);
       };
       script.onerror = function () {
-        console.error("search-index load failed");
+        console.error("search-index failed to load: " + script.src);
         resolve([]);
       };
       document.head.appendChild(script);

@@ -60,8 +60,15 @@ test.describe('Static site search over file://', () => {
 
   test('reports no matches for an absent term', async ({ page }) => {
     await page.goto(indexUrl);
-    await page.getByPlaceholder('Search recipes...').fill('zzzznotarecipe');
+    const input = page.getByPlaceholder('Search recipes...');
 
+    // An index that failed to load renders the same empty state, so the
+    // absent-term assertion below only means something once we have seen
+    // a real match come back.
+    await input.fill('Risotto');
+    await expect(page.locator('#search-results a').first()).toBeVisible();
+
+    await input.fill('zzzznotarecipe');
     await expect(page.locator('#search-results')).toContainText('No recipes found');
   });
 });
