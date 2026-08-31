@@ -8,10 +8,9 @@ import { pathToFileURL } from 'url';
 /**
  * Search over a site opened straight from disk.
  *
- * Browsers give every file:// resource its own opaque origin, so anything the
- * page fetches at runtime is blocked. The rest of the suite runs against
- * `cook server`, which takes the /api/search branch and never exercises the
- * static search path — this spec covers the file:// promise in docs/build.md.
+ * The rest of the suite runs against `cook server`, which takes the /api/search
+ * branch and never exercises the static search path. Covers the file:// promise
+ * in docs/build.md.
  */
 test.describe('Static site search over file://', () => {
   let outDir: string;

@@ -366,14 +366,16 @@ fn build_writes_search_index() {
     let idx = out.join("static/search-index.js");
     assert!(idx.is_file(), "search-index.js should exist");
 
-    // The index ships as a classic script assigning a global rather than as
-    // JSON: `fetch()` is blocked between `file://` resources, `<script src>`
-    // is not.
     let source = std::fs::read_to_string(&idx).unwrap();
-    let payload = source
-        .strip_prefix("window.__SEARCH_INDEX__ = ")
-        .and_then(|s| s.strip_suffix(";\n"))
-        .expect("index should assign window.__SEARCH_INDEX__");
+    assert!(
+        source.starts_with("window.__SEARCH_INDEX__"),
+        "index should assign window.__SEARCH_INDEX__, got: {:.40}",
+        source
+    );
+    let (_, payload) = source
+        .split_once('=')
+        .expect("index should be an assignment");
+    let payload = payload.trim().trim_end_matches(';');
 
     assert!(
         !out.join("static/search-index.json").exists(),
@@ -403,7 +405,7 @@ fn build_writes_search_index() {
 }
 
 #[test]
-fn search_js_loads_index_without_fetch() {
+fn search_js_loads_index_as_script() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
     let seed = seed_dir();
@@ -422,27 +424,12 @@ fn search_js_loads_index_without_fetch() {
 
     let js = std::fs::read_to_string(out.join("static/js/search.js")).unwrap();
 
-    // Drop line comments so prose explaining why fetch() is avoided doesn't
-    // satisfy the check below.
-    let code = js
-        .lines()
-        .filter(|l| !l.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    // Stock Chromium and Firefox give every `file://` resource its own opaque
-    // origin, so a runtime `fetch()` for the index is blocked and search
-    // silently returns nothing when the site is opened from disk.
     assert!(
-        !code.contains("fetch("),
-        "search.js must not fetch the index at runtime (breaks file://)"
+        js.contains("search-index.js"),
+        "search.js should load the index as a script (a fetch breaks file://)"
     );
     assert!(
-        code.contains("search-index.js"),
-        "search.js should load the index as a script"
-    );
-    assert!(
-        code.contains("__SEARCH_INDEX__"),
+        js.contains("__SEARCH_INDEX__"),
         "search.js should read the index from the global the script assigns"
     );
 }

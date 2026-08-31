@@ -7,11 +7,9 @@
   var indexPromise = null;
   var selectedIndex = -1;
 
-  // The index is loaded by injecting a classic <script> rather than fetching
-  // JSON. Browsers give every file:// resource its own opaque origin, which
-  // blocks fetch() but not classic script tags, so this is what keeps search
-  // working when the generated site is opened from disk. It must stay a
-  // classic script: module scripts are CORS-gated and fail like fetch does.
+  // Loaded as a classic <script>, never fetched: file:// documents are opaque
+  // origins, so a fetch is blocked and search returns nothing from disk. Must
+  // stay classic — module scripts are CORS-gated and fail the same way.
   function loadIndex() {
     if (indexPromise) return indexPromise;
     indexPromise = new Promise(function (resolve) {

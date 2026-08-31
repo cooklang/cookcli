@@ -209,9 +209,8 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let entries = index::build_search_index(&tree);
     let entry_count = entries.len();
     let json = serde_json::to_string(&entries)?;
-    // Emitted as a script assigning a global, not as JSON: browsers give every
-    // file:// resource its own opaque origin, so search.js cannot fetch() the
-    // index when the site is opened from disk. A classic <script> can load it.
+    // A script assigning a global, not JSON: file:// documents are opaque
+    // origins, so search.js cannot fetch the index from disk. See docs/build.md.
     let script = format!("window.__SEARCH_INDEX__ = {json};\n");
     writer::write_bytes(
         &output,
