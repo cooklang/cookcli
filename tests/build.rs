@@ -363,11 +363,24 @@ fn build_writes_search_index() {
         .assert()
         .success();
 
-    let idx = out.join("static/search-index.json");
-    assert!(idx.is_file(), "search-index.json should exist");
+    let idx = out.join("static/search-index.js");
+    assert!(idx.is_file(), "search-index.js should exist");
 
-    let json: serde_json::Value =
-        serde_json::from_reader(std::fs::File::open(&idx).unwrap()).unwrap();
+    // The index ships as a classic script assigning a global rather than as
+    // JSON: `fetch()` is blocked between `file://` resources, `<script src>`
+    // is not.
+    let source = std::fs::read_to_string(&idx).unwrap();
+    let payload = source
+        .strip_prefix("window.__SEARCH_INDEX__ = ")
+        .and_then(|s| s.strip_suffix(";\n"))
+        .expect("index should assign window.__SEARCH_INDEX__");
+
+    assert!(
+        !out.join("static/search-index.json").exists(),
+        "search-index.json should no longer be emitted"
+    );
+
+    let json: serde_json::Value = serde_json::from_str(payload).unwrap();
     let arr = json.as_array().expect("index is array");
     assert!(!arr.is_empty(), "index should not be empty for seed");
 
@@ -386,6 +399,51 @@ fn build_writes_search_index() {
         risotto.get("title").and_then(|t| t.as_str()),
         Some("Classic Risotto alla Milanese"),
         "title should be the metadata title; path should be the file stem"
+    );
+}
+
+#[test]
+fn search_js_loads_index_without_fetch() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let js = std::fs::read_to_string(out.join("static/js/search.js")).unwrap();
+
+    // Drop line comments so prose explaining why fetch() is avoided doesn't
+    // satisfy the check below.
+    let code = js
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Stock Chromium and Firefox give every `file://` resource its own opaque
+    // origin, so a runtime `fetch()` for the index is blocked and search
+    // silently returns nothing when the site is opened from disk.
+    assert!(
+        !code.contains("fetch("),
+        "search.js must not fetch the index at runtime (breaks file://)"
+    );
+    assert!(
+        code.contains("search-index.js"),
+        "search.js should load the index as a script"
+    );
+    assert!(
+        code.contains("__SEARCH_INDEX__"),
+        "search.js should read the index from the global the script assigns"
     );
 }
 
@@ -657,7 +715,7 @@ fn build_compress_writes_gzip_variants() {
     for file in [
         "index.html",
         "static/css/output.css",
-        "static/search-index.json",
+        "static/search-index.js",
     ] {
         let gz_path = out.join(format!("{file}.gz"));
         assert!(gz_path.is_file(), "{file}.gz should exist");

@@ -4,22 +4,29 @@
   var results = document.getElementById("search-results");
   if (!input || !results) return;
 
-  var index = null;
+  var indexPromise = null;
   var selectedIndex = -1;
 
+  // The index is loaded by injecting a classic <script> rather than fetching
+  // JSON. Browsers give every file:// resource its own opaque origin, which
+  // blocks fetch() but not classic script tags, so this is what keeps search
+  // working when the generated site is opened from disk. It must stay a
+  // classic script: module scripts are CORS-gated and fail like fetch does.
   function loadIndex() {
-    if (index !== null) return Promise.resolve(index);
-    return fetch(prefix + "/static/search-index.json")
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        index = data;
-        return data;
-      })
-      .catch(function (e) {
-        console.error("search-index load failed", e);
-        index = [];
-        return index;
-      });
+    if (indexPromise) return indexPromise;
+    indexPromise = new Promise(function (resolve) {
+      var script = document.createElement("script");
+      script.src = prefix + "/static/search-index.js";
+      script.onload = function () {
+        resolve(window.__SEARCH_INDEX__ || []);
+      };
+      script.onerror = function () {
+        console.error("search-index load failed");
+        resolve([]);
+      };
+      document.head.appendChild(script);
+    });
+    return indexPromise;
   }
 
   function score(entry, q) {
