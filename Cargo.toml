@@ -86,7 +86,7 @@ directories = "6"
 flate2 = "1"
 fluent = "0.16"
 futures-util = { version = "0.3", optional = true }
-fluent-templates = "0.10"
+fluent-templates = "0.15"
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
