@@ -84,7 +84,7 @@ cooklang-reports = { version = "0.5.1" }
 cookcli-core = { version = "0.35.0", path = "crates/core" }
 directories = "6"
 flate2 = "1"
-fluent = "0.16"
+fluent = "0.17"
 futures-util = { version = "0.3", optional = true }
 fluent-templates = "0.10"
 mime_guess = "2.0"
