@@ -24,7 +24,10 @@ impl Tr {
     /// Translate a pluralized message. Passes `$count` as a number so Fluent
     /// plural selectors (`[one]` / `[other]`, etc.) resolve correctly.
     pub fn tn(&self, key: &str, count: &usize) -> String {
-        let args = std::collections::HashMap::from([("count", fluent::FluentValue::from(count))]);
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("count"),
+            fluent::FluentValue::from(count),
+        )]);
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
