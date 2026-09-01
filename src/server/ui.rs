@@ -2,12 +2,13 @@ use crate::server::AppState;
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use axum::{
-    extract::{Extension, Host, Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Form, Router,
 };
+use axum_extra::extract::Host;
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -34,9 +35,9 @@ fn error_page(
 pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
-        .route("/directory/*path", get(recipes_directory))
-        .route("/recipe/*path", get(recipe_page))
-        .route("/edit/*path", get(edit_page))
+        .route("/directory/{*path}", get(recipes_directory))
+        .route("/recipe/{*path}", get(recipe_page))
+        .route("/edit/{*path}", get(edit_page))
         .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
@@ -222,7 +223,7 @@ async fn new_page(
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
     Query(query): Query<NewPageQuery>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     crate::web::templates::NewTemplate {
         active: "recipes".to_string(),
         tr: Tr::new(lang),
@@ -459,7 +460,7 @@ async fn shopping_list_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
         tr: Tr::new(lang),
@@ -474,7 +475,7 @@ async fn pantry_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, StatusCode> {
     // Load pantry configuration
     let pantry_path = state.pantry_path.as_ref();
 
@@ -524,7 +525,7 @@ async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     #[cfg(feature = "sync")]
     let (sync_logged_in, sync_email, sync_syncing, _sync_reason) = state.sync_status().await;
     #[cfg(not(feature = "sync"))]
@@ -561,7 +562,7 @@ async fn api_docs_page(
     Host(host): Host,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     ApiDocsTemplate {
         active: "preferences".to_string(),
         // Rendered so integrators can copy a working URL rather than a

@@ -179,7 +179,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let inner = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
-        .route("/static/*file", get(serve_static))
+        .route("/static/{*file}", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
 
     let app = if state.url_prefix.is_empty() {
@@ -465,23 +465,23 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/pantry/expiring", get(handlers::get_expiring))
         .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::delete(handlers::remove_pantry_item),
         )
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::put(handlers::update_pantry_item),
         )
         .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/raw/*path", get(handlers::recipe_raw)) // More specific route must come first
+        .route("/recipes/raw/{*path}", get(handlers::recipe_raw)) // More specific route must come first
         .route(
-            "/recipes/*path",
+            "/recipes/{*path}",
             get(handlers::recipe)
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
         )
         .route("/menus", get(handlers::list_menus))
-        .route("/menus/*path", get(handlers::get_menu))
+        .route("/menus/{*path}", get(handlers::get_menu))
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))
