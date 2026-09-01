@@ -724,7 +724,7 @@ pub struct ParamDoc {
 #[cfg(feature = "server")]
 pub struct EndpointDoc {
     pub method: String,
-    /// Path in axum route syntax, e.g. "/api/pantry/:section/:name".
+    /// Path in axum route syntax, e.g. "/api/pantry/{section}/{name}".
     pub path: String,
     pub summary: String,
     /// Longer prose. Empty string means "no extra detail".
@@ -804,3 +804,58 @@ pub struct ApiDocsTemplate {
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
+
+/// Askama's axum integration lived in the `askama_axum` crate, which was
+/// deprecated and never updated for axum 0.8. It provided a blanket
+/// `IntoResponse` for every `Template`; a blanket impl is not available to us
+/// (both traits are foreign), so each response template opts in explicitly.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for $t {
+            fn into_response(self) -> axum::response::Response {
+                match askama::Template::render(&self) {
+                    Ok(body) => axum::response::Html(body).into_response(),
+                    Err(err) => {
+                        tracing::error!("failed to render template: {err}");
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            "Template rendering failed",
+                        )
+                            .into_response()
+                    }
+                }
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response!(
+    ErrorTemplate,
+    RecipesTemplate,
+    RecipeTemplate,
+    MenuTemplate,
+    ShoppingListTemplate,
+    PreferencesTemplate,
+    PantryTemplate,
+    EditTemplate,
+    NewTemplate,
+    ApiDocsTemplate,
+);
+
+/// The two large templates are handed around boxed, and `Box<T>` is not
+/// itself a `Template`.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response_boxed {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for Box<$t> {
+            fn into_response(self) -> axum::response::Response {
+                (*self).into_response()
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response_boxed!(RecipeTemplate, MenuTemplate);

@@ -11,7 +11,7 @@
 //! itself.
 //!
 //! The check compares paths only; a wrong *method* on a real path is not
-//! caught. `POST /api/recipes/*path` — which does not exist — would pass
+//! caught. `POST /api/recipes/{*path}` — which does not exist — would pass
 //! `no_documented_path_is_stale` cleanly, because axum registers verbs as
 //! `.route(path, get(h).put(h).delete(h))` and the textual extractor never
 //! sees them.
@@ -210,7 +210,7 @@ fn recipes() -> ApiSection {
             ),
             ep(
                 "GET",
-                "/api/recipes/*path",
+                "/api/recipes/{*path}",
                 "Read one parsed recipe",
                 "Parses the recipe and returns its ingredients, cookware, timers and steps. \
                  `grouped_ingredients` aggregates repeated ingredients and indexes back into \
@@ -293,7 +293,7 @@ fn recipes() -> ApiSection {
             ),
             ep(
                 "GET",
-                "/api/recipes/raw/*path",
+                "/api/recipes/raw/{*path}",
                 "Read the unparsed Cooklang source",
                 "Returns the file's text verbatim with content type `text/plain`, including \
                  YAML frontmatter. The `.cook` and `.menu` extensions are optional in the path — \
@@ -317,7 +317,7 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
             ),
             ep(
                 "PUT",
-                "/api/recipes/*path",
+                "/api/recipes/{*path}",
                 "Create or overwrite a recipe",
                 "The request body is the raw Cooklang source as `text/plain` — not JSON. \
                  Writes are atomic (temp file plus rename). If the file does not exist yet, \
@@ -350,7 +350,7 @@ Mix the @flour{200%g} and @water{120%ml}.
             ),
             ep(
                 "DELETE",
-                "/api/recipes/*path",
+                "/api/recipes/{*path}",
                 "Delete a recipe file",
                 "Permanently removes the file from disk. There is no undo and no trash.",
             )
@@ -370,10 +370,10 @@ Mix the @flour{200%g} and @water{120%ml}.
             ),
             ep(
                 "GET",
-                "/api/static/*path",
+                "/api/static/{*path}",
                 "Fetch a recipe asset",
                 "Serves files straight from the recipe directory — this is where recipe images \
-                 live. The `image` field returned by `GET /api/recipes/*path` is already a URL \
+                 live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL \
                  into this route.",
             )
             .params(vec![path_param(
@@ -409,7 +409,7 @@ fn menus() -> ApiSection {
             ),
             ep(
                 "GET",
-                "/api/menus/*path",
+                "/api/menus/{*path}",
                 "Read one menu",
                 "Sections correspond to days; a `date` is extracted when the section name \
                  contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't \
@@ -1084,7 +1084,7 @@ fn pantry() -> ApiSection {
             ),
             ep(
                 "PUT",
-                "/api/pantry/:section/:name",
+                "/api/pantry/{section}/{name}",
                 "Update an item",
                 "Only the fields present in the body are changed; omitted fields keep their \
                  current values. Returns 404 if the section does not exist. A name that \
@@ -1116,7 +1116,7 @@ fn pantry() -> ApiSection {
             ),
             ep(
                 "DELETE",
-                "/api/pantry/:section/:name",
+                "/api/pantry/{section}/{name}",
                 "Remove an item",
                 "The section is deleted too if it becomes empty. Returns 404 if the section \
                  does not exist, but — like `PUT` — responds `200` with a success message even \
@@ -1204,7 +1204,7 @@ fn search_and_stats() -> ApiSection {
                  recipes. `q` is required: omitting it entirely returns a plain-text 400 from \
                  axum's query deserializer (`Failed to deserialize query string: missing field \
                  q`), not the page's usual JSON error envelope — the same shape as the \
-                 `scale` parameter's failure mode on `GET /api/recipes/*path`. A present but \
+                 `scale` parameter's failure mode on `GET /api/recipes/{*path}`. A present but \
                  empty `q=` is not rejected, though: it matches everything and returns the \
                  whole collection.",
             )
@@ -1515,7 +1515,7 @@ mod tests {
 
     const FIXTURE: &str = r#"
 fn serve_static() {
-    .route("/static/*file", get(serve_static))
+    .route("/static/{*file}", get(serve_static))
 }
 
 fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
@@ -1525,9 +1525,9 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             "/shopping_list/items",
             get(handlers::get_shopping_list_items),
         )
-        .route("/pantry/:section/:name", axum::routing::delete(h))
-        .route("/pantry/:section/:name", axum::routing::put(h))
-        .route("/recipes/*path", get(h).put(h).delete(h));
+        .route("/pantry/{section}/{name}", axum::routing::delete(h))
+        .route("/pantry/{section}/{name}", axum::routing::put(h))
+        .route("/recipes/{*path}", get(h).put(h).delete(h));
 
     #[cfg(feature = "sync")]
     let router = router.route("/sync/status", get(handlers::sync_status));
@@ -1540,25 +1540,25 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
     fn extracts_api_routes_with_prefix() {
         let paths = router_paths(FIXTURE);
         assert!(paths.contains("/api/shopping_list"));
-        assert!(paths.contains("/api/recipes/*path"));
+        assert!(paths.contains("/api/recipes/{*path}"));
     }
 
     #[test]
     fn ignores_routes_defined_before_the_api_fn() {
         let paths = router_paths(FIXTURE);
         assert!(
-            !paths.contains("/api/static/*file"),
-            "the /static/*file route lives outside api() and must not be collected"
+            !paths.contains("/api/static/{*file}"),
+            "the /static/{{*file}} route lives outside api() and must not be collected"
         );
     }
 
     #[test]
     fn deduplicates_paths_registered_once_per_method() {
         let paths = router_paths(FIXTURE);
-        assert!(paths.contains("/api/pantry/:section/:name"));
+        assert!(paths.contains("/api/pantry/{section}/{name}"));
         // 5 distinct paths in the fixture: shopping_list, shopping_list/items
-        // (wrapped `.route(` call), pantry/:section/:name (registered twice,
-        // for DELETE and PUT), recipes/*path, sync/status.
+        // (wrapped `.route(` call), pantry/{section}/{name} (registered twice,
+        // for DELETE and PUT), recipes/{*path}, sync/status.
         assert_eq!(paths.len(), 5, "expected 5 distinct paths, got {paths:?}");
     }
 
@@ -1591,8 +1591,8 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             "/api/shopping_list/add_menu",
             "/api/shopping_list/remove",
             "/api/shopping_list/uncheck",
-            "/api/pantry/:section/:name",
-            "/api/recipes/*path",
+            "/api/pantry/{section}/{name}",
+            "/api/recipes/{*path}",
         ] {
             assert!(
                 paths.contains(expected),
@@ -1601,7 +1601,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         }
 
         assert!(
-            !paths.contains("/api/static/*file"),
+            !paths.contains("/api/static/{*file}"),
             "the outer router's static route must not be collected"
         );
         assert!(
@@ -1660,7 +1660,7 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
     /// Paths that are documented but are not registered via `.route(...)`
     /// inside `api()`. Currently just the asset service, which is mounted
     /// with `.nest_service("/api/static", ...)` on the outer router.
-    const NOT_ROUTER_REGISTERED: &[&str] = &["/api/static/*path"];
+    const NOT_ROUTER_REGISTERED: &[&str] = &["/api/static/{*path}"];
 
     fn documented_paths() -> BTreeSet<String> {
         sections()
@@ -1735,7 +1735,7 @@ fn sync_router() -> Router { Router::new().route("/sync/status", get(h)) }
     /// The page renders prose through the `inline_code` filter, which handles
     /// backtick spans and nothing else. Markdown emphasis written in a
     /// description reaches the reader as literal asterisks or underscores —
-    /// caught once in a `PUT /api/pantry/:section/:name` description that
+    /// caught once in a `PUT /api/pantry/{section}/{name}` description that
     /// shipped `**not**` to the page. Automated output checks missed it
     /// because the markup is valid HTML; only looking at the page revealed it.
     #[test]

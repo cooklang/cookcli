@@ -79,7 +79,7 @@ Response:
 }
 ```
 
-### `GET /api/recipes/*path`
+### `GET /api/recipes/{*path}`
 
 Read one parsed recipe
 
@@ -160,7 +160,7 @@ Response:
 }
 ```
 
-### `GET /api/recipes/raw/*path`
+### `GET /api/recipes/raw/{*path}`
 
 Read the unparsed Cooklang source
 
@@ -183,7 +183,7 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
 @milk{250%ml} and @sea salt{pinch}, and blitz until smooth.
 ```
 
-### `PUT /api/recipes/*path`
+### `PUT /api/recipes/{*path}`
 
 Create or overwrite a recipe
 
@@ -212,7 +212,7 @@ Response:
 }
 ```
 
-### `DELETE /api/recipes/*path`
+### `DELETE /api/recipes/{*path}`
 
 Delete a recipe file
 
@@ -231,11 +231,11 @@ Response:
 }
 ```
 
-### `GET /api/static/*path`
+### `GET /api/static/{*path}`
 
 Fetch a recipe asset
 
-Serves files straight from the recipe directory — this is where recipe images live. The `image` field returned by `GET /api/recipes/*path` is already a URL into this route.
+Serves files straight from the recipe directory — this is where recipe images live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL into this route.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -260,7 +260,7 @@ Response:
 ]
 ```
 
-### `GET /api/menus/*path`
+### `GET /api/menus/{*path}`
 
 Read one menu
 
@@ -749,7 +749,7 @@ Response:
 }
 ```
 
-### `PUT /api/pantry/:section/:name`
+### `PUT /api/pantry/{section}/{name}`
 
 Update an item
 
@@ -779,7 +779,7 @@ Response:
 }
 ```
 
-### `DELETE /api/pantry/:section/:name`
+### `DELETE /api/pantry/{section}/{name}`
 
 Remove an item
 
@@ -844,7 +844,7 @@ Collection-wide queries.
 
 Full-text recipe search
 
-Matches against recipe names and content. Menus are searched alongside recipes. `q` is required: omitting it entirely returns a plain-text 400 from axum's query deserializer (`Failed to deserialize query string: missing field q`), not the page's usual JSON error envelope — the same shape as the `scale` parameter's failure mode on `GET /api/recipes/*path`. A present but empty `q=` is not rejected, though: it matches everything and returns the whole collection.
+Matches against recipe names and content. Menus are searched alongside recipes. `q` is required: omitting it entirely returns a plain-text 400 from axum's query deserializer (`Failed to deserialize query string: missing field q`), not the page's usual JSON error envelope — the same shape as the `scale` parameter's failure mode on `GET /api/recipes/{*path}`. A present but empty `q=` is not rejected, though: it matches everything and returns the whole collection.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
