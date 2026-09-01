@@ -18,7 +18,7 @@ recipe-tags = Etiketak
 recipe-add-to-shopping = Gehitu erosketa zerrendara
 recipe-add-all-to-shopping = Gehitu dena erosketa zerrendara
 recipe-scale-label = Eskala
-recipe-servings-label = anoak
+recipe-servings-label = anoa
 recipe-print = Inprimatu errezeta
 recipe-added = Gehituta!
 recipe-main-section = Nagusia
@@ -33,7 +33,7 @@ meta-source = Iturria
 meta-prep-time = Prestaketa denbora
 meta-cook-time = Kozinatze denbora
 meta-total-time = Denbora guztira
-meta-servings = Anoak
+meta-servings = Anoa
 meta-difficulty = Zailtasuna
 meta-description = Deskribapena
 

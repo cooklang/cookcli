@@ -1,7 +1,7 @@
 # Navigation
 nav-recipes = Errezeta
 nav-shopping-list = Erosketa zerrenda
-nav-pantry = Despentsa
+nav-pantry = Jaki-tokia
 nav-preferences = Ezarpenak
 
 # Search
@@ -22,7 +22,7 @@ action-preview = Aurrebista
 
 # Common Labels
 label-scale = Eskala
-label-servings = Anoak
+label-servings = Anoa
 label-time = Denbora
 label-difficulty = Zailtasuna
 label-name = Izena

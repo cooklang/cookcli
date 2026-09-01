@@ -1,10 +1,10 @@
 # Pantry
-pantry-title = Despentsa
-pantry-empty = Zure despentsa hutsik dago
+pantry-title = Jaki-tokia
+pantry-empty = Zure jaki-tokia hutsik dago
 pantry-section = { $name }
-pantry-no-config = Ez da despentsaren konfiguraziorik aurkitu
+pantry-no-config = Ez da jaki-tokiaren konfiguraziorik aurkitu
 pantry-create-config = Sortu pantry.conf artxibo bat inbentarioaren jarraipena egiteko
-pantry-configure = Konfiguratu despentsa →
+pantry-configure = Konfiguratu jaki-tokia →
 pantry-no-items-section = Ez dago elementurik sail honetan
 pantry-show-out-of-stock = Erakutsi bukatutako elementuak bakarrik
 pantry-no-out-of-stock = Ez dago bukatutako elementurik sail honetan
@@ -24,7 +24,7 @@ pantry-item-low-threshold = Stock baxuaren atalasea
 
 # Pantry Actions
 pantry-add-item = Gehitu elementua
-pantry-add-pantry-item = Gehitu elementu bat despentsan
+pantry-add-pantry-item = Gehitu elementu bat jaki-tokian
 pantry-edit-item = Editatu elementua
 pantry-remove-item = Ezabatu elementua
 pantry-remove-confirm = Ezabatu { $name } { $section }-tik?
@@ -37,7 +37,7 @@ pantry-section-label = Saila
 pantry-section-select = Aukeratu saila...
 pantry-section-freezer = Izozkailua
 pantry-section-fridge = Hozkailua
-pantry-section-pantry = Despentsa
+pantry-section-pantry = Jaki-tokia
 pantry-section-spices = Espeziak
 pantry-section-other = Besteak
 pantry-optional = (aukerakoa)
