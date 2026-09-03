@@ -276,12 +276,13 @@ fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
 
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
-    Host(host): Host,
     headers: HeaderMap,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
-    // CSRF protection: verify request came from same origin
-    if state.csrf_check && !validate_same_origin(&headers, &host) {
+    // The raw `Host` header, not axum-extra's `Host` extractor: that one
+    // prefers `X-Forwarded-Host`, which any client can set.
+    let host = super::cors::host_header(&headers).unwrap_or_default();
+    if state.csrf_check && !validate_same_origin(&headers, host) {
         tracing::warn!("CSRF validation failed for create_recipe request");
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }

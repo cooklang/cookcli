@@ -134,6 +134,25 @@ impl CorsConfig {
     }
 }
 
+/// The `Host` header, if the request carries exactly one.
+///
+/// Deliberately ignores `Forwarded` / `X-Forwarded-Host`: those are set by
+/// whoever is on the other end of a direct connection, so a security decision
+/// must not depend on them. A deployment behind a proxy that rewrites `Host`
+/// names its public origin with `--cors-origin` instead.
+///
+/// More than one `Host` header is a malformed request (RFC 9112 §3.2 requires
+/// exactly one), and picking the first would let a raw client choose which one
+/// the guard sees — so that is treated as no host at all, which fails closed.
+pub(super) fn host_header(headers: &HeaderMap) -> Option<&str> {
+    let mut hosts = headers.get_all(header::HOST).iter();
+    let host = hosts.next()?;
+    if hosts.next().is_some() {
+        return None;
+    }
+    host.to_str().ok()
+}
+
 /// The authority this request was addressed to.
 ///
 /// Deliberately reads the `Host` header (or, for HTTP/2, the URI authority)
@@ -144,13 +163,12 @@ impl CorsConfig {
 /// deployment behind a proxy that rewrites `Host` names its public origin with
 /// `--cors-origin` instead.
 fn request_host(request: &Request) -> Option<&str> {
-    if let Some(host) = request.headers().get(header::HOST) {
-        return host.to_str().ok();
-    }
-    request
-        .uri()
-        .authority()
-        .map(|authority| authority.as_str())
+    host_header(request.headers()).or_else(|| {
+        request
+            .uri()
+            .authority()
+            .map(|authority| authority.as_str())
+    })
 }
 
 /// Whether an `Origin` value denotes the same host the request was sent to.
@@ -515,6 +533,25 @@ mod tests {
         // Nothing can then match same-origin, so writes need --cors-origin.
         let request = request_with(&[]);
         assert_eq!(request_host(&request), None);
+    }
+
+    #[test]
+    fn two_host_headers_are_treated_as_none() {
+        // Picking the first would let a raw client choose which host the guard
+        // compares against. Fail closed instead.
+        let request = request_with(&[("host", "evil.test"), ("host", "127.0.0.1:9080")]);
+        assert_eq!(request_host(&request), None);
+    }
+
+    #[test]
+    fn http2_falls_back_to_the_uri_authority() {
+        // h2 synthesises a Host header in practice, so this branch is belt and
+        // braces — but it must still be right.
+        let request = axum::http::Request::builder()
+            .uri("http://127.0.0.1:9080/api/pantry/add")
+            .body(axum::body::Body::empty())
+            .expect("valid request");
+        assert_eq!(request_host(&request), Some("127.0.0.1:9080"));
     }
 
     #[test]
