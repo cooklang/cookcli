@@ -77,7 +77,7 @@ Note that only the UI chrome (navigation, headings, labels) is translated — yo
 | `menu/<path>.html` | One page per `.menu` file |
 | `api/static/<path>` | Images alongside recipes (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.avif`) |
 | `static/css/`, `static/js/` | Compiled CSS, fonts, icons, and the client-side search script |
-| `static/search-index.json` | Search index consumed by `static/js/search.js` |
+| `static/search-index.js` | Search index consumed by `static/js/search.js`, as a script assigning `window.__SEARCH_INDEX__` |
 
 ## What's excluded
 
@@ -115,7 +115,11 @@ Use `--base-url` only if your host serves the site under a fixed subpath and you
 
 ## Notes
 
-- The generated site has no server dependency — it works fully offline via `file://`.
-- Search runs entirely in the browser by loading `static/search-index.json`.
+- The generated site has no server dependency: it works fully offline via `file://`.
+  Not with `--base-url` though. That flag makes every asset reference absolute, so from
+  disk the page gets no stylesheet, no icons and no search. Use it only for HTTP hosting.
+- Search runs entirely in the browser by loading `static/search-index.js`. It is a script
+  rather than JSON so that search also works over `file://`, where browsers block
+  `fetch()` between local files.
 - Re-run `cook build web` after editing recipes; the command is idempotent.
 - For a live editing experience, use `cook server` instead.
