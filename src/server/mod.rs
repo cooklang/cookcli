@@ -113,12 +113,15 @@ pub struct ServerArgs {
     #[arg(long, default_value_t = false)]
     cors_allow_credentials: bool,
 
-    /// Enable cors verification
+    /// Disable same-origin enforcement on requests that modify recipes
     ///
-    /// When enabled, the POST /new path require a seemless
-    /// Origin and Host header.
-    #[arg(long = "no-cors", action = clap::ArgAction::SetFalse)]
-    cors: bool,
+    /// By default a request is rejected unless its Origin matches the Host it
+    /// was sent to, or is named by --cors-origin. This has nothing to do with
+    /// the cross-origin read policy the other --cors-* flags configure. Use it
+    /// only when a reverse proxy rewrites Host in a way that cannot be
+    /// expressed with --cors-origin. The former spelling --no-cors still works.
+    #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
+    csrf_check: bool,
 }
 
 impl ServerArgs {
@@ -334,7 +337,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
-        cors: args.cors,
+        csrf_check: args.csrf_check,
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
         #[cfg(feature = "sync")]
@@ -383,7 +386,9 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
-    pub cors: bool,
+    /// When true, requests that modify recipes must be same-origin or come
+    /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
+    pub csrf_check: bool,
     /// Serializes access to `.shopping-checked` within this process.
     /// File-level `flock` doesn't prevent two tasks in the *same* process
     /// from racing on the file (the kernel treats them as one lock owner),
