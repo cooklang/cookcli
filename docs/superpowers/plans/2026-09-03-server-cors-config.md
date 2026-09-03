@@ -569,6 +569,45 @@ Claude-Session: https://claude.ai/code/session_013cPWotrjEY4Jac87e6vHsh"
 
 ---
 
+## REVISION (after Task 2-3 code review)
+
+Tasks 1-3 are complete and committed. A code review of Tasks 2-3 found that the
+plan's central premise was wrong: **`allow_methods([GET])` does not block a
+cross-origin `POST`**, because `POST` is a CORS-safelisted method and the
+`Access-Control-Allow-Methods` list is only consulted for non-safelisted ones.
+Verified in a real browser — a cross-origin page wrote to
+`seed/config/pantry.conf` via `POST /api/pantry/add`.
+
+Adding `content-type` to `allow_headers` also removes the accidental protection
+that today's *unset* `allow_headers` provides, so as it stands the new default
+is more permissive than the code it replaces.
+
+The design doc has been corrected (see its "Correction: `allow_methods` cannot
+enforce read-only" and "The cross-origin write guard" sections, commit
+`54f187c`). The remaining tasks are renumbered and rewritten below. Read-only
+is now enforced **server-side** by a write guard; CORS headers describe the
+policy rather than enforce it.
+
+Remaining tasks:
+
+- **Task 4** — review fixes to Tasks 2-3 (help text, smoke tests, polish).
+- **Task 5** — the `--no-cors` → `--no-csrf-check` rename (unchanged from the
+  original Task 4).
+- **Task 6** — the cross-origin write guard (new).
+- **Task 7** — end-to-end tests (the original Task 5, with the `POST`
+  assertions rewritten: a preflight assertion cannot detect the hole, since
+  `AllowOrigin::any()` always answers `*`).
+- **Task 8** — documentation (the original Task 6, with corrected text).
+- **Task 9** — full verification and PR (the original Task 7).
+
+Full task text is supplied to each implementer at dispatch time. The original
+Tasks 4-7 are preserved below for reference; where they conflict with this
+revision, the revision wins.
+
+---
+
+## ORIGINAL TASKS 4-7 (superseded — see REVISION above)
+
 ### Task 4: Rename `--no-cors` to `--no-csrf-check`
 
 **Files:**
