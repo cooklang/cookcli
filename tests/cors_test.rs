@@ -130,7 +130,10 @@ async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
     // for.
     let client = Client::new();
     let url = guard.url("/api/menus");
-    for _ in 0..200 {
+    // 30s. Every test here boots its own server, so a full parallel run spawns
+    // more of them at once than the suites this pattern came from — a loaded
+    // machine can take well past the 10s that was enough for nine.
+    for _ in 0..600 {
         if guard.child.try_wait().expect("poll server").is_some() {
             // Port was taken between reserving and binding it.
             return None;
