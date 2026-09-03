@@ -60,13 +60,36 @@ fn free_port() -> u16 {
     listener.local_addr().expect("local addr").port()
 }
 
-/// One minimal recipe, just enough for the server to have something to scan.
+/// One minimal recipe, just enough for the server to have something to scan,
+/// plus a pantry config so `POST /api/pantry/add` has somewhere to write and
+/// a permitted write returns a real success instead of `404` (no pantry
+/// configured) either way.
 fn write_fixture(dir: &TempDir) {
     std::fs::write(
         dir.path().join("Recipe.cook"),
         "Mix @flour{100%g} and @water{100%ml}.\n",
     )
     .unwrap();
+
+    let config_dir = dir.path().join("config");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("pantry.conf"),
+        "[pantry]\nflour = \"1%kg\"\n",
+    )
+    .unwrap();
+}
+
+/// Points a spawned `cook server` at a `HOME`/`XDG_CONFIG_HOME` inside the
+/// test's own `TempDir`, so a global `~/.config/cook/pantry.conf` (or the
+/// macOS equivalent) on the machine running the test cannot change which
+/// config file `Context::discover` finds and, in turn, what these tests
+/// observe.
+fn with_isolated_home<'a>(cmd: &'a mut Command, dir: &TempDir) -> &'a mut Command {
+    let home = dir.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    cmd.env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
 }
 
 /// `free_port` only reserves a port long enough to learn its number, so with
@@ -94,7 +117,7 @@ async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
     for arg in extra_args {
         cmd.arg(arg);
     }
-    let child = cmd
+    let child = with_isolated_home(&mut cmd, &dir)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -141,7 +164,9 @@ fn run_server_startup(extra_args: &[&str]) -> Output {
     for arg in extra_args {
         cmd.arg(arg);
     }
-    cmd.output().expect("run cook server")
+    with_isolated_home(&mut cmd, &dir)
+        .output()
+        .expect("run cook server")
 }
 
 /// Sends an `OPTIONS` preflight for `POST /api/pantry/add` from `origin`,
@@ -340,11 +365,11 @@ async fn default_policy_same_origin_post_is_not_blocked() {
     let resp = post_pantry_add(&server, Some(&own_origin)).await;
 
     let status = resp.status();
-    assert_ne!(
+    assert_eq!(
         status,
-        StatusCode::FORBIDDEN,
+        StatusCode::OK,
         "a POST whose Origin matches the server's own Host (the web UI's own request) \
-         must not be blocked by the write guard, got {status}"
+         must not be blocked by the write guard and must actually succeed, got {status}"
     );
 }
 
@@ -380,10 +405,10 @@ async fn explicit_origin_write_guard_matches_the_configured_list() {
     let server = start_server(&["--cors-origin", "http://app.test"]).await;
 
     let allowed = post_pantry_add(&server, Some("http://app.test")).await;
-    assert_ne!(
+    assert_eq!(
         allowed.status(),
-        StatusCode::FORBIDDEN,
-        "a POST from a listed --cors-origin must not be blocked, got {}",
+        StatusCode::OK,
+        "a POST from a listed --cors-origin must not be blocked and must actually succeed, got {}",
         allowed.status()
     );
 
