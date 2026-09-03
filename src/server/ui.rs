@@ -254,43 +254,23 @@ fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::
 
 /// Validates that the request originated from the same host (CSRF protection)
 fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
-    // Check Origin header first (preferred for CSRF protection)
+    // Origin first: it is the header a browser always sends on a form POST,
+    // and the one an attacker cannot forge.
     if let Some(origin) = headers.get(header::ORIGIN) {
-        if let Ok(origin_str) = origin.to_str() {
-            // Origin format is scheme://host[:port]
-            if let Ok(origin_url) = url::Url::parse(origin_str) {
-                if let Some(origin_host) = origin_url.host_str() {
-                    let origin_with_port = if let Some(port) = origin_url.port() {
-                        format!("{}:{}", origin_host, port)
-                    } else {
-                        origin_host.to_string()
-                    };
-                    return origin_with_port == host || origin_host == host;
-                }
-            }
-        }
-        return false;
+        return origin
+            .to_str()
+            .is_ok_and(|origin| super::cors::origin_matches_host(origin, host));
     }
 
-    // Fallback to Referer header (less reliable but better than nothing)
+    // Referer is less reliable but better than nothing.
     if let Some(referer) = headers.get(header::REFERER) {
-        if let Ok(referer_str) = referer.to_str() {
-            if let Ok(referer_url) = url::Url::parse(referer_str) {
-                if let Some(referer_host) = referer_url.host_str() {
-                    let referer_with_port = if let Some(port) = referer_url.port() {
-                        format!("{}:{}", referer_host, port)
-                    } else {
-                        referer_host.to_string()
-                    };
-                    return referer_with_port == host || referer_host == host;
-                }
-            }
-        }
-        return false;
+        return referer
+            .to_str()
+            .is_ok_and(|referer| super::cors::origin_matches_host(referer, host));
     }
 
-    // No Origin or Referer header - reject for safety
-    // (though browsers should always send one for form submissions)
+    // Neither header: reject. Browsers always send one for a form submission,
+    // unlike the API, where a missing Origin just means a non-browser client.
     false
 }
 

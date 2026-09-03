@@ -6,7 +6,15 @@
 //! client are unaffected by anything here.
 
 use anyhow::{bail, Result};
-use axum::http::{header, HeaderValue, Method};
+use axum::{
+    extract::{Request, State},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
+    Json,
+};
+use axum_extra::extract::Host;
+use std::sync::Arc;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 /// Which origins may make cross-origin requests.
@@ -95,6 +103,57 @@ impl CorsConfig {
             .allow_headers([header::CONTENT_TYPE])
             .allow_credentials(self.allow_credentials)
     }
+
+    /// Whether a request with this method, these headers and this `Host` may
+    /// modify recipes.
+    ///
+    /// `allow_methods` cannot express this. `POST` is a CORS-safelisted method,
+    /// so a browser never consults `Access-Control-Allow-Methods` for it —
+    /// only a server-side check makes the wildcard default actually read-only.
+    fn allows_write(&self, method: &Method, headers: &HeaderMap, host: &str) -> bool {
+        if *method == Method::GET || *method == Method::HEAD || *method == Method::OPTIONS {
+            return true;
+        }
+        // No `Origin` means no browser. `curl` and other clients send none, and
+        // the API has no authentication for them to bypass.
+        let Some(origin) = headers.get(header::ORIGIN) else {
+            return true;
+        };
+        let Ok(origin) = origin.to_str() else {
+            return false;
+        };
+        origin_matches_host(origin, host) || self.lists_origin(origin)
+    }
+
+    fn lists_origin(&self, origin: &str) -> bool {
+        match &self.origins {
+            CorsOrigins::Any => false,
+            CorsOrigins::List(list) => list
+                .iter()
+                .any(|listed| listed.as_bytes() == origin.as_bytes()),
+        }
+    }
+}
+
+/// Whether an `Origin` value denotes the same host the request was sent to.
+///
+/// `Origin` is `scheme://host[:port]` while `Host` is `host[:port]`, and a
+/// browser omits the port when it is the scheme's default — so the comparison
+/// has to allow `https://a.test` to match either `a.test` or `a.test:443`.
+pub(super) fn origin_matches_host(origin: &str, host: &str) -> bool {
+    let Ok(url) = url::Url::parse(origin) else {
+        return false;
+    };
+    let Some(origin_host) = url.host_str() else {
+        return false;
+    };
+    match url.port() {
+        Some(port) => host == format!("{origin_host}:{port}"),
+        None => match url.port_or_known_default() {
+            Some(default) => host == origin_host || host == format!("{origin_host}:{default}"),
+            None => host == origin_host,
+        },
+    }
 }
 
 /// Parses one `--cors-origin` value.
@@ -170,6 +229,36 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
 
     HeaderValue::from_str(origin)
         .map_err(|e| anyhow::anyhow!("invalid --cors-origin {origin:?}: {e}"))
+}
+
+/// Rejects cross-origin requests that would modify recipes.
+///
+/// Applied inside the CORS layer, so tower-http has already answered any
+/// `OPTIONS` preflight before this runs.
+pub async fn write_guard(
+    State(config): State<Arc<CorsConfig>>,
+    Host(host): Host,
+    request: Request,
+    next: Next,
+) -> Response {
+    if config.allows_write(request.method(), request.headers(), &host) {
+        return next.run(request).await;
+    }
+
+    tracing::warn!(
+        method = %request.method(),
+        path = %request.uri().path(),
+        "refused a cross-origin request that would modify recipes"
+    );
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "error": "Cross-origin requests may not modify recipes. Start the server with \
+                      --cors-origin <ORIGIN> to allow this origin, or --no-csrf-check to \
+                      disable this check."
+        })),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -353,5 +442,94 @@ mod tests {
     fn layer_applies_for_explicit_origins_with_credentials() {
         let config = CorsConfig::from_args(&origins(&["http://a.test"]), true).expect("valid");
         assert_layer_applies(&config);
+    }
+
+    fn headers_with_origin(origin: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_str(origin).expect("valid"),
+        );
+        headers
+    }
+
+    #[test]
+    fn origin_matches_its_own_host() {
+        assert!(origin_matches_host("http://a.test:9080", "a.test:9080"));
+        assert!(origin_matches_host("http://a.test", "a.test"));
+        // `Host` may or may not spell out a scheme's default port.
+        assert!(origin_matches_host("https://a.test", "a.test:443"));
+        assert!(origin_matches_host("http://a.test", "a.test:80"));
+    }
+
+    #[test]
+    fn origin_on_a_different_port_is_not_the_same_host() {
+        assert!(!origin_matches_host("http://a.test:9080", "a.test"));
+        assert!(!origin_matches_host("http://a.test:9080", "a.test:3000"));
+        assert!(!origin_matches_host("http://a.test", "b.test"));
+        assert!(!origin_matches_host("not a url", "a.test"));
+    }
+
+    #[test]
+    fn reads_are_always_allowed() {
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for method in [Method::GET, Method::HEAD, Method::OPTIONS] {
+            assert!(
+                config.allows_write(&method, &headers_with_origin("http://evil.test"), "a.test"),
+                "{method} must pass the guard"
+            );
+        }
+    }
+
+    #[test]
+    fn a_request_without_an_origin_is_not_a_browser() {
+        // curl and every other non-browser client. The API has no auth, so
+        // rejecting these would break integrations and protect nothing.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(config.allows_write(&Method::POST, &HeaderMap::new(), "a.test"));
+    }
+
+    #[test]
+    fn same_origin_writes_are_allowed() {
+        // This is the web UI's own POST.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://a.test:9080"),
+            "a.test:9080"
+        ));
+    }
+
+    #[test]
+    fn cross_origin_writes_are_refused_under_the_wildcard_default() {
+        // The hole this guard exists to close: POST is CORS-safelisted, so
+        // Access-Control-Allow-Methods: GET does not stop it.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for method in [Method::POST, Method::PUT, Method::DELETE] {
+            assert!(
+                !config.allows_write(
+                    &method,
+                    &headers_with_origin("http://evil.test"),
+                    "a.test:9080"
+                ),
+                "cross-origin {method} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_listed_origin_may_write() {
+        let config =
+            CorsConfig::from_args(&origins(&["http://app.test:3000"]), false).expect("valid");
+        assert!(config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://app.test:3000"),
+            "a.test:9080"
+        ));
+        assert!(!config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://evil.test"),
+            "a.test:9080"
+        ));
     }
 }

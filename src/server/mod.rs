@@ -214,9 +214,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     // Capture url_prefix before state is consumed by with_state.
     let url_prefix_for_features = state.url_prefix.clone();
+    let csrf_check = state.csrf_check;
 
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
+
+    let cors_layer = cors.layer();
+    let cors = Arc::new(cors);
 
     let app = app
         .with_state(state)
@@ -227,8 +231,20 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         ))
         .layer(axum::middleware::from_fn(
             crate::web::language::language_middleware,
+        ));
+
+    // Inside the CORS layer, so preflights are answered before it runs.
+    // `--no-csrf-check` omits it entirely.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(
+            cors,
+            cors::write_guard,
         ))
-        .layer(cors.layer());
+    } else {
+        app
+    };
+
+    let app = app.layer(cors_layer);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
