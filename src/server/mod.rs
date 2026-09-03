@@ -46,6 +46,7 @@ use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info};
 
+mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
