@@ -75,6 +75,26 @@ impl CorsConfig {
             }
         }
     }
+
+    /// Builds the tower-http layer for this policy.
+    ///
+    /// `content-type` is always allowed: without it a cross-origin JSON `POST`
+    /// fails preflight no matter what the origin setting is, so there is
+    /// nothing here worth making configurable. The CORS-safelisted request
+    /// headers (`Accept`, `Accept-Language`, `Content-Language`) need no entry
+    /// — browsers permit them regardless.
+    pub fn layer(&self) -> CorsLayer {
+        let allow_origin = match &self.origins {
+            CorsOrigins::Any => AllowOrigin::any(),
+            CorsOrigins::List(list) => AllowOrigin::list(list.iter().cloned()),
+        };
+
+        CorsLayer::new()
+            .allow_origin(allow_origin)
+            .allow_methods(self.methods())
+            .allow_headers([header::CONTENT_TYPE])
+            .allow_credentials(self.allow_credentials)
+    }
 }
 
 /// Parses one `--cors-origin` value.
@@ -312,5 +332,17 @@ mod tests {
             err.to_string().contains("bare lowercase origin"),
             "userinfo must not be misreported as a bad port: {err}"
         );
+    }
+
+    #[test]
+    fn layer_builds_for_wildcard() {
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        let _layer = config.layer();
+    }
+
+    #[test]
+    fn layer_builds_for_explicit_origins_with_credentials() {
+        let config = CorsConfig::from_args(&origins(&["http://a.test"]), true).expect("valid");
+        let _layer = config.layer();
     }
 }
