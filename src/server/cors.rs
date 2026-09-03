@@ -104,14 +104,9 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
         );
     }
 
-    let (host, port) = match rest.split_once(':') {
-        Some((host, port)) => (host, Some(port)),
-        None => (rest, None),
-    };
-    if host.is_empty() {
-        bail!("invalid --cors-origin {origin:?}: expected scheme://host[:port]");
-    }
-    if let Some(bad) = host
+    // Check the whole remainder before splitting off a port, so userinfo and
+    // other extras are reported as what they are rather than as a bad port.
+    if let Some(bad) = rest
         .chars()
         .find(|c| c.is_whitespace() || c.is_ascii_uppercase() || matches!(c, '/' | '?' | '#' | '@'))
     {
@@ -121,6 +116,25 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
              e.g. http://localhost:3000"
         );
     }
+
+    // An IPv6 host is bracketed and full of colons, so the port can only be
+    // split off after the closing bracket.
+    let port = if let Some(rest) = rest.strip_prefix('[') {
+        let Some((_host, after)) = rest.split_once(']') else {
+            bail!(
+                "invalid --cors-origin {origin:?}: unterminated IPv6 host, e.g. http://[::1]:3000"
+            );
+        };
+        match after {
+            "" => None,
+            _ => Some(after.strip_prefix(':').ok_or_else(|| {
+                anyhow::anyhow!("invalid --cors-origin {origin:?}: expected scheme://host[:port]")
+            })?),
+        }
+    } else {
+        rest.rsplit_once(':').map(|(_host, port)| port)
+    };
+
     if let Some(port) = port {
         if port.parse::<u16>().is_err() {
             bail!("invalid --cors-origin {origin:?}: {port:?} is not a valid port number");
@@ -256,6 +270,8 @@ mod tests {
             "http://a.test:99999",
             "*://a.test",
             "://a.test",
+            "http://[::1",
+            "http://[::1]x",
         ] {
             CorsConfig::from_args(&origins(&[bad]), false)
                 .expect_err(&format!("{bad:?} must be rejected"));
@@ -263,16 +279,29 @@ mod tests {
     }
 
     #[test]
-    fn non_http_schemes_are_accepted() {
-        // Browser extensions and desktop shells send these as `Origin`.
+    fn unusual_but_valid_origins_are_accepted() {
+        // Browser extensions, desktop shells, and IPv6 hosts are legitimate
+        // `Origin` values.
         for good in [
             "chrome-extension://abcdefghijklmnop",
             "moz-extension://abcdefghijklmnop",
             "tauri://localhost",
             "https://a.test:8443",
+            "http://[::1]:3000",
+            "http://[::1]",
         ] {
             CorsConfig::from_args(&origins(&[good]), false)
                 .unwrap_or_else(|e| panic!("{good:?} must be accepted: {e}"));
         }
+    }
+
+    #[test]
+    fn userinfo_is_reported_as_userinfo_not_as_a_bad_port() {
+        let err = CorsConfig::from_args(&origins(&["http://user:pass@a.test"]), false)
+            .expect_err("must reject");
+        assert!(
+            err.to_string().contains("bare lowercase origin"),
+            "userinfo must not be misreported as a bad port: {err}"
+        );
     }
 }
