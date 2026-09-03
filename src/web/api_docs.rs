@@ -54,7 +54,11 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "CORS",
-                "All origins are allowed, for the methods GET, POST, PUT and DELETE.",
+                "`GET` is allowed from any origin. A cross-origin request that would modify \
+                 recipes is refused with `403` unless the server was started with a matching \
+                 `--cors-origin <ORIGIN>`. Requests with no `Origin` header — `curl` and other \
+                 non-browser clients — are unaffected. `content-type` is always an allowed \
+                 request header.",
             ),
             note("Request size limit", "1 MB."),
             note(
@@ -71,6 +75,11 @@ pub fn preamble() -> ApiPreamble {
                 "400",
                 "malformed input: an invalid path, a bad query parameter, or a recipe that \
                  failed to parse.",
+            ),
+            note(
+                "403",
+                "a cross-origin request tried to modify recipes. Start the server with \
+                 `--cors-origin <ORIGIN>` to allow that origin.",
             ),
             note(
                 "404",
