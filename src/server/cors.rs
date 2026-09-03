@@ -176,6 +176,14 @@ fn request_host(request: &Request) -> Option<&str> {
 /// `Origin` is `scheme://host[:port]` while `Host` is `host[:port]`, and a
 /// browser omits the port when it is the scheme's default — so the comparison
 /// has to allow `https://a.test` to match either `a.test` or `a.test:443`.
+///
+/// The scheme is deliberately not compared. `cook server` speaks plaintext
+/// HTTP, but is routinely fronted by a TLS-terminating proxy that passes
+/// `Host` through unchanged, so `Origin: https://cook.example.com` against
+/// `Host: cook.example.com` is the *normal* proxied case — rejecting it would
+/// break those deployments. The converse reading, an `https://` page reaching
+/// a plaintext server on port 80, is blocked by browsers' mixed-content
+/// policy, so nothing reachable is given up.
 pub(super) fn origin_matches_host(origin: &str, host: &str) -> bool {
     let Ok(url) = url::Url::parse(origin) else {
         return false;
@@ -184,10 +192,13 @@ pub(super) fn origin_matches_host(origin: &str, host: &str) -> bool {
         return false;
     };
     match url.port() {
-        Some(port) => host == format!("{origin_host}:{port}"),
+        Some(port) => host.eq_ignore_ascii_case(&format!("{origin_host}:{port}")),
         None => match url.port_or_known_default() {
-            Some(default) => host == origin_host || host == format!("{origin_host}:{default}"),
-            None => host == origin_host,
+            Some(default) => {
+                host.eq_ignore_ascii_case(origin_host)
+                    || host.eq_ignore_ascii_case(&format!("{origin_host}:{default}"))
+            }
+            None => host.eq_ignore_ascii_case(origin_host),
         },
     }
 }
@@ -496,6 +507,10 @@ mod tests {
         // `Host` may or may not spell out a scheme's default port.
         assert!(origin_matches_host("https://a.test", "a.test:443"));
         assert!(origin_matches_host("http://a.test", "a.test:80"));
+        // `Url::parse` lowercases the origin's host; the Host header is not
+        // normalized for us.
+        assert!(origin_matches_host("http://A.Test:9080", "a.test:9080"));
+        assert!(origin_matches_host("http://a.test:9080", "A.TEST:9080"));
     }
 
     #[test]
@@ -504,6 +519,21 @@ mod tests {
         assert!(!origin_matches_host("http://a.test:9080", "a.test:3000"));
         assert!(!origin_matches_host("http://a.test", "b.test"));
         assert!(!origin_matches_host("not a url", "a.test"));
+    }
+
+    #[test]
+    fn the_scheme_is_not_compared() {
+        // Deliberate: see the note on `origin_matches_host`. A TLS-terminating
+        // proxy passing Host through is the normal case for an https origin.
+        assert!(origin_matches_host(
+            "https://cook.example.test",
+            "cook.example.test"
+        ));
+        // An explicit, non-default port still has to match exactly.
+        assert!(!origin_matches_host(
+            "https://cook.example.test",
+            "cook.example.test:80"
+        ));
     }
 
     fn request_with(headers: &[(&str, &str)]) -> Request {
