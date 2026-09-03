@@ -34,7 +34,7 @@ use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path},
-    http::{header, HeaderValue, Method, Response, StatusCode},
+    http::{header, Response, StatusCode},
     routing::{get, post},
     Router,
 };
@@ -43,7 +43,7 @@ use clap::Args;
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::services::ServeDir;
 use tracing::{error, info};
 
 mod cors;
@@ -97,6 +97,22 @@ pub struct ServerArgs {
     #[arg(long, default_value_t = false)]
     open: bool,
 
+    /// Origin allowed to make cross-origin browser requests (repeatable)
+    ///
+    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. Use "*"
+    /// for any origin, which is the default. A wildcard origin allows GET
+    /// only; naming explicit origins also allows POST, PUT and DELETE.
+    /// "*" cannot be combined with explicit origins.
+    #[arg(long = "cors-origin", value_name = "ORIGIN")]
+    cors_origin: Vec<String>,
+
+    /// Allow cross-origin requests to carry cookies and credentials
+    ///
+    /// Requires at least one explicit --cors-origin; browsers reject
+    /// credentialed requests against a wildcard origin.
+    #[arg(long = "cors-allow-credentials", default_value_t = false)]
+    cors_allow_credentials: bool,
+
     /// Enable cors verification
     ///
     /// When enabled, the POST /new path require a seemless
@@ -120,6 +136,10 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     };
     let addr = SocketAddr::from((addr, args.port));
     let open = args.open;
+
+    // Validate before binding or printing anything, so a bad flag combination
+    // fails immediately rather than after the "Listening on ..." banner.
+    let cors = cors::CorsConfig::from_args(&args.cors_origin, args.cors_allow_credentials)?;
 
     let state = build_state(ctx, args)?;
 
@@ -205,11 +225,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .layer(axum::middleware::from_fn(
             crate::web::language::language_middleware,
         ))
-        .layer(
-            CorsLayer::new()
-                .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]),
-        );
+        .layer(cors.layer());
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
