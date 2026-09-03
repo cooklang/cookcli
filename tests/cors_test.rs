@@ -301,6 +301,39 @@ async fn default_policy_cross_origin_post_is_refused_with_403() {
 }
 
 #[tokio::test]
+async fn a_forwarded_host_header_cannot_fake_same_origin() {
+    // The guard reads the real `Host` header, never `Forwarded` /
+    // `X-Forwarded-Host`. Those are set by whoever is on the other end of a
+    // direct connection, so trusting them would let `Origin: http://evil.test`
+    // plus `X-Forwarded-Host: evil.test` pass as same-origin.
+    let server = start_server(&[]).await;
+
+    for spoof in [
+        ("x-forwarded-host", "evil.test"),
+        ("forwarded", "host=evil.test"),
+    ] {
+        let resp = Client::new()
+            .post(server.url("/api/pantry/add"))
+            .json(&serde_json::json!({ "section": "Test", "name": "Test Item" }))
+            .header(ORIGIN, "http://evil.test")
+            .header(spoof.0, spoof.1)
+            .send()
+            .await
+            .expect("pantry add request");
+
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{}: {} must not make a cross-origin write look same-origin, got {status}: {body}",
+            spoof.0,
+            spoof.1
+        );
+    }
+}
+
+#[tokio::test]
 async fn default_policy_same_origin_post_is_not_blocked() {
     let server = start_server(&[]).await;
     let own_origin = server.own_origin();

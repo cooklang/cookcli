@@ -13,7 +13,6 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use axum_extra::extract::Host;
 use std::sync::Arc;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -135,6 +134,25 @@ impl CorsConfig {
     }
 }
 
+/// The authority this request was addressed to.
+///
+/// Deliberately reads the `Host` header (or, for HTTP/2, the URI authority)
+/// rather than `Forwarded` / `X-Forwarded-Host`. Those are set by whoever is
+/// on the other end of a direct connection, so a security decision must not
+/// depend on them — `Origin: http://evil.test` plus
+/// `X-Forwarded-Host: evil.test` would otherwise look same-origin. A
+/// deployment behind a proxy that rewrites `Host` names its public origin with
+/// `--cors-origin` instead.
+fn request_host(request: &Request) -> Option<&str> {
+    if let Some(host) = request.headers().get(header::HOST) {
+        return host.to_str().ok();
+    }
+    request
+        .uri()
+        .authority()
+        .map(|authority| authority.as_str())
+}
+
 /// Whether an `Origin` value denotes the same host the request was sent to.
 ///
 /// `Origin` is `scheme://host[:port]` while `Host` is `host[:port]`, and a
@@ -237,11 +255,11 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
 /// `OPTIONS` preflight before this runs.
 pub async fn write_guard(
     State(config): State<Arc<CorsConfig>>,
-    Host(host): Host,
     request: Request,
     next: Next,
 ) -> Response {
-    if config.allows_write(request.method(), request.headers(), &host) {
+    let host = request_host(&request).unwrap_or_default();
+    if config.allows_write(request.method(), request.headers(), host) {
         return next.run(request).await;
     }
 
@@ -468,6 +486,35 @@ mod tests {
         assert!(!origin_matches_host("http://a.test:9080", "a.test:3000"));
         assert!(!origin_matches_host("http://a.test", "b.test"));
         assert!(!origin_matches_host("not a url", "a.test"));
+    }
+
+    fn request_with(headers: &[(&str, &str)]) -> Request {
+        let mut builder = axum::http::Request::builder().uri("/api/pantry/add");
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        builder
+            .body(axum::body::Body::empty())
+            .expect("valid request")
+    }
+
+    #[test]
+    fn host_comes_from_the_host_header_not_a_forwarded_one() {
+        // `Origin: http://evil.test` plus `X-Forwarded-Host: evil.test` must
+        // not read as same-origin: both are attacker-supplied.
+        let request = request_with(&[
+            ("host", "127.0.0.1:9080"),
+            ("x-forwarded-host", "evil.test"),
+            ("forwarded", "host=evil.test"),
+        ]);
+        assert_eq!(request_host(&request), Some("127.0.0.1:9080"));
+    }
+
+    #[test]
+    fn a_request_with_no_host_at_all_has_no_authority() {
+        // Nothing can then match same-origin, so writes need --cors-origin.
+        let request = request_with(&[]);
+        assert_eq!(request_host(&request), None);
     }
 
     #[test]
