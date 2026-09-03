@@ -453,6 +453,7 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 * [Seed](docs/seed.md) - example recipes
 * [Report](docs/report.md) - custom outputs
 * [Pantry](docs/pantry.md) - inventory management and tracking
+* [Completions](docs/completions.md) - shell completion scripts
 
 ## ⚙️ Configuration
 

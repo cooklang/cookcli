@@ -41,6 +41,7 @@ pub use cookcli_core::Context;
 
 // commands
 mod build;
+mod completions;
 mod doctor;
 #[cfg(feature = "import")]
 mod import;
@@ -93,6 +94,7 @@ pub fn main() -> Result<()> {
         Command::Login(args) => login::run(&ctx, args),
         #[cfg(feature = "sync")]
         Command::Logout(args) => logout::run(&ctx, args),
+        Command::Completions(args) => completions::run(args),
         #[cfg(feature = "self-update")]
         Command::Update(args) => update::run(args),
     }
