@@ -119,6 +119,7 @@ Configuration search order:
 - `seed`: Initialize with example recipes
 - `report`: Generate custom outputs using Jinja2 templates
 - `update`: Self-update the CookCLI binary to the latest version (can be disabled with --no-self-update feature)
+- `completions`: Print a shell completion script (bash, zsh, fish, powershell, elvish) generated from the clap definition
 
 #### Utility Modules
 - `util/`: Shared utilities for parsing, conversion, and output formatting

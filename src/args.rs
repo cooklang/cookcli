@@ -38,7 +38,7 @@ use crate::lsp;
 use crate::server;
 #[cfg(feature = "self-update")]
 use crate::update;
-use crate::{build, doctor, pantry, recipe, report, search, seed, shopping_list};
+use crate::{build, completions, doctor, pantry, recipe, report, search, seed, shopping_list};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -264,6 +264,21 @@ pub enum Command {
     #[cfg(feature = "sync")]
     #[command(long_about = "Sign out of CookCloud and delete the local session file")]
     Logout(crate::logout::LogoutArgs),
+
+    /// Generate a shell completion script
+    ///
+    /// Prints a completion script for the given shell to stdout. Source it
+    /// from your shell configuration or install it in the shell's completion
+    /// directory to get tab completion for cook subcommands and flags.
+    ///
+    /// Examples:
+    ///   cook completions bash > /usr/local/etc/bash_completion.d/cook
+    ///   cook completions zsh > "${fpath[1]}/_cook"
+    ///   cook completions fish > ~/.config/fish/completions/cook.fish
+    #[command(
+        long_about = "Generate a shell completion script for bash, zsh, fish, PowerShell or elvish"
+    )]
+    Completions(completions::CompletionsArgs),
 
     /// Update CookCLI to the latest version
     ///

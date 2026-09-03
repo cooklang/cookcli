@@ -66,6 +66,7 @@ axum-extra = { version = "0.10", optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
 base64 = { version = "0.23", optional = true }
 # bundled_units is deliberately NOT enabled: it carries the unit database, and with
 # it Converter::default() silently converts quantities to a "best" unit (e.g.
