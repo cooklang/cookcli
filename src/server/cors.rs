@@ -119,22 +119,29 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
 
     // An IPv6 host is bracketed and full of colons, so the port can only be
     // split off after the closing bracket.
-    let port = if let Some(rest) = rest.strip_prefix('[') {
-        let Some((_host, after)) = rest.split_once(']') else {
+    let (host, port) = if let Some(rest) = rest.strip_prefix('[') {
+        let Some((host, after)) = rest.split_once(']') else {
             bail!(
                 "invalid --cors-origin {origin:?}: unterminated IPv6 host, e.g. http://[::1]:3000"
             );
         };
-        match after {
+        let port = match after {
             "" => None,
             _ => Some(after.strip_prefix(':').ok_or_else(|| {
                 anyhow::anyhow!("invalid --cors-origin {origin:?}: expected scheme://host[:port]")
             })?),
-        }
+        };
+        (host, port)
     } else {
-        rest.rsplit_once(':').map(|(_host, port)| port)
+        match rest.rsplit_once(':') {
+            Some((host, port)) => (host, Some(port)),
+            None => (rest, None),
+        }
     };
 
+    if host.is_empty() {
+        bail!("invalid --cors-origin {origin:?}: missing host, expected scheme://host[:port]");
+    }
     if let Some(port) = port {
         if port.parse::<u16>().is_err() {
             bail!("invalid --cors-origin {origin:?}: {port:?} is not a valid port number");
@@ -272,6 +279,8 @@ mod tests {
             "://a.test",
             "http://[::1",
             "http://[::1]x",
+            "http://[]",
+            "http://:3000",
         ] {
             CorsConfig::from_args(&origins(&[bad]), false)
                 .expect_err(&format!("{bad:?} must be rejected"));
