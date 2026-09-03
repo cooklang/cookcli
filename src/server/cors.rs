@@ -67,7 +67,7 @@ impl CorsConfig {
     /// A wildcard origin means *any* page in the user's browser can reach the
     /// server, so it gets read-only access. Naming an origin is an explicit
     /// statement of trust, and unlocks the mutating routes.
-    pub fn methods(&self) -> Vec<Method> {
+    fn methods(&self) -> Vec<Method> {
         match &self.origins {
             CorsOrigins::Any => vec![Method::GET],
             CorsOrigins::List(_) => {
@@ -334,15 +334,24 @@ mod tests {
         );
     }
 
-    #[test]
-    fn layer_builds_for_wildcard() {
-        let config = CorsConfig::from_args(&[], false).expect("valid");
-        let _layer = config.layer();
+    /// tower-http's `ensure_usable_cors_rules` runs in `Layer::layer`, not in
+    /// the `CorsLayer` builder, so the layer has to be applied to a real
+    /// service for its assertions to fire.
+    fn assert_layer_applies(config: &CorsConfig) {
+        let _ = axum::Router::<()>::new()
+            .route("/", axum::routing::get(|| async {}))
+            .layer(config.layer());
     }
 
     #[test]
-    fn layer_builds_for_explicit_origins_with_credentials() {
+    fn layer_applies_for_wildcard() {
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert_layer_applies(&config);
+    }
+
+    #[test]
+    fn layer_applies_for_explicit_origins_with_credentials() {
         let config = CorsConfig::from_args(&origins(&["http://a.test"]), true).expect("valid");
-        let _layer = config.layer();
+        assert_layer_applies(&config);
     }
 }

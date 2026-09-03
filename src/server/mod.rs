@@ -103,14 +103,14 @@ pub struct ServerArgs {
     /// for any origin, which is the default. A wildcard origin allows GET
     /// only; naming explicit origins also allows POST, PUT and DELETE.
     /// "*" cannot be combined with explicit origins.
-    #[arg(long = "cors-origin", value_name = "ORIGIN")]
+    #[arg(long, value_name = "ORIGIN")]
     cors_origin: Vec<String>,
 
     /// Allow cross-origin requests to carry cookies and credentials
     ///
     /// Requires at least one explicit --cors-origin; browsers reject
     /// credentialed requests against a wildcard origin.
-    #[arg(long = "cors-allow-credentials", default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     cors_allow_credentials: bool,
 
     /// Enable cors verification
