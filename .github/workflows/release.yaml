@@ -362,19 +362,17 @@ jobs:
     # draft, so a failed RPM build must not strand the release.
     continue-on-error: true
     steps:
-      # actions/checkout needs git, so the tools come first.
+      # actions/checkout needs git, so the tools come first. Rust comes from
+      # the distribution rather than rustup: that is the toolchain the spec's
+      # BuildRequires asks for, and rpmbuild checks those against installed
+      # packages, so a rustup toolchain leaves the build root "missing" both.
       - name: Setup | Install tools
-        run: dnf install -y rpm-build gcc git tar xz curl
+        run: dnf install -y rpm-build gcc git tar xz curl rust cargo
 
       - name: Setup | Checkout
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.release_please.outputs.tag_name }}
-
-      - name: Setup | Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       # A named download extracts the artifact's contents straight into
       # `path`, so the tarball lands in source/, not in a directory named

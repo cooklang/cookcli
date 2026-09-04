@@ -29,9 +29,9 @@ Source0:        https://github.com/cooklang/cookcli/releases/download/v%{version
 # packaging/fedora/README.md). Not tied to a particular architecture.
 Source1:        cookcli-%{version}-vendor.tar.xz
 
-# rust/cargo: informational for build roots that provide a toolchain new
-# enough for the locked dependency set. gcc: libsqlite3-sys (bundled) and
-# other -sys crates compile C code.
+# rpmbuild resolves these against installed packages, so the build root needs
+# the distribution's rust/cargo — a rustup toolchain on PATH does not satisfy
+# them. gcc: libsqlite3-sys (bundled) and other -sys crates compile C code.
 BuildRequires:  gcc
 BuildRequires:  rust
 BuildRequires:  cargo

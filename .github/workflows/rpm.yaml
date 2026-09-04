@@ -32,9 +32,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container: fedora:latest
     steps:
-      # actions/checkout needs git, so the tools come first.
+      # actions/checkout needs git, so the tools come first. Rust comes from
+      # the distribution rather than rustup: that is the toolchain the spec's
+      # BuildRequires asks for, and rpmbuild checks those against installed
+      # packages, so a rustup toolchain leaves the build root "missing" both.
       - name: Setup | Install tools
-        run: dnf install -y rpm-build gcc git tar xz curl npm
+        run: dnf install -y rpm-build gcc git tar xz curl npm rust cargo
 
       - name: Setup | Checkout
         uses: actions/checkout@v7.0.1
@@ -45,11 +48,6 @@ jobs:
       # temporary global config that is gone by the time later steps run.
       - name: Setup | Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Setup | Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       # The same source drop the release workflow attaches: `git archive` plus
       # the two npm-generated web assets, so no Node.js is needed inside the

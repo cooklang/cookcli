@@ -43,9 +43,8 @@ Inside a Fedora container:
 
 ```bash
 docker run --rm -it -v "$PWD:/src:Z" -w /src fedora:latest bash -c '
-  dnf install -y rpm-build gcc git tar xz curl &&
-  curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal &&
-  source "$HOME/.cargo/env" &&
+  dnf install -y rpm-build gcc git tar xz rust cargo &&
+  git config --global --add safe.directory /src &&
   ./packaging/fedora/build-rpm.sh'
 ```
 
