@@ -260,7 +260,7 @@ Output formatting is centralized in `src/util/` modules. Each format has its own
 4. Add route in the UI router
 
 ### Modifying Styles
-1. Edit component classes in `static/css/input.css`
+1. Edit component classes in `static/css/components.css`
 2. Run `make css` or `npm run build-css` to compile
 3. For development, use `npm run watch-css` for auto-rebuild
 4. Custom colors and utilities can be added to `static/css/input.css` (`@theme`) and component classes to `static/css/components.css`
