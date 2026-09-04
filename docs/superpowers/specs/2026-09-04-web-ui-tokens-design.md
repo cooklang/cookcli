@@ -42,7 +42,7 @@ Structure, in order:
 
 ### 1.2 Tokens
 
-Seventeen semantic colour tokens plus two radii, two shadows. Values are the PR's final values, verbatim.
+Twenty semantic colour tokens plus two radii, two shadows. Values are the PR's final values, verbatim.
 
 | Token | Light | Dark |
 |---|---|---|

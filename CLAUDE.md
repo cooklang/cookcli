@@ -188,7 +188,7 @@ The web UI uses server-side rendering with Askama templates:
 - Tailwind CSS for utility-first styling
 - Custom components defined in `static/css/input.css`
 - Compiled CSS output in `static/css/output.css`
-- Configuration in `tailwind.config.js`
+- Tailwind is configured in `static/css/input.css` (`@source`, `@custom-variant`, `@theme`); components live in `static/css/components.css`
 
 ### Key Templates
 - `base.html` - Common layout with navigation and search
@@ -263,7 +263,7 @@ Output formatting is centralized in `src/util/` modules. Each format has its own
 1. Edit component classes in `static/css/input.css`
 2. Run `make css` or `npm run build-css` to compile
 3. For development, use `npm run watch-css` for auto-rebuild
-4. Custom colors and utilities can be added to `tailwind.config.js`
+4. Custom colors and utilities can be added to `static/css/input.css` (`@theme`) and component classes to `static/css/components.css`
 
 ### Frontend Development Workflow
 1. Install dependencies: `npm install`

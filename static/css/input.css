@@ -1,19 +1,22 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
 /* Tailwind v4 is CSS-first. The two things tailwind.config.js used to own —
    class-based dark mode and the list of files to scan for class names — are
-   declared here instead. */
+   declared here instead. `source(none)` disables Tailwind's automatic
+   whole-repo auto-detection, so only the paths named below are scanned. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @source "../../templates";
-@source "../../static/js";
+@source "../../static/js/*.js";
+@source "../../static/js/src";
+@source not "../../static/js/editor.bundle.js";
 /* The one Rust file that emits class names: method_classes() for the API
    docs method badge. */
 @source "../../src/web/templates.rs";
 
 /* ============================================================
    DESIGN TOKENS
-   Seventeen semantic colour names plus radii and shadows, defined once per
+   Twenty semantic colour names plus radii and shadows, defined once per
    theme. Every colour in the UI resolves through one of these. Do not
    introduce raw hex values or Tailwind palette utilities in templates.
    --accent-ink is the foreground for text sitting ON a filled --accent
@@ -121,8 +124,8 @@
    TYPE SCALE
    Seven steps, each with a role and a line-height chosen for that role.
    `display` is 30px — the size main's page titles have always been — the
-   rest are the PR #456 scale. Tailwind's own names are aliased onto the
-   steps so a stray `text-sm` cannot drift off the scale.
+   rest are the PR #456 scale. Tailwind's xs/sm/base/lg/2xl/3xl names are
+   aliased onto the steps so a stray `text-sm` cannot drift off the scale.
    ============================================================ */
 @theme {
     --text-display: 30px;
@@ -150,17 +153,17 @@
     --text-label--letter-spacing: .06em;
 
     --text-xs:   var(--text-meta);
-    --text-xs--line-height: 1.4;
+    --text-xs--line-height: var(--text-meta--line-height);
     --text-sm:   var(--text-body);
-    --text-sm--line-height: 1.5;
+    --text-sm--line-height: var(--text-body--line-height);
     --text-base: var(--text-read);
-    --text-base--line-height: 1.6;
+    --text-base--line-height: var(--text-read--line-height);
     --text-lg:   var(--text-title);
-    --text-lg--line-height: 1.35;
+    --text-lg--line-height: var(--text-title--line-height);
     --text-2xl:  var(--text-display);
-    --text-2xl--line-height: 1.2;
+    --text-2xl--line-height: var(--text-display--line-height);
     --text-3xl:  var(--text-display);
-    --text-3xl--line-height: 1.2;
+    --text-3xl--line-height: var(--text-display--line-height);
 }
 
 body {
@@ -178,6 +181,8 @@ body {
     :root,
     .dark,
     .cooking-overlay {
+        color-scheme: light;
+
         --bg:            #ffffff;
         --surface:       #ffffff;
         --surface-sunk:  #f5f4f2;

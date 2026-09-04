@@ -142,13 +142,13 @@ Custom component classes:
 │   └── recipe.html     # Single recipe view
 ├── static/             # Static assets
 │   └── css/
-│       ├── input.css   # Tailwind input with custom classes
-│       └── output.css  # Compiled CSS (generated)
+│       ├── input.css      # Tailwind config (@source, @custom-variant, @theme) and tokens
+│       ├── components.css # Component classes (.card, .btn, .nav-pill, ...)
+│       └── output.css     # Compiled CSS (generated)
 ├── src/server/
 │   ├── mod.rs         # Server setup and routing
 │   ├── ui.rs          # UI request handlers
 │   └── templates.rs   # Template data structures
-├── tailwind.config.js  # Tailwind configuration
 └── package.json        # NPM dependencies
 ```
 

@@ -13,7 +13,6 @@
     :focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
-        border-radius: var(--radius-control);
     }
 
     /* ---------- Surfaces ---------- */
@@ -87,10 +86,11 @@
 
     .btn:hover {
         background: var(--surface-sunk);
-        border-color: var(--border-strong);
     }
 
     .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
+    .btn-primary:active { background: var(--accent); filter: brightness(.97); }
+    .btn-danger:active { background: var(--danger); filter: brightness(.97); }
 
     .btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
 
@@ -202,6 +202,11 @@
 
     .stepper input:focus { outline: none; }
 
+    .stepper:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
     .search-input {
         width: 100%;
         height: 44px;
@@ -218,6 +223,7 @@
     .search-input:focus {
         outline: none;
         border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
     }
 
     /* ---------- Navigation ---------- */
@@ -488,7 +494,8 @@
     }
 
     .image-step {
-        @apply w-full max-h-80 object-contain rounded-xl;
+        @apply w-full max-h-80 object-contain;
+        border-radius: var(--radius-card);
     }
 
     .recipe-image-placeholder {
@@ -547,7 +554,7 @@
         .stepper button { width: 44px; }
         .icon-btn { width: 44px; height: 44px; }
         .ref-checkbox,
-        #list-content input[type="checkbox"] { width: 24px; height: 24px; }
+        .list-checkbox { width: 24px; height: 24px; }
         .pantry-actions { opacity: 1; }
     }
 }
