@@ -93,6 +93,9 @@ test.describe('Recipes index sorting', () => {
   });
 
   test('corrupt saved state falls back to defaults instead of throwing', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+
     await page.evaluate(() => sessionStorage.setItem('recipes-sort', '{not json'));
     await page.reload();
 
@@ -106,6 +109,8 @@ test.describe('Recipes index sorting', () => {
     await page.locator('#sort-dir').click();
     await expect(page.locator('#sort-dir')).toHaveText('↓');
     expect(await recipeNames(page)).toEqual([...before].reverse());
+
+    expect(pageErrors).toEqual([]);
   });
 
   test('controls stay hidden when there is nothing to sort', async ({ page }) => {
