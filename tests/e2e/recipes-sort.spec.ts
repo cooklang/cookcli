@@ -45,20 +45,28 @@ test.describe('Recipes index sorting', () => {
     expect(desc).toEqual([...asc].reverse());
   });
 
-  test('sorting by modified date reorders and defaults to newest first', async ({ page }) => {
+  test('sorting by modified date defaults to newest first', async ({ page }) => {
     const byName = await recipeNames(page);
+    const timestamps = await page
+      .locator('#recipes-grid [data-type="recipe"]')
+      .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-modified'))));
+    // A fresh checkout gives every seed file the same mtime (second precision),
+    // so "reorders" is only meaningful when at least two values differ.
+    const distinct = new Set(timestamps).size > 1;
+
     await page.locator('#sort-field').selectOption('modified');
     await expect(page.locator('#sort-dir')).toHaveText('↓');
 
     const newestFirst = await recipeNames(page);
-    expect(newestFirst).not.toEqual(byName);
-    expect([...newestFirst].sort()).toEqual([...byName].sort());
+    expect([...newestFirst].sort()).toEqual([...byName].sort()); // same set
 
-    const timestamps = await page
+    const sorted = await page
       .locator('#recipes-grid [data-type="recipe"]')
       .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-modified'))));
-    const descending = [...timestamps].sort((a, b) => b - a);
-    expect(timestamps).toEqual(descending);
+    expect(sorted).toEqual([...sorted].sort((a, b) => b - a));
+    if (distinct) {
+      expect(newestFirst).not.toEqual(byName);
+    }
   });
 
   test('directories stay grouped above recipes in both directions', async ({ page }) => {
