@@ -74,10 +74,10 @@
         }
 
         const staticMode = window.__STATIC_MODE__ === true;
-        const kbd = 'class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono"';
+        const kbd = 'class="px-2 py-1 bg-sunk rounded text-sm font-mono"';
         const row = (label, keys) => `
             <div class="flex justify-between items-center">
-                <span class="text-gray-600 dark:text-gray-400">${label}</span>
+                <span class="text-muted">${label}</span>
                 <span>${keys}</span>
             </div>`;
         const k = (s) => `<kbd ${kbd}>${s}</kbd>`;
@@ -112,7 +112,7 @@
 
         const shoppingSection = staticMode ? '' : `
             <div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Shopping List</h3>
+                <h3 class="font-semibold text-text mb-3">Shopping List</h3>
                 <div class="space-y-2">
                     ${row('Clear all items', k('c'))}
                 </div>
@@ -122,10 +122,10 @@
         modal.id = 'keyboard-shortcuts-modal';
         modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
-                <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">Keyboard Shortcuts</h2>
-                    <button onclick="closeShortcutsHelp()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            <div class="card shadow-[var(--shadow-overlay)] max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+                <div class="p-6 border-b border-line flex justify-between items-center">
+                    <h2 class="text-title font-bold text-text">Keyboard Shortcuts</h2>
+                    <button onclick="closeShortcutsHelp()" class="icon-btn" aria-label="Close">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
@@ -134,11 +134,11 @@
                 <div class="p-6 overflow-y-auto max-h-[60vh]">
                     <div class="grid md:grid-cols-2 gap-6">
                         <div>
-                            <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Navigation</h3>
+                            <h3 class="font-semibold text-text mb-3">Navigation</h3>
                             <div class="space-y-2">${navRows.join('')}</div>
                         </div>
                         <div>
-                            <h3 class="font-semibold text-gray-900 dark:text-white mb-3">General</h3>
+                            <h3 class="font-semibold text-text mb-3">General</h3>
                             <div class="space-y-2">
                                 ${row('Toggle theme', k('t'))}
                                 ${row('Show shortcuts', k('?'))}
@@ -146,14 +146,14 @@
                             </div>
                         </div>
                         <div>
-                            <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Recipe Page</h3>
+                            <h3 class="font-semibold text-text mb-3">Recipe Page</h3>
                             <div class="space-y-2">${recipeRows.join('')}</div>
                         </div>
                         ${shoppingSection}
                     </div>
                 </div>
-                <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500 dark:text-gray-400">
-                    Press <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono">Esc</kbd> to close
+                <div class="p-4 border-t border-line text-center text-sm text-faint">
+                    Press <kbd class="px-1 py-0.5 bg-sunk rounded text-xs font-mono">Esc</kbd> to close
                 </div>
             </div>
         `;
@@ -374,6 +374,10 @@
             scaleInput.dispatchEvent(new Event('change'));
         }
     }
+
+    // The recipe page's −/+ stepper buttons call this too, so the clamping,
+    // rounding and no-op guard live in exactly one place.
+    window.adjustScale = adjustScale;
 
     // Shopping list page specific shortcuts
     function handleShoppingListShortcuts(event, key) {
