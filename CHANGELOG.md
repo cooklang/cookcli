@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.36.0](https://github.com/cooklang/cookcli/compare/v0.35.0...v0.36.0) (2026-09-04)
+
+
+### Features
+
+* **cli:** add `cook completions <shell>` for shell completion scripts ([56c5376](https://github.com/cooklang/cookcli/commit/56c5376a9cba5c57600147c5efd0e4858f990a7c))
+* **cli:** add `cook completions <shell>` for shell completion scripts ([a1fc3f0](https://github.com/cooklang/cookcli/commit/a1fc3f0244998031ee30e009958bfa6da77c0668)), closes [#467](https://github.com/cooklang/cookcli/issues/467)
+* **packaging:** add Fedora RPM packaging ([97447ab](https://github.com/cooklang/cookcli/commit/97447ab1fb4cfe2145236e93c1ba7feefbd5ea58))
+* **server:** add --cors-origin and --cors-allow-credentials ([979addf](https://github.com/cooklang/cookcli/commit/979addfbeae20fed4d3bcbb948a485535b995a32)), closes [#465](https://github.com/cooklang/cookcli/issues/465)
+* **server:** build the CORS layer from the validated config ([26f7bf0](https://github.com/cooklang/cookcli/commit/26f7bf086a860fe1a202b037377edccdf17ac2ba))
+* **server:** make CORS configuration configurable ([282eaaa](https://github.com/cooklang/cookcli/commit/282eaaa2b909ac43b50b5e27adef0237887763ee))
+* **server:** refuse cross-origin writes under the wildcard default ([d314e78](https://github.com/cooklang/cookcli/commit/d314e780bac2394b03d63e8773866d3ab8131b1c))
+* **server:** validate CORS origin and credential flags ([85d3f95](https://github.com/cooklang/cookcli/commit/85d3f95ff48f60496703b4142a65953d61adbb06))
+
+
+### Bug Fixes
+
+* **build:** emit search index as a script so file:// search works ([0234e89](https://github.com/cooklang/cookcli/commit/0234e8954cb511acaad50fc8a7ba55b12013efb5))
+* **build:** emit search index as a script so file:// search works ([792338f](https://github.com/cooklang/cookcli/commit/792338fc3bd42248ab1695448f5d9c022e2ff6ae)), closes [#471](https://github.com/cooklang/cookcli/issues/471)
+* **build:** harden search index load and scope the file:// claim ([091a916](https://github.com/cooklang/cookcli/commit/091a916af85f40161a8ac0ec9f086a7854d7b024))
+* **build:** wire resolved --lang to &lt;html lang&gt; attribute ([1c13d44](https://github.com/cooklang/cookcli/commit/1c13d447b048d631aa2ff827bc96633de063542b)), closes [#470](https://github.com/cooklang/cookcli/issues/470)
+* **packaging:** attach the built RPMs to the release ([d70964f](https://github.com/cooklang/cookcli/commit/d70964fdbdc3a042f8bb2419d9ccc1e237c1abef))
+* **packaging:** give the build root the toolchain the spec asks for ([c52da27](https://github.com/cooklang/cookcli/commit/c52da27dd67f045e6a802d3fb06b1bcb3fdd896f))
+* **packaging:** keep the packaged binary stripped ([253bf34](https://github.com/cooklang/cookcli/commit/253bf34f051e21b96adf2698384efdd5a49c1629))
+* **packaging:** make the RPM workflow build again ([641f530](https://github.com/cooklang/cookcli/commit/641f530f18f97c8426a22306a96d632a42886eaa))
+* **server:** accept bracketed IPv6 CORS origins ([8172463](https://github.com/cooklang/cookcli/commit/8172463d8cf1cb86d8b5e27f0d91ea7f1f18492c))
+* **server:** read the write guard's host from the Host header only ([abe2976](https://github.com/cooklang/cookcli/commit/abe2976f63e6f89fafb1716c88909b90a1e1431f))
+* **server:** reject CORS origins that could never match ([0e76be4](https://github.com/cooklang/cookcli/commit/0e76be4bb68878b06af12fb48e723f23b695a5e9))
+* **server:** reject CORS origins with an empty host ([b32ac93](https://github.com/cooklang/cookcli/commit/b32ac93d0fa1e0b331b420f9672323c725873f69))
+* **server:** stop deriving the new-recipe host from a forgeable header ([ea9138b](https://github.com/cooklang/cookcli/commit/ea9138be2f3e8524eaaa9474976e24e15d767532))
+
 ## [0.35.0](https://github.com/cooklang/cookcli/compare/v0.34.0...v0.35.0) (2026-08-30)
 
 
