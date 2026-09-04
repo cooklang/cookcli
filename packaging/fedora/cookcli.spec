@@ -36,7 +36,8 @@ BuildRequires:  gcc
 BuildRequires:  rust
 BuildRequires:  cargo
 
-# The release profile strips the binary; there is nothing left to split off.
+# No debuginfo subpackage: see the -Cdebuginfo=0 in the build section, which
+# keeps the binary free of anything to split off.
 %global debug_package %{nil}
 
 %description
@@ -54,6 +55,14 @@ package manager.
 %build
 %set_build_flags
 export CARGO_NET_OFFLINE=true
+
+# %%set_build_flags puts -Cdebuginfo=2 -Cstrip=none in RUSTFLAGS, which comes
+# after the release profile's own settings and so wins: without this the
+# binary ships unstripped with full DWARF, even though debug_package is nil so
+# nothing consumes it. Restoring the profile's intent also keeps the LTO link
+# (codegen-units=1, one huge unit) inside a normal builder's memory.
+# (Escaped as %%%%: rpm expands macros inside spec comments too.)
+export RUSTFLAGS="${RUSTFLAGS} -Cdebuginfo=0 -Cstrip=symbols"
 
 FEATURES="server,import,lsp"
 %if %{with sync}
