@@ -110,7 +110,7 @@
             <p class="text-gray-600 text-sm">{{ description }}</p>
             {% when None %}
             {% endmatch %}
-            {% if !item.tags.is_empty() %}
+            {% if !item.tags.is_empty() || item.nutrition_kcal.is_some() %}
             <div class="mt-3 flex flex-wrap gap-2">
                 {% for tag in item.tags.iter().take(3) %}
                 <span class="text-xs bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">{{ tag }}</span>
@@ -118,6 +118,14 @@
                 {% if item.tags.len() > 3 %}
                 <span class="text-xs text-gray-500">+{{ item.tags.len() - 3 }}</span>
                 {% endif %}
+                {% match item.nutrition_kcal %}
+                {% when Some with (kcal) %}
+                <span class="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
+                    <svg class="w-3 h-3 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c1 3-2 4-2 7a2 2 0 0 0 4 0c1 1 2 2.5 2 4.5A6 6 0 0 1 4 13.5C4 9 8 7 8 3c1.5 1 2 2.5 1.5 4C10 5 11 3.5 12 2Z"/></svg>
+                    {{ kcal }}
+                </span>
+                {% when None %}
+                {% endmatch %}
             </div>
             {% endif %}
             </div>

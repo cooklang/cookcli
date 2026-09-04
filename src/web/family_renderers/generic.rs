@@ -20,36 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! Recipe rendering: Askama templates, view-model builders, i18n and the
-//! embedded static assets.
-//!
-//! Shared by `cook server` (renders them over HTTP) and `cook build` (renders
-//! them to a static site), so this layer stays compiled even when the `server`
-//! feature is off.
+use super::FamilyRenderer;
 
-use rust_embed::RustEmbed;
+/// Fallback renderer for any family without a specific one: list entries are
+/// shown as-authored (`"value%unit"` -> `"value unit"`), mapping entries as
+/// `"field: value"`. No icons. Used by [`super::renderer_for`] whenever a
+/// family key doesn't match a specific renderer.
+pub(super) struct GenericRenderer;
 
-pub mod builders;
-mod family_renderers;
-mod i18n;
-pub mod language;
-pub mod menus;
-pub mod templates;
-
-/// API reference content for the `/api-docs` page. Server-only.
-#[cfg(feature = "server")]
-pub mod api_docs;
-
-/// The same reference, rendered to the Markdown checked in as `docs/api.md`.
-///
-/// Only `tests/api_docs_md_test.rs` calls this. The `cook` binary declares its
-/// own copy of this module tree and never reaches the renderer, so without the
-/// allow every helper in here is dead code in that build.
-#[cfg(feature = "server")]
-#[allow(dead_code)]
-pub mod api_docs_md;
-
-/// Static assets (CSS, JS, icons) embedded into the binary at compile time.
-#[derive(RustEmbed)]
-#[folder = "static/"]
-pub struct StaticFiles;
+impl FamilyRenderer for GenericRenderer {}

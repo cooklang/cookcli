@@ -36,6 +36,20 @@ meta-total-time = Denbora guztira
 meta-servings = Anoa
 meta-difficulty = Zailtasuna
 meta-description = Deskribapena
+meta-created-by = Sortzailea
+meta-created-at = Sortze data
+meta-modified-by = Aldatzailea
+meta-modified-at = Aldatze data
+
+# Nutrizioa (`nutrition:` metadatu pertsonalizatuak)
+nutrition-per-serving = anoko
+nutrition-proteins = proteinak
+nutrition-lipids = gantzak
+nutrition-saturated-fat = gantz aseak
+nutrition-carbohydrates = karbohidratoak
+nutrition-sugars = azukreak
+nutrition-fibers = zuntza
+nutrition-salt = gatza
 
 # Recipe Types
 recipe-type-menu = Menua

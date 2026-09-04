@@ -36,6 +36,20 @@ meta-total-time = Total tid
 meta-servings = Portioner
 meta-difficulty = Svårighet
 meta-description = Beskrivning
+meta-created-by = Skapad av
+meta-created-at = Skapad
+meta-modified-by = Ändrad av
+meta-modified-at = Ändrad
+
+# Nutrition (anpassad `nutrition:`-metadata)
+nutrition-per-serving = per portion
+nutrition-proteins = protein
+nutrition-lipids = fett
+nutrition-saturated-fat = mättat fett
+nutrition-carbohydrates = kolhydrater
+nutrition-sugars = socker
+nutrition-fibers = fibrer
+nutrition-salt = salt
 
 # Recipe Types
 recipe-type-menu = Meny

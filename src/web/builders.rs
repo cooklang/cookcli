@@ -68,7 +68,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         };
 
         // Extract tags, image, is_menu, and file timestamps if this is a recipe
-        let (tags, image_path, is_menu, modified_at, created_at) =
+        let (tags, nutrition_kcal, image_path, is_menu, modified_at, created_at) =
             if let Some(ref recipe) = child.recipe {
                 let img_path = recipe.title_image().clone().and_then(|img| {
                     if img.starts_with("http://") || img.starts_with("https://") {
@@ -108,13 +108,14 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
 
                 (
                     recipe.tags(),
+                    crate::web::family_renderers::extract_nutrition_kcal(recipe.metadata()),
                     img_path,
                     recipe.is_menu(),
                     modified_at,
                     created_at,
                 )
             } else {
-                (Vec::new(), None, false, None, None)
+                (Vec::new(), None, None, false, None, None)
             };
 
         items.push(RecipeItem {
@@ -128,6 +129,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             },
             description: None,
             tags,
+            nutrition_kcal,
             image_path,
             is_menu,
             modified_at,
@@ -715,10 +717,19 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
+                // A key prefixed with "." is hidden from the recipe page.
+                if key_str.starts_with('.') {
+                    continue;
+                }
 
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
+
+        let custom_lists = crate::web::family_renderers::build_custom_list_families(
+            recipe.metadata.map_filtered(),
+            &lang,
+        );
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
@@ -740,6 +751,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
+            custom_lists,
         })
     };
 
@@ -1007,9 +1019,18 @@ fn build_menu_template_inner(
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
             if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+                // A key prefixed with "." is hidden from the recipe page.
+                if key_str.starts_with('.') {
+                    continue;
+                }
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
+
+        let custom_lists = crate::web::family_renderers::build_custom_list_families(
+            recipe.metadata.map_filtered(),
+            &lang,
+        );
 
         Some(RecipeMetadata {
             servings: get_field("servings"),
@@ -1029,6 +1050,7 @@ fn build_menu_template_inner(
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
+            custom_lists,
         })
     };
 

@@ -36,6 +36,20 @@ meta-total-time = Gesamtzeit
 meta-servings = Portionen
 meta-difficulty = Schwierigkeit
 meta-description = Beschreibung
+meta-created-by = Erstellt von
+meta-created-at = Erstellt am
+meta-modified-by = Geändert von
+meta-modified-at = Geändert am
+
+# Nutrition (benutzerdefinierte `nutrition:`-Metadaten)
+nutrition-per-serving = pro Portion
+nutrition-proteins = Eiweiß
+nutrition-lipids = Fett
+nutrition-saturated-fat = gesättigte Fettsäuren
+nutrition-carbohydrates = Kohlenhydrate
+nutrition-sugars = Zucker
+nutrition-fibers = Ballaststoffe
+nutrition-salt = Salz
 
 # Recipe Types
 recipe-type-menu = Menü
