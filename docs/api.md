@@ -8,7 +8,7 @@ Start the server with [`cook server`](server.md); every endpoint below is served
 
 - **Base URL:** `http://localhost:9080/api`
 - **Authentication:** None. Anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network.
-- **CORS:** All origins are allowed, for the methods GET, POST, PUT and DELETE.
+- **CORS:** `GET` is allowed from any origin. A cross-origin request that would modify recipes is refused with `403` unless the server was started with a matching `--cors-origin <ORIGIN>`. Requests with no `Origin` header — `curl` and other non-browser clients — are unaffected. `content-type` is always an allowed request header.
 - **Request size limit:** 1 MB.
 - **Content type:** JSON in and out, except where noted — raw recipe text is `text/plain`.
 
@@ -21,6 +21,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
+- `403` — a cross-origin request tried to modify recipes. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `500` — the server could not read or write a file.
 

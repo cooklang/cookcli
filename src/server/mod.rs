@@ -34,7 +34,7 @@ use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path},
-    http::{header, HeaderValue, Method, Response, StatusCode},
+    http::{header, Response, StatusCode},
     routing::{get, post},
     Router,
 };
@@ -43,9 +43,10 @@ use clap::Args;
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::services::ServeDir;
 use tracing::{error, info};
 
+mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
@@ -96,12 +97,33 @@ pub struct ServerArgs {
     #[arg(long, default_value_t = false)]
     open: bool,
 
-    /// Enable cors verification
+    /// Origin allowed to make cross-origin browser requests (repeatable)
     ///
-    /// When enabled, the POST /new path require a seemless
-    /// Origin and Host header.
-    #[arg(long = "no-cors", action = clap::ArgAction::SetFalse)]
-    cors: bool,
+    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. Use "*"
+    /// for any origin, which is the default. Under a wildcard origin the
+    /// server answers cross-origin reads but refuses cross-origin writes with
+    /// 403; naming explicit origins lets those origins write too. "*" cannot
+    /// be combined with explicit origins. Requests with no Origin header --
+    /// curl and other non-browser clients -- are never affected.
+    #[arg(long, value_name = "ORIGIN")]
+    cors_origin: Vec<String>,
+
+    /// Allow cross-origin requests to carry cookies and credentials
+    ///
+    /// Requires at least one explicit --cors-origin; browsers reject
+    /// credentialed requests against a wildcard origin.
+    #[arg(long, default_value_t = false)]
+    cors_allow_credentials: bool,
+
+    /// Disable same-origin enforcement on requests that modify recipes
+    ///
+    /// By default a request is rejected unless its Origin matches the Host it
+    /// was sent to, or is named by --cors-origin. This has nothing to do with
+    /// the cross-origin read policy the other --cors-* flags configure. Use it
+    /// only when a reverse proxy rewrites Host in a way that cannot be
+    /// expressed with --cors-origin. The former spelling --no-cors still works.
+    #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
+    csrf_check: bool,
 }
 
 impl ServerArgs {
@@ -119,6 +141,10 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     };
     let addr = SocketAddr::from((addr, args.port));
     let open = args.open;
+
+    // Validate before binding or printing anything, so a bad flag combination
+    // fails immediately rather than after the "Listening on ..." banner.
+    let cors = cors::CorsConfig::from_args(&args.cors_origin, args.cors_allow_credentials)?;
 
     let state = build_state(ctx, args)?;
 
@@ -190,9 +216,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     // Capture url_prefix before state is consumed by with_state.
     let url_prefix_for_features = state.url_prefix.clone();
+    let csrf_check = state.csrf_check;
 
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
+
+    let cors_layer = cors.layer();
+    let cors = Arc::new(cors);
 
     let app = app
         .with_state(state)
@@ -203,12 +233,20 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         ))
         .layer(axum::middleware::from_fn(
             crate::web::language::language_middleware,
+        ));
+
+    // Inside the CORS layer, so preflights are answered before it runs.
+    // `--no-csrf-check` omits it entirely.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(
+            cors,
+            cors::write_guard,
         ))
-        .layer(
-            CorsLayer::new()
-                .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]),
-        );
+    } else {
+        app
+    };
+
+    let app = app.layer(cors_layer);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
@@ -317,7 +355,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
-        cors: args.cors,
+        csrf_check: args.csrf_check,
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
         #[cfg(feature = "sync")]
@@ -366,7 +404,9 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
-    pub cors: bool,
+    /// When true, requests that modify recipes must be same-origin or come
+    /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
+    pub csrf_check: bool,
     /// Serializes access to `.shopping-checked` within this process.
     /// File-level `flock` doesn't prevent two tasks in the *same* process
     /// from racing on the file (the kernel treats them as one lock owner),
