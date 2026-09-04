@@ -1,0 +1,553 @@
+/* ============================================================
+   COMPONENT LAYER
+   Imported from input.css after the token registration. Everything here
+   resolves through the tokens; never introduce raw hex values or Tailwind
+   palette utilities. Dimensions match what main rendered before the token
+   migration — this file changes how things look, not how big they are.
+   Colour transitions are deliberately absent: transitioning a token-valued
+   property races Chrome's custom-property invalidation when .dark flips,
+   and elements keep the outgoing theme's colour until the next recalc.
+   ============================================================ */
+@layer components {
+    /* ---------- Focus ---------- */
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+    }
+
+    /* ---------- Surfaces ---------- */
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .card-head h2,
+    .card-head h3 {
+        margin: 0;
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .card-head.plain h2,
+    .card-head.plain h3 {
+        font-size: var(--text-body);
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--text);
+    }
+
+    .card-head .count {
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The nav container: main's rounded card, not sticky. */
+    .nav-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        margin-bottom: 2rem;
+    }
+
+    /* ---------- Controls ---------- */
+    /* 40px: main's px-4 py-2 buttons at 16px text. */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 16px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-body);
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+    }
+
+    .btn:hover {
+        background: var(--surface-sunk);
+        border-color: var(--border-strong);
+    }
+
+    .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
+
+    .btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
+
+    /* One accent-filled button per view. Everything else is neutral. */
+    .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-ink);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent);
+        filter: brightness(1.06);
+    }
+
+    /* The commit half of a destructive confirmation. */
+    .btn-danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: var(--danger-ink);
+    }
+
+    .btn-danger:hover {
+        background: var(--danger);
+        filter: brightness(1.06);
+    }
+
+    .icon-btn {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .icon-btn:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .icon-btn svg { width: 20px; height: 20px; }
+
+    .select {
+        height: 40px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .select:hover { background: var(--surface-sunk); }
+
+    .stepper {
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+    }
+
+    .stepper button {
+        width: 32px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: var(--text-read);
+    }
+
+    .stepper button:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .stepper button:active { background: var(--surface-sunk); filter: brightness(.97); }
+
+    .stepper input {
+        width: 56px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        text-align: center;
+        font-size: var(--text-body);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+    .stepper input::-webkit-outer-spin-button,
+    .stepper input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .stepper input:focus { outline: none; }
+
+    .search-input {
+        width: 100%;
+        height: 44px;
+        padding: 0 16px 0 40px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+    }
+
+    .search-input::placeholder { color: var(--text-faint); }
+
+    .search-input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    /* ---------- Navigation ---------- */
+    .nav-pill {
+        padding: .5rem 1.25rem;
+        border-radius: 9999px;
+        font-size: var(--text-body);
+        font-weight: 500;
+        color: var(--text-muted);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .nav-pill:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .nav-pill.active {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* ---------- Lists ---------- */
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: var(--text-body);
+    }
+
+    .row + .row { border-top: 1px solid var(--border); }
+
+    .row .row-name { flex: 1; min-width: 0; }
+
+    .row-value {
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .row-note {
+        color: var(--text-faint);
+        font-size: var(--text-meta);
+    }
+
+    /* Recipe ingredient rows: main's tinted row, on the sunk surface. */
+    .ingredient-list { list-style: none; margin: 0; padding: 0; }
+
+    .ingredient-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .5rem .75rem;
+        border-radius: var(--radius-control);
+        background: var(--surface-sunk);
+    }
+
+    .section-label {
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin: 18px 0 8px;
+        padding: 0 14px;
+    }
+
+    /* ---------- Text ---------- */
+    .metaline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 0;
+        font-size: var(--text-ui);
+        color: var(--text-muted);
+    }
+
+    .metaline > *:not(:last-child)::after {
+        content: "·";
+        margin: 0 8px;
+        color: var(--text-faint);
+    }
+
+    .metaline b { font-weight: 600; color: var(--text); }
+
+    /* Recipe-reference links. --info is a warm orange, so the underline is
+       what makes it read as a link. */
+    a.text-info { text-decoration: underline; text-underline-offset: 2px; }
+
+    /* ---------- Status ---------- */
+    .item-status-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .item-status-dot.in-stock { background: var(--ok); }
+
+    .item-status-dot.low-stock { background: var(--accent); }
+
+    .item-status-dot.out-of-stock { background: var(--danger); }
+
+    /* ---------- Inline recipe entities ---------- */
+    /* Weight + tint, not bordered gradient pills, so they stop competing with
+       the prose they sit inside. */
+    .ingredient-badge {
+        color: var(--accent-text);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* Distinguished from an ingredient by texture, not hue, so the split is
+       visible to red-green deficient readers. */
+    .cookware-badge {
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+        text-decoration: underline dotted var(--inactive);
+        text-underline-offset: 3px;
+    }
+
+    .timer-badge {
+        padding: 1px 6px;
+        border-radius: 5px;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /* main's 32px circle, on a flat accent tint. */
+    .step-number {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-size: var(--text-body);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 500;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    /* Neutral bordered pill. The metadata-* key classes stay in the markup as
+       hooks but carry no colour of their own any more. */
+    .metadata-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: .25rem .75rem;
+        border-radius: 9999px;
+        font-size: var(--text-body);
+        font-weight: 500;
+        white-space: nowrap;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    .metadata-pill svg {
+        width: 1rem;
+        height: 1rem;
+        margin-right: .5rem;
+    }
+
+    /* ---------- Recipes index ---------- */
+    /* main's tall card: block layout, p-6 content from the template, no
+       gradient stripe, no scale transform. */
+    .recipe-card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        text-decoration: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .recipe-card:hover { border-color: var(--border-strong); }
+
+    .recipe-card-icon {
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        font-size: 24px;
+        margin-bottom: 1rem;
+    }
+
+    /* An <h2>, not an <h3>: the index has an <h1> and nothing between. */
+    .recipe-card-title {
+        display: block;
+        margin: 0 0 .5rem;
+        font-size: var(--text-title);
+        font-weight: 700;
+        line-height: 1.35;
+        color: var(--text);
+    }
+
+    .recipe-card-sub {
+        display: block;
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+    }
+
+    /* ---------- Recipe page ---------- */
+    .step-list { list-style: none; margin: 0; padding: 0; }
+
+    /* main's per-step box. */
+    .step-box {
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        padding: 1rem;
+    }
+
+    /* Step prose keeps main's leading-8 (2.0) on 16px text — the one place
+       the reading step's line-height is overridden, by decision. */
+    .step-body {
+        font-size: var(--text-read);
+        line-height: 2;
+        color: var(--text);
+    }
+
+    .step-refs {
+        margin-top: .5rem;
+        padding-left: 1rem;
+        border-left: 2px solid var(--accent);
+        font-size: var(--text-body);
+        color: var(--text-muted);
+    }
+
+    .recipe-note {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        background: var(--surface-sunk);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .image-step {
+        @apply w-full max-h-80 object-contain rounded-xl;
+    }
+
+    .recipe-image-placeholder {
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--accent-text);
+        @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
+    }
+
+    /* ---------- Pantry ---------- */
+    /* main's four-line stat block. The transparent border keeps the box from
+       shifting when a state border appears. */
+    .pantry-item {
+        background: var(--surface-sunk);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        padding: 1rem;
+    }
+
+    .pantry-item:hover { border-color: var(--border); }
+
+    .pantry-item.out-of-stock {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+    }
+
+    .pantry-item.out-of-stock .quantity-display,
+    .pantry-item.out-of-stock .out-of-stock-icon {
+        color: var(--danger);
+        font-weight: 600;
+    }
+
+    .pantry-item.low-stock {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+    }
+
+    .pantry-item.low-stock .quantity-display,
+    .pantry-item.low-stock .out-of-stock-icon {
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* Row actions appear on hover or focus, as main's group-hover did. */
+    .pantry-actions { opacity: 0; }
+
+    .pantry-item:hover .pantry-actions,
+    .pantry-item:focus-within .pantry-actions { opacity: 1; }
+
+    /* ---------- Coarse pointers ---------- */
+    /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
+    @media (pointer: coarse) {
+        .btn { height: 44px; }
+        .select { height: 44px; }
+        .stepper { height: 46px; }
+        .stepper button { width: 44px; }
+        .icon-btn { width: 44px; height: 44px; }
+        .ref-checkbox,
+        #list-content input[type="checkbox"] { width: 24px; height: 24px; }
+        .pantry-actions { opacity: 1; }
+    }
+}
