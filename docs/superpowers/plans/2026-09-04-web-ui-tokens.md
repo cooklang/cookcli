@@ -607,6 +607,11 @@ body {
         font-size: var(--text-meta);
     }
 
+    /* Checkbox sizes live here, not in w-* / h-* utilities, so the
+       coarse-pointer override further down can actually win. */
+    .ref-checkbox { width: 16px; height: 16px; }
+    .list-checkbox { width: 20px; height: 20px; }
+
     /* Recipe ingredient rows: main's tinted row, on the sunk surface. */
     .ingredient-list { list-style: none; margin: 0; padding: 0; }
 
@@ -1938,7 +1943,7 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
                             {% when Some with (path) %}
                             {% if !static_mode %}
                             <input type="checkbox" checked
-                                   class="ref-checkbox w-4 h-4 accent-[var(--accent)] mr-2 shrink-0"
+                                   class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
                                    data-ref-path="{{ path }}"
                                    title="{{ tr.t("shopping-include-in-list") }}">
                             {% endif %}
@@ -1978,7 +1983,7 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
                             {% when Some with (path) %}
                             {% if !static_mode %}
                             <input type="checkbox" checked
-                                   class="ref-checkbox w-4 h-4 accent-[var(--accent)] mr-2 shrink-0"
+                                   class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
                                    data-ref-path="{{ path }}"
                                    title="{{ tr.t("shopping-include-in-list") }}">
                             {% endif %}

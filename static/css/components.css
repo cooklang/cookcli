@@ -308,6 +308,11 @@
         font-size: var(--text-meta);
     }
 
+    /* Checkbox sizes live here, not in w-* / h-* utilities, so the
+       coarse-pointer override further down can actually win. */
+    .ref-checkbox { width: 16px; height: 16px; }
+    .list-checkbox { width: 20px; height: 20px; }
+
     /* Recipe ingredient rows: main's tinted row, on the sunk surface. */
     .ingredient-list { list-style: none; margin: 0; padding: 0; }
 
