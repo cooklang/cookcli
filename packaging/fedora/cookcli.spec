@@ -16,7 +16,9 @@
 %bcond_without sync
 
 Name:           cookcli
-Version:        0.34.0
+# build-rpm.sh substitutes the version from Cargo.toml, so this only has to be
+# right when building the spec directly with rpmbuild.
+Version:        0.35.0
 Release:        1%{?dist}
 Summary:        Command-line interface for managing Cooklang recipes
 
@@ -82,5 +84,5 @@ target/release/cook completions fish > %{buildroot}%{_datadir}/fish/vendor_compl
 %{_datadir}/fish/vendor_completions.d/cook.fish
 
 %changelog
-* Thu Aug 27 2026 CookCLI maintainers - 0.34.0-1
-- Initial RPM packaging, generated from the 0.34.0 release sources.
+* Fri Sep 04 2026 CookCLI maintainers - 0.35.0-1
+- Initial RPM packaging, generated from the release sources.

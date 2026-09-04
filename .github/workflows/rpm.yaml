@@ -39,6 +39,13 @@ jobs:
       - name: Setup | Checkout
         uses: actions/checkout@v7.0.1
 
+      # The container runs as root while the checkout is owned by the runner
+      # user, which git rejects as "dubious ownership" — and `git archive`
+      # below would fail. actions/checkout only marks the directory safe in a
+      # temporary global config that is gone by the time later steps run.
+      - name: Setup | Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Setup | Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
@@ -49,6 +56,7 @@ jobs:
       # RPM build itself.
       - name: Build | RPM
         run: |
+          set -euo pipefail
           npm install
           npm run build-css
           npm run build-js
