@@ -376,15 +376,19 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
+      # A named download extracts the artifact's contents straight into
+      # `path`, so the tarball lands in source/, not in a directory named
+      # after the artifact.
       - name: Setup | Source tarball
         uses: actions/download-artifact@v8
         with:
           name: cook-source.tar.gz
+          path: source
 
       - name: Build | RPM
-        run: ./packaging/fedora/build-rpm.sh "$(ls cook-*/cook-*-source.tar.gz)"
+        run: ./packaging/fedora/build-rpm.sh "$(ls source/cook-*-source.tar.gz)"
 
-      # Named to match the `cook-*` pattern that upload_artifacts downloads,
+      # Named to match the `cook*` pattern that upload_artifacts downloads,
       # checksums and attaches to the release.
       - name: Release | Upload artifact
         uses: actions/upload-artifact@v7
@@ -404,8 +408,11 @@ jobs:
         with:
           pattern: cook-*
 
+      # `cook*` rather than `cook-*` for the files: the RPMs are named after
+      # the package, `cookcli-<version>-…rpm`, and a hyphen here would drop
+      # them from both the checksums and the release.
       - name: Setup | Checksums
-        run: for file in cook-*/cook-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: for file in cook*/cook*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
       - name: Setup | Publish Release
         run: gh release edit ${{ needs.release_please.outputs.tag_name }} --draft=false --repo=cooklang/cookcli
@@ -415,7 +422,7 @@ jobs:
       - name: Build | Add Artifacts to Release
         uses: softprops/action-gh-release@v3
         with:
-          files: cook-*/cook-*
+          files: cook*/cook*
           tag_name: ${{ needs.release_please.outputs.tag_name }}
 
   # Publish to crates.io
