@@ -1205,20 +1205,28 @@ test.describe('Recipes index sorting', () => {
     expect(desc).toEqual([...asc].reverse());
   });
 
-  test('sorting by modified date reorders and defaults to newest first', async ({ page }) => {
+  test('sorting by modified date defaults to newest first', async ({ page }) => {
     const byName = await recipeNames(page);
+    const timestamps = await page
+      .locator('#recipes-grid [data-type="recipe"]')
+      .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-modified'))));
+    // A fresh checkout gives every seed file the same mtime (second precision),
+    // so "reorders" is only meaningful when at least two values differ.
+    const distinct = new Set(timestamps).size > 1;
+
     await page.locator('#sort-field').selectOption('modified');
     await expect(page.locator('#sort-dir')).toHaveText('↓');
 
     const newestFirst = await recipeNames(page);
-    expect(newestFirst).not.toEqual(byName);
-    expect([...newestFirst].sort()).toEqual([...byName].sort());
+    expect([...newestFirst].sort()).toEqual([...byName].sort()); // same set
 
-    const timestamps = await page
+    const sorted = await page
       .locator('#recipes-grid [data-type="recipe"]')
       .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-modified'))));
-    const descending = [...timestamps].sort((a, b) => b - a);
-    expect(timestamps).toEqual(descending);
+    expect(sorted).toEqual([...sorted].sort((a, b) => b - a));
+    if (distinct) {
+      expect(newestFirst).not.toEqual(byName);
+    }
   });
 
   test('directories stay grouped above recipes in both directions', async ({ page }) => {
@@ -1251,6 +1259,13 @@ test.describe('Recipes index sorting', () => {
     await expect(page.locator('#sort-controls')).toBeVisible();
     await expect(page.locator('#sort-field')).toHaveValue('name');
     await expect(page.locator('#sort-dir')).toHaveText('↑');
+
+    // Prove the sorter script itself kept running past the corrupt value,
+    // not just that the controls rendered.
+    const before = await recipeNames(page);
+    await page.locator('#sort-dir').click();
+    await expect(page.locator('#sort-dir')).toHaveText('↓');
+    expect(await recipeNames(page)).toEqual([...before].reverse());
   });
 
   test('controls stay hidden when there is nothing to sort', async ({ page }) => {
@@ -1318,7 +1333,7 @@ Replace the whole file with:
             <option value="modified">{{ tr.t("sort-modified") }}</option>
             <option value="created" id="sort-created-option">{{ tr.t("sort-created") }}</option>
         </select>
-        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}">↑</button>
+        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}" title="{{ tr.t("sort-direction-toggle") }}">↑</button>
     </div>
 
     {% match todays_menu %}
@@ -1333,7 +1348,7 @@ Replace the whole file with:
                 </div>
                 <p class="text-sm text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn">
+            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -1379,12 +1394,10 @@ Replace the whole file with:
                     <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
                 </div>
             {% endmatch %}
-                <h2 class="recipe-card-title">
-                    {{ item.name }}
-                    {% if item.is_menu %}
-                    <span class="tag ml-2 align-middle">{{ tr.t("recipe-type-menu") }}</span>
-                    {% endif %}
-                </h2>
+                <h2 class="recipe-card-title">{{ item.name }}</h2>
+                {% if item.is_menu %}
+                <span class="tag mb-2 inline-block">{{ tr.t("recipe-type-menu") }}</span>
+                {% endif %}
                 {% match item.description %}
                 {% when Some with (description) %}
                 <p class="text-muted text-sm">{{ description }}</p>
@@ -1456,12 +1469,12 @@ Replace the whole file with:
         }
         if (!saved) return;
         // The saved field may not exist here — "created" is removed on pages
-        // where not every recipe has a date.
+        // where not every recipe has a date. Treat an invalid field as fully
+        // corrupt so a stale direction cannot pair with the wrong field.
         const valid = Array.from(fieldSelect.options).some(o => o.value === saved.field);
-        if (valid) {
-            sortField = saved.field;
-            fieldSelect.value = saved.field;
-        }
+        if (!valid) return;
+        sortField = saved.field;
+        fieldSelect.value = saved.field;
         if (saved.dir === 'asc' || saved.dir === 'desc') {
             sortDir = saved.dir;
         }
@@ -1511,10 +1524,12 @@ Replace the whole file with:
 
         recipes.sort(compare);
         // Directories stay grouped above recipes, sorted by name among
-        // themselves so their order is deterministic.
+        // themselves so their order is deterministic. They only follow
+        // sortDir when sorting by name; for date fields they stay A→Z since
+        // directories have no modified/created date of their own.
         dirs.sort((a, b) => {
             const cmp = collator.compare(a.getAttribute('data-name') || '', b.getAttribute('data-name') || '');
-            return sortDir === 'asc' ? cmp : -cmp;
+            return sortField === 'name' && sortDir === 'desc' ? -cmp : cmp;
         });
 
         const frag = document.createDocumentFragment();

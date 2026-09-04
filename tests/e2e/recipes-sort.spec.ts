@@ -99,6 +99,13 @@ test.describe('Recipes index sorting', () => {
     await expect(page.locator('#sort-controls')).toBeVisible();
     await expect(page.locator('#sort-field')).toHaveValue('name');
     await expect(page.locator('#sort-dir')).toHaveText('↑');
+
+    // Prove the sorter script itself kept running past the corrupt value,
+    // not just that the controls rendered.
+    const before = await recipeNames(page);
+    await page.locator('#sort-dir').click();
+    await expect(page.locator('#sort-dir')).toHaveText('↓');
+    expect(await recipeNames(page)).toEqual([...before].reverse());
   });
 
   test('controls stay hidden when there is nothing to sort', async ({ page }) => {

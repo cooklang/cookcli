@@ -39,7 +39,7 @@
             <option value="modified">{{ tr.t("sort-modified") }}</option>
             <option value="created" id="sort-created-option">{{ tr.t("sort-created") }}</option>
         </select>
-        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}">↑</button>
+        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}" title="{{ tr.t("sort-direction-toggle") }}">↑</button>
     </div>
 
     {% match todays_menu %}
@@ -54,7 +54,7 @@
                 </div>
                 <p class="text-sm text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn">
+            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -100,12 +100,10 @@
                     <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
                 </div>
             {% endmatch %}
-                <h2 class="recipe-card-title">
-                    {{ item.name }}
-                    {% if item.is_menu %}
-                    <span class="tag ml-2 align-middle">{{ tr.t("recipe-type-menu") }}</span>
-                    {% endif %}
-                </h2>
+                <h2 class="recipe-card-title">{{ item.name }}</h2>
+                {% if item.is_menu %}
+                <span class="tag mb-2 inline-block">{{ tr.t("recipe-type-menu") }}</span>
+                {% endif %}
                 {% match item.description %}
                 {% when Some with (description) %}
                 <p class="text-muted text-sm">{{ description }}</p>
@@ -177,12 +175,12 @@
         }
         if (!saved) return;
         // The saved field may not exist here — "created" is removed on pages
-        // where not every recipe has a date.
+        // where not every recipe has a date. Treat an invalid field as fully
+        // corrupt so a stale direction cannot pair with the wrong field.
         const valid = Array.from(fieldSelect.options).some(o => o.value === saved.field);
-        if (valid) {
-            sortField = saved.field;
-            fieldSelect.value = saved.field;
-        }
+        if (!valid) return;
+        sortField = saved.field;
+        fieldSelect.value = saved.field;
         if (saved.dir === 'asc' || saved.dir === 'desc') {
             sortDir = saved.dir;
         }
@@ -232,10 +230,12 @@
 
         recipes.sort(compare);
         // Directories stay grouped above recipes, sorted by name among
-        // themselves so their order is deterministic.
+        // themselves so their order is deterministic. They only follow
+        // sortDir when sorting by name; for date fields they stay A→Z since
+        // directories have no modified/created date of their own.
         dirs.sort((a, b) => {
             const cmp = collator.compare(a.getAttribute('data-name') || '', b.getAttribute('data-name') || '');
-            return sortDir === 'asc' ? cmp : -cmp;
+            return sortField === 'name' && sortDir === 'desc' ? -cmp : cmp;
         });
 
         const frag = document.createDocumentFragment();
