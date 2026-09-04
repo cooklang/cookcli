@@ -29,7 +29,7 @@ Structure, in order:
 
 1. `@import "tailwindcss";`
 2. `@custom-variant dark (&:where(.dark, .dark *));` — replaces `darkMode: 'class'`.
-3. `@source "../../templates";` and `@source "../../static/js";` — replaces the content globs. No Rust source contains class names, so `src/**/*.rs` is not scanned.
+3. `@source "../../templates";`, `@source "../../static/js";` and `@source "../../src/web/templates.rs";` — replaces the content globs. The one Rust file that emits class names is `src/web/templates.rs` (`method_classes()` for the API docs method badge), so it is scanned explicitly; the rest of `src/` is not.
 4. Token declarations: `:root` (light), `.dark, .cooking-overlay` (dark), each with `color-scheme`.
 5. `@theme inline` registering every colour token as a Tailwind colour.
 6. `@theme` type scale.
@@ -129,7 +129,7 @@ Copied from the PR, then adjusted. Everything lives in `@layer components` and r
 | `.step-body` | `font-size: var(--text-read); line-height: 2;` |
 | `.ingredient-list` | `list-style:none; margin:0; padding:0;` |
 | `.ingredient-row` | main's tinted row: `display:flex; justify-content:space-between; align-items:center; padding: .5rem .75rem; border-radius: var(--radius-control); background: var(--surface-sunk);` Quantity uses `.row-value`. Note uses `.row-note`. |
-| `.pantry-item` | main's block: `--surface-sunk` fill, `--radius-control`, `padding: 1rem`, `border: 1px solid transparent`; hover `border-color: var(--border)`. `.out-of-stock` variant: `--danger-soft` fill, `--danger` border; its `.quantity-display` is `--danger`. |
+| `.pantry-item` | main's block: `--surface-sunk` fill, `--radius-control`, `padding: 1rem`, `border: 1px solid transparent`; hover `border-color: var(--border)`. `.out-of-stock` variant: `--danger-soft` fill, `--danger` border; its `.quantity-display` is `--danger`. `.low-stock` variant: `--accent-soft` fill, `--accent` border; its `.quantity-display` is `--accent-text`. The JS toggles only these state classes; no utility classes are added at runtime. |
 | `.pantry-actions` | opacity 0, revealed on `.pantry-item:hover`, `:focus-within`; always visible on coarse pointers. (Same behaviour as main's `group-hover:opacity-100`.) |
 
 ### 1.5 Other stylesheets
@@ -219,7 +219,7 @@ Eleven gradients become `.card p-6` sections with `h2.text-title`. Language and 
 
 ### 3.9 `api_docs.html`, `error.html`
 
-Cards and tokens; all `dark:` utilities removed; code blocks `bg-sunk`.
+Cards and tokens; all `dark:` utilities removed; code blocks `bg-sunk`. The HTTP method badge classes come from `method_classes()` in `src/web/templates.rs`; they become `bg-sunk text-text` (GET), `bg-ok-soft text-ok` (POST), `bg-accent-soft text-accent-text` (PUT), `bg-danger-soft text-danger` (DELETE), `bg-sunk text-muted` (other). This is a string change only, no behaviour change.
 
 ### 3.10 Scripts
 
