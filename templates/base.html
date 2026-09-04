@@ -727,7 +727,7 @@
             <div class="px-3 lg:px-6 py-4 relative">
                 <div class="flex items-center justify-between flex-wrap gap-y-3">
                     <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="order-1 hidden md:flex items-center space-x-2">
-                        <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="h-8 w-8 rounded-md" width="32" height="32">
+                        <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="brand-mark h-8 w-8 rounded-md" width="32" height="32">
                     </a>
 
                     <div class="relative z-50 order-2 flex-1 md:ml-2 md:mr-4" id="search-container">
@@ -795,31 +795,31 @@
                             </button>
                             <div id="more-dropdown" class="hidden absolute right-0 mt-2 w-56 card shadow-[var(--shadow-overlay)] z-50 py-1">
                                 {% if features.show_shopping_list || features.show_pantry %}
-                                <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text {% if active == "recipes" %}font-semibold text-accent-text{% endif %}">
+                                <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="menu-item {% if active == "recipes" %}active{% endif %}">
                                     <span>🍳</span> <span>{{ tr.t("nav-recipes") }}</span>
                                 </a>
                                 {% if features.show_shopping_list && !static_mode %}
-                                <a href="{{ prefix }}/shopping-list" class="flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text {% if active == "shopping" %}font-semibold text-accent-text{% endif %}">
+                                <a href="{{ prefix }}/shopping-list" class="menu-item {% if active == "shopping" %}active{% endif %}">
                                     <span>🛒</span> <span>{{ tr.t("nav-shopping-list") }}</span>
                                 </a>
                                 {% endif %}
                                 {% if features.show_pantry && !static_mode %}
-                                <a href="{{ prefix }}/pantry" class="flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text {% if active == "pantry" %}font-semibold text-accent-text{% endif %}">
+                                <a href="{{ prefix }}/pantry" class="menu-item {% if active == "pantry" %}active{% endif %}">
                                     <span>🥫</span> <span>{{ tr.t("nav-pantry") }}</span>
                                 </a>
                                 {% endif %}
                                 <div class="border-t border-line my-1"></div>
                                 {% endif %}
                                 {% if !static_mode %}
-                                <a href="{{ prefix }}/preferences" class="flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text">
+                                <a href="{{ prefix }}/preferences" class="menu-item">
                                     <span>⚙️</span> <span>Preferences</span>
                                 </a>
                                 {% endif %}
-                                <button onclick="showShortcutsHelp(); document.getElementById('more-dropdown').classList.add('hidden');" class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text">
+                                <button onclick="showShortcutsHelp(); document.getElementById('more-dropdown').classList.add('hidden');" class="menu-item">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                     <span>Keyboard Shortcuts</span>
                                 </button>
-                                <button onclick="toggleTheme(); document.getElementById('more-dropdown').classList.add('hidden');" class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-muted hover:bg-sunk hover:text-text">
+                                <button onclick="toggleTheme(); document.getElementById('more-dropdown').classList.add('hidden');" class="menu-item">
                                     <svg class="w-4 h-4 hidden dark:block" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path></svg>
                                     <svg class="w-4 h-4 block dark:hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
                                     <span>Toggle Theme</span>

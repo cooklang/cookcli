@@ -248,6 +248,41 @@
         font-weight: 600;
     }
 
+    /* Rows of the small-screen overflow menu. A component rather than
+       text-muted + a conditional text-accent-text: two utilities of equal
+       specificity collide and the active colour silently loses. */
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 16px;
+        font-size: var(--text-body);
+        color: var(--text-muted);
+        text-decoration: none;
+        background: transparent;
+        border: 0;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .menu-item:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .menu-item.active {
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* The brand mark is orange with dark dots on transparency; it needs a
+       light backing on a dark nav. */
+    .dark .brand-mark {
+        background: var(--text);
+        padding: 2px;
+    }
+
     /* ---------- Lists ---------- */
     .row {
         display: flex;

@@ -186,7 +186,7 @@ The web UI uses server-side rendering with Askama templates:
 
 ### Styling
 - Tailwind CSS for utility-first styling
-- Custom components defined in `static/css/input.css`
+- Custom components defined in `static/css/components.css`
 - Compiled CSS output in `static/css/output.css`
 - Tailwind is configured in `static/css/input.css` (`@source`, `@custom-variant`, `@theme`); components live in `static/css/components.css`
 
