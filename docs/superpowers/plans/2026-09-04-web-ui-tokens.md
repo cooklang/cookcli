@@ -2440,7 +2440,7 @@ The aisle block (`html += data.categories.map(category => …`):
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
                                     id="${escHtml(itemId)}"
-                                    class="w-5 h-5 accent-[var(--accent)] mr-3"
+                                    class="list-checkbox accent-[var(--accent)] mr-3"
                                     data-action="toggle-item"
                                     data-item-id="${escHtml(itemId)}"
                                     data-ingredient-name="${escHtml(item.name)}">
