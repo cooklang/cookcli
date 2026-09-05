@@ -4,57 +4,59 @@
 
 {% block content %}
 <div>
-    <h1 class="text-2xl font-bold mb-6">{{ tr.t("pref-title") }}</h1>
+    <h1 class="text-display font-bold text-text mb-6">{{ tr.t("pref-title") }}</h1>
 
     <div class="space-y-6">
         <!-- Language Selector -->
-        <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-2xl border-2 border-purple-200">
-            <h2 class="text-lg font-semibold mb-4 text-purple-900">{{ tr.t("pref-language") }}</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-4 text-text">{{ tr.t("pref-language") }}</h2>
             <div class="flex flex-wrap gap-3">
-                <button onclick="setLanguage('en-US')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "en-US" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('en-US')" data-active="{% if tr.lang_string() == "en-US" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "en-US" %}btn-primary{% endif %}">
                     🇺🇸 English
                 </button>
-                <button onclick="setLanguage('de-DE')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "de-DE" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('de-DE')" data-active="{% if tr.lang_string() == "de-DE" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "de-DE" %}btn-primary{% endif %}">
                     🇩🇪 Deutsch
                 </button>
-                <button onclick="setLanguage('nl-NL')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "nl-NL" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('nl-NL')" data-active="{% if tr.lang_string() == "nl-NL" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "nl-NL" %}btn-primary{% endif %}">
                     🇳🇱 Nederlands
                 </button>
-                <button onclick="setLanguage('fr-FR')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "fr-FR" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('fr-FR')" data-active="{% if tr.lang_string() == "fr-FR" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "fr-FR" %}btn-primary{% endif %}">
                     🇫🇷 Français
                 </button>
-                <button onclick="setLanguage('es-ES')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "es-ES" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('es-ES')" data-active="{% if tr.lang_string() == "es-ES" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "es-ES" %}btn-primary{% endif %}">
                     🇪🇸 Español
                 </button>
-                <button onclick="setLanguage('eu-ES')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "eu-ES" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('eu-ES')" data-active="{% if tr.lang_string() == "eu-ES" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "eu-ES" %}btn-primary{% endif %}">
                     Euskara
                 </button>
-                <button onclick="setLanguage('sv-SE')"
-                        class="language-btn px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if tr.lang_string() == "sv-SE" %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                <button onclick="setLanguage('sv-SE')" data-active="{% if tr.lang_string() == "sv-SE" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "sv-SE" %}btn-primary{% endif %}">
                     🇸🇪 Svenska
                 </button>
             </div>
-            <p class="text-sm text-purple-700 mt-3">Your language preference will be saved in a cookie.</p>
+            <p class="text-sm text-muted mt-3">Your language preference will be saved in a cookie.</p>
         </div>
 
         <!-- Features -->
         {% if !static_mode %}
-        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border-2 border-blue-200">
-            <h2 class="text-lg font-semibold mb-2 text-blue-900">{{ tr.t("pref-features") }}</h2>
-            <p class="text-sm text-blue-700 mb-4">{{ tr.t("pref-features-desc") }}</p>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-2 text-text">{{ tr.t("pref-features") }}</h2>
+            <p class="text-sm text-muted mb-4">{{ tr.t("pref-features-desc") }}</p>
             <div class="flex flex-wrap gap-3">
                 <button onclick="toggleFeature('show_shopping_list', {{ features.show_shopping_list }})"
-                        class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if features.show_shopping_list %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                        data-active="{% if features.show_shopping_list %}true{% else %}false{% endif %}"
+                        class="btn {% if features.show_shopping_list %}btn-primary{% endif %}">
                     🛒 {{ tr.t("nav-shopping-list") }}
                 </button>
                 <button onclick="toggleFeature('show_pantry', {{ features.show_pantry }})"
-                        class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 {% if features.show_pantry %}bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-600 shadow-lg scale-105{% else %}bg-white text-gray-700 border-gray-300 hover:border-orange-400 hover:bg-orange-50 hover:scale-105{% endif %}">
+                        data-active="{% if features.show_pantry %}true{% else %}false{% endif %}"
+                        class="btn {% if features.show_pantry %}btn-primary{% endif %}">
                     🥫 {{ tr.t("nav-pantry") }}
                 </button>
             </div>
@@ -63,8 +65,8 @@
 
         <!-- CookCloud Sync -->
         {% if sync_enabled %}
-        <div class="bg-gray-50 p-4 rounded-sm">
-            <h2 class="text-lg font-semibold mb-3">CookCloud Sync</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-3 text-text">CookCloud Sync</h2>
             <div id="sync-section">
                 {% if sync_logged_in %}
                 <div class="flex items-center justify-between">
@@ -72,36 +74,34 @@
                         <p class="text-sm">
                             Signed in as <span class="font-medium">{{ sync_email.as_deref().unwrap_or("Unknown") }}</span>
                         </p>
-                        <p class="text-xs text-gray-600 mt-1" id="sync-status-text">{% if sync_syncing %}Syncing recipes...{% else %}Sync idle{% endif %}</p>
+                        <p class="text-xs text-muted mt-1" id="sync-status-text">{% if sync_syncing %}Syncing recipes...{% else %}Sync idle{% endif %}</p>
                     </div>
-                    <button onclick="syncLogout()"
-                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-white text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400">
+                    <button onclick="syncLogout()" class="btn text-danger border-danger">
                         Logout
                     </button>
                 </div>
                 {% else %}
                 <div id="sync-login-section" class="flex items-center justify-between">
-                    <p class="text-sm text-gray-600" id="sync-login-message">Sync your recipes across devices with CookCloud.</p>
-                    <button id="sync-login-btn" onclick="syncLogin()"
-                            class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border-2 bg-orange-700 text-white border-orange-800 hover:bg-orange-800">
+                    <p class="text-sm text-muted" id="sync-login-message">Sync your recipes across devices with CookCloud.</p>
+                    <button id="sync-login-btn" onclick="syncLogin()" class="btn btn-primary">
                         Login to CookCloud
                     </button>
                 </div>
 
-                <div id="sync-login-card" class="hidden mt-4 border border-gray-200 rounded-lg p-6 bg-white">
-                    <h3 class="text-lg font-semibold mb-2">Sign in to CookCloud</h3>
-                    <ol class="mt-3 space-y-2 text-sm text-gray-700">
-                        <li>1. Open <a id="sync-login-link" href="#" target="_blank" rel="noopener" class="underline text-orange-700 hover:text-orange-800">cook.md/device</a> in any browser.</li>
+                <div id="sync-login-card" class="hidden mt-4 border border-line rounded-[var(--radius-card)] p-6 bg-sunk">
+                    <h3 class="text-title font-semibold mb-2 text-text">Sign in to CookCloud</h3>
+                    <ol class="mt-3 space-y-2 text-sm text-text">
+                        <li>1. Open <a id="sync-login-link" href="#" target="_blank" rel="noopener" class="underline text-accent-text">cook.md/device</a> in any browser.</li>
                         <li>2. Enter this code:</li>
                     </ol>
                     <div class="mt-3 flex items-center gap-2">
-                        <span id="sync-login-code" class="text-2xl tracking-widest bg-gray-100 px-4 py-2 rounded-sm font-mono">----  ----</span>
-                        <button id="sync-login-copy" type="button" class="px-3 py-1 border border-gray-300 rounded-sm text-sm hover:bg-gray-50">Copy</button>
+                        <span id="sync-login-code" class="text-2xl tracking-widest bg-surface border border-line px-4 py-2 rounded-[var(--radius-control)] font-mono">----  ----</span>
+                        <button id="sync-login-copy" type="button" class="btn">Copy</button>
                     </div>
-                    <p id="sync-login-expires" class="mt-3 text-sm text-gray-600"></p>
+                    <p id="sync-login-expires" class="mt-3 text-sm text-muted"></p>
                     <div class="mt-4 flex gap-2">
-                        <a id="sync-login-open" href="#" target="_blank" rel="noopener" class="px-4 py-2 rounded-lg font-medium bg-orange-700 text-white border-2 border-orange-800 hover:bg-orange-800">Open cook.md/device</a>
-                        <button id="sync-login-cancel" type="button" class="px-4 py-2 rounded-lg font-medium border-2 border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <a id="sync-login-open" href="#" target="_blank" rel="noopener" class="btn btn-primary">Open cook.md/device</a>
+                        <button id="sync-login-cancel" type="button" class="btn">Cancel</button>
                     </div>
                 </div>
                 {% endif %}
@@ -109,81 +109,81 @@
         </div>
         {% endif %}
 
-        <div class="bg-gray-50 p-4 rounded-sm">
-            <h2 class="text-lg font-semibold mb-3">Configuration Files</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-3 text-text">Configuration Files</h2>
             <div class="space-y-2 text-sm">
                 <div>
                     <span class="font-medium">{{ tr.t("pref-aisle-path") }}:</span>
-                    <span class="text-gray-600 ml-2">{{ aisle_path }}</span>
+                    <span class="text-muted ml-2">{{ aisle_path }}</span>
                 </div>
                 <div>
                     <span class="font-medium">{{ tr.t("pref-pantry-path") }}:</span>
-                    <span class="text-gray-600 ml-2">{{ pantry_path }}</span>
+                    <span class="text-muted ml-2">{{ pantry_path }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="bg-gray-50 p-4 rounded-sm">
-            <h2 class="text-lg font-semibold mb-3">Recipe Directory</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-3 text-text">Recipe Directory</h2>
             <div class="text-sm">
                 <span class="font-medium">{{ tr.t("pref-base-path") }}:</span>
-                <span class="text-gray-600 ml-2">{{ base_path }}</span>
+                <span class="text-muted ml-2">{{ base_path }}</span>
             </div>
         </div>
 
-        <div class="bg-gray-50 p-4 rounded-sm">
-            <h2 class="text-lg font-semibold mb-3">About</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-3 text-text">About</h2>
             <div class="space-y-2 text-sm">
                 <div>
                     <span class="font-medium">{{ tr.t("pref-version") }}:</span>
-                    <span class="text-gray-600 ml-2">{{ version }}</span>
+                    <span class="text-muted ml-2">{{ version }}</span>
                 </div>
                 <div>
                     <span class="font-medium">Cooklang CLI:</span>
-                    <span class="text-gray-600 ml-2">A command-line tool for managing Cooklang recipes</span>
+                    <span class="text-muted ml-2">A command-line tool for managing Cooklang recipes</span>
                 </div>
             </div>
         </div>
 
-        <div class="bg-gray-50 p-4 rounded-sm">
-            <h2 class="text-lg font-semibold mb-3">Documentation & Resources</h2>
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-3 text-text">Documentation & Resources</h2>
             <div class="space-y-2 text-sm">
                 {% if !static_mode %}
                 <div>
                     <a href="{{ prefix }}/api-docs"
-                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                       class="text-accent-text hover:underline font-medium">
                         🔌 Server API
                     </a>
-                    <span class="text-gray-600 ml-2">- HTTP endpoints for building integrations</span>
+                    <span class="text-muted ml-2">- HTTP endpoints for building integrations</span>
                 </div>
                 {% endif %}
                 <div>
                     <a href="https://cooklang.org/cli/" target="_blank" rel="noopener noreferrer"
-                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                       class="text-accent-text hover:underline font-medium">
                         📚 CLI Documentation
                     </a>
-                    <span class="text-gray-600 ml-2">- Learn about all CLI commands and features</span>
+                    <span class="text-muted ml-2">- Learn about all CLI commands and features</span>
                 </div>
                 <div>
                     <a href="https://cooklang.org/docs/spec/" target="_blank" rel="noopener noreferrer"
-                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                       class="text-accent-text hover:underline font-medium">
                         📖 Cooklang Specification
                     </a>
-                    <span class="text-gray-600 ml-2">- Recipe markup language syntax guide</span>
+                    <span class="text-muted ml-2">- Recipe markup language syntax guide</span>
                 </div>
                 <div>
                     <a href="https://cooklang.org/docs/getting-started/" target="_blank" rel="noopener noreferrer"
-                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                       class="text-accent-text hover:underline font-medium">
                         🚀 Getting Started
                     </a>
-                    <span class="text-gray-600 ml-2">- Introduction to Cooklang basics</span>
+                    <span class="text-muted ml-2">- Introduction to Cooklang basics</span>
                 </div>
                 <div>
                     <a href="https://github.com/cooklang/CookCLI" target="_blank" rel="noopener noreferrer"
-                       class="text-orange-700 hover:text-orange-800 hover:underline font-medium">
+                       class="text-accent-text hover:underline font-medium">
                         🔧 GitHub Repository
                     </a>
-                    <span class="text-gray-600 ml-2">- Source code and issue tracker</span>
+                    <span class="text-muted ml-2">- Source code and issue tracker</span>
                 </div>
             </div>
         </div>
