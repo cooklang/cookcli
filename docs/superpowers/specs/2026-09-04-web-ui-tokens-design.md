@@ -197,7 +197,7 @@ Every template starts from its `main` version. Edits are class substitutions plu
 - Sidebar `.card p-6 sticky top-6`; headings become `h2.text-title.font-bold` (`text-accent-text` for selected recipes, `text-text` for pantry). Pantry box `bg-sunk rounded-[var(--radius-control)] p-3 border border-line`.
 - Error banner per section 2. Page title becomes `h1.text-display.font-bold.text-text` (main has no `h1` on this page).
 - Copy split button `.btn.btn-primary` halves; options menu `.card shadow-[var(--shadow-overlay)]`; Clear `.btn`.
-- JS-rendered markup: selected-recipe entries and nested references on tokens; aisle groups `.card p-4` with `h3.text-title.font-semibold`; items keep main's row structure with `accent-[var(--accent)]` checkboxes and `line-through text-faint` when checked. The `aisle-name` hook stays.
+- JS-rendered markup: selected-recipe entries and nested references on tokens; aisle groups `.card p-4` with `h2.aisle-name.text-title.font-semibold`; items keep main's row structure with `accent-[var(--accent)]` checkboxes and `line-through text-faint` when checked. The `aisle-name` hook stays.
 
 ### 3.5 `pantry.html`
 

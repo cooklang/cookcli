@@ -194,7 +194,7 @@ function renderSelectedRecipes() {
             <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
                 <div class="flex items-center justify-between">
                     <div>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                         <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
                     <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">
@@ -224,7 +224,7 @@ function renderSelectedRecipes() {
         <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
             <div class="flex items-center justify-between">
                 <div>
-                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                     <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
                 <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">

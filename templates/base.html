@@ -24,398 +24,21 @@
             padding: 0 1rem;
         }
 
-        /* Dark mode styles */
-        .dark {
-            color-scheme: dark;
-        }
-
-        .dark body {
-            background-color: #111827;
-        }
-
-        .dark .bg-gray-50 {
-            background-color: #111827;
-        }
-
-        .dark .bg-white {
-            background-color: #1f2937;
-        }
-
-        .dark .text-gray-900 {
-            color: #f9fafb;
-        }
-
-        .dark .text-gray-800 {
-            color: #e5e7eb;
-        }
-
-        .dark .text-gray-700 {
-            color: #d1d5db;
-        }
-
-        .dark .text-gray-600 {
-            color: #9ca3af;
-        }
-
-        .dark .text-gray-500 {
-            color: #6b7280;
-        }
-
-        .dark .text-gray-400 {
-            color: #9ca3af;
-        }
-
-        .dark .border-gray-300 {
-            border-color: #4b5563;
-        }
-
-        .dark .border-gray-200 {
-            border-color: #374151;
-        }
-
-        .dark .border-purple-200 {
-            border-color: #7c3aed;
-        }
-
-        .dark .hover\:text-gray-900:hover {
-            color: #f9fafb;
-        }
-
-        .dark .hover\:text-gray-800:hover {
-            color: #e5e7eb;
-        }
-
-        .dark .hover\:bg-gray-50:hover {
-            background-color: #374151;
-        }
-
-        .dark .hover\:bg-gray-100:hover {
-            background-color: #374151;
-        }
-
-        .dark .bg-gradient-to-r.from-orange-50.to-yellow-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        .dark .bg-gradient-to-r.from-gray-50.to-orange-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        .dark .bg-gradient-to-r.from-green-50.to-blue-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        .dark .bg-gradient-to-r.from-blue-50.to-purple-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        /* Shopping list specific dark styles */
-        .dark .bg-gradient-to-r.from-purple-50.to-pink-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        .dark .bg-gradient-to-r.from-green-50.to-emerald-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        /* Plan cards in the shopping list use an indigo/purple gradient */
-        .dark .bg-gradient-to-r.from-indigo-50.to-purple-50 {
-            background: linear-gradient(to right, #1f2937, #111827);
-            border: 1px solid #374151;
-        }
-
-        .dark .border-indigo-200 {
-            border-color: #4c1d95;
-        }
-
-        .dark .border-purple-200 {
-            border-color: #4c1d95;
-        }
-
-        .dark .border-green-200 {
-            border-color: #065f46;
-        }
-
-        .dark .border-orange-200 {
-            border-color: #7c2d12;
-        }
-
-        .dark .border-blue-400 {
-            border-color: #1e3a8a;
-        }
-
-        /* Dark mode hover states */
-        .dark .hover\:bg-gradient-to-r:hover {
-            background: #374151 !important;
-        }
-
-        .dark .hover\:from-purple-50:hover,
-        .dark .hover\:to-pink-50:hover {
-            background: #374151 !important;
-        }
-
-        .dark .hover\:from-orange-100:hover,
-        .dark .hover\:to-amber-100:hover {
-            background: #374151 !important;
-        }
-
-        .dark .hover\:from-purple-100:hover,
-        .dark .hover\:to-pink-100:hover {
-            background: #374151 !important;
-        }
-
-        .dark a.hover\:bg-gradient-to-r:hover {
-            background: #374151 !important;
-            color: #e5e7eb !important;
-        }
-
-        /* Fix for navigation pill hover states */
-        .dark a[href="{{ prefix }}/"].hover\:bg-gradient-to-r:hover{% if !static_mode %},
-        .dark a[href="{{ prefix }}/shopping-list"].hover\:bg-gradient-to-r:hover{% endif %} {
-            background: #374151 !important;
-        }
-
-        .dark .hover\:text-orange-700:hover {
-            color: #fb923c !important;
-        }
-
-        .dark .hover\:text-purple-700:hover {
-            color: #a78bfa !important;
-        }
-
-        /* Nav pill dark mode */
-        .dark .nav-pill {
-            color: #9ca3af;
-        }
-
-        .dark .nav-pill:hover {
-            background: #374151;
-            color: #fb923c;
-        }
-
-        .dark .nav-pill.active {
-            background: linear-gradient(135deg, #ff6b35, #f97316);
-            color: white;
-        }
-
-        /* Button dark mode styles */
-        .dark .bg-gray-200 {
-            background-color: #4b5563;
-        }
-
-        .dark .hover\:bg-gray-300:hover {
-            background-color: #6b7280;
-        }
-
-        .dark .bg-gray-200.text-gray-700 {
-            color: #e5e7eb;
-        }
-
-        /* Text colors in various contexts */
-        .dark .text-purple-600 {
-            color: #c084fc;
-        }
-
-        .dark .text-red-500 {
-            color: #ef4444;
-        }
-
-        .dark .hover\:text-red-700:hover {
-            color: #dc2626;
-        }
-
-        .dark .text-green-600 {
-            color: #34d399;
-        }
-
-        .dark .shadow-lg, .dark .shadow-md, .dark .shadow-xl {
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Dark mode tag and badge styles */
-        .dark .bg-gradient-to-r.from-yellow-100.to-orange-100 {
-            background: linear-gradient(to right, #374151, #4b5563);
-        }
-
-        .dark .text-orange-700 {
-            color: #fb923c;
-        }
-
-        .dark .text-orange-600 {
-            color: #fb923c;
-        }
-
-        .dark .bg-gradient-to-r.from-purple-100.to-pink-100 {
-            background: linear-gradient(to right, #374151, #4b5563);
-        }
-
-        .dark .text-purple-700 {
-            color: #a78bfa;
-        }
-
-        .dark .bg-gray-100 {
-            background-color: #374151;
-        }
-
-        /* Recipe card specific dark styles */
-        .dark .recipe-card {
-            background-color: #1f2937;
-            border: 1px solid #374151;
-        }
-
         /* Search result keyboard selection. --surface-sunk alone is barely
            visible against --surface in dark mode, so the accent bar carries
            the signal. */
         #search-results a.search-selected {
-            background: var(--accent-soft) !important;
+            background: var(--accent-soft);
             box-shadow: inset 3px 0 0 var(--accent);
         }
 
-        /* Theme toggle button styles */
-        .theme-toggle {
-            position: relative;
-            width: 50px;
-            height: 24px;
-            background-color: #9ca3af;
-            border-radius: 12px;
-            padding: 2px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .theme-toggle.dark {
-            background-color: #7c3aed;
-        }
-
-        .theme-toggle-handle {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 20px;
-            height: 20px;
-            background-color: white;
-            border-radius: 50%;
-            transition: transform 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .theme-toggle.dark .theme-toggle-handle {
-            transform: translateX(26px);
-        }
-
         @media print {
-            /* Reset color-scheme so browser default text color is dark, not
-               light. Without this, elements without an explicit text color
-               (e.g. ingredient/cookware names) inherit the dark-mode default
-               white text and become invisible on the forced white background. */
-            html, html.dark {
+            /* Token values are reset to light in input.css; this resets the
+               browser's own defaults so unstyled text is dark too. */
+            html.dark, html {
                 color-scheme: light !important;
             }
 
-            /* Default text color for dark mode when printing */
-            .dark,
-            .dark body {
-                color: #111827 !important;
-            }
-
-            /* Force light mode for printing */
-            .dark body,
-            .dark .bg-gray-50,
-            .dark .bg-white,
-            .dark .bg-gray-100 {
-                background-color: white !important;
-            }
-
-            .dark .text-gray-900, .dark h1, .dark h2, .dark h3 {
-                color: #111827 !important;
-            }
-
-            .dark .text-gray-800 {
-                color: #1f2937 !important;
-            }
-
-            .dark .text-gray-700,
-            .dark .text-gray-600 {
-                color: #374151 !important;
-            }
-
-            .dark .text-orange-600, .dark .text-orange-700 {
-                color: #c2410c !important;
-            }
-
-            .dark .text-green-600 {
-                color: #16a34a !important;
-            }
-
-            .dark .text-purple-600 {
-                color: #9333ea !important;
-            }
-
-            .dark .text-red-500 {
-                color: #ef4444 !important;
-            }
-
-            .dark .border-gray-200, .dark .border-gray-300 {
-                border-color: #e5e7eb !important;
-            }
-
-            .dark .shadow-lg, .dark .shadow-md, .dark .shadow-xl {
-                box-shadow: none !important;
-            }
-
-            .dark .bg-gradient-to-r {
-                background: transparent !important;
-                border-color: #e5e7eb !important;
-            }
-
-            .dark .recipe-card {
-                background-color: white !important;
-                border-color: #e5e7eb !important;
-            }
-
-            /* Dark mode badges must be readable when printed */
-            .dark .ingredient-badge {
-                background: #fef3c7 !important;
-                color: #9a3412 !important;
-                border-color: #fb923c !important;
-            }
-
-            .dark .cookware-badge {
-                background: #dcfce7 !important;
-                color: #14532d !important;
-                border-color: #4ade80 !important;
-            }
-
-            .dark .timer-badge {
-                background: #fee2e2 !important;
-                color: #7f1d1d !important;
-                border-color: #f87171 !important;
-            }
-
-            .dark .step-number {
-                background: #f97316 !important;
-                color: white !important;
-            }
-
-            .dark .tag {
-                background: linear-gradient(135deg, #fbbf24, #fb923c) !important;
-                color: white !important;
-            }
-
-            .dark .metadata-pill {
-                background: white !important;
-                color: #374151 !important;
-            }
-
-            /* Global print styles */
             * {
                 print-color-adjust: exact;
                 -webkit-print-color-adjust: exact;
@@ -438,61 +61,24 @@
                 display: none !important;
             }
 
-            /* Hide entire navigation bar and its contents */
-            .bg-white.shadow-lg.rounded-2xl.mb-8 {
-                display: none !important;
-            }
-
             /* Hide all navigation links */
             a[href="{{ prefix }}/"]{% if !static_mode %}, a[href="{{ prefix }}/shopping-list"], a[href="{{ prefix }}/preferences"]{% endif %} {
                 display: none !important;
             }
 
-            /* Recipe layout for print */
+            /* Recipe layout for print: one column */
             .grid {
                 display: block !important;
             }
 
-            /* Remove shadows and borders for cleaner print */
-            .shadow-lg, .shadow-md, .shadow-xl {
-                box-shadow: none !important;
-            }
-
-            .rounded-2xl, .rounded-xl, .rounded-lg {
-                border-radius: 0 !important;
-            }
-
-            /* Optimize colors for print */
-            .bg-gradient-to-r {
-                background: transparent !important;
-            }
-
-            .text-orange-600, .text-orange-700 {
-                color: #000 !important;
-                font-weight: bold;
-            }
-
-            .text-green-600 {
-                color: #000 !important;
-            }
-
-            /* Page breaks */
             .md\:col-span-1, .md\:col-span-2 {
                 page-break-inside: avoid;
                 width: 100% !important;
             }
 
-            /* Ingredient and step styling */
-            .bg-gradient-to-r.from-orange-50,
-            .bg-gradient-to-r.from-green-50,
-            .bg-gradient-to-r.from-gray-50,
-            .bg-gradient-to-r.from-blue-50,
-            .dark .bg-gradient-to-r.from-orange-50,
-            .dark .bg-gradient-to-r.from-green-50,
-            .dark .bg-gradient-to-r.from-gray-50,
-            .dark .bg-gradient-to-r.from-blue-50 {
-                background: #f9f9f9 !important;
-                border: 1px solid #ddd !important;
+            /* Square corners on paper */
+            .card, .step-box, .ingredient-row, .recipe-note, .rounded-xl {
+                border-radius: 0 !important;
             }
 
             /* Step numbers */
@@ -553,12 +139,6 @@
                 font-size: 1.5rem !important;
             }
 
-            /* Ensure ingredients and instructions stay together */
-            .bg-white {
-                background: white !important;
-                border: none !important;
-            }
-
             /* Remove truncation in print so text is fully visible */
             .truncate {
                 overflow: visible !important;
@@ -573,7 +153,6 @@
                 display: none !important;
             }
 
-            /* Only apply flex override to top-level shopping list layout */
             #shopping-list-results ~ .flex-1,
             .flex.min-h-screen > .flex-1 {
                 width: 100% !important;
@@ -599,19 +178,9 @@
             }
 
             #shopping-list-results h2 {
-                font-size: 14pt !important;
-                margin-bottom: 0.1rem !important;
-            }
-
-            #shopping-list-results h3 {
                 font-size: 11pt !important;
+                color: #000 !important;
                 margin-bottom: 0 !important;
-            }
-
-            #shopping-list-results .space-y-2,
-            #shopping-list-results ul {
-                gap: 0 !important;
-                --tw-space-y-reverse: 0 !important;
             }
 
             #shopping-list-results .space-y-2 > * + *,
@@ -625,26 +194,9 @@
                 border-bottom: 1px dotted #ccc;
             }
 
-            #shopping-list-results .mb-6 {
+            #shopping-list-results .card {
                 margin-bottom: 0.15rem !important;
-            }
-
-            #shopping-list-results .mb-4,
-            #shopping-list-results .mb-3 {
-                margin-bottom: 0 !important;
-            }
-
-            #shopping-list-results .p-4,
-            #shopping-list-results .p-3,
-            #shopping-list-results .px-3 {
                 padding: 0 !important;
-            }
-
-            #shopping-list-results .gap-6 {
-                gap: 0 !important;
-            }
-
-            #shopping-list-results .rounded-lg {
                 border: none !important;
             }
 
@@ -658,7 +210,6 @@
                 font-size: 14pt !important;
                 margin-bottom: 0.25rem !important;
                 color: #000 !important;
-                -webkit-text-fill-color: #000 !important;
             }
 
             #menu-content .space-y-6 > * + * {
@@ -707,9 +258,6 @@
             }
 
             #menu-content .ingredient-badge {
-                background: transparent !important;
-                border: none !important;
-                padding: 0 !important;
                 font-weight: bold !important;
                 color: #000 !important;
             }

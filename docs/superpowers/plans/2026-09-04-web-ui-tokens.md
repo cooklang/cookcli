@@ -2382,7 +2382,7 @@ Plan/menu entry (the `if (item.recipes)` branch):
             <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
                 <div class="flex items-center justify-between">
                     <div>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                         <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
                     <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">
@@ -2413,7 +2413,7 @@ Regular recipe entry (after `// Regular recipe entry`):
         <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
             <div class="flex items-center justify-between">
                 <div>
-                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                     <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
                 <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">
@@ -3812,7 +3812,7 @@ Replace everything from `<style>` through `</style>` in `<head>` with:
            visible against --surface in dark mode, so the accent bar carries
            the signal. */
         #search-results a.search-selected {
-            background: var(--accent-soft) !important;
+            background: var(--accent-soft);
             box-shadow: inset 3px 0 0 var(--accent);
         }
 
@@ -3962,8 +3962,9 @@ Replace everything from `<style>` through `</style>` in `<head>` with:
             }
 
             #shopping-list-results h2 {
-                font-size: 14pt !important;
-                margin-bottom: 0.1rem !important;
+                font-size: 11pt !important;
+                color: #000 !important;
+                margin-bottom: 0 !important;
             }
 
             #shopping-list-results .space-y-2 > * + *,
