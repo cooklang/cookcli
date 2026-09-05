@@ -100,10 +100,12 @@
                     <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
                 </div>
             {% endmatch %}
-                <h2 class="recipe-card-title">{{ item.name }}</h2>
-                {% if item.is_menu %}
-                <span class="tag mb-2 inline-block">{{ tr.t("recipe-type-menu") }}</span>
-                {% endif %}
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="recipe-card-title">{{ item.name }}</h2>
+                    {% if item.is_menu %}
+                    <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
+                    {% endif %}
+                </div>
                 {% match item.description %}
                 {% when Some with (description) %}
                 <p class="text-muted text-sm">{{ description }}</p>

@@ -1405,10 +1405,12 @@ Replace the whole file with:
                     <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
                 </div>
             {% endmatch %}
-                <h2 class="recipe-card-title">{{ item.name }}</h2>
-                {% if item.is_menu %}
-                <span class="tag mb-2 inline-block">{{ tr.t("recipe-type-menu") }}</span>
-                {% endif %}
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="recipe-card-title">{{ item.name }}</h2>
+                    {% if item.is_menu %}
+                    <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
+                    {% endif %}
+                </div>
                 {% match item.description %}
                 {% when Some with (description) %}
                 <p class="text-muted text-sm">{{ description }}</p>
@@ -1793,13 +1795,13 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
-                    <span>{{ tr.t("action-edit") }}</span>
+                    <span class="hidden lg:inline">{{ tr.t("action-edit") }}</span>
                 </a>
                 <button onclick="addToShoppingList(event, {{ recipe_path|json }})" class="btn" title="{{ tr.t("recipe-add-to-shopping") }}">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
-                    <span>{{ tr.t("recipe-add-to-shopping") }}</span>
+                    <span class="hidden lg:inline">{{ tr.t("recipe-add-to-shopping") }}</span>
                 </button>
                 {% endif %}
                 <button id="start-cooking-btn" onclick="startCookingMode()" class="btn btn-primary" title="Start Cooking">
@@ -1807,14 +1809,14 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <span>Cook</span>
+                    <span class="hidden lg:inline">Cook</span>
                 </button>
                 {% if static_mode %}
                 <a href="{{ prefix }}/recipe/{{ recipe_path }}.cook" download class="btn" title="Download .cook source">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path>
                     </svg>
-                    <span>.cook</span>
+                    <span class="hidden lg:inline">.cook</span>
                 </a>
                 {% endif %}
             </div>
@@ -2080,7 +2082,6 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
         </div>
     </div>
 </div>
-
 ```
 
 Compare the `StepItem` line against main's before saving: it is identical except `text-orange-600` → `text-accent-text`. The `step.ingredients` line is identical except `text-gray-600` → `text-faint`.
@@ -3819,7 +3820,7 @@ Replace everything from `<style>` through `</style>` in `<head>` with:
         @media print {
             /* Token values are reset to light in input.css; this resets the
                browser's own defaults so unstyled text is dark too. */
-            html, html.dark {
+            html.dark, html {
                 color-scheme: light !important;
             }
 
@@ -3906,41 +3907,9 @@ Replace everything from `<style>` through `</style>` in `<head>` with:
                 margin-bottom: 0 !important;
             }
 
-            /* Print-specific flexbox utilities */
-            .print\:flex-row {
-                flex-direction: row !important;
-            }
-
-            .print\:items-center {
-                align-items: center !important;
-            }
-
-            .print\:block {
-                display: block !important;
-            }
-
-            .print\:text-2xl {
-                font-size: 1.5rem !important;
-            }
-
-            /* Remove truncation in print so text is fully visible */
-            .truncate {
-                overflow: visible !important;
-                text-overflow: unset !important;
-                white-space: normal !important;
-                max-width: none !important;
-                display: inline !important;
-            }
-
             /* Shopping list print styles */
             .lg\:w-2\/5, .xl\:w-1\/3 {
                 display: none !important;
-            }
-
-            #shopping-list-results ~ .flex-1,
-            .flex.min-h-screen > .flex-1 {
-                width: 100% !important;
-                flex: none !important;
             }
 
             #shopping-list-results {

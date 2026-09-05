@@ -206,14 +206,18 @@ The web UI uses server-side rendering with Askama templates:
 - **Responsive Design**: Mobile-friendly layout with Tailwind
 
 ### CSS Component Classes
-Custom Tailwind components for consistent styling:
-- `.recipe-card` - Recipe cards with gradient top border
-- `.ingredient-badge` - Orange gradient badges for ingredients
-- `.cookware-badge` - Green gradient badges for cookware
-- `.timer-badge` - Red gradient badges for timers
-- `.metadata-pill` - Clean outline badges for metadata
-- `.nav-pill` - Navigation items with hover effects
-- `.step-number` - Circular step numbers with gradient
+Component classes live in `static/css/components.css` and resolve every colour through the tokens in `static/css/input.css`:
+- `.card` / `.card-head` - Bordered surface with hairline and 6px radius
+- `.btn`, `.btn-primary`, `.btn-danger`, `.btn-sm` - 40px controls (32px compact); one accent-filled primary per view
+- `.icon-btn` - 36px icon-only control
+- `.nav-card`, `.nav-pill`, `.menu-item` - Navigation card, pills, and small-screen menu rows
+- `.recipe-card`, `.recipe-card-icon`, `.recipe-card-title` - Index cards with a flat icon disc
+- `.ingredient-badge`, `.cookware-badge`, `.timer-badge` - Inline recipe entities (tint, dotted underline, chip)
+- `.metadata-pill`, `.tag` - Neutral bordered pills
+- `.step-box`, `.step-number`, `.step-body`, `.step-refs` - Boxed recipe steps
+- `.ingredient-row`, `.row`, `.row-value`, `.row-note` - List rows
+- `.pantry-item`, `.pantry-actions`, `.item-status-dot` - Pantry blocks and stock state
+- `.stepper`, `.select`, `.search-input` - Form controls
 
 ## Testing Approach
 

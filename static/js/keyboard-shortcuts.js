@@ -120,7 +120,7 @@
 
         const modal = document.createElement('div');
         modal.id = 'keyboard-shortcuts-modal';
-        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
         modal.innerHTML = `
             <div class="card shadow-[var(--shadow-overlay)] max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
                 <div class="p-6 border-b border-line flex justify-between items-center">
