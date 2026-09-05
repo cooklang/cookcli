@@ -124,13 +124,14 @@ Copied from the PR, then adjusted. Everything lives in `@layer components` and r
 | Class | Definition |
 |---|---|
 | `.nav-card` | main's nav container: `--surface`, hairline, `--radius-card`, `--shadow-card`, `margin-bottom: 2rem`. Not sticky. |
+| `.btn-sm` | compact `.btn` variant for inline forms that sit inside a card row: height 32px, padding `0 12px`, `text-ui`, svg 16px. Used by the pantry item edit form's Cancel/Save. |
 | `.step-list` | `list-style:none; margin:0; padding:0;` only. Step boxes are `li.step-box`. |
 | `.step-box` | main's per-step box: `--surface-sunk` fill, hairline, `--radius-card`, `padding: 1rem`. |
 | `.step-body` | `font-size: var(--text-read); line-height: 2;` |
 | `.ingredient-list` | `list-style:none; margin:0; padding:0;` |
 | `.ingredient-row` | main's tinted row: `display:flex; justify-content:space-between; align-items:center; padding: .5rem .75rem; border-radius: var(--radius-control); background: var(--surface-sunk);` Quantity uses `.row-value`. Note uses `.row-note`. |
-| `.pantry-item` | main's block: `--surface-sunk` fill, `--radius-control`, `padding: 1rem`, `border: 1px solid transparent`; hover `border-color: var(--border)`. `.out-of-stock` variant: `--danger-soft` fill, `--danger` border; its `.quantity-display` is `--danger`. `.low-stock` variant: `--accent-soft` fill, `--accent` border; its `.quantity-display` is `--accent-text`. The JS toggles only these state classes; no utility classes are added at runtime. |
-| `.pantry-actions` | opacity 0, revealed on `.pantry-item:hover`, `:focus-within`; always visible on coarse pointers. (Same behaviour as main's `group-hover:opacity-100`.) |
+| `.pantry-item` | main's block: `--surface-sunk` fill, `--radius-control`, `padding: 1rem`, `border: 1px solid transparent`; hover `border-color: var(--border)`. Base `.quantity-display` is `--text-muted`, `.item-quantity` weight 500, so the template carries no colour utility on either element and the state rules below can win. `.out-of-stock` variant: `--danger-soft` fill, `--danger` border; its `.quantity-display` (and `.out-of-stock-icon`) recolour to `--danger`, `.item-quantity` weight 600. `.low-stock` variant: `--accent-soft` fill, `--accent` border; same shape with `--accent-text`. The JS toggles only these state classes; no utility classes are added at runtime. |
+| `.pantry-actions` | opacity 0, revealed on `.pantry-item:hover`, `:focus-within`; always visible on coarse pointers. (Same behaviour as main's `group-hover:opacity-100`.) Its `.icon-btn`s are sized down to 28px (16px svg) so the row buttons don't crowd the text column at narrower breakpoints; the coarse-pointer 44px override still wins on touch. |
 
 ### 1.5 Other stylesheets
 

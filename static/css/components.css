@@ -118,6 +118,15 @@
         filter: brightness(1.06);
     }
 
+    /* Compact control for inline forms that sit inside a card row. */
+    .btn-sm {
+        height: 32px;
+        padding: 0 12px;
+        font-size: var(--text-ui);
+    }
+
+    .btn-sm svg { width: 16px; height: 16px; }
+
     .icon-btn {
         width: 36px;
         height: 36px;
@@ -557,6 +566,9 @@
 
     .pantry-item:hover { border-color: var(--border); }
 
+    .pantry-item .quantity-display { color: var(--text-muted); }
+    .pantry-item .item-quantity { font-weight: 500; }
+
     .pantry-item.out-of-stock {
         background: var(--danger-soft);
         border-color: var(--danger);
@@ -565,8 +577,9 @@
     .pantry-item.out-of-stock .quantity-display,
     .pantry-item.out-of-stock .out-of-stock-icon {
         color: var(--danger);
-        font-weight: 600;
     }
+
+    .pantry-item.out-of-stock .item-quantity { font-weight: 600; }
 
     .pantry-item.low-stock {
         background: var(--accent-soft);
@@ -576,14 +589,20 @@
     .pantry-item.low-stock .quantity-display,
     .pantry-item.low-stock .out-of-stock-icon {
         color: var(--accent-text);
-        font-weight: 600;
     }
+
+    .pantry-item.low-stock .item-quantity { font-weight: 600; }
 
     /* Row actions appear on hover or focus, as main's group-hover did. */
     .pantry-actions { opacity: 0; }
 
     .pantry-item:hover .pantry-actions,
     .pantry-item:focus-within .pantry-actions { opacity: 1; }
+
+    /* Row icons stay compact so the text column keeps its width at narrower
+       breakpoints (main's icons here were 24px, not the 36px default). */
+    .pantry-actions .icon-btn { width: 28px; height: 28px; }
+    .pantry-actions .icon-btn svg { width: 16px; height: 16px; }
 
     /* ---------- Coarse pointers ---------- */
     /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
