@@ -1921,7 +1921,7 @@ Replace everything from `{% block content %}` up to (not including) `<script id=
         </div>
     </div>
 
-    <div class="grid md:grid-cols-3 gap-8 mb-8">
+    <div id="recipe-body" class="grid md:grid-cols-3 gap-8 mb-8">
         <div class="md:col-span-1">
             <div class="card p-6">
                 <h2 class="text-title font-bold mb-4 text-accent-text">🥘 {{ tr.t("recipe-ingredients") }}</h2>
@@ -2157,7 +2157,7 @@ function showRecipeError(message) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
             </div>
-            <p class="flex-1 text-text text-sm font-mono whitespace-pre-wrap">${message}</p>
+            <p class="flex-1 text-text text-sm font-mono whitespace-pre-wrap"></p>
             <button type="button" onclick="this.closest('#recipe-error-banner').remove()" class="icon-btn shrink-0" aria-label="Dismiss">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -2165,24 +2165,41 @@ function showRecipeError(message) {
             </button>
         </div>
     `;
+    banner.querySelector('p').textContent = message;
     // Insert before the main content
-    const content = document.querySelector('.grid');
+    const content = document.getElementById('recipe-body');
     content.parentNode.insertBefore(banner, content);
 }
 
 // Scale navigation stashes the scroll position so a scale tap does not
 // jump the reader back to the top of the recipe.
 const SCALE_SCROLL_KEY = 'recipe-scale-scroll';
+// |json puts the path in a JS string literal with <, >, & escaped as
+// \uXXXX, so it survives the <script> context (Askama's HTML escaping
+// would not be decoded here the way it is inside an attribute).
+const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+const DEFAULT_SCALE = {{ scale }};
 
 function goToScale(value) {
+    const input = document.getElementById('scale');
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) {
+        // Cleared or non-numeric: put the current scale back, do not navigate.
+        input.value = DEFAULT_SCALE;
+        return;
+    }
+    const min = parseFloat(input.min) || 0.5;
+    const max = parseFloat(input.max) || 200;
+    const clamped = Math.min(max, Math.max(min, n));
     try {
-        sessionStorage.setItem(SCALE_SCROLL_KEY, String(window.scrollY));
+        sessionStorage.setItem(SCALE_SCROLL_KEY, window.location.pathname + '|' + window.scrollY);
     } catch (e) { /* private mode / storage disabled */ }
-    window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${value}`;
+    window.location.href = RECIPE_URL + '?scale=' + encodeURIComponent(clamped);
 }
 
-// Only ever set immediately before a scale navigation, and cleared as soon as
-// it is read, so arriving at this page any other way restores nothing.
+// Only ever set immediately before a scale navigation, cleared as soon as it
+// is read, and only honoured on the same recipe path, so a stale stash from a
+// failed navigation cannot scroll a different recipe.
 (function restoreScaleScroll() {
     let stashed = null;
     try {
@@ -2190,7 +2207,9 @@ function goToScale(value) {
         if (stashed !== null) sessionStorage.removeItem(SCALE_SCROLL_KEY);
     } catch (e) { return; }
     if (stashed === null) return;
-    const y = parseInt(stashed, 10);
+    const sep = stashed.lastIndexOf('|');
+    if (sep === -1 || stashed.slice(0, sep) !== window.location.pathname) return;
+    const y = parseInt(stashed.slice(sep + 1), 10);
     if (!Number.isFinite(y) || y <= 0) return;
     window.addEventListener('load', function () { window.scrollTo(0, y); });
 })();

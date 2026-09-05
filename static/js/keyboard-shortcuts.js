@@ -358,9 +358,11 @@
         const scaleInput = document.getElementById('scale');
         if (!scaleInput) return;
 
-        let newValue = parseFloat(scaleInput.value) + delta;
         const min = parseFloat(scaleInput.min) || 0.5;
         const max = parseFloat(scaleInput.max) || 200;
+
+        let newValue = parseFloat(scaleInput.value) + delta;
+        if (!Number.isFinite(newValue)) newValue = min;
 
         // Clamp to valid range
         newValue = Math.max(min, Math.min(max, newValue));
