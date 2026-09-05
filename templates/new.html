@@ -31,7 +31,7 @@
                     pattern="[a-zA-Z0-9_/ -]+"
                     placeholder="{{ tr.t("new-recipe-placeholder") }}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
-                    class="flex-1 px-4 py-3 border border-line rounded-[var(--radius-control)] bg-surface text-text focus:border-accent outline-hidden{% if error.is_some() %} border-danger{% endif %}"
+                    class="flex-1 px-4 py-3 border {% if error.is_some() %}border-danger{% else %}border-line{% endif %} rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]"
                 >
                 <span class="text-faint">.cook</span>
             </div>

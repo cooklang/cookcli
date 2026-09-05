@@ -16,6 +16,7 @@
 
 - Never commit `static/css/output.css` (gitignored). Rebuild it with `npm run build-css` after any CSS change and before running E2E tests.
 - No Tailwind palette utility (`gray-*`, `orange-*`, `purple-*`, `blue-*`, `green-*`, `red-*`, `pink-*`, `yellow-*`, `indigo-*`, `lime-*`, `amber-*`, `cyan-*`, `emerald-*`, `white`, `black`) may appear in a file you touch, except `bg-black/50` for modal backdrops. No gradients. The only `dark:` usage allowed is the theme-toggle icon swap (`hidden dark:block` / `block dark:hidden`).
+- Never stack two utilities that set the same property where one is conditional (e.g. `border-line` plus a conditional `border-danger`): Tailwind emits them in alphabetical order, so whichever sorts last wins regardless of intent. Branch the class instead: `{% if err %}border-danger{% else %}border-line{% endif %}`.
 - Keep every structural utility (grid columns, `p-6`, `gap-6`, `mb-8`, `h-48`, `w-16`, `sticky top-6`, responsive variants) exactly as `main` has it. Only colour, border, radius, shadow and typography classes change.
 - Commit messages use Conventional Commits (`feat(ui):`, `fix(ui):`, `refactor(ui):`, `test(ui):`, `docs:`) and end with the trailer line `Claude-Session: https://claude.ai/code/session_013urND2B6Y3Z7WQuDpE8ZDu`.
 - E2E: `npm test -- --project=chromium <spec>` runs one spec file in Chromium. The Playwright web server builds CSS, JS and the binary automatically; if a server is already on port 9080 it is reused, so restart it after Rust changes. The `shopping-list*.spec.ts` files race on the shared fixture; run them with `--workers=1`.
@@ -3534,7 +3535,7 @@ The LSP indicator (around lines 350–366): replace the six `className` assignme
                     pattern="[a-zA-Z0-9_/ -]+"
                     placeholder="{{ tr.t("new-recipe-placeholder") }}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
-                    class="flex-1 px-4 py-3 border border-line rounded-[var(--radius-control)] bg-surface text-text focus:border-accent outline-hidden{% if error.is_some() %} border-danger{% endif %}"
+                    class="flex-1 px-4 py-3 border {% if error.is_some() %}border-danger{% else %}border-line{% endif %} rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]"
                 >
                 <span class="text-faint">.cook</span>
             </div>
@@ -3650,7 +3651,7 @@ Expected: passes (no test pins the strings).
         <h2 class="text-title font-semibold mb-3 text-text">Contents</h2>
         <div class="flex flex-wrap gap-2">
             {% for section in sections %}
-            <a href="#{{ section.id }}" class="btn">
+            <a href="#{{ section.id }}" class="btn btn-sm">
                 {{ section.title }}
             </a>
             {% endfor %}
