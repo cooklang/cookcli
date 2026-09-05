@@ -301,8 +301,11 @@ async fn html_menu_page_agrees_with_the_menu_api() {
     let server = start_server().await;
 
     // Every reference link, paired with the badge following it (if any).
+    // The badge's classes are deliberately not pinned — this test is about
+    // the factors, and hard-coding the styling made a purely visual change
+    // to menu.html fail here.
     let re = regex::Regex::new(
-        r#"/recipe/(?:[^"?]*?)"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span class="text-sm text-gray-500">\(×([0-9.]+)\)</span>)?"#,
+        r#"/recipe/(?:[^"?]*?)"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
     )
     .unwrap();
 

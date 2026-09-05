@@ -205,4 +205,32 @@ test.describe('Recipe Scaling', () => {
       expect(true).toBe(true);
     }
   });
+
+  // Regression coverage for goToScale()'s guard against non-numeric input
+  // and for building the scale URL from a JS string constant instead of an
+  // HTML-escaped template literal (issue: recipe names with & or ' broke).
+  test('should not navigate when the scale input is cleared', async ({ page }) => {
+    await page.goto('/recipe/Neapolitan%20Pizza');
+    await page.waitForLoadState('networkidle');
+
+    const scaleInput = page.locator('#scale');
+    await scaleInput.fill('');
+    await scaleInput.press('Tab');
+    await page.waitForTimeout(300);
+
+    expect(page.url()).not.toContain('scale=');
+    expect(page.url()).toContain('/recipe/Neapolitan');
+    await expect(scaleInput).toHaveValue('1');
+  });
+
+  test('should navigate to a safely encoded scale URL from the stepper button', async ({ page }) => {
+    await page.goto('/recipe/Neapolitan%20Pizza');
+    await page.waitForLoadState('networkidle');
+
+    const increaseButton = page.getByRole('button', { name: 'Increase scale' });
+    await increaseButton.click();
+    await page.waitForLoadState('networkidle');
+
+    expect(page.url()).toMatch(/\?scale=1\.5$/);
+  });
 });

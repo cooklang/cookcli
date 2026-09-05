@@ -7,18 +7,18 @@
     <!-- Header bar -->
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-4">
-            <a href="{{ prefix }}/recipe/{{ recipe_path }}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="{{ prefix }}/recipe/{{ recipe_path }}" class="btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
                 {{ tr.t("action-back") }}
             </a>
-            <h1 class="text-2xl font-bold text-gray-800">{{ recipe_name }}</h1>
+            <h1 class="text-display font-bold text-text">{{ recipe_name }}</h1>
         </div>
         <div class="flex items-center gap-3">
-            <span id="save-status" class="text-sm text-gray-500"></span>
-            <button onclick="showDeleteModal()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span id="save-status" class="text-sm text-muted"></span>
+            <button onclick="showDeleteModal()" class="btn btn-danger">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                 </svg>
                 {{ tr.t("action-delete") }}
@@ -28,22 +28,22 @@
 
     <!-- Delete confirmation modal -->
     <div id="delete-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
+        <div class="card shadow-[var(--shadow-overlay)] p-6 max-w-md mx-4">
             <div class="flex items-center gap-3 mb-4">
-                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
-                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-12 h-12 rounded-full bg-danger-soft flex items-center justify-center">
+                    <svg class="w-6 h-6 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ tr.t("delete-recipe") }}</h2>
+                <h2 class="text-title font-bold text-text">{{ tr.t("delete-recipe") }}</h2>
             </div>
-            <p class="text-gray-600 dark:text-gray-300 mb-2">{{ tr.t("delete-recipe-confirm") }}</p>
-            <p class="text-sm text-red-600 dark:text-red-400 mb-6">{{ tr.t("delete-recipe-warning") }}</p>
+            <p class="text-muted mb-2">{{ tr.t("delete-recipe-confirm") }}</p>
+            <p class="text-sm text-danger mb-6">{{ tr.t("delete-recipe-warning") }}</p>
             <div class="flex justify-end gap-3">
-                <button onclick="hideDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                <button onclick="hideDeleteModal()" class="btn">
                     {{ tr.t("action-cancel") }}
                 </button>
-                <button onclick="deleteRecipe()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                <button onclick="deleteRecipe()" class="btn btn-danger">
                     {{ tr.t("action-delete") }}
                 </button>
             </div>
@@ -51,17 +51,17 @@
     </div>
 
     <!-- Editor area -->
-    <div id="editor-container" class="flex-1 bg-white rounded-2xl shadow-lg overflow-hidden"></div>
+    <div id="editor-container" class="flex-1 card overflow-hidden"></div>
 
     <!-- Status bar -->
-    <div id="status-bar" class="mt-2 px-4 py-2 bg-gray-100 rounded-lg flex items-center justify-between text-sm">
+    <div id="status-bar" class="mt-2 px-4 py-2 bg-sunk rounded-[var(--radius-control)] flex items-center justify-between text-sm">
         <div class="flex items-center gap-2">
             <span id="lsp-status" class="flex items-center gap-1">
-                <span id="lsp-indicator" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                <span id="lsp-indicator" class="w-2 h-2 rounded-full bg-inactive"></span>
                 <span id="lsp-text">Disconnected</span>
             </span>
         </div>
-        <div id="cursor-position" class="text-gray-500">
+        <div id="cursor-position" class="text-muted">
             Line 1, Col 1
         </div>
     </div>
@@ -124,19 +124,19 @@ function updateSaveStatus(state) {
     switch (state) {
         case 'modified':
             status.textContent = 'Modified';
-            status.className = 'text-sm text-orange-500';
+            status.className = 'text-sm text-accent-text';
             break;
         case 'saving':
             status.textContent = 'Saving...';
-            status.className = 'text-sm text-gray-500';
+            status.className = 'text-sm text-muted';
             break;
         case 'saved':
             status.textContent = 'Saved';
-            status.className = 'text-sm text-green-500';
+            status.className = 'text-sm text-ok';
             break;
         case 'error':
             status.textContent = 'Save failed';
-            status.className = 'text-sm text-red-500';
+            status.className = 'text-sm text-danger';
             break;
     }
 }
@@ -144,8 +144,8 @@ function updateSaveStatus(state) {
 function showToast(message, type = 'error') {
     // Create toast element
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${
-        type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+    toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-[var(--radius-control)] border shadow-[var(--shadow-overlay)] z-50 ${
+        type === 'error' ? 'bg-danger-soft text-danger border-danger' : 'bg-ok-soft text-ok border-ok'
     }`;
     toast.textContent = message;
     document.body.appendChild(toast);
@@ -421,19 +421,19 @@ function updateLspStatus(status) {
 
     switch (status) {
         case 'connected':
-            indicator.className = 'w-2 h-2 rounded-full bg-green-500';
+            indicator.className = 'w-2 h-2 rounded-full bg-ok';
             text.textContent = 'LSP Connected';
-            text.className = 'text-green-600';
+            text.className = 'text-ok';
             break;
         case 'disconnected':
-            indicator.className = 'w-2 h-2 rounded-full bg-gray-400';
+            indicator.className = 'w-2 h-2 rounded-full bg-inactive';
             text.textContent = 'Disconnected';
-            text.className = 'text-gray-500';
+            text.className = 'text-muted';
             break;
         case 'error':
-            indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+            indicator.className = 'w-2 h-2 rounded-full bg-danger';
             text.textContent = 'LSP Error';
-            text.className = 'text-red-600';
+            text.className = 'text-danger';
             break;
     }
 }
