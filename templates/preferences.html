@@ -11,31 +11,31 @@
         <div class="card p-6">
             <h2 class="text-title font-semibold mb-4 text-text">{{ tr.t("pref-language") }}</h2>
             <div class="flex flex-wrap gap-3">
-                <button onclick="setLanguage('en-US')" data-active="{% if tr.lang_string() == "en-US" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('en-US')" aria-pressed="{% if tr.lang_string() == "en-US" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "en-US" %}btn-primary{% endif %}">
                     🇺🇸 English
                 </button>
-                <button onclick="setLanguage('de-DE')" data-active="{% if tr.lang_string() == "de-DE" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('de-DE')" aria-pressed="{% if tr.lang_string() == "de-DE" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "de-DE" %}btn-primary{% endif %}">
                     🇩🇪 Deutsch
                 </button>
-                <button onclick="setLanguage('nl-NL')" data-active="{% if tr.lang_string() == "nl-NL" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('nl-NL')" aria-pressed="{% if tr.lang_string() == "nl-NL" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "nl-NL" %}btn-primary{% endif %}">
                     🇳🇱 Nederlands
                 </button>
-                <button onclick="setLanguage('fr-FR')" data-active="{% if tr.lang_string() == "fr-FR" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('fr-FR')" aria-pressed="{% if tr.lang_string() == "fr-FR" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "fr-FR" %}btn-primary{% endif %}">
                     🇫🇷 Français
                 </button>
-                <button onclick="setLanguage('es-ES')" data-active="{% if tr.lang_string() == "es-ES" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('es-ES')" aria-pressed="{% if tr.lang_string() == "es-ES" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "es-ES" %}btn-primary{% endif %}">
                     🇪🇸 Español
                 </button>
-                <button onclick="setLanguage('eu-ES')" data-active="{% if tr.lang_string() == "eu-ES" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('eu-ES')" aria-pressed="{% if tr.lang_string() == "eu-ES" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "eu-ES" %}btn-primary{% endif %}">
                     Euskara
                 </button>
-                <button onclick="setLanguage('sv-SE')" data-active="{% if tr.lang_string() == "sv-SE" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('sv-SE')" aria-pressed="{% if tr.lang_string() == "sv-SE" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "sv-SE" %}btn-primary{% endif %}">
                     🇸🇪 Svenska
                 </button>
@@ -50,12 +50,12 @@
             <p class="text-sm text-muted mb-4">{{ tr.t("pref-features-desc") }}</p>
             <div class="flex flex-wrap gap-3">
                 <button onclick="toggleFeature('show_shopping_list', {{ features.show_shopping_list }})"
-                        data-active="{% if features.show_shopping_list %}true{% else %}false{% endif %}"
+                        aria-pressed="{% if features.show_shopping_list %}true{% else %}false{% endif %}"
                         class="btn {% if features.show_shopping_list %}btn-primary{% endif %}">
                     🛒 {{ tr.t("nav-shopping-list") }}
                 </button>
                 <button onclick="toggleFeature('show_pantry', {{ features.show_pantry }})"
-                        data-active="{% if features.show_pantry %}true{% else %}false{% endif %}"
+                        aria-pressed="{% if features.show_pantry %}true{% else %}false{% endif %}"
                         class="btn {% if features.show_pantry %}btn-primary{% endif %}">
                     🥫 {{ tr.t("nav-pantry") }}
                 </button>
@@ -88,14 +88,14 @@
                     </button>
                 </div>
 
-                <div id="sync-login-card" class="hidden mt-4 border border-line rounded-[var(--radius-card)] p-6 bg-sunk">
+                <div id="sync-login-card" class="hidden mt-4 card p-6 bg-sunk">
                     <h3 class="text-title font-semibold mb-2 text-text">Sign in to CookCloud</h3>
                     <ol class="mt-3 space-y-2 text-sm text-text">
                         <li>1. Open <a id="sync-login-link" href="#" target="_blank" rel="noopener" class="underline text-accent-text">cook.md/device</a> in any browser.</li>
                         <li>2. Enter this code:</li>
                     </ol>
                     <div class="mt-3 flex items-center gap-2">
-                        <span id="sync-login-code" class="text-2xl tracking-widest bg-surface border border-line px-4 py-2 rounded-[var(--radius-control)] font-mono">----  ----</span>
+                        <span id="sync-login-code" class="text-2xl tracking-widest bg-surface border border-line-strong px-4 py-2 rounded-[var(--radius-control)] font-mono">----  ----</span>
                         <button id="sync-login-copy" type="button" class="btn">Copy</button>
                     </div>
                     <p id="sync-login-expires" class="mt-3 text-sm text-muted"></p>

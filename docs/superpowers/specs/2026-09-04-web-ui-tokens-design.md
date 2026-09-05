@@ -212,7 +212,7 @@ Six gradients become `.card`. Section header keeps its `menu-section-header` hoo
 
 ### 3.7 `preferences.html`
 
-Eleven gradients become `.card p-6` sections with `h2.text-title`. Language and feature toggle buttons are `.btn` with `.btn-primary` when active and carry `data-active="true|false"`.
+Eleven gradients become `.card p-6` sections with `h2.text-title`. Language and feature toggle buttons are `.btn` with `.btn-primary` when active and carry `aria-pressed="true|false"`.
 
 ### 3.8 `edit.html`, `new.html`
 
@@ -246,7 +246,7 @@ Every page has exactly one `h1` and no skipped level. Concretely: recipes index 
 ## 6. Tests
 
 - `tests/e2e/navigation.spec.ts`: `h3` → `.recipe-card-title`.
-- `tests/e2e/preferences.spec.ts`: gradient class assertions → `data-active`.
+- `tests/e2e/preferences.spec.ts`: gradient class assertions → `aria-pressed`.
 - `tests/e2e/recipe-display.spec.ts`: `ul.space-y-3 li` → `ul.ingredient-list li`; `span.italic.text-gray-600` → `span.row-note`; `.text-sm.text-gray-600.mt-2` → `.step-refs`. The metadata test keeps `.metadata-pill` but drops the `if (count > 0)` guard and asserts the Easy Pancakes values.
 - `tests/e2e/recipes-sort.spec.ts`: added from the PR.
 - `tests/e2e/tablet.spec.ts`: not added.

@@ -25,7 +25,7 @@
         {% match image_path %}
         {% when Some with (img) %}
         <div class="mb-4 max-w-4xl mx-auto print:hidden">
-            <div class="rounded-xl overflow-hidden card bg-sunk">
+            <div class="overflow-hidden card bg-sunk">
                 <img src="{{ img }}" alt="{{ name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
             </div>
         </div>
@@ -50,7 +50,7 @@
                                min="0.5"
                                max="200"
                                step="0.5"
-                               onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                               onchange="goToScale(this.value)">
                         <button type="button" aria-label="Increase scale" onclick="adjustScale(0.5)">+</button>
                     </div>
                 </div>
@@ -175,12 +175,12 @@
                                             {{ name }}
                                             {% match quantity %}
                                             {% when Some with (q) %}
-                                                <span class="font-semibold">{{ q }}</span>
+                                                <span>{{ q }}</span>
                                             {% when None %}
                                             {% endmatch %}
                                             {% match unit %}
                                             {% when Some with (u) %}
-                                                <span>{{ u }}</span>
+                                                <span class="font-normal text-muted">{{ u }}</span>
                                             {% when None %}
                                             {% endmatch %}
                                         </span>
@@ -216,12 +216,12 @@
                                         {{ name }}
                                         {% match quantity %}
                                         {% when Some with (q) %}
-                                            <span class="font-semibold">{{ q }}</span>
+                                            <span>{{ q }}</span>
                                         {% when None %}
                                         {% endmatch %}
                                         {% match unit %}
                                         {% when Some with (u) %}
-                                            <span>{{ u }}</span>
+                                            <span class="font-normal text-muted">{{ u }}</span>
                                         {% when None %}
                                         {% endmatch %}
                                     </span>
@@ -250,6 +250,25 @@ function escHtml(s) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+// |json puts the path in a JS string literal with <, >, & escaped as
+// \uXXXX, so it survives the <script> context.
+const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+const DEFAULT_SCALE = {{ scale }};
+
+function goToScale(value) {
+    const input = document.getElementById('scale');
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) {
+        // Cleared or non-numeric: put the current scale back, do not navigate.
+        input.value = DEFAULT_SCALE;
+        return;
+    }
+    const min = parseFloat(input.min) || 0.5;
+    const max = parseFloat(input.max) || 200;
+    const clamped = Math.min(max, Math.max(min, n));
+    window.location.href = RECIPE_URL + '?scale=' + encodeURIComponent(clamped);
 }
 
 async function addToShoppingList(event, recipePath) {

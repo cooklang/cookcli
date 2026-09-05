@@ -2840,7 +2840,7 @@ Replace everything from `{% block content %}` up to (not including) `{% if !stat
         {% match image_path %}
         {% when Some with (img) %}
         <div class="mb-4 max-w-4xl mx-auto print:hidden">
-            <div class="rounded-xl overflow-hidden card bg-sunk">
+            <div class="overflow-hidden card bg-sunk">
                 <img src="{{ img }}" alt="{{ name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
             </div>
         </div>
@@ -2865,7 +2865,7 @@ Replace everything from `{% block content %}` up to (not including) `{% if !stat
                                min="0.5"
                                max="200"
                                step="0.5"
-                               onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                               onchange="goToScale(this.value)">
                         <button type="button" aria-label="Increase scale" onclick="adjustScale(0.5)">+</button>
                     </div>
                 </div>
@@ -2990,12 +2990,12 @@ Replace everything from `{% block content %}` up to (not including) `{% if !stat
                                             {{ name }}
                                             {% match quantity %}
                                             {% when Some with (q) %}
-                                                <span class="font-semibold">{{ q }}</span>
+                                                <span>{{ q }}</span>
                                             {% when None %}
                                             {% endmatch %}
                                             {% match unit %}
                                             {% when Some with (u) %}
-                                                <span>{{ u }}</span>
+                                                <span class="font-normal text-muted">{{ u }}</span>
                                             {% when None %}
                                             {% endmatch %}
                                         </span>
@@ -3031,12 +3031,12 @@ Replace everything from `{% block content %}` up to (not including) `{% if !stat
                                         {{ name }}
                                         {% match quantity %}
                                         {% when Some with (q) %}
-                                            <span class="font-semibold">{{ q }}</span>
+                                            <span>{{ q }}</span>
                                         {% when None %}
                                         {% endmatch %}
                                         {% match unit %}
                                         {% when Some with (u) %}
-                                            <span>{{ u }}</span>
+                                            <span class="font-normal text-muted">{{ u }}</span>
                                         {% when None %}
                                         {% endmatch %}
                                     </span>
@@ -3051,7 +3051,31 @@ Replace everything from `{% block content %}` up to (not including) `{% if !stat
             {% endfor %}
     </div>
 </div>
+```
 
+- [ ] **Step 3a: Safe scale navigation**
+
+The stepper's input uses `onchange="goToScale(this.value)"`. Inside the `{% if !static_mode %}<script>` block, before `escHtml`, add the same guarded navigation the recipe page uses (no scroll stash here):
+
+```js
+// |json puts the path in a JS string literal with <, >, & escaped as
+// \uXXXX, so it survives the <script> context.
+const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+const DEFAULT_SCALE = {{ scale }};
+
+function goToScale(value) {
+    const input = document.getElementById('scale');
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) {
+        // Cleared or non-numeric: put the current scale back, do not navigate.
+        input.value = DEFAULT_SCALE;
+        return;
+    }
+    const min = parseFloat(input.min) || 0.5;
+    const max = parseFloat(input.max) || 200;
+    const clamped = Math.min(max, Math.max(min, n));
+    window.location.href = RECIPE_URL + '?scale=' + encodeURIComponent(clamped);
+}
 ```
 
 - [ ] **Step 3: Retint the success/error states in the menu script**
@@ -3113,14 +3137,14 @@ EOF
 - Modify: `tests/e2e/preferences.spec.ts:231-245`
 - Modify: `templates/preferences.html`
 
-- [ ] **Step 1: Assert on `data-active` instead of gradient classes**
+- [ ] **Step 1: Assert on `aria-pressed` instead of gradient classes**
 
 In `tests/e2e/preferences.spec.ts`:
 
 ```ts
-    // Both enabled → toggles report active state
-    await expect(shoppingBtn).toHaveAttribute('data-active', 'true');
-    await expect(pantryBtn).toHaveAttribute('data-active', 'true');
+    // Both enabled → toggles report pressed state via aria-pressed
+    await expect(shoppingBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(pantryBtn).toHaveAttribute('aria-pressed', 'true');
 ```
 
 and further down:
@@ -3128,11 +3152,11 @@ and further down:
 ```ts
     // Button is now inactive
     const shoppingBtn = page.getByRole('button', { name: /Shopping/i });
-    await expect(shoppingBtn).toHaveAttribute('data-active', 'false');
+    await expect(shoppingBtn).toHaveAttribute('aria-pressed', 'false');
 ```
 
 Run: `npm test -- --project=chromium tests/e2e/preferences.spec.ts`
-Expected: the two feature-toggle tests fail (no `data-active` yet).
+Expected: the two feature-toggle tests fail (no `aria-pressed` yet).
 
 - [ ] **Step 2: Rewrite the markup block of `templates/preferences.html`**
 
@@ -3148,31 +3172,31 @@ Replace everything from `{% block content %}` through `{% endblock %}` (the cont
         <div class="card p-6">
             <h2 class="text-title font-semibold mb-4 text-text">{{ tr.t("pref-language") }}</h2>
             <div class="flex flex-wrap gap-3">
-                <button onclick="setLanguage('en-US')" data-active="{% if tr.lang_string() == "en-US" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('en-US')" aria-pressed="{% if tr.lang_string() == "en-US" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "en-US" %}btn-primary{% endif %}">
                     🇺🇸 English
                 </button>
-                <button onclick="setLanguage('de-DE')" data-active="{% if tr.lang_string() == "de-DE" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('de-DE')" aria-pressed="{% if tr.lang_string() == "de-DE" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "de-DE" %}btn-primary{% endif %}">
                     🇩🇪 Deutsch
                 </button>
-                <button onclick="setLanguage('nl-NL')" data-active="{% if tr.lang_string() == "nl-NL" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('nl-NL')" aria-pressed="{% if tr.lang_string() == "nl-NL" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "nl-NL" %}btn-primary{% endif %}">
                     🇳🇱 Nederlands
                 </button>
-                <button onclick="setLanguage('fr-FR')" data-active="{% if tr.lang_string() == "fr-FR" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('fr-FR')" aria-pressed="{% if tr.lang_string() == "fr-FR" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "fr-FR" %}btn-primary{% endif %}">
                     🇫🇷 Français
                 </button>
-                <button onclick="setLanguage('es-ES')" data-active="{% if tr.lang_string() == "es-ES" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('es-ES')" aria-pressed="{% if tr.lang_string() == "es-ES" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "es-ES" %}btn-primary{% endif %}">
                     🇪🇸 Español
                 </button>
-                <button onclick="setLanguage('eu-ES')" data-active="{% if tr.lang_string() == "eu-ES" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('eu-ES')" aria-pressed="{% if tr.lang_string() == "eu-ES" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "eu-ES" %}btn-primary{% endif %}">
                     Euskara
                 </button>
-                <button onclick="setLanguage('sv-SE')" data-active="{% if tr.lang_string() == "sv-SE" %}true{% else %}false{% endif %}"
+                <button onclick="setLanguage('sv-SE')" aria-pressed="{% if tr.lang_string() == "sv-SE" %}true{% else %}false{% endif %}"
                         class="language-btn btn {% if tr.lang_string() == "sv-SE" %}btn-primary{% endif %}">
                     🇸🇪 Svenska
                 </button>
@@ -3187,12 +3211,12 @@ Replace everything from `{% block content %}` through `{% endblock %}` (the cont
             <p class="text-sm text-muted mb-4">{{ tr.t("pref-features-desc") }}</p>
             <div class="flex flex-wrap gap-3">
                 <button onclick="toggleFeature('show_shopping_list', {{ features.show_shopping_list }})"
-                        data-active="{% if features.show_shopping_list %}true{% else %}false{% endif %}"
+                        aria-pressed="{% if features.show_shopping_list %}true{% else %}false{% endif %}"
                         class="btn {% if features.show_shopping_list %}btn-primary{% endif %}">
                     🛒 {{ tr.t("nav-shopping-list") }}
                 </button>
                 <button onclick="toggleFeature('show_pantry', {{ features.show_pantry }})"
-                        data-active="{% if features.show_pantry %}true{% else %}false{% endif %}"
+                        aria-pressed="{% if features.show_pantry %}true{% else %}false{% endif %}"
                         class="btn {% if features.show_pantry %}btn-primary{% endif %}">
                     🥫 {{ tr.t("nav-pantry") }}
                 </button>
@@ -3225,14 +3249,14 @@ Replace everything from `{% block content %}` through `{% endblock %}` (the cont
                     </button>
                 </div>
 
-                <div id="sync-login-card" class="hidden mt-4 border border-line rounded-[var(--radius-card)] p-6 bg-sunk">
+                <div id="sync-login-card" class="hidden mt-4 card p-6 bg-sunk">
                     <h3 class="text-title font-semibold mb-2 text-text">Sign in to CookCloud</h3>
                     <ol class="mt-3 space-y-2 text-sm text-text">
                         <li>1. Open <a id="sync-login-link" href="#" target="_blank" rel="noopener" class="underline text-accent-text">cook.md/device</a> in any browser.</li>
                         <li>2. Enter this code:</li>
                     </ol>
                     <div class="mt-3 flex items-center gap-2">
-                        <span id="sync-login-code" class="text-2xl tracking-widest bg-surface border border-line px-4 py-2 rounded-[var(--radius-control)] font-mono">----  ----</span>
+                        <span id="sync-login-code" class="text-2xl tracking-widest bg-surface border border-line-strong px-4 py-2 rounded-[var(--radius-control)] font-mono">----  ----</span>
                         <button id="sync-login-copy" type="button" class="btn">Copy</button>
                     </div>
                     <p id="sync-login-expires" class="mt-3 text-sm text-muted"></p>
@@ -3344,7 +3368,7 @@ Expected: all pass.
 ```bash
 git add templates/preferences.html tests/e2e/preferences.spec.ts
 git commit -q -F - <<'EOF'
-refactor(ui): preferences on tokens, toggles expose data-active
+refactor(ui): preferences on tokens, toggles expose aria-pressed
 
 Claude-Session: https://claude.ai/code/session_013urND2B6Y3Z7WQuDpE8ZDu
 EOF
