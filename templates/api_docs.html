@@ -4,18 +4,18 @@
 
 {% block content %}
 <div class="max-w-5xl">
-    <h1 class="text-2xl font-bold mb-2">Server API</h1>
-    <p class="text-gray-600 dark:text-gray-400 mb-6">
+    <h1 class="text-display font-bold text-text mb-2">Server API</h1>
+    <p class="text-muted mb-6">
         {{ preamble.intro }}
     </p>
 
     <!-- Ground rules -->
-    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 p-6 rounded-2xl border-2 border-blue-200 dark:border-gray-700 mb-8">
-        <h2 class="text-lg font-semibold mb-3 text-blue-900 dark:text-blue-200">Before you start</h2>
-        <div class="text-sm space-y-2 text-gray-700 dark:text-gray-300">
+    <div class="card p-6 border-l-[3px] border-l-accent mb-8">
+        <h2 class="text-title font-semibold mb-3 text-text">Before you start</h2>
+        <div class="text-sm space-y-2 text-text">
             <div>
                 <span class="font-medium">Base URL:</span>
-                <code class="ml-2 px-2 py-0.5 rounded bg-white dark:bg-gray-900 font-mono">{{ base_url }}</code>
+                <code class="ml-2 px-2 py-0.5 rounded bg-sunk font-mono">{{ base_url }}</code>
             </div>
             {% for n in preamble.notes %}
             <div>
@@ -27,13 +27,13 @@
     </div>
 
     <!-- Errors -->
-    <div class="bg-gray-50 dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 mb-8">
-        <h2 class="text-lg font-semibold mb-3">Errors</h2>
-        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+    <div class="card p-6 mb-8">
+        <h2 class="text-title font-semibold mb-3 text-text">Errors</h2>
+        <p class="text-sm text-text mb-3">
             {{ preamble.error_intro }}
         </p>
-        <pre class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs overflow-x-auto font-mono">{{ preamble.error_example }}</pre>
-        <ul class="mt-3 text-sm space-y-1 text-gray-700 dark:text-gray-300">
+        <pre class="bg-sunk border border-line rounded-[var(--radius-control)] p-3 text-xs overflow-x-auto font-mono">{{ preamble.error_example }}</pre>
+        <ul class="mt-3 text-sm space-y-1 text-text">
             {% for c in preamble.error_codes %}
             <li><span class="font-mono font-medium">{{ c.label }}</span> — {{ c.text|inline_code|safe }}</li>
             {% endfor %}
@@ -41,12 +41,11 @@
     </div>
 
     <!-- Contents -->
-    <div class="bg-gray-50 dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 mb-8">
-        <h2 class="text-lg font-semibold mb-3">Contents</h2>
+    <div class="card p-6 mb-8">
+        <h2 class="text-title font-semibold mb-3 text-text">Contents</h2>
         <div class="flex flex-wrap gap-2">
             {% for section in sections %}
-            <a href="#{{ section.id }}"
-               class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors">
+            <a href="#{{ section.id }}" class="btn">
                 {{ section.title }}
             </a>
             {% endfor %}
@@ -56,17 +55,17 @@
     <!-- Endpoints -->
     {% for section in sections %}
     <section id="{{ section.id }}" class="mb-10 scroll-mt-24">
-        <h2 class="text-xl font-bold mb-2">{{ section.title }}</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">{{ section.description|inline_code|safe }}</p>
+        <h2 class="text-title font-bold mb-2 text-text">{{ section.title }}</h2>
+        <p class="text-sm text-muted mb-4">{{ section.description|inline_code|safe }}</p>
 
         <div class="space-y-4">
             {% for endpoint in section.endpoints %}
-            <article class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+            <article class="card p-5">
                 <div class="flex flex-wrap items-center gap-2 mb-2">
                     <span class="px-2 py-0.5 rounded text-xs font-bold font-mono {{ endpoint.method_classes() }}">{{ endpoint.method }}</span>
                     <code class="font-mono text-sm break-all">{{ endpoint.path }}</code>
                     {% if let Some(feature) = endpoint.feature %}
-                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-accent-soft text-accent-text">
                         requires <span class="font-mono">{{ feature }}</span> build
                     </span>
                     {% endif %}
@@ -74,14 +73,14 @@
 
                 <p class="text-sm font-medium mb-1">{{ endpoint.summary|inline_code|safe }}</p>
                 {% if !endpoint.description.is_empty() %}
-                <p class="text-sm text-gray-600 dark:text-gray-400">{{ endpoint.description|inline_code|safe }}</p>
+                <p class="text-sm text-muted">{{ endpoint.description|inline_code|safe }}</p>
                 {% endif %}
 
                 {% if !endpoint.params.is_empty() %}
                 <div class="mt-4 overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                            <tr class="text-left text-xs uppercase tracking-wide text-faint border-b border-line">
                                 <th class="py-1.5 pr-4 font-medium">Name</th>
                                 <th class="py-1.5 pr-4 font-medium">In</th>
                                 <th class="py-1.5 pr-4 font-medium">Type</th>
@@ -90,34 +89,34 @@
                         </thead>
                         <tbody>
                             {% for p in endpoint.params %}
-                            <tr class="border-b border-gray-100 dark:border-gray-700 align-top">
+                            <tr class="border-b border-line align-top">
                                 <td class="py-1.5 pr-4 font-mono whitespace-nowrap">
-                                    {{ p.name }}{% if p.required %}<span class="text-red-600 dark:text-red-400" title="required">*</span>{% endif %}
+                                    {{ p.name }}{% if p.required %}<span class="text-danger" title="required">*</span>{% endif %}
                                 </td>
-                                <td class="py-1.5 pr-4 text-gray-500 dark:text-gray-400">{{ p.kind }}</td>
-                                <td class="py-1.5 pr-4 font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ p.type_name }}</td>
-                                <td class="py-1.5 text-gray-600 dark:text-gray-400">{{ p.description|inline_code|safe }}</td>
+                                <td class="py-1.5 pr-4 text-faint">{{ p.kind }}</td>
+                                <td class="py-1.5 pr-4 font-mono text-faint whitespace-nowrap">{{ p.type_name }}</td>
+                                <td class="py-1.5 text-muted">{{ p.description|inline_code|safe }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span class="text-red-600 dark:text-red-400">*</span> required
+                    <p class="mt-1 text-xs text-faint">
+                        <span class="text-danger">*</span> required
                     </p>
                 </div>
                 {% endif %}
 
                 {% if let Some(request) = endpoint.request_example %}
                 <div class="mt-4">
-                    <h4 class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Request body</h4>
-                    <pre class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs overflow-x-auto font-mono">{{ request }}</pre>
+                    <h4 class="text-xs uppercase tracking-wide text-faint mb-1">Request body</h4>
+                    <pre class="bg-sunk border border-line rounded-[var(--radius-control)] p-3 text-xs overflow-x-auto font-mono">{{ request }}</pre>
                 </div>
                 {% endif %}
 
                 {% if let Some(response) = endpoint.response_example %}
                 <div class="mt-4">
-                    <h4 class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Response</h4>
-                    <pre class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs overflow-x-auto font-mono">{{ response }}</pre>
+                    <h4 class="text-xs uppercase tracking-wide text-faint mb-1">Response</h4>
+                    <pre class="bg-sunk border border-line rounded-[var(--radius-control)] p-3 text-xs overflow-x-auto font-mono">{{ response }}</pre>
                 </div>
                 {% endif %}
             </article>
