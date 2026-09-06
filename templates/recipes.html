@@ -264,7 +264,12 @@
     });
 
     restore();
-    applySort();
+    // The server already renders name/asc (natural, case-folded), so on the
+    // default sort the DOM is left as served: no reorder on load, and names
+    // with accents keep the server's order instead of the collator's.
+    if (sortField !== 'name' || sortDir !== 'asc') {
+        applySort();
+    }
 })();
 </script>
 {% endblock %}

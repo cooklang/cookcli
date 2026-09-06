@@ -200,8 +200,12 @@ enum NaturalChunk {
 
 /// Split a name into digit runs and non-digit runs, lowercased, so that
 /// "Recipe 9" sorts before "Recipe 10" and case does not split otherwise
-/// equal names. Mirrors the client-side `Intl.Collator` with
-/// `{ numeric: true, sensitivity: 'base' }` used by `templates/recipes.html`.
+/// equal names. This folds case and digits like the client-side
+/// `Intl.Collator` with `{ numeric: true, sensitivity: 'base' }` in
+/// `templates/recipes.html`, but not accents: non-ASCII letters keep code
+/// point order, so "Äpfel" sorts after "zucchini". The client therefore
+/// leaves the served order alone on the default sort and only re-sorts
+/// when the user picks another field or direction.
 fn natural_key(name: &str) -> Vec<NaturalChunk> {
     let mut chunks = Vec::new();
     let mut text = String::new();
@@ -1152,8 +1156,17 @@ fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Optio
 
 #[cfg(test)]
 mod natural_sort_tests {
-    use super::natural_cmp;
+    use super::{natural_cmp, natural_key};
     use std::cmp::Ordering;
+
+    #[test]
+    fn non_ascii_letters_keep_code_point_order() {
+        // Accents are not folded: this pins the documented divergence from
+        // the browser collator so a change here is deliberate.
+        assert_eq!(natural_cmp("zucchini", "Äpfel"), Ordering::Less);
+        // Case still folds for non-ASCII letters.
+        assert_eq!(natural_key("äpfel"), natural_key("Äpfel"));
+    }
 
     #[test]
     fn case_insensitive() {
