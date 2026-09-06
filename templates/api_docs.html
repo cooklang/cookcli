@@ -71,7 +71,7 @@
                     {% endif %}
                 </div>
 
-                <p class="text-sm font-medium mb-1">{{ endpoint.summary|inline_code|safe }}</p>
+                <h3 class="text-sm font-medium mb-1">{{ endpoint.summary|inline_code|safe }}</h3>
                 {% if !endpoint.description.is_empty() %}
                 <p class="text-sm text-muted">{{ endpoint.description|inline_code|safe }}</p>
                 {% endif %}

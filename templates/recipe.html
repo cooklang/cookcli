@@ -298,7 +298,7 @@
                 {% for section in sections %}
                 {% match section.name %}
                 {% when Some with (name) %}
-                <h3 class="text-title font-semibold mt-6 mb-4 text-accent-text border-b border-line pb-2">{{ name }}</h3>
+                <h2 class="text-title font-semibold mt-6 mb-4 text-accent-text border-b border-line pb-2">{{ name }}</h2>
                 {% when None %}
                 {% endmatch %}
                 <ol class="step-list space-y-4 {% if !loop.first %}mt-4{% endif %}">
