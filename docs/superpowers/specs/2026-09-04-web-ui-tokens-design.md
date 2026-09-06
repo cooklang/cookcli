@@ -42,7 +42,7 @@ Structure, in order:
 
 ### 1.2 Tokens
 
-Twenty semantic colour tokens plus two radii, two shadows. Values are the PR's final values, verbatim.
+Twenty-one semantic colour tokens plus two radii, two shadows. Values are the PR's final values, verbatim.
 
 | Token | Light | Dark |
 |---|---|---|
@@ -55,9 +55,10 @@ Twenty semantic colour tokens plus two radii, two shadows. Values are the PR's f
 | `--text-muted` | `#5f5a51` | `#ada69b` |
 | `--text-faint` | `#6a645b` | `#948d83` |
 | `--accent` | `#e15a29` | `#e15a29` |
+| `--accent-strong` | `#c94a1c` | `#c94a1c` |
 | `--accent-text` | `#715329` | `#f08050` |
 | `--accent-soft` | `#f5dacf` | `#3a2820` |
-| `--accent-ink` | `#16161d` | `#16161d` |
+| `--accent-ink` | `#ffffff` | `#ffffff` |
 | `--ok` | `#3d6849` | `#6fb283` |
 | `--ok-soft` | `#e2e8df` | `#1e2a22` |
 | `--danger` | `#c4261c` | `#ff6b60` |
@@ -73,7 +74,7 @@ Twenty semantic colour tokens plus two radii, two shadows. Values are the PR's f
 
 The print block resets all of these to the PR's print values (white surfaces, dark text, no shadows) under `:root, .dark, .cooking-overlay`.
 
-Tailwind names, registered under `@theme inline`: `bg`, `surface`, `sunk`, `line`, `line-strong`, `text`, `muted`, `faint`, `accent`, `accent-text`, `accent-soft`, `accent-ink`, `ok`, `ok-soft`, `danger`, `danger-soft`, `danger-ink`, `info`, `disabled`, `inactive`. Border tokens are named `line` so the utility reads `border-line`.
+Tailwind names, registered under `@theme inline`: `bg`, `surface`, `sunk`, `line`, `line-strong`, `text`, `muted`, `faint`, `accent`, `accent-strong`, `accent-text`, `accent-soft`, `accent-ink`, `ok`, `ok-soft`, `danger`, `danger-soft`, `danger-ink`, `info`, `disabled`, `inactive`. Border tokens are named `line` so the utility reads `border-line`.
 
 No raw hex appears outside the token declarations and `@media print`. No Tailwind palette utility (`gray-*`, `orange-*`, `purple-*`, …) appears in any template, script, or stylesheet. No `dark:` variant appears in any template; every colour flips through its token.
 
@@ -105,7 +106,7 @@ Copied from the PR, then adjusted. Everything lives in `@layer components` and r
 
 | Class | Change |
 |---|---|
-| `.btn`, `.btn-primary`, `.btn-danger` | height 40px, padding `0 16px`, `text-body`, svg 20px. Matches main's `px-4 py-2` buttons. |
+| `.btn`, `.btn-primary`, `.btn-danger` | `.btn-primary` fills with `--accent-strong` under white `--accent-ink` (4.7:1); hover/active darken. Height 40px, padding `0 16px`, `text-body`, svg 20px. Matches main's `px-4 py-2` buttons. |
 | `.select` | height 40px to sit level with `.btn`. |
 | `.stepper` | height 40px; buttons 32px wide; input 56px wide. |
 | `.nav-pill` | main's `px-5 py-2`, `border-radius: 9999px`, `text-body`. Flat fill states: hover `--surface-sunk`; active `--accent-soft` background, `--accent-text` colour, weight 600. |

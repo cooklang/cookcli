@@ -69,27 +69,31 @@ Expected: `output.css` written, `Finished` line from cargo.
 Replace the whole file with:
 
 ```css
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
 /* Tailwind v4 is CSS-first. The two things tailwind.config.js used to own —
    class-based dark mode and the list of files to scan for class names — are
-   declared here instead. */
+   declared here instead. `source(none)` disables Tailwind's automatic
+   whole-repo auto-detection, so only the paths named below are scanned. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @source "../../templates";
-@source "../../static/js";
+@source "../../static/js/*.js";
+@source "../../static/js/src";
+@source not "../../static/js/editor.bundle.js";
 /* The one Rust file that emits class names: method_classes() for the API
    docs method badge. */
 @source "../../src/web/templates.rs";
 
 /* ============================================================
    DESIGN TOKENS
-   Seventeen semantic colour names plus radii and shadows, defined once per
+   Twenty-one semantic colour names plus radii and shadows, defined once per
    theme. Every colour in the UI resolves through one of these. Do not
    introduce raw hex values or Tailwind palette utilities in templates.
-   --accent-ink is the foreground for text sitting ON a filled --accent
-   background: the design system's near-black, which clears AA on the
-   accent fill where white would not.
+   --accent-strong is the fill for controls that carry text: the DS orange
+   (--accent) only reaches 3.7:1 under white text, so filled buttons use
+   this slightly darker step, where white (--accent-ink) clears AA at 4.7:1.
+   --accent itself stays on icons, borders, focus rings and status dots.
    ============================================================ */
 :root {
     color-scheme: light;
@@ -103,9 +107,10 @@ Replace the whole file with:
     --text-muted:    #5f5a51;   /* DS Text/Secondary, darkened for AA */
     --text-faint:    #6a645b;
     --accent:        #e15a29;   /* DS Controls/Primary, Icons/Primary */
+    --accent-strong: #c94a1c;   /* --accent darkened until white text clears AA */
     --accent-text:   #715329;   /* DS Text/Tags */
     --accent-soft:   #f5dacf;   /* DS Background/UI One */
-    --accent-ink:    #16161d;
+    --accent-ink:    #ffffff;
     --ok:            #3d6849;
     --ok-soft:       #e2e8df;
     --danger:        #c4261c;   /* DS Text/Warning, darkened for AA */
@@ -144,9 +149,10 @@ Replace the whole file with:
     --text-muted:    #ada69b;
     --text-faint:    #948d83;
     --accent:        #e15a29;
+    --accent-strong: #c94a1c;
     --accent-text:   #f08050;
     --accent-soft:   #3a2820;
-    --accent-ink:    #16161d;
+    --accent-ink:    #ffffff;
     --ok:            #6fb283;
     --ok-soft:       #1e2a22;
     --danger:        #ff6b60;
@@ -175,6 +181,7 @@ Replace the whole file with:
     --color-muted:       var(--text-muted);
     --color-faint:       var(--text-faint);
     --color-accent:      var(--accent);
+    --color-accent-strong: var(--accent-strong);
     --color-accent-text: var(--accent-text);
     --color-accent-soft: var(--accent-soft);
     --color-accent-ink:  var(--accent-ink);
@@ -192,8 +199,8 @@ Replace the whole file with:
    TYPE SCALE
    Seven steps, each with a role and a line-height chosen for that role.
    `display` is 30px — the size main's page titles have always been — the
-   rest are the PR #456 scale. Tailwind's own names are aliased onto the
-   steps so a stray `text-sm` cannot drift off the scale.
+   rest are the PR #456 scale. Tailwind's xs/sm/base/lg/2xl/3xl names are
+   aliased onto the steps so a stray `text-sm` cannot drift off the scale.
    ============================================================ */
 @theme {
     --text-display: 30px;
@@ -221,17 +228,17 @@ Replace the whole file with:
     --text-label--letter-spacing: .06em;
 
     --text-xs:   var(--text-meta);
-    --text-xs--line-height: 1.4;
+    --text-xs--line-height: var(--text-meta--line-height);
     --text-sm:   var(--text-body);
-    --text-sm--line-height: 1.5;
+    --text-sm--line-height: var(--text-body--line-height);
     --text-base: var(--text-read);
-    --text-base--line-height: 1.6;
+    --text-base--line-height: var(--text-read--line-height);
     --text-lg:   var(--text-title);
-    --text-lg--line-height: 1.35;
+    --text-lg--line-height: var(--text-title--line-height);
     --text-2xl:  var(--text-display);
-    --text-2xl--line-height: 1.2;
+    --text-2xl--line-height: var(--text-display--line-height);
     --text-3xl:  var(--text-display);
-    --text-3xl--line-height: 1.2;
+    --text-3xl--line-height: var(--text-display--line-height);
 }
 
 body {
@@ -249,6 +256,8 @@ body {
     :root,
     .dark,
     .cooking-overlay {
+        color-scheme: light;
+
         --bg:            #ffffff;
         --surface:       #ffffff;
         --surface-sunk:  #f5f4f2;
@@ -258,6 +267,7 @@ body {
         --text-muted:    #444444;
         --text-faint:    #666666;
         --accent:        #a8380c;
+        --accent-strong: #a8380c;
         --accent-text:   #a8380c;
         --accent-soft:   #f7ece5;
         --accent-ink:    #ffffff;
@@ -354,7 +364,6 @@ body {
     :focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
-        border-radius: var(--radius-control);
     }
 
     /* ---------- Surfaces ---------- */
@@ -428,23 +437,26 @@ body {
 
     .btn:hover {
         background: var(--surface-sunk);
-        border-color: var(--border-strong);
     }
 
     .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
+    .btn-primary:active { background: var(--accent-strong); filter: brightness(.9); }
+    .btn-danger:active { background: var(--danger); filter: brightness(.97); }
 
     .btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
 
-    /* One accent-filled button per view. Everything else is neutral. */
+    /* One accent-filled button per view. Everything else is neutral.
+       Hover and active darken rather than brighten so the white label never
+       drops below AA on the fill. */
     .btn-primary {
-        background: var(--accent);
-        border-color: var(--accent);
+        background: var(--accent-strong);
+        border-color: var(--accent-strong);
         color: var(--accent-ink);
     }
 
     .btn-primary:hover {
-        background: var(--accent);
-        filter: brightness(1.06);
+        background: var(--accent-strong);
+        filter: brightness(.94);
     }
 
     /* The commit half of a destructive confirmation. */
@@ -458,6 +470,15 @@ body {
         background: var(--danger);
         filter: brightness(1.06);
     }
+
+    /* Compact control for inline forms that sit inside a card row. */
+    .btn-sm {
+        height: 32px;
+        padding: 0 12px;
+        font-size: var(--text-ui);
+    }
+
+    .btn-sm svg { width: 16px; height: 16px; }
 
     .icon-btn {
         width: 36px;
@@ -543,6 +564,11 @@ body {
 
     .stepper input:focus { outline: none; }
 
+    .stepper:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
     .search-input {
         width: 100%;
         height: 44px;
@@ -559,6 +585,7 @@ body {
     .search-input:focus {
         outline: none;
         border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
     }
 
     /* ---------- Navigation ---------- */
@@ -581,6 +608,41 @@ body {
         background: var(--accent-soft);
         color: var(--accent-text);
         font-weight: 600;
+    }
+
+    /* Rows of the small-screen overflow menu. A component rather than
+       text-muted + a conditional text-accent-text: two utilities of equal
+       specificity collide and the active colour silently loses. */
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 16px;
+        font-size: var(--text-body);
+        color: var(--text-muted);
+        text-decoration: none;
+        background: transparent;
+        border: 0;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .menu-item:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .menu-item.active {
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* The brand mark is orange with dark dots on transparency; it needs a
+       light backing on a dark nav. */
+    .dark .brand-mark {
+        background: var(--text);
+        padding: 2px;
     }
 
     /* ---------- Lists ---------- */
@@ -834,7 +896,8 @@ body {
     }
 
     .image-step {
-        @apply w-full max-h-80 object-contain rounded-xl;
+        @apply w-full max-h-80 object-contain;
+        border-radius: var(--radius-card);
     }
 
     .recipe-image-placeholder {
@@ -856,6 +919,9 @@ body {
 
     .pantry-item:hover { border-color: var(--border); }
 
+    .pantry-item .quantity-display { color: var(--text-muted); }
+    .pantry-item .item-quantity { font-weight: 500; }
+
     .pantry-item.out-of-stock {
         background: var(--danger-soft);
         border-color: var(--danger);
@@ -864,8 +930,9 @@ body {
     .pantry-item.out-of-stock .quantity-display,
     .pantry-item.out-of-stock .out-of-stock-icon {
         color: var(--danger);
-        font-weight: 600;
     }
+
+    .pantry-item.out-of-stock .item-quantity { font-weight: 600; }
 
     .pantry-item.low-stock {
         background: var(--accent-soft);
@@ -875,14 +942,20 @@ body {
     .pantry-item.low-stock .quantity-display,
     .pantry-item.low-stock .out-of-stock-icon {
         color: var(--accent-text);
-        font-weight: 600;
     }
+
+    .pantry-item.low-stock .item-quantity { font-weight: 600; }
 
     /* Row actions appear on hover or focus, as main's group-hover did. */
     .pantry-actions { opacity: 0; }
 
     .pantry-item:hover .pantry-actions,
     .pantry-item:focus-within .pantry-actions { opacity: 1; }
+
+    /* Row icons stay compact so the text column keeps its width at narrower
+       breakpoints (main's icons here were 24px, not the 36px default). */
+    .pantry-actions .icon-btn { width: 28px; height: 28px; }
+    .pantry-actions .icon-btn svg { width: 16px; height: 16px; }
 
     /* ---------- Coarse pointers ---------- */
     /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
@@ -893,7 +966,7 @@ body {
         .stepper button { width: 44px; }
         .icon-btn { width: 44px; height: 44px; }
         .ref-checkbox,
-        #list-content input[type="checkbox"] { width: 24px; height: 24px; }
+        .list-checkbox { width: 24px; height: 24px; }
         .pantry-actions { opacity: 1; }
     }
 }

@@ -74,9 +74,9 @@
 }
 
 .cooking-section-pill.active {
-    background: var(--accent);
+    background: var(--accent-strong);
     color: var(--accent-ink);
-    border-color: var(--accent);
+    border-color: var(--accent-strong);
 }
 
 .cooking-close-btn {
@@ -248,7 +248,7 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--accent-strong);
     color: var(--accent-ink);
     font-weight: 700;
     font-size: 13px;
@@ -318,7 +318,7 @@
     padding: 12px 40px;
     border-radius: 6px;
     border: none;
-    background: var(--accent);
+    background: var(--accent-strong);
     color: var(--accent-ink);
     font-size: 18px;
     font-weight: 600;
@@ -327,7 +327,7 @@
 }
 
 .cooking-done-close-btn:hover {
-    filter: brightness(1.06);
+    filter: brightness(.94);
 }
 
 /* Progress bar */

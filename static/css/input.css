@@ -16,12 +16,13 @@
 
 /* ============================================================
    DESIGN TOKENS
-   Twenty semantic colour names plus radii and shadows, defined once per
+   Twenty-one semantic colour names plus radii and shadows, defined once per
    theme. Every colour in the UI resolves through one of these. Do not
    introduce raw hex values or Tailwind palette utilities in templates.
-   --accent-ink is the foreground for text sitting ON a filled --accent
-   background: the design system's near-black, which clears AA on the
-   accent fill where white would not.
+   --accent-strong is the fill for controls that carry text: the DS orange
+   (--accent) only reaches 3.7:1 under white text, so filled buttons use
+   this slightly darker step, where white (--accent-ink) clears AA at 4.7:1.
+   --accent itself stays on icons, borders, focus rings and status dots.
    ============================================================ */
 :root {
     color-scheme: light;
@@ -35,9 +36,10 @@
     --text-muted:    #5f5a51;   /* DS Text/Secondary, darkened for AA */
     --text-faint:    #6a645b;
     --accent:        #e15a29;   /* DS Controls/Primary, Icons/Primary */
+    --accent-strong: #c94a1c;   /* --accent darkened until white text clears AA */
     --accent-text:   #715329;   /* DS Text/Tags */
     --accent-soft:   #f5dacf;   /* DS Background/UI One */
-    --accent-ink:    #16161d;
+    --accent-ink:    #ffffff;
     --ok:            #3d6849;
     --ok-soft:       #e2e8df;
     --danger:        #c4261c;   /* DS Text/Warning, darkened for AA */
@@ -76,9 +78,10 @@
     --text-muted:    #ada69b;
     --text-faint:    #948d83;
     --accent:        #e15a29;
+    --accent-strong: #c94a1c;
     --accent-text:   #f08050;
     --accent-soft:   #3a2820;
-    --accent-ink:    #16161d;
+    --accent-ink:    #ffffff;
     --ok:            #6fb283;
     --ok-soft:       #1e2a22;
     --danger:        #ff6b60;
@@ -107,6 +110,7 @@
     --color-muted:       var(--text-muted);
     --color-faint:       var(--text-faint);
     --color-accent:      var(--accent);
+    --color-accent-strong: var(--accent-strong);
     --color-accent-text: var(--accent-text);
     --color-accent-soft: var(--accent-soft);
     --color-accent-ink:  var(--accent-ink);
@@ -192,6 +196,7 @@ body {
         --text-muted:    #444444;
         --text-faint:    #666666;
         --accent:        #a8380c;
+        --accent-strong: #a8380c;
         --accent-text:   #a8380c;
         --accent-soft:   #f7ece5;
         --accent-ink:    #ffffff;

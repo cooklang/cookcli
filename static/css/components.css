@@ -89,21 +89,23 @@
     }
 
     .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
-    .btn-primary:active { background: var(--accent); filter: brightness(.97); }
+    .btn-primary:active { background: var(--accent-strong); filter: brightness(.9); }
     .btn-danger:active { background: var(--danger); filter: brightness(.97); }
 
     .btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
 
-    /* One accent-filled button per view. Everything else is neutral. */
+    /* One accent-filled button per view. Everything else is neutral.
+       Hover and active darken rather than brighten so the white label never
+       drops below AA on the fill. */
     .btn-primary {
-        background: var(--accent);
-        border-color: var(--accent);
+        background: var(--accent-strong);
+        border-color: var(--accent-strong);
         color: var(--accent-ink);
     }
 
     .btn-primary:hover {
-        background: var(--accent);
-        filter: brightness(1.06);
+        background: var(--accent-strong);
+        filter: brightness(.94);
     }
 
     /* The commit half of a destructive confirmation. */
