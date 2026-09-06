@@ -44,10 +44,10 @@
 
     function captureStepHTML() {
         const stepElements = [];
-        const sectionEls = document.querySelectorAll('.md\\:col-span-2 ol');
+        const sectionEls = document.querySelectorAll('ol.step-list');
         sectionEls.forEach(function(ol) {
             ol.querySelectorAll(':scope > li').forEach(function(li) {
-                const textDiv = li.querySelector('.leading-8');
+                const textDiv = li.querySelector('.step-body');
                 if (textDiv) {
                     stepElements.push(textDiv.innerHTML);
                 }

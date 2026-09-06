@@ -109,25 +109,18 @@ test.describe('Recipe Display', () => {
     await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
     await page.waitForLoadState('networkidle');
 
-    // Check for metadata pills
+    // Pills keep the .metadata-pill class. No count guard: Easy Pancakes
+    // declares metadata, so zero pills is a failure, not a skip.
     const metadataPills = page.locator('.metadata-pill');
+    expect(await metadataPills.count()).toBeGreaterThan(0);
+    await expect(metadataPills.first()).toBeVisible();
 
-    if (await metadataPills.count() > 0) {
-      await expect(metadataPills.first()).toBeVisible();
-
-      // Check for common metadata like servings, time, etc.
-      const metadataText = await metadataPills.allTextContents();
-      const hasValidMetadata = metadataText.some(text =>
-        text.includes('servings') ||
-        text.includes('time') ||
-        text.includes('difficulty') ||
-        text.includes('cuisine')
-      );
-
-      if (hasValidMetadata) {
-        expect(hasValidMetadata).toBeTruthy();
-      }
-    }
+    const metadataText = (await metadataPills.allTextContents()).join(' ').toLowerCase();
+    expect(metadataText).toContain('2');
+    expect(metadataText).toContain('servings');
+    expect(metadataText).toContain('5 min');
+    expect(metadataText).toContain('20 min');
+    expect(metadataText).toContain('cookcli team');
   });
 
   test('should display ingredient notes from shorthand notation', async ({ page }) => {
@@ -136,7 +129,7 @@ test.describe('Recipe Display', () => {
     await page.waitForLoadState('networkidle');
 
     // Check that ingredients with notes are displayed
-    const ingredientsList = page.locator('ul.space-y-3 li');
+    const ingredientsList = page.locator('ul.ingredient-list li');
     const count = await ingredientsList.count();
     expect(count).toBeGreaterThan(0);
 
@@ -145,7 +138,7 @@ test.describe('Recipe Display', () => {
 
     if (await ingredientWithNote.count() > 0) {
       // Check note is displayed with correct styling
-      const noteSpan = ingredientWithNote.locator('span.italic.text-gray-600');
+      const noteSpan = ingredientWithNote.locator('span.row-note');
       await expect(noteSpan).toBeVisible();
 
       // Check note content
@@ -161,7 +154,7 @@ test.describe('Recipe Display', () => {
     }
 
     // Check step-level ingredient notes
-    const stepIngredients = page.locator('.text-sm.text-gray-600.mt-2');
+    const stepIngredients = page.locator('.step-refs');
     if (await stepIngredients.count() > 0) {
       const stepNoteSpan = stepIngredients.locator('span.italic').first();
       if (await stepNoteSpan.count() > 0) {

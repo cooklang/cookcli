@@ -744,11 +744,11 @@ impl EndpointDoc {
     /// template so the template needs no conditional chain per endpoint.
     pub fn method_classes(&self) -> &'static str {
         match self.method.as_str() {
-            "GET" => "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-            "POST" => "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-            "PUT" => "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-            "DELETE" => "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-            _ => "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+            "GET" => "bg-sunk text-text",
+            "POST" => "bg-ok-soft text-ok",
+            "PUT" => "bg-accent-soft text-accent-text",
+            "DELETE" => "bg-danger-soft text-danger",
+            _ => "bg-sunk text-muted",
         }
     }
 }

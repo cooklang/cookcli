@@ -6,12 +6,12 @@
 <div>
     {% if !breadcrumbs.is_empty() %}
     <nav class="mb-4">
-        <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
-                <span class="mx-2 text-gray-400">/</span>
-                <a href="{{ prefix }}/directory/{{ crumb.path }}{% if static_mode %}.html{% endif %}" class="hover:text-gray-900">{{ crumb.name }}</a>
+                <span class="mx-2 text-faint">/</span>
+                <a href="{{ prefix }}/directory/{{ crumb.path }}{% if static_mode %}.html{% endif %}" class="hover:text-text">{{ crumb.name }}</a>
             </li>
             {% endfor %}
         </ol>
@@ -19,12 +19,12 @@
     {% endif %}
 
     <div class="flex items-center justify-between mb-8">
-        <h1 class="text-3xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
+        <h1 class="text-display font-bold text-text">
             {{ current_name }}
         </h1>
         {% if !static_mode %}
-        <a href="{{ new_recipe_url }}" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <a href="{{ new_recipe_url }}" class="btn btn-primary">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
             {{ tr.t("new-recipe") }}
@@ -33,30 +33,30 @@
     </div>
 
     <div id="sort-controls" class="hidden items-center gap-2 mb-6">
-        <label for="sort-field" class="text-sm text-gray-500 dark:text-gray-400">{{ tr.t("sort-by") }}</label>
-        <select id="sort-field" class="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-purple-300">
+        <label for="sort-field" class="text-sm text-muted">{{ tr.t("sort-by") }}</label>
+        <select id="sort-field" class="select">
             <option value="name">{{ tr.t("sort-name") }}</option>
             <option value="modified">{{ tr.t("sort-modified") }}</option>
             <option value="created" id="sort-created-option">{{ tr.t("sort-created") }}</option>
         </select>
-        <button id="sort-dir" class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" title="{{ tr.t("sort-direction-toggle") }}">↑</button>
+        <button id="sort-dir" type="button" class="btn" aria-label="{{ tr.t("sort-direction-toggle") }}" title="{{ tr.t("sort-direction-toggle") }}">↑</button>
     </div>
 
     {% match todays_menu %}
     {% when Some with (menu) %}
-    <div class="mb-8 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
+    <div class="mb-8 card p-6 border-l-[3px] border-l-accent">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex-1">
                 <div class="flex items-center gap-3 mb-2">
                     <span class="text-2xl">📋</span>
-                    <h2 class="text-xl font-bold">{{ tr.t("todays-menu-title") }}</h2>
-                    <span class="text-sm opacity-80">{{ menu.date_display }}</span>
+                    <h2 class="text-title font-bold text-text">{{ tr.t("todays-menu-title") }}</h2>
+                    <span class="text-sm text-faint">{{ menu.date_display }}</span>
                 </div>
-                <p class="text-sm opacity-90">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
+                <p class="text-sm text-muted">{{ tr.t("todays-menu-from") }}: {{ menu.menu_name }}</p>
             </div>
-            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-purple-50 transition-colors shadow-md self-start sm:self-center whitespace-nowrap">
+            <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>
@@ -68,15 +68,15 @@
     <div id="recipes-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}
-        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
             <div class="p-6 flex-1">
-                <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-4">
-                    <span class="text-2xl">📁</span>
+                <div class="recipe-card-icon">
+                    <span>📁</span>
                 </div>
-                <h3 class="font-bold text-lg mb-2">{{ item.name }}</h3>
+                <h2 class="recipe-card-title">{{ item.name }}</h2>
                 {% match item.count %}
                 {% when Some with (count) %}
-                <span class="text-sm text-orange-600 font-medium">{{ tr.tn("recipes-count", count) }}</span>
+                <span class="text-sm text-accent-text font-medium">{{ tr.tn("recipes-count", count) }}</span>
                 {% when None %}
                 {% endmatch %}
             </div>
@@ -84,49 +84,50 @@
         {% else %}
         <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
            data-type="recipe"
+           data-name="{{ item.name }}"
            {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
            {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
-           class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-105 recipe-card flex flex-col">
+           class="recipe-card">
             {% match item.image_path %}
             {% when Some with (img) %}
-            <div class="h-48 bg-gray-100 overflow-hidden">
-                <img src="{{ img }}" alt="{{ item.name }}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-300">
+            <div class="h-48 bg-sunk overflow-hidden">
+                <img src="{{ img }}" alt="{{ item.name }}" class="w-full h-full object-cover">
             </div>
             <div class="p-6">
             {% when None %}
             <div class="p-6">
-                <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br {% if item.is_menu %}from-purple-400 to-pink-500{% else %}from-orange-400 to-pink-500{% endif %} rounded-full mb-4">
-                    <span class="text-2xl">{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
+                <div class="recipe-card-icon">
+                    <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
                 </div>
             {% endmatch %}
-            <h3 class="font-bold text-lg mb-2 text-gray-800">
-                {{ item.name }}
-                {% if item.is_menu %}
-                <span class="ml-2 text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-1 rounded-full font-semibold">{{ tr.t("recipe-type-menu") }}</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="recipe-card-title">{{ item.name }}</h2>
+                    {% if item.is_menu %}
+                    <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
+                    {% endif %}
+                </div>
+                {% match item.description %}
+                {% when Some with (description) %}
+                <p class="text-muted text-sm">{{ description }}</p>
+                {% when None %}
+                {% endmatch %}
+                {% if !item.tags.is_empty() %}
+                <div class="mt-3 flex flex-wrap gap-2">
+                    {% for tag in item.tags.iter().take(3) %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                    {% if item.tags.len() > 3 %}
+                    <span class="text-xs text-faint">+{{ item.tags.len() - 3 }}</span>
+                    {% endif %}
+                </div>
                 {% endif %}
-            </h3>
-            {% match item.description %}
-            {% when Some with (description) %}
-            <p class="text-gray-600 text-sm">{{ description }}</p>
-            {% when None %}
-            {% endmatch %}
-            {% if !item.tags.is_empty() %}
-            <div class="mt-3 flex flex-wrap gap-2">
-                {% for tag in item.tags.iter().take(3) %}
-                <span class="text-xs bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">{{ tag }}</span>
-                {% endfor %}
-                {% if item.tags.len() > 3 %}
-                <span class="text-xs text-gray-500">+{{ item.tags.len() - 3 }}</span>
-                {% endif %}
-            </div>
-            {% endif %}
             </div>
         </a>
         {% endif %}
         {% endfor %}
 
         {% if items.is_empty() %}
-        <div class="text-gray-500 text-center py-8">
+        <div class="text-faint text-center py-8">
             {{ tr.t("recipes-empty") }}
         </div>
         {% endif %}
@@ -143,35 +144,84 @@
     const dirBtn = document.getElementById('sort-dir');
     const createdOption = document.getElementById('sort-created-option');
 
-    if (!grid) return;
+    if (!grid || !controls || !fieldSelect || !dirBtn) return;
+
+    // Sorting is client-side because this template is also rendered by the
+    // static site builder, where there is no server to answer a ?sort= query.
+    const STORE_KEY = 'recipes-sort';
 
     let sortField = 'name';
     let sortDir = 'asc';
 
-    // Hide Created option unless every recipe card has a creation date
-    const allRecipeCards = grid.querySelectorAll('[data-type="recipe"]');
-    const allHaveCreated = allRecipeCards.length > 0 &&
-        Array.from(allRecipeCards).every(el => el.hasAttribute('data-created'));
+    const recipeCards = Array.from(grid.querySelectorAll('[data-type="recipe"]'));
+
+    // "Created" is only offered when every recipe has a creation date;
+    // otherwise the column is partly empty and the ordering is arbitrary.
+    const allHaveCreated = recipeCards.length > 0 &&
+        recipeCards.every(el => el.hasAttribute('data-created'));
     if (!allHaveCreated && createdOption) {
         createdOption.remove();
     }
 
-    // Show controls only when there are at least 2 recipe cards
-    const recipeCount = grid.querySelectorAll('[data-type="recipe"]').length;
-    if (recipeCount >= 2) {
-        controls.classList.remove('hidden');
-        controls.classList.add('flex');
+    // Nothing to sort with fewer than two recipes.
+    if (recipeCards.length < 2) return;
+    controls.classList.remove('hidden');
+    controls.classList.add('flex');
+
+    function restore() {
+        let saved = null;
+        try {
+            saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
+        } catch (e) {
+            // Corrupt value: fall through to the defaults.
+        }
+        if (!saved) return;
+        // The saved field may not exist here — "created" is removed on pages
+        // where not every recipe has a date. Treat an invalid field as fully
+        // corrupt so a stale direction cannot pair with the wrong field.
+        const valid = Array.from(fieldSelect.options).some(o => o.value === saved.field);
+        if (!valid) return;
+        sortField = saved.field;
+        fieldSelect.value = saved.field;
+        if (saved.dir === 'asc' || saved.dir === 'desc') {
+            sortDir = saved.dir;
+        }
+    }
+
+    function persist() {
+        try {
+            sessionStorage.setItem(STORE_KEY, JSON.stringify({ field: sortField, dir: sortDir }));
+        } catch (e) {
+            // Private browsing or a full quota: sorting still works, it just
+            // does not survive navigation.
+        }
     }
 
     function getValue(el) {
         if (sortField === 'name') {
-            return (el.querySelector('h3')?.textContent ?? '').trim().toLowerCase();
+            // data-name rather than the heading text, so a markup change
+            // cannot silently break sorting.
+            return (el.getAttribute('data-name') || '').trim();
         }
-        const attr = sortField === 'modified' ? 'data-modified' : 'data-created';
-        const raw = el.getAttribute(attr);
+        const raw = el.getAttribute(sortField === 'modified' ? 'data-modified' : 'data-created');
         if (raw === null) return null;
         const n = parseInt(raw, 10);
         return Number.isNaN(n) ? null : n;
+    }
+
+    // numeric so "Recipe 10" sorts after "Recipe 9"; sensitivity 'base' so
+    // case and accents do not split otherwise-equal names.
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+    function compare(a, b) {
+        const av = getValue(a);
+        const bv = getValue(b);
+        // Missing values sort last in both directions.
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        const cmp = typeof av === 'string' ? collator.compare(av, bv) : av - bv;
+        return sortDir === 'asc' ? cmp : -cmp;
     }
 
     function applySort() {
@@ -180,34 +230,41 @@
         const recipes = all.filter(el => el.dataset.type === 'recipe');
         const others = all.filter(el => !el.dataset.type);
 
-        recipes.sort((a, b) => {
-            const av = getValue(a);
-            const bv = getValue(b);
-            if (av === null && bv === null) return 0;
-            if (av === null) return 1;
-            if (bv === null) return -1;
-            const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
-            return sortDir === 'asc' ? cmp : -cmp;
+        recipes.sort(compare);
+        // Directories stay grouped above recipes, sorted by name among
+        // themselves so their order is deterministic. They only follow
+        // sortDir when sorting by name; for date fields they stay A→Z since
+        // directories have no modified/created date of their own.
+        dirs.sort((a, b) => {
+            const cmp = collator.compare(a.getAttribute('data-name') || '', b.getAttribute('data-name') || '');
+            return sortField === 'name' && sortDir === 'desc' ? -cmp : cmp;
         });
 
-        dirs.forEach(el => grid.appendChild(el));
-        recipes.forEach(el => grid.appendChild(el));
-        others.forEach(el => grid.appendChild(el));
+        const frag = document.createDocumentFragment();
+        dirs.forEach(el => frag.appendChild(el));
+        recipes.forEach(el => frag.appendChild(el));
+        others.forEach(el => frag.appendChild(el));
+        grid.appendChild(frag);
 
         dirBtn.textContent = sortDir === 'asc' ? '↑' : '↓';
     }
 
     fieldSelect.addEventListener('change', function () {
         sortField = this.value;
-        // Default to desc for date sorts (newest first), asc for name
+        // Dates default to newest first; names to A–Z.
         sortDir = sortField === 'name' ? 'asc' : 'desc';
         applySort();
+        persist();
     });
 
     dirBtn.addEventListener('click', function () {
         sortDir = sortDir === 'asc' ? 'desc' : 'asc';
         applySort();
+        persist();
     });
+
+    restore();
+    applySort();
 })();
 </script>
 {% endblock %}
