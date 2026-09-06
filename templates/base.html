@@ -285,16 +285,16 @@
                         {% endif %}
                         <!-- Inline buttons on md+ screens -->
                         {% if !static_mode %}
-                        <a href="{{ prefix }}/preferences" class="icon-btn hidden md:inline-flex {% if active == "preferences" %}bg-accent-soft text-accent-text{% endif %}" aria-label="Preferences" title="Preferences">
+                        <a href="{{ prefix }}/preferences" class="icon-btn hidden md:inline-flex {% if active == "preferences" %}bg-accent-soft text-accent-text{% endif %}" aria-label="{{ tr.t("aria-preferences") }}" title="{{ tr.t("aria-preferences") }}">
                             <span>⚙️</span>
                         </a>
                         {% endif %}
-                        <button onclick="showShortcutsHelp()" class="icon-btn hidden md:inline-flex ml-2 print:hidden" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+                        <button onclick="showShortcutsHelp()" class="icon-btn hidden md:inline-flex ml-2 print:hidden" aria-label="{{ tr.t("aria-keyboard-shortcuts") }}" title="{{ tr.t("aria-keyboard-shortcuts") }} (?)">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                         </button>
-                        <button onclick="toggleTheme()" class="icon-btn hidden md:inline-flex ml-2 print:hidden" aria-label="Toggle theme">
+                        <button onclick="toggleTheme()" class="icon-btn hidden md:inline-flex ml-2 print:hidden" aria-label="{{ tr.t("aria-toggle-theme") }}">
                             <svg class="hidden dark:block" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
                             </svg>
@@ -304,7 +304,7 @@
                         </button>
                         <!-- Overflow menu for small screens -->
                         <div class="relative md:hidden ml-auto" id="more-menu-container">
-                            <button onclick="document.getElementById('more-dropdown').classList.toggle('hidden')" class="icon-btn" aria-label="More options">
+                            <button onclick="document.getElementById('more-dropdown').classList.toggle('hidden')" class="icon-btn" aria-label="{{ tr.t("aria-more-options") }}">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
                                 </svg>
@@ -481,6 +481,7 @@
     <script>
         window.__PREFIX__ = {{ prefix|json|safe }};
         window.__STATIC_MODE__ = {{ static_mode|json|safe }};
+        window.__STRINGS__ = { close: {{ tr.t("aria-close")|json|safe }} };
     </script>
 
     <!-- Keyboard shortcuts -->

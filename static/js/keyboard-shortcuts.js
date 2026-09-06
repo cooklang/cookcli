@@ -118,6 +118,10 @@
                 </div>
             </div>`;
 
+        // Translated strings are injected by base.html; fall back to English.
+        const strings = window.__STRINGS__ || {};
+        const closeLabel = String(strings.close || 'Close')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const modal = document.createElement('div');
         modal.id = 'keyboard-shortcuts-modal';
         modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
@@ -125,7 +129,7 @@
             <div class="card shadow-[var(--shadow-overlay)] max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
                 <div class="p-6 border-b border-line flex justify-between items-center">
                     <h2 class="text-title font-bold text-text">Keyboard Shortcuts</h2>
-                    <button onclick="closeShortcutsHelp()" class="icon-btn" aria-label="Close">
+                    <button onclick="closeShortcutsHelp()" class="icon-btn" aria-label="${closeLabel}">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>

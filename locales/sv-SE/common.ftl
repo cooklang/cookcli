@@ -56,3 +56,13 @@ delete-recipe-warning = Detta kan inte ångras.
 # Errors
 error-title = Något gick snett
 error-back-home = Tillbaka till recept
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Byt tema
+aria-keyboard-shortcuts = Tangentbordsgenvägar
+aria-more-options = Fler alternativ
+aria-preferences = Inställningar
+aria-dismiss = Stäng
+aria-decrease-scale = Minska skala
+aria-increase-scale = Öka skala
+aria-close = Stäng
