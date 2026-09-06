@@ -399,6 +399,10 @@
             });
         }
 
+        function escapeHtml(s) {
+            return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
+
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const query = this.value.trim();
@@ -419,8 +423,8 @@
                         searchResults.innerHTML = '<div class="p-4 text-muted text-center">' + translations.noRecipes + '</div>';
                     } else {
                         searchResults.innerHTML = results.map(recipe =>
-                            `<a href="{{ prefix }}/recipe/${recipe.path}" class="search-result block px-4 py-3 hover:bg-sunk border-b border-line last:border-b-0">
-                                <div class="font-medium text-text">${recipe.name}</div>
+                            `<a href="{{ prefix }}/recipe/${escapeHtml(recipe.path)}" class="search-result block px-4 py-3 hover:bg-sunk border-b border-line last:border-b-0">
+                                <div class="font-medium text-text">${escapeHtml(recipe.name)}</div>
                             </a>`
                         ).join('');
                     }
