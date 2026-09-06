@@ -286,7 +286,6 @@ async function clearList() {
         if (response.ok) {
             hideError();
             await loadShoppingList();
-            document.getElementById('shopping-list-results').classList.add('hidden');
         } else {
             const data = await response.json().catch(() => ({}));
             showError(data.error || 'Failed to clear list');
@@ -463,6 +462,9 @@ function displayShoppingList(data) {
 
     lastListData = data;
     updateCopyButtonVisibility();
+    // Live updates from another tab render here too, so make sure the
+    // container is showing whatever hid it earlier.
+    resultsDiv.classList.remove('hidden');
 
     let html = '';
 
