@@ -273,3 +273,42 @@ body {
 .cm-editor ::selection {
     background: color-mix(in srgb, var(--info) 30%, transparent) !important;
 }
+
+/* Cooklang syntax highlighting. editor.js assigns one fixed class per token
+   kind (HighlightStyle `class`), so every colour resolves through the theme
+   tokens and flips with light/dark like the rest of the editor chrome. */
+.cm-editor .cm-cook-ingredient {
+    color: var(--accent-text);
+    font-weight: 600;
+}
+
+.cm-editor .cm-cook-cookware {
+    color: var(--ok);
+    font-weight: 600;
+}
+
+.cm-editor .cm-cook-timer {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.cm-editor .cm-cook-unit,
+.cm-editor .cm-cook-metadata {
+    color: var(--text-muted);
+}
+
+.cm-editor .cm-cook-comment {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.cm-editor .cm-cook-section {
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+.cm-editor .cm-cook-prep {
+    color: var(--info);
+    font-style: italic;
+}
