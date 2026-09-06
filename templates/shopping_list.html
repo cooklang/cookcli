@@ -32,7 +32,7 @@
                 <div class="flex-1">
                     <p id="error-message" class="text-text text-sm font-mono whitespace-pre-wrap"></p>
                 </div>
-                <button type="button" onclick="hideError()" class="icon-btn shrink-0" aria-label="Dismiss">
+                <button type="button" onclick="hideError()" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -286,7 +286,6 @@ async function clearList() {
         if (response.ok) {
             hideError();
             await loadShoppingList();
-            document.getElementById('shopping-list-results').classList.add('hidden');
         } else {
             const data = await response.json().catch(() => ({}));
             showError(data.error || 'Failed to clear list');
@@ -463,6 +462,9 @@ function displayShoppingList(data) {
 
     lastListData = data;
     updateCopyButtonVisibility();
+    // Live updates from another tab render here too, so make sure the
+    // container is showing whatever hid it earlier.
+    resultsDiv.classList.remove('hidden');
 
     let html = '';
 

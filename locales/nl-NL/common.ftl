@@ -52,3 +52,13 @@ new-recipe-create = Recept Aanmaken
 delete-recipe = Recept Verwijderen
 delete-recipe-confirm = Weet je zeker dat je dit recept wilt verwijderen?
 delete-recipe-warning = Deze actie kan niet ongedaan worden gemaakt.
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Thema wisselen
+aria-keyboard-shortcuts = Sneltoetsen
+aria-more-options = Meer opties
+aria-preferences = Voorkeuren
+aria-dismiss = Sluiten
+aria-decrease-scale = Schaal verkleinen
+aria-increase-scale = Schaal vergroten
+aria-close = Sluiten

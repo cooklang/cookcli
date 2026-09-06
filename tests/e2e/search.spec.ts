@@ -65,4 +65,27 @@ test.describe('Search Functionality', () => {
       await searchInput.clear();
     }
   });
+
+  test('should render inline result names as text, not markup', async ({ page }) => {
+    // Fabricate a result whose name is markup; a raw innerHTML interpolation
+    // would run the onerror handler and set the marker.
+    await page.route('**/api/search?*', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ path: 'x', name: '<img src=x onerror=window.__pwned=1>' }]),
+      })
+    );
+
+    const searchInput = page.getByPlaceholder('Search recipes...');
+    await searchInput.fill('pizza');
+
+    const result = page.locator('#search-results a.search-result');
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText('<img');
+    await expect(result.locator('img')).toHaveCount(0);
+
+    const pwned = await page.evaluate(() => (window as any).__pwned);
+    expect(pwned).toBeUndefined();
+  });
 });

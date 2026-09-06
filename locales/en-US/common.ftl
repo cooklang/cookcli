@@ -56,3 +56,13 @@ delete-recipe-warning = This action cannot be undone.
 # Errors
 error-title = Something went wrong
 error-back-home = Back to recipes
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Toggle theme
+aria-keyboard-shortcuts = Keyboard shortcuts
+aria-more-options = More options
+aria-preferences = Preferences
+aria-dismiss = Dismiss
+aria-decrease-scale = Decrease scale
+aria-increase-scale = Increase scale
+aria-close = Close
