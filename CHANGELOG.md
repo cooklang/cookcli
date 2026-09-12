@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.36.0](https://github.com/cooklang/cookcli/compare/v0.35.0...v0.36.0) (2026-09-12)
+
+
+### Features
+
+* **cli:** add `cook completions <shell>` for shell completion scripts ([56c5376](https://github.com/cooklang/cookcli/commit/56c5376a9cba5c57600147c5efd0e4858f990a7c))
+* **cli:** add `cook completions <shell>` for shell completion scripts ([a1fc3f0](https://github.com/cooklang/cookcli/commit/a1fc3f0244998031ee30e009958bfa6da77c0668)), closes [#467](https://github.com/cooklang/cookcli/issues/467)
+* **packaging:** add Fedora RPM packaging ([97447ab](https://github.com/cooklang/cookcli/commit/97447ab1fb4cfe2145236e93c1ba7feefbd5ea58))
+* **server:** add --cors-origin and --cors-allow-credentials ([979addf](https://github.com/cooklang/cookcli/commit/979addfbeae20fed4d3bcbb948a485535b995a32)), closes [#465](https://github.com/cooklang/cookcli/issues/465)
+* **server:** build the CORS layer from the validated config ([26f7bf0](https://github.com/cooklang/cookcli/commit/26f7bf086a860fe1a202b037377edccdf17ac2ba))
+* **server:** make CORS configuration configurable ([282eaaa](https://github.com/cooklang/cookcli/commit/282eaaa2b909ac43b50b5e27adef0237887763ee))
+* **server:** refuse cross-origin writes under the wildcard default ([d314e78](https://github.com/cooklang/cookcli/commit/d314e780bac2394b03d63e8773866d3ab8131b1c))
+* **server:** validate CORS origin and credential flags ([85d3f95](https://github.com/cooklang/cookcli/commit/85d3f95ff48f60496703b4142a65953d61adbb06))
+* **ui:** add token layer and component vocabulary ([2901588](https://github.com/cooklang/cookcli/commit/2901588222886af60851fff0e1575bc3d3999893))
+* **ui:** token foundation and Cooklang palette, existing layout kept ([a83a5a8](https://github.com/cooklang/cookcli/commit/a83a5a85a8c541b0c5a3884b97a0b5758db3a7ab))
+
+
+### Bug Fixes
+
+* **build:** emit search index as a script so file:// search works ([0234e89](https://github.com/cooklang/cookcli/commit/0234e8954cb511acaad50fc8a7ba55b12013efb5))
+* **build:** emit search index as a script so file:// search works ([792338f](https://github.com/cooklang/cookcli/commit/792338fc3bd42248ab1695448f5d9c022e2ff6ae)), closes [#471](https://github.com/cooklang/cookcli/issues/471)
+* **build:** harden search index load and scope the file:// claim ([091a916](https://github.com/cooklang/cookcli/commit/091a916af85f40161a8ac0ec9f086a7854d7b024))
+* **build:** ship only compiled stylesheets and scripts in the static site ([b28ba40](https://github.com/cooklang/cookcli/commit/b28ba40c777cf4e67b06c3ad01d0e76ace04318d)), closes [#493](https://github.com/cooklang/cookcli/issues/493)
+* **build:** wire resolved --lang to &lt;html lang&gt; attribute ([1c13d44](https://github.com/cooklang/cookcli/commit/1c13d447b048d631aa2ff827bc96633de063542b)), closes [#470](https://github.com/cooklang/cookcli/issues/470)
+* **editor:** do not show Saved before any save ([cb93179](https://github.com/cooklang/cookcli/commit/cb93179406db430531e23c8594ca2515c5390df0)), closes [#491](https://github.com/cooklang/cookcli/issues/491)
+* **editor:** syntax colours from tokens instead of hex ([cb4f830](https://github.com/cooklang/cookcli/commit/cb4f830c6cb16ebbc0fb10717444a0c81b659017)), closes [#490](https://github.com/cooklang/cookcli/issues/490)
+* **i18n:** translate icon-button labels ([d874c04](https://github.com/cooklang/cookcli/commit/d874c04dd018b19b11e31cea0075308feb88f084)), closes [#488](https://github.com/cooklang/cookcli/issues/488)
+* **packaging:** attach the built RPMs to the release ([d70964f](https://github.com/cooklang/cookcli/commit/d70964fdbdc3a042f8bb2419d9ccc1e237c1abef))
+* **packaging:** give the build root the toolchain the spec asks for ([c52da27](https://github.com/cooklang/cookcli/commit/c52da27dd67f045e6a802d3fb06b1bcb3fdd896f))
+* **packaging:** keep the packaged binary stripped ([253bf34](https://github.com/cooklang/cookcli/commit/253bf34f051e21b96adf2698384efdd5a49c1629))
+* **packaging:** make the RPM workflow build again ([641f530](https://github.com/cooklang/cookcli/commit/641f530f18f97c8426a22306a96d632a42886eaa))
+* **server:** accept bracketed IPv6 CORS origins ([8172463](https://github.com/cooklang/cookcli/commit/8172463d8cf1cb86d8b5e27f0d91ea7f1f18492c))
+* **server:** read the write guard's host from the Host header only ([abe2976](https://github.com/cooklang/cookcli/commit/abe2976f63e6f89fafb1716c88909b90a1e1431f))
+* **server:** reject CORS origins that could never match ([0e76be4](https://github.com/cooklang/cookcli/commit/0e76be4bb68878b06af12fb48e723f23b695a5e9))
+* **server:** reject CORS origins with an empty host ([b32ac93](https://github.com/cooklang/cookcli/commit/b32ac93d0fa1e0b331b420f9672323c725873f69))
+* **server:** stop deriving the new-recipe host from a forgeable header ([ea9138b](https://github.com/cooklang/cookcli/commit/ea9138be2f3e8524eaaa9474976e24e15d767532))
+* **ui:** build the scale URL safely and guard bad scale values ([108359b](https://github.com/cooklang/cookcli/commit/108359b4436d7d33c89243b6d8a10ca4c181fda0))
+* **ui:** keep icon-only actions below lg, tidy print rules and docs ([c5aa9c2](https://github.com/cooklang/cookcli/commit/c5aa9c255353b06fe91176c7c14d2d0a0b210af5))
+* **ui:** keep overflow menu highlight and brand mark legible ([efb561d](https://github.com/cooklang/cookcli/commit/efb561d7702990632a36845f3f9acd2d2baee58a))
+* **ui:** pantry stock colour, compact inline buttons, smaller row icons ([3ca61d1](https://github.com/cooklang/cookcli/commit/3ca61d1a96dc2539d930db05be3c2a185ecf34e8))
+* **ui:** recipes index review fixes ([af83ef6](https://github.com/cooklang/cookcli/commit/af83ef66e33972b3c00402f0ebbc05661a2e6225))
+* **ui:** safe scale navigation on menus, aria-pressed on preference toggles ([944972c](https://github.com/cooklang/cookcli/commit/944972c1f18ca1bf77b4f3a8f1ca66137bd888cb))
+* **ui:** show the new-recipe error border, ring its input, compact API chips ([1d310a4](https://github.com/cooklang/cookcli/commit/1d310a4aed37a239e1e41d5d8abc3ae70cfb21ee))
+* **ui:** tighten token foundation after review ([b1b64df](https://github.com/cooklang/cookcli/commit/b1b64df58413726d8bea05f96545f12f03fbe951))
+* **ui:** white text on filled buttons via a darker accent fill ([16293bb](https://github.com/cooklang/cookcli/commit/16293bbf989900484a7001b44b5b867b0bcd3901))
+* **web:** close the UI follow-ups from [#456](https://github.com/cooklang/cookcli/issues/456) ([9b19857](https://github.com/cooklang/cookcli/commit/9b19857fa3518a49e53bb3eb0423d4dd80aec065))
+* **web:** escape recipe names in server-mode search results ([1b578c9](https://github.com/cooklang/cookcli/commit/1b578c928c4c688f1473dccd6b2d66b21ab778de)), closes [#487](https://github.com/cooklang/cookcli/issues/487)
+* **web:** keep the served order on the default sort ([8f4f144](https://github.com/cooklang/cookcli/commit/8f4f144409aad07ffd2eb5b71714b45a4c12f60c)), closes [#486](https://github.com/cooklang/cookcli/issues/486)
+* **web:** no skipped heading levels on API docs and sectioned recipes ([227d09e](https://github.com/cooklang/cookcli/commit/227d09e6a62ee69616fcfb16160d01825dde216c)), closes [#492](https://github.com/cooklang/cookcli/issues/492)
+* **web:** show the shopping list empty state after clearing ([89c0696](https://github.com/cooklang/cookcli/commit/89c0696f59683326b5ef7841bc78be73ef6613e5)), closes [#489](https://github.com/cooklang/cookcli/issues/489)
+* **web:** sort the recipes index naturally on the server ([feaedb4](https://github.com/cooklang/cookcli/commit/feaedb4e15291f363badb1522a0cb4a7b2a6da1d)), closes [#486](https://github.com/cooklang/cookcli/issues/486)
+
 ## [0.35.0](https://github.com/cooklang/cookcli/compare/v0.34.0...v0.35.0) (2026-08-30)
 
 
