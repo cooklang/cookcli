@@ -5,7 +5,7 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/cooklang/CookCLI)](https://github.com/cooklang/CookCLI/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/cooklang/CookCLI?style=social)](https://github.com/cooklang/CookCLI)
 
-**Command line tools for working with [Cooklang](https://cooklang.org) recipes.**
+**Command line tools for working with [Cooklang](https://cooklang.org) recipes.** Full reference: [CookCLI documentation](https://cooklang.org/cli/).
 
 ### 🎯 Quick Install
 
@@ -634,6 +634,7 @@ Some source files include code from [cooklang-chef](https://github.com/Zheoni/co
 
 ## 🔗 Links
 
+* [CookCLI documentation](https://cooklang.org/cli/) - every command, the server, and guides
 * [Cooklang Specification](https://cooklang.org/docs/spec) - the recipe markup language
 * [Cooklang Apps](https://cooklang.org/app/) - iOS and Android apps
 
