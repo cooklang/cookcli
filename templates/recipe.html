@@ -330,7 +330,7 @@
                                     <div class="step-refs">
                                         {% for ing in step.ingredients %}
                                         <span class="inline-block mr-3">
-                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% if ing.is_optional %}<span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-optional") }}">({{ tr.t("recipe-optional") }})</span>{% endif %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% if ing.is_optional %}<span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-optional") }}"> ({{ tr.t("recipe-optional") }})</span>{% endif %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
                                         </span>
                                         {% endfor %}
                                     </div>
