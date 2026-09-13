@@ -199,6 +199,7 @@ impl RecipeTemplate {
                             "quantity": ing.quantity,
                             "unit": ing.unit,
                             "note": ing.note,
+                            "is_optional": ing.is_optional,
                         })
                     })
                     .collect();
@@ -217,6 +218,7 @@ impl RecipeTemplate {
                                         "quantity": ing.quantity,
                                         "unit": ing.unit,
                                         "note": ing.note,
+                                        "is_optional": ing.is_optional,
                                     })
                                 })
                                 .collect();
@@ -628,6 +630,7 @@ pub struct IngredientData {
     /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
     pub reference_path: Option<String>,
+    pub is_optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -667,6 +670,7 @@ pub struct StepIngredient {
     pub unit: Option<String>,
     /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
+    pub is_optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -23,6 +23,7 @@ recipe-print = Imprimir receta
 recipe-added = ¡Agregado!
 recipe-main-section = Principal
 recipe-preparation = preparación
+recipe-optional = Opcional
 
 # Recipe Metadata
 meta-course = Plato

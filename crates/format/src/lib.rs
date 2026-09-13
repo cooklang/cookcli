@@ -167,7 +167,7 @@ pub struct ReadmeDoctests;
 /// The formatters take an already-parsed recipe, so the parser is not part of
 /// this crate's public surface — but its own tests still need to build a
 /// `Recipe` from source. This reproduces `cookcli_core::parser`'s
-/// configuration exactly (no extensions, default converter) and its call
+/// configuration exactly (only component modifiers, default converter) and its call
 /// shape, so the tests read the same on both sides of the split.
 #[cfg(test)]
 pub(crate) mod test_support {
@@ -175,7 +175,7 @@ pub(crate) mod test_support {
     use std::sync::LazyLock;
 
     pub(crate) static PARSER: LazyLock<CooklangParser> =
-        LazyLock::new(|| CooklangParser::new(Extensions::empty(), Converter::default()));
+        LazyLock::new(|| CooklangParser::new(Extensions::COMPONENT_MODIFIERS, Converter::default()));
 
     /// Stands in for `cookcli_core::Outcome`, of which the formatter tests use
     /// `.value` and `.diagnostics`.

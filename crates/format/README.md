@@ -24,7 +24,7 @@ is `Serialize`, so `serde_json` or `serde_yaml` handle those directly.
 use cooklang_format::cooklang::{Converter, CooklangParser, Extensions};
 use cooklang_format::markdown_to_string;
 
-let parser = CooklangParser::new(Extensions::empty(), Converter::default());
+let parser = CooklangParser::new(Extensions::COMPONENT_MODIFIERS, Converter::default());
 let source = "---\ntitle: Tea\n---\n\nBoil @water{2%cups} in a #pot.\n";
 let (recipe, _) = parser.parse(source).into_result().unwrap();
 

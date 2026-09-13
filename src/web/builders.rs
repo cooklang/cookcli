@@ -421,12 +421,16 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             (Some(quantities.join(", ")), None)
         };
 
+        // Mark as optional only if ALL occurrences are optional
+        let is_optional = ingredient_list.iter().all(|igr| igr.modifiers().is_optional());
+
         ingredients.push(IngredientData {
             name: display_name,
             quantity: formatted_quantity,
             unit: formatted_unit,
             note: combined_note,
             reference_path,
+            is_optional
         });
     }
 
@@ -495,6 +499,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                             .as_ref()
                                             .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
                                         note: ing.note.clone(),
+                                        is_optional: ing.modifiers().is_optional(),
                                     });
                                 }
                             }
@@ -675,6 +680,9 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             .collect();
                     (Some(quantities.join(", ")), None)
                 };
+        
+                // Mark as optional only if ALL occurrences are optional
+                let is_optional = ingredient_list.iter().all(|igr| igr.modifiers().is_optional());
 
                 section_ingredients.push(IngredientData {
                     name: display_name,
@@ -682,6 +690,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     unit: formatted_unit,
                     note: combined_note,
                     reference_path,
+                    is_optional
                 });
             }
 
@@ -714,6 +723,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             unit: formatted_unit,
                             note: ingredient.note.clone(),
                             reference_path: None,
+                            is_optional: ingredient.modifiers().is_optional()
                         },
                     ));
                 }

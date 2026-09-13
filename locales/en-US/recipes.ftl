@@ -23,6 +23,7 @@ recipe-print = Print Recipe
 recipe-added = Added!
 recipe-main-section = Main
 recipe-preparation = preparation
+recipe-optional = Optional
 
 # Recipe Metadata
 meta-course = Course
