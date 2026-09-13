@@ -1,6 +1,7 @@
 target/
 .DS_Store
 releases
+dist/
 node_modules/
 static/css/output.css
 static/js/editor.bundle.js

@@ -3,7 +3,7 @@
 //! This is the shape search engines read, so the field names are fixed by the
 //! vocabulary rather than chosen here.
 
-use crate::format::quantity::grouped_quantity_fmt;
+use crate::quantity::grouped_quantity_fmt;
 use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
 use std::io;

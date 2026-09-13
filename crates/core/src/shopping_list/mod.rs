@@ -108,7 +108,7 @@ impl ScaledRecipe {
 }
 
 /// What to put on the shopping list.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GenerateRequest {
     /// The recipes to include, each with its own scaling factor.
     pub recipes: Vec<ScaledRecipe>,
@@ -117,6 +117,17 @@ pub struct GenerateRequest {
     /// This does not drop the reference: it stays on the list as an item named
     /// after the referenced recipe, with no quantity.
     pub ignore_references: bool,
+    /// Extra items to add to the list that no recipe calls for — the paper
+    /// towels and bin bags that belong on the same shopping trip.
+    ///
+    /// Each entry is a Cooklang ingredient written without its leading `@`: a
+    /// bare name (`paper towels`) for something with no amount, or the brace
+    /// form (`flour{200%g}`, `eggs{12}`) to give one. They are aggregated with
+    /// the recipe ingredients rather than kept apart, so an extra item sharing
+    /// a name with one a recipe already asks for merges into it, lands in its
+    /// aisle category, and is subtracted from by the pantry — exactly as that
+    /// ingredient would be.
+    pub extra_items: Vec<String>,
 }
 
 /// How [`extract_ingredients`] should treat recipe references.
@@ -298,6 +309,17 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         diagnostics.extend(extract_ingredients(ctx, recipe, &options, &mut list)?);
     }
 
+    // Extra items join the list after the recipes, so they keep the order the
+    // user wrote them in and fall below the ingredients on the uncategorised
+    // view. From here on they are indistinguishable from a recipe ingredient:
+    // `use_common_names`, categorisation and the pantry all treat them the
+    // same, which is what lets an extra "milk" merge with a recipe's.
+    for spec in &req.extra_items {
+        let outcome = parse_extra_item(spec)?;
+        diagnostics.extend(outcome.diagnostics);
+        list.add_recipe(&outcome.value, PARSER.converter(), false);
+    }
+
     let mut list = list.use_common_names(&aisle, PARSER.converter());
     if let Some(pantry) = &pantry {
         list = list.subtract_pantry(pantry, PARSER.converter());
@@ -307,6 +329,29 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         AggregatedList::build(list, &aisle),
         diagnostics,
     ))
+}
+
+/// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient
+/// recipe.
+///
+/// The text is a Cooklang ingredient with the leading `@` left off, so an `@`
+/// the user typed anyway is tolerated rather than doubled. A name with no
+/// braces is one ingredient however many words long, but only when a `{}`
+/// closes it — otherwise `paper towels` parses as `paper` followed by the loose
+/// word `towels`. So the empty braces are supplied when the entry carries no
+/// amount of its own, and left to the user when it does (`flour{200%g}`).
+///
+/// Errors as [`CoreError::Parse`], naming the entry as the user wrote it, when
+/// the result is not a valid ingredient — an empty entry, or braces that do not
+/// close.
+fn parse_extra_item(spec: &str) -> Result<Outcome<Recipe>, CoreError> {
+    let body = spec.trim().strip_prefix('@').unwrap_or(spec.trim()).trim();
+    let line = if body.contains('{') {
+        format!("@{body}")
+    } else {
+        format!("@{body}{{}}")
+    };
+    parse_unscaled(&line, spec, None)
 }
 
 /// Parse an aisle configuration, degrading to an empty one rather than failing.
@@ -415,17 +460,29 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// including the references of a [`RecipeSource::Content`] recipe. Only the
 /// starting recipe can come from memory; see [`ScaledRecipe`].
 ///
-/// # Cycles are not detected
+/// # Cycles
 ///
-/// Because expansion is bounded rather than recursive, two recipes that
-/// reference each other neither loop nor fail. They silently double-count: the
-/// ingredients of the starting recipe are added once directly and once more
-/// when the cycle leads back to it. That is
-/// <https://github.com/cooklang/cookcli/issues/424>, pinned by
-/// `mutually_referencing_recipes_terminate`. Fixing it means making expansion
-/// recursive, tracking the recipes on the current path, and adding a
-/// `CoreError` variant for the cycle — deliberately absent today rather than
-/// present and unreachable.
+/// A reference back to a recipe already being expanded — the starting recipe,
+/// or anything between it and here — is **not followed**. It raises a
+/// [`Severity::Warning`] diagnostic naming the cycle instead.
+///
+/// Without that, two recipes referencing each other did not loop — expansion is
+/// bounded, not recursive — but they silently double-counted: the starting
+/// recipe's ingredients went in once directly and once more when the cycle led
+/// back to it, and the deeper the mutual references the further the quantities
+/// drifted (<https://github.com/cooklang/cookcli/issues/424>). A shopping list
+/// with quietly wrong quantities is worse than one that says something is
+/// wrong, so this warns rather than failing: the list is still produced, and it
+/// is now correct.
+///
+/// What is tracked is the **chain of ancestors**, not everything seen. A recipe
+/// two dishes both reference — one sauce for the pasta and the salad — is still
+/// expanded for each of them, because neither is inside the other. Only a
+/// reference that leads back up its own chain is refused.
+///
+/// Identity is the resolved file path, so a [`RecipeSource::Content`] starting
+/// recipe has none: a reference cycle leading back to an unsaved buffer cannot
+/// be recognised, since nothing on disk is that buffer.
 ///
 /// # Errors
 ///
@@ -441,6 +498,20 @@ pub fn extract_ingredients(
 
     let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
     let ref_indices = list.add_recipe(&parsed, converter, options.ignore_references);
+
+    // The chain of recipes currently being expanded, innermost last, by
+    // resolved file path. A reference resolving to something already on it
+    // would lead back up its own chain, so it is refused rather than followed.
+    // See "Cycles" above for why this is the ancestor chain and not every
+    // recipe seen.
+    let starting_path = match &recipe.source {
+        RecipeSource::Path(path) => find::get_recipe(base_path, path.as_str())
+            .ok()
+            .and_then(|entry| entry.path().cloned()),
+        // An unsaved buffer is no file, so nothing can reference it.
+        RecipeSource::Content { .. } => None,
+    };
+    let ancestors: Vec<Utf8PathBuf> = starting_path.into_iter().collect();
 
     tracing::debug!(
         "ignore_references = {}, ref_indices.len() = {}",
@@ -481,8 +552,16 @@ pub fn extract_ingredients(
                 }
             }
 
-            let ref_path = reference.path(std::path::MAIN_SEPARATOR_STR);
+            let ref_path = reference.path(find::REFERENCE_SEPARATOR);
             let ref_entry = find::get_recipe(base_path, &ref_path)?;
+
+            if let Some(cycle) = cycle_warning(&ancestors, &ref_entry, &ref_path) {
+                diagnostics.push(cycle);
+                continue;
+            }
+            // Expanding this one, so it is an ancestor of anything inside it.
+            let mut ancestors = ancestors.clone();
+            ancestors.extend(ref_entry.path().cloned());
 
             // Parse and scale the recipe based on the quantity specification.
             let ref_recipe = match ingredient.quantity.as_ref() {
@@ -553,20 +632,23 @@ pub fn extract_ingredients(
                     continue;
                 };
 
+                // Same shape as the outer `ref_path` above. `path` supplies
+                // the leading `.` itself, so prepending another — as this used
+                // to — spelled the lookup `././sub/sauce`, which resolved but
+                // named itself that way in any error about it.
                 let nested_path = if nested_ref.components.is_empty() {
                     nested_ref.name.clone()
                 } else {
-                    let sep = std::path::MAIN_SEPARATOR.to_string();
-                    format!(
-                        ".{}{}{}{}",
-                        sep,
-                        nested_ref.components.join(&sep),
-                        sep,
-                        nested_ref.name
-                    )
+                    nested_ref.path(find::REFERENCE_SEPARATOR)
                 };
 
                 let nested_entry = find::get_recipe(base_path, &nested_path)?;
+
+                if let Some(cycle) = cycle_warning(&ancestors, &nested_entry, &nested_path) {
+                    diagnostics.push(cycle);
+                    continue;
+                }
+
                 let (mut nested_recipe, nested_diagnostics) =
                     parse_entry(&nested_entry, &nested_path, None)?;
                 diagnostics.extend(nested_diagnostics);
@@ -610,6 +692,45 @@ pub fn extract_ingredients(
     }
 
     Ok(diagnostics)
+}
+
+/// The warning to raise if expanding `entry` would lead back up its own chain,
+/// or `None` when it is safe to expand.
+///
+/// `ancestors` is the chain of recipes currently being expanded, innermost
+/// last, by resolved file path; `lookup` is how the reference was written, so
+/// the message names what the author typed rather than an absolute path they
+/// never wrote.
+///
+/// An entry with no resolved path cannot be compared to anything and is treated
+/// as safe. That is not a hole in practice: every entry here came from
+/// [`find::get_recipe`], which only finds files.
+fn cycle_warning(
+    ancestors: &[Utf8PathBuf],
+    entry: &RecipeEntry,
+    lookup: &str,
+) -> Option<Diagnostic> {
+    let path = entry.path()?;
+    if !ancestors.iter().any(|ancestor| ancestor == path) {
+        return None;
+    }
+
+    // Name the whole chain: with mutual references the pair is what is wrong,
+    // and naming only the end of it leaves the reader to work out the rest.
+    let chain = ancestors
+        .iter()
+        .map(|p| p.file_name().unwrap_or(p.as_str()).to_string())
+        .collect::<Vec<_>>()
+        .join(" → ");
+    let repeated = path.file_name().unwrap_or(path.as_str());
+
+    Some(
+        Diagnostic::warning(format!(
+            "Skipped circular recipe reference '{lookup}': {chain} → {repeated} leads back to a \
+             recipe already being expanded. Its ingredients are counted once"
+        ))
+        .at_file(path.clone()),
+    )
 }
 
 /// Parse the recipe a [`ScaledRecipe`] names, from disk or from memory.

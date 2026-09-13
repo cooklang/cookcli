@@ -1,10 +1,11 @@
 use anyhow::Result;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand};
 use cookcli_core::{
     doctor::{aisle_coverage, broken_references, pantry_coverage, CoverageRequest},
-    Diagnostic,
+    Diagnostic, Severity,
 };
+use std::collections::BTreeSet;
 use tracing::warn;
 
 use crate::{util::cli_error, Context};
@@ -312,14 +313,22 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
     }
 
     let total_recipes = report.total_recipes();
-    let recipes_with_errors = report.recipes_with_errors();
     let recipes_with_warnings = report.recipes_with_warnings();
     let mut total_errors = report.total_errors();
     let total_warnings = report.total_warnings();
 
-    // Recipe references are resolved separately from validation, so that a
-    // reference leading nowhere is not counted as a recipe with errors — the
-    // summary below has always reported them as errors belonging to no recipe.
+    // Recipe references are resolved separately from validation, so a broken
+    // one reaches neither the report's error count nor its recipe count. Both
+    // have to be topped up here, and the recipe count as a *set* — a recipe
+    // that both fails to parse and references something missing is still one
+    // recipe, and one that carries two broken references is too.
+    let mut failing_recipes: BTreeSet<&Utf8Path> = report
+        .recipes
+        .iter()
+        .filter(|r| r.diagnostics.iter().any(|d| d.severity == Severity::Error))
+        .map(|r| r.path.as_path())
+        .collect();
+
     if !report.references().is_empty() {
         println!("\n=== Recipe References ===");
         let broken = broken_references(&report);
@@ -329,6 +338,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
         } else {
             for (recipe_path, missing) in broken {
                 println!("\n📄 {recipe_path}");
+                failing_recipes.insert(recipe_path);
                 for missing_ref in missing {
                     println!("  ❌ Missing reference: {missing_ref}");
                     total_errors += 1;
@@ -336,6 +346,8 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
             }
         }
     }
+
+    let recipes_with_errors = failing_recipes.len();
 
     // Print summary
     println!("\n=== Validation Summary ===");

@@ -10,8 +10,10 @@
 //!
 //! # These tests assert what the output IS, not what it should be
 //!
-//! `a_bare_recipe_name_is_not_resolved` in particular records behaviour that is
-//! arguably a bug. It is pinned so that changing it has to be deliberate.
+//! Where that recorded a defect, the defect has since been fixed and the test
+//! turned round to assert the corrected behaviour — see
+//! `a_bare_recipe_name_is_resolved`, which used to pin `report`'s path-only
+//! lookup (#430).
 //!
 //! # Machine independence
 //!
@@ -90,22 +92,57 @@ fn the_scaling_suffix_scales_the_variable_and_the_quantities() {
         .stdout("Pancakes x2.0|eggs=6 large|milk=500 ml|flour=250 g\n");
 }
 
-/// Recorded, not endorsed: `report` opens the recipe argument as a plain path
-/// relative to the working directory, where every other command resolves it
-/// through `cooklang-find`. So `cook recipe pancakes` works and this does not.
+/// The recipe argument goes through `cooklang-find` like every other command's,
+/// so a bare name works with or without the extension. `report` used to open it
+/// as a plain path, so `cook recipe pancakes` worked and this did not (#430).
 #[test]
-fn a_bare_recipe_name_is_not_resolved() {
+fn a_bare_recipe_name_is_resolved() {
     let dir = fixture();
-    let output = cook(&dir)
+    cook(&dir)
         .args(["report", "-t", "list.jinja", "pancakes"])
         .assert()
+        .success()
+        .stdout("Pancakes x1.0|eggs=3 large|milk=250 ml|flour=125 g\n");
+}
+
+/// A name that resolves to nothing is a lookup failure naming the name, not a
+/// read failure naming a file the user never mentioned.
+#[test]
+fn an_unresolvable_recipe_name_is_reported_as_not_found() {
+    let dir = fixture();
+    let output = cook(&dir)
+        .args(["report", "-t", "list.jinja", "absent"])
+        .assert()
         .failure()
-        .code(1)
         .to_string();
     assert!(
-        output.contains("Failed to read recipe file: pancakes"),
-        "expected a plain read failure, got: {output}"
+        output.contains("Recipe not found: absent"),
+        "expected a lookup failure, got: {output}"
     );
+}
+
+/// `--base-path` scopes the recipe argument too, matching `shopping-list`,
+/// whose own `--base-path` is documented as where bare names are searched for.
+/// It used to steer only the references inside the template, so the argument
+/// resolved against the working directory whatever was passed (#430).
+#[test]
+fn the_base_path_is_where_the_recipe_argument_is_looked_up() {
+    let dir = fixture();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("waffles.cook"), PANCAKES).unwrap();
+
+    // Present under `sub`, so `-b sub` finds it...
+    cook(&dir)
+        .args(["report", "-t", "list.jinja", "-b", "sub", "waffles"])
+        .assert()
+        .success()
+        .stdout("Pancakes x1.0|eggs=3 large|milk=250 ml|flour=125 g\n");
+
+    // ...and `pancakes`, which sits in the root rather than in `sub`, does not.
+    cook(&dir)
+        .args(["report", "-t", "list.jinja", "-b", "sub", "pancakes"])
+        .assert()
+        .failure();
 }
 
 /// The point of keeping `std::process::exit(1)` in the CLI: the template
@@ -278,6 +315,9 @@ fn a_relative_aisle_path_in_a_subdirectory_is_read() {
 fn a_relative_base_path_reaches_the_template_absolute() {
     let dir = fixture();
     fs::create_dir(dir.path().join("sub")).unwrap();
+    // The recipe lives under `sub` because `--base-path` is where the recipe
+    // argument is looked up as well as where the template's references resolve.
+    fs::write(dir.path().join("sub").join("pancakes.cook"), PANCAKES).unwrap();
     write_template(dir.path(), "base.jinja", "{{ base_path }}");
 
     let assert = cook(&dir)

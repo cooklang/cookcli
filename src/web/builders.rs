@@ -138,7 +138,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     items.sort_by(|a, b| match (a.is_directory, b.is_directory) {
         (true, false) => std::cmp::Ordering::Less,
         (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.cmp(&b.name),
+        _ => natural_cmp(&a.name, &b.name),
     });
 
     let todays_menu = if sub_path.is_none() {
@@ -188,6 +188,61 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         repo_url,
         features,
     })
+}
+
+/// One chunk of a name for natural sorting: a run of digits compared by
+/// value, or a run of anything else compared as lowercase text.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum NaturalChunk {
+    Number(u128),
+    Text(String),
+}
+
+/// Split a name into digit runs and non-digit runs, lowercased, so that
+/// "Recipe 9" sorts before "Recipe 10" and case does not split otherwise
+/// equal names. This folds case and digits like the client-side
+/// `Intl.Collator` with `{ numeric: true, sensitivity: 'base' }` in
+/// `templates/recipes.html`, but not accents: non-ASCII letters keep code
+/// point order, so "Äpfel" sorts after "zucchini". The client therefore
+/// leaves the served order alone on the default sort and only re-sorts
+/// when the user picks another field or direction.
+fn natural_key(name: &str) -> Vec<NaturalChunk> {
+    let mut chunks = Vec::new();
+    let mut text = String::new();
+    let mut digits = String::new();
+
+    let flush_text = |text: &mut String, chunks: &mut Vec<NaturalChunk>| {
+        if !text.is_empty() {
+            chunks.push(NaturalChunk::Text(std::mem::take(text)));
+        }
+    };
+    let flush_digits = |digits: &mut String, chunks: &mut Vec<NaturalChunk>| {
+        if !digits.is_empty() {
+            // Cap absurdly long digit runs instead of panicking on overflow.
+            let value = digits.parse::<u128>().unwrap_or(u128::MAX);
+            digits.clear();
+            chunks.push(NaturalChunk::Number(value));
+        }
+    };
+
+    for c in name.chars() {
+        if c.is_ascii_digit() {
+            flush_text(&mut text, &mut chunks);
+            digits.push(c);
+        } else {
+            flush_digits(&mut digits, &mut chunks);
+            text.extend(c.to_lowercase());
+        }
+    }
+    flush_text(&mut text, &mut chunks);
+    flush_digits(&mut digits, &mut chunks);
+    chunks
+}
+
+/// Case-insensitive natural ordering. Ties (names that differ only in case
+/// or leading zeros) fall back to byte order so the sort stays deterministic.
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    natural_key(a).cmp(&natural_key(b)).then_with(|| a.cmp(b))
 }
 
 /// Inputs for [`build_recipe_template`].
@@ -929,7 +984,7 @@ fn build_menu_template_inner(
                                     let factor = match authored_quantity {
                                         Some(quantity) => {
                                             let lookup =
-                                                recipe_ref.path(std::path::MAIN_SEPARATOR_STR);
+                                                recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
                                             let info = ref_info_cache
                                                 .entry(lookup.clone())
                                                 .or_insert_with(|| {
@@ -1106,5 +1161,97 @@ fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Optio
                 .file_name()
                 .map(|name| format!("{prefix}/api/static/{name}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod natural_sort_tests {
+    use super::{natural_cmp, natural_key};
+    use std::cmp::Ordering;
+
+    #[test]
+    fn non_ascii_letters_keep_code_point_order() {
+        // Accents are not folded: this pins the documented divergence from
+        // the browser collator so a change here is deliberate.
+        assert_eq!(natural_cmp("zucchini", "Äpfel"), Ordering::Less);
+        // Case still folds for non-ASCII letters.
+        assert_eq!(natural_key("äpfel"), natural_key("Äpfel"));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert_eq!(natural_cmp("apple pie", "Banana bread"), Ordering::Less);
+        assert_eq!(natural_cmp("Banana bread", "apple pie"), Ordering::Greater);
+    }
+
+    #[test]
+    fn digit_runs_compare_numerically() {
+        assert_eq!(natural_cmp("Recipe 9", "Recipe 10"), Ordering::Less);
+        assert_eq!(natural_cmp("Recipe 10", "Recipe 9"), Ordering::Greater);
+        assert_eq!(natural_cmp("Recipe 10", "Recipe 10"), Ordering::Equal);
+    }
+
+    #[test]
+    fn case_only_differences_are_stable_ties() {
+        // Equal under the natural key; byte order breaks the tie so the
+        // result is deterministic across runs.
+        assert_eq!(natural_cmp("a", "A"), Ordering::Greater);
+        assert_eq!(natural_cmp("A", "a"), Ordering::Less);
+        assert_eq!(natural_cmp("a", "a"), Ordering::Equal);
+    }
+
+    #[test]
+    fn sorts_like_the_client_collator() {
+        let mut names = vec![
+            "Recipe 10",
+            "banana bread",
+            "Recipe 9",
+            "Apple pie",
+            "recipe 2",
+        ];
+        names.sort_by(|a, b| natural_cmp(a, b));
+        assert_eq!(
+            names,
+            vec![
+                "Apple pie",
+                "banana bread",
+                "recipe 2",
+                "Recipe 9",
+                "Recipe 10"
+            ]
+        );
+    }
+
+    #[test]
+    fn directories_come_before_recipes() {
+        struct Item {
+            name: &'static str,
+            is_directory: bool,
+        }
+        let mut items = [
+            Item {
+                name: "zucchini",
+                is_directory: false,
+            },
+            Item {
+                name: "Soups",
+                is_directory: true,
+            },
+            Item {
+                name: "Apple pie",
+                is_directory: false,
+            },
+            Item {
+                name: "breakfast",
+                is_directory: true,
+            },
+        ];
+        items.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => natural_cmp(a.name, b.name),
+        });
+        let order: Vec<_> = items.iter().map(|i| i.name).collect();
+        assert_eq!(order, vec!["breakfast", "Soups", "Apple pie", "zucchini"]);
     }
 }

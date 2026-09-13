@@ -5,12 +5,14 @@
 //! `shopping-list` is the most intricate command in CookCLI — recursive recipe
 //! reference expansion, aisle and pantry config discovery, ingredient
 //! aggregation with unit conversion, and four output formats — and it had
-//! effectively zero regression coverage. Every `#[ignore]`d test in this
-//! repository is a shopping-list test (`shopping_list_test.rs` in its
-//! entirety, plus cases in `snapshot_test.rs`, `output_formats_test.rs` and
-//! `cli_integration_test.rs`), and running them shows most of them fail: they
-//! assert output the command no longer produces. Tracked as
-//! <https://github.com/cooklang/cookcli/issues/415>.
+//! effectively zero regression coverage: every `#[ignore]`d test in the
+//! repository was a shopping-list test, and most of them failed when run.
+//!
+//! Those have since been repaired and un-ignored
+//! (<https://github.com/cooklang/cookcli/issues/415>), so the two now divide
+//! the work: `shopping_list_test.rs` asserts *intent* — that references are
+//! expanded, that quantities combine, that a flag does what it says — while
+//! this file pins exact output, and is what notices a change nobody meant.
 //!
 //! These snapshots were added ahead of extracting the command into the
 //! `cookcli-core` library crate, so that refactor can be verified as
@@ -246,14 +248,22 @@ fn json_pretty_output() {
 // 6. -f yaml
 // ---------------------------------------------------------------------------
 
-/// Note (from reading `build_yaml_value`, not asserted by this snapshot):
-/// unlike the JSON and markdown writers, the YAML writer takes no `plain`
-/// parameter, so `-f yaml --plain` still categorises.
 #[test]
 fn yaml_output() {
     assert_snapshot!(run(
         &base_fixture(),
         &["-f", "yaml", "pasta.cook", "salad.cook"]
+    ));
+}
+
+/// `-f yaml --plain` drops the categories, like `-f json --plain` and
+/// `-f markdown --plain`. The YAML writer used to take no `plain` parameter at
+/// all, so the flag silently did nothing here (#419).
+#[test]
+fn yaml_plain_output() {
+    assert_snapshot!(run(
+        &base_fixture(),
+        &["-f", "yaml", "--plain", "pasta.cook", "salad.cook"]
     ));
 }
 

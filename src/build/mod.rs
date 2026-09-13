@@ -209,10 +209,13 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let entries = index::build_search_index(&tree);
     let entry_count = entries.len();
     let json = serde_json::to_string(&entries)?;
+    // A script assigning a global, not JSON: file:// documents are opaque
+    // origins, so search.js cannot fetch the index from disk. See docs/build.md.
+    let script = format!("window.__SEARCH_INDEX__ = {json};\n");
     writer::write_bytes(
         &output,
-        camino::Utf8Path::new("static/search-index.json"),
-        json.as_bytes(),
+        camino::Utf8Path::new("static/search-index.js"),
+        script.as_bytes(),
     )?;
 
     // The URL was already validated near the top of run_web.

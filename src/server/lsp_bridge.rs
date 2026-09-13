@@ -183,7 +183,7 @@ async fn run_bridge(
     // Task: Send messages from channel to WebSocket
     let mut ws_send_handle = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            if let Err(e) = ws_sender.send(Message::Text(msg)).await {
+            if let Err(e) = ws_sender.send(Message::Text(msg.into())).await {
                 error!("Error sending to WebSocket: {}", e);
                 return;
             }

@@ -30,7 +30,7 @@
 
 //! Format a recipe as markdown
 
-use crate::format::quantity::grouped_quantity_fmt;
+use crate::quantity::grouped_quantity_fmt;
 use std::{fmt::Write, io};
 
 use cooklang::{
@@ -217,7 +217,7 @@ where
 
 /// Writes a recipe in Markdown format
 ///
-/// This is an alias for [`print_md_with_options`] where the options are the
+/// This is an alias for `print_md_with_options` where the options are the
 /// default value.
 pub fn print_md(
     recipe: &Recipe,
@@ -349,8 +349,8 @@ fn ingredients(
         }
 
         if let Some(reference) = &ingredient.reference {
-            let sep = std::path::MAIN_SEPARATOR.to_string();
-            let path = reference.components.join(&sep);
+            let sep = crate::REFERENCE_SEPARATOR;
+            let path = reference.components.join(sep);
             write!(
                 w,
                 "[{}]({}{}{})",

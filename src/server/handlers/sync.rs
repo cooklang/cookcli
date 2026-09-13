@@ -20,10 +20,15 @@ pub struct SyncStatusResponse {
     pub email: Option<String>,
     pub syncing: bool,
     pub pending_login: Option<PendingLogin>,
+    /// Why sync is currently off, e.g. `"payment_required"`. Absent while
+    /// syncing or when the last stop wasn't a known, user-actionable
+    /// condition. Additive field: older clients that don't read it are
+    /// unaffected.
+    pub reason: Option<String>,
 }
 
 pub async fn sync_status(State(state): State<Arc<AppState>>) -> Json<SyncStatusResponse> {
-    let (logged_in, email, syncing) = state.sync_status().await;
+    let (logged_in, email, syncing, reason) = state.sync_status().await;
 
     let pending_login = {
         let guard = state.pending_device_flow.lock().await;
@@ -43,6 +48,7 @@ pub async fn sync_status(State(state): State<Arc<AppState>>) -> Json<SyncStatusR
         email,
         syncing,
         pending_login,
+        reason,
     })
 }
 
@@ -120,6 +126,7 @@ pub async fn sync_login(
                             db_path,
                         ) {
                             Ok(handle) => {
+                                *state_clone.last_sync_reason.lock().unwrap() = None;
                                 *state_clone.sync_handle.lock().await = Some(handle);
                                 tracing::info!("Sync started after login");
                             }
@@ -165,6 +172,7 @@ pub async fn sync_logout(
     if let Some(handle) = state.sync_handle.lock().await.take() {
         handle.stop().await;
     }
+    *state.last_sync_reason.lock().unwrap() = None;
 
     *state.sync_session.lock().unwrap() = None;
     if let Err(e) = SyncSession::delete(&state.session_path) {

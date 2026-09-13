@@ -34,7 +34,7 @@ use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path},
-    http::{header, HeaderValue, Method, Response, StatusCode},
+    http::{header, Response, StatusCode},
     routing::{get, post},
     Router,
 };
@@ -43,9 +43,10 @@ use clap::Args;
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::services::ServeDir;
 use tracing::{error, info};
 
+mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
@@ -95,6 +96,34 @@ pub struct ServerArgs {
     // #[cfg(feature = "ui")]
     #[arg(long, default_value_t = false)]
     open: bool,
+
+    /// Origin allowed to make cross-origin browser requests (repeatable)
+    ///
+    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. Use "*"
+    /// for any origin, which is the default. Under a wildcard origin the
+    /// server answers cross-origin reads but refuses cross-origin writes with
+    /// 403; naming explicit origins lets those origins write too. "*" cannot
+    /// be combined with explicit origins. Requests with no Origin header --
+    /// curl and other non-browser clients -- are never affected.
+    #[arg(long, value_name = "ORIGIN")]
+    cors_origin: Vec<String>,
+
+    /// Allow cross-origin requests to carry cookies and credentials
+    ///
+    /// Requires at least one explicit --cors-origin; browsers reject
+    /// credentialed requests against a wildcard origin.
+    #[arg(long, default_value_t = false)]
+    cors_allow_credentials: bool,
+
+    /// Disable same-origin enforcement on requests that modify recipes
+    ///
+    /// By default a request is rejected unless its Origin matches the Host it
+    /// was sent to, or is named by --cors-origin. This has nothing to do with
+    /// the cross-origin read policy the other --cors-* flags configure. Use it
+    /// only when a reverse proxy rewrites Host in a way that cannot be
+    /// expressed with --cors-origin. The former spelling --no-cors still works.
+    #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
+    csrf_check: bool,
 }
 
 impl ServerArgs {
@@ -112,6 +141,10 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     };
     let addr = SocketAddr::from((addr, args.port));
     let open = args.open;
+
+    // Validate before binding or printing anything, so a bad flag combination
+    // fails immediately rather than after the "Listening on ..." banner.
+    let cors = cors::CorsConfig::from_args(&args.cors_origin, args.cors_allow_credentials)?;
 
     let state = build_state(ctx, args)?;
 
@@ -142,6 +175,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
                 Ok(db_path) => {
                     match crate::sync::start_sync(session, state.base_path.to_string(), db_path) {
                         Ok(handle) => {
+                            *state.last_sync_reason.lock().unwrap() = None;
                             // Safe to use try_lock here: no contention before the server accepts connections
                             if let Ok(mut guard) = state.sync_handle.try_lock() {
                                 *guard = Some(handle);
@@ -171,7 +205,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let inner = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
-        .route("/static/*file", get(serve_static))
+        .route("/static/{*file}", get(serve_static))
         .nest_service("/api/static", ServeDir::new(&state.base_path));
 
     let app = if state.url_prefix.is_empty() {
@@ -182,9 +216,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     // Capture url_prefix before state is consumed by with_state.
     let url_prefix_for_features = state.url_prefix.clone();
+    let csrf_check = state.csrf_check;
 
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
+
+    let cors_layer = cors.layer();
+    let cors = Arc::new(cors);
 
     let app = app
         .with_state(state)
@@ -195,12 +233,20 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         ))
         .layer(axum::middleware::from_fn(
             crate::web::language::language_middleware,
+        ));
+
+    // Inside the CORS layer, so preflights are answered before it runs.
+    // `--no-csrf-check` omits it entirely.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(
+            cors,
+            cors::write_guard,
         ))
-        .layer(
-            CorsLayer::new()
-                .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]),
-        );
+    } else {
+        app
+    };
+
+    let app = app.layer(cors_layer);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
@@ -309,12 +355,15 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
+        csrf_check: args.csrf_check,
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
+        #[cfg(feature = "sync")]
+        last_sync_reason: Arc::new(Mutex::new(None)),
         #[cfg(feature = "sync")]
         pending_device_flow: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
@@ -355,6 +404,9 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
+    /// When true, requests that modify recipes must be same-origin or come
+    /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
+    pub csrf_check: bool,
     /// Serializes access to `.shopping-checked` within this process.
     /// File-level `flock` doesn't prevent two tasks in the *same* process
     /// from racing on the file (the kernel treats them as one lock owner),
@@ -369,6 +421,12 @@ pub struct AppState {
     pub sync_session: Arc<Mutex<Option<crate::sync::SyncSession>>>,
     #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<crate::sync::SyncHandle>>>,
+    /// Reason the most recent sync task stopped, surfaced by the status
+    /// endpoint after the (now finished) `SyncHandle` that observed it has
+    /// been cleaned up. Cleared whenever a new sync task starts or the user
+    /// logs out.
+    #[cfg(feature = "sync")]
+    pub last_sync_reason: Arc<Mutex<Option<crate::sync::SyncFailureReason>>>,
     #[cfg(feature = "sync")]
     pub pending_device_flow: Arc<tokio::sync::Mutex<Option<crate::sync::PendingDeviceFlow>>>,
     #[cfg(feature = "sync")]
@@ -379,9 +437,11 @@ pub struct AppState {
 
 #[cfg(feature = "sync")]
 impl AppState {
-    /// Check sync status: returns (logged_in, email, syncing).
+    /// Check sync status: returns (logged_in, email, syncing, reason).
+    /// `reason` explains why sync is off (e.g. `"payment_required"`), and is
+    /// `None` while syncing or when the last stop wasn't a known condition.
     /// Cleans up finished sync handles as a side effect.
-    pub async fn sync_status(&self) -> (bool, Option<String>, bool) {
+    pub async fn sync_status(&self) -> (bool, Option<String>, bool, Option<String>) {
         let (logged_in, email) = {
             let session = self.sync_session.lock().unwrap();
             (
@@ -393,14 +453,25 @@ impl AppState {
             let mut guard = self.sync_handle.lock().await;
             match guard.as_ref() {
                 Some(handle) if handle.is_running() => true,
-                Some(_) => {
+                Some(handle) => {
+                    if let Some(reason) = handle.last_error_reason() {
+                        *self.last_sync_reason.lock().unwrap() = Some(reason);
+                    }
                     guard.take();
                     false
                 }
                 None => false,
             }
         };
-        (logged_in, email, syncing)
+        let reason = if syncing {
+            None
+        } else {
+            self.last_sync_reason
+                .lock()
+                .unwrap()
+                .map(|r| r.as_str().to_string())
+        };
+        (logged_in, email, syncing, reason)
     }
 }
 
@@ -434,23 +505,23 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/pantry/expiring", get(handlers::get_expiring))
         .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::delete(handlers::remove_pantry_item),
         )
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::put(handlers::update_pantry_item),
         )
         .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/raw/*path", get(handlers::recipe_raw)) // More specific route must come first
+        .route("/recipes/raw/{*path}", get(handlers::recipe_raw)) // More specific route must come first
         .route(
-            "/recipes/*path",
+            "/recipes/{*path}",
             get(handlers::recipe)
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
         )
         .route("/menus", get(handlers::list_menus))
-        .route("/menus/*path", get(handlers::get_menu))
+        .route("/menus/{*path}", get(handlers::get_menu))
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))

@@ -24,10 +24,27 @@ pub fn write_bytes(output_root: &Utf8Path, relpath: &Utf8Path, bytes: &[u8]) -> 
     Ok(())
 }
 
-/// Copy every file in the rust-embed `StaticFiles` to `output_root/static/<path>`.
+/// Embedded `static/` paths that are build inputs rather than shipped assets.
+/// Pages only link the compiled `output.css` and `editor.bundle.js`, so the
+/// Tailwind sources and the unbundled editor modules stay out of the site.
+const EXCLUDED_STATIC_PREFIXES: &[&str] = &["css/input.css", "css/components.css", "js/src/"];
+
+/// Whether an embedded `static/` path (relative to `static/`) belongs in the
+/// generated site.
+fn is_shipped_asset(path: &str) -> bool {
+    !EXCLUDED_STATIC_PREFIXES
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
+}
+
+/// Copy every shipped file in the rust-embed `StaticFiles` to
+/// `output_root/static/<path>`, skipping stylesheet and script sources.
 pub fn copy_static_assets(output_root: &Utf8Path) -> Result<usize> {
     let mut count = 0;
     for path in crate::web::StaticFiles::iter() {
+        if !is_shipped_asset(path.as_ref()) {
+            continue;
+        }
         let rel = Utf8Path::new("static").join(path.as_ref());
         let file = crate::web::StaticFiles::get(path.as_ref())
             .with_context(|| format!("Embedded file vanished: {path}"))?;
@@ -147,5 +164,28 @@ mod tests {
         let count = copy_static_assets(root).unwrap();
         assert!(count > 0, "should copy at least one static asset");
         assert!(root.join("static/css/output.css").is_file());
+        assert!(root.join("static/js/editor.bundle.js").is_file());
+    }
+
+    #[test]
+    fn copy_static_assets_skips_build_inputs() {
+        let tmp = TempDir::new().unwrap();
+        let root = camino::Utf8Path::from_path(tmp.path()).unwrap();
+        copy_static_assets(root).unwrap();
+        assert!(!root.join("static/css/input.css").exists());
+        assert!(!root.join("static/css/components.css").exists());
+        assert!(!root.join("static/js/src").exists());
+    }
+
+    #[test]
+    fn is_shipped_asset_excludes_sources_only() {
+        assert!(is_shipped_asset("css/output.css"));
+        assert!(is_shipped_asset("css/cooking-mode.css"));
+        assert!(is_shipped_asset("js/editor.bundle.js"));
+        assert!(is_shipped_asset("favicon.ico"));
+        assert!(!is_shipped_asset("css/input.css"));
+        assert!(!is_shipped_asset("css/components.css"));
+        assert!(!is_shipped_asset("js/src/editor.js"));
+        assert!(!is_shipped_asset("js/src/cooklang-mode.js"));
     }
 }

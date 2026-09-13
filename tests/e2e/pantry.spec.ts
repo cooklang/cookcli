@@ -359,4 +359,21 @@ eggs = { amount = "12", unit = "pieces" }
       }
     }
   });
+
+  test('marks zero-quantity items out of stock with the danger colour', async ({ page }) => {
+    await page.goto('/pantry');
+    await page.waitForLoadState('networkidle');
+    const item = page.locator('.pantry-item.out-of-stock').first();
+    await expect(item).toBeVisible();
+    const [qtyColor, dangerColor] = await item.evaluate((el) => {
+      const qty = el.querySelector('.item-quantity') as HTMLElement;
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--danger)';
+      document.body.appendChild(probe);
+      const expected = getComputedStyle(probe).color;
+      probe.remove();
+      return [getComputedStyle(qty).color, expected];
+    });
+    expect(qtyColor).toBe(dangerColor);
+  });
 });

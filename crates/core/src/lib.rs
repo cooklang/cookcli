@@ -29,6 +29,7 @@ pub mod source;
 pub use context::{global_config_path, Context};
 pub use diagnostic::{Diagnostic, Location, Severity, Span};
 pub use error::CoreError;
+pub use find::REFERENCE_SEPARATOR;
 pub use format::{PaperSize, Style};
 pub use outcome::Outcome;
 pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};

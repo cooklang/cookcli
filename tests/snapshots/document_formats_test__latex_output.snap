@@ -1,0 +1,101 @@
+---
+source: tests/document_formats_test.rs
+expression: "render(\"latex\")"
+---
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{multicol}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{geometry}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+% Define colors for recipe elements
+\definecolor{ingredientcolor}{RGB}{204, 85, 0}
+\definecolor{cookwarecolor}{RGB}{34, 139, 34}
+\definecolor{timercolor}{RGB}{220, 20, 60}
+
+% Custom commands for recipe elements
+\newcommand{\ingredient}[1]{\textcolor{ingredientcolor}{\textbf{#1}}}
+\newcommand{\cookware}[1]{\textcolor{cookwarecolor}{\textbf{#1}}}
+\newcommand{\timer}[1]{\textcolor{timercolor}{\textbf{#1}}}
+
+% Customize section headers
+\titleformat{\section}{\Large\bfseries}{}{0em}{}
+\titleformat{\subsection}{\large\bfseries}{}{0em}{}
+
+\begin{document}
+
+\pagestyle{empty}
+
+% BEGIN_RECIPE_CONTENT
+% BEGIN_TITLE
+\begin{center}
+\huge\textbf{Test Kitchen}
+\end{center}
+\vspace{0.5cm}
+% END_TITLE
+
+% TAGS: dinner
+\textbf{Tags:} \texttt{dinner}
+
+% SERVINGS: 4
+% BEGIN_METADATA
+\begin{center}
+Servings: 4
+\end{center}
+% END_METADATA
+
+\section*{Ingredients}
+
+\begin{multicols}{2}
+\begin{itemize}[leftmargin=*]
+\item \textbf{200 g} \ingredient{plain flour}
+\item \textbf{250 ml} \ingredient{whole milk}
+\item \ingredient{fine sea salt}
+\item \ingredient{sauce} \textit{(see recipe: ./sauce)}
+\item \textbf{1 tbsp} \ingredient{icing sugar} --- sifted
+\end{itemize}
+\end{multicols}
+
+\section*{Cookware}
+
+\begin{itemize}[leftmargin=*]
+\item \cookware{large mixing bowl}
+\item \textbf{2} \cookware{pan}
+\end{itemize}
+
+\section*{Instructions}
+
+\subsection*{Section 1}
+
+\begin{enumerate}
+\item Mix \ingredient{plain flour} with \ingredient{whole milk} in a \cookware{large mixing bowl} and beat until smooth, then add \ingredient{fine sea salt}.
+\item Simmer \timer{gently: 10 minutes} in a \cookware{pan}, then rest \timer{5 minutes}.
+
+\textit{Note: Rest the dough somewhere warm, covered.}
+
+\end{enumerate}
+
+\subsection*{Finishing}
+
+\begin{enumerate}
+\item Serve with \ingredient{sauce} and dust with \ingredient{icing sugar}.
+\end{enumerate}
+
+% END_RECIPE_CONTENT
+
+\vfill
+\begin{center}
+\small\textit{Created with CookCLI}
+\end{center}
+
+\end{document}

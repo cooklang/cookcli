@@ -7,6 +7,10 @@ use cooklang::Recipe;
 use cooklang_find::{tree::TreeError, RecipeEntry, RecipeTree};
 use std::collections::BTreeSet;
 
+/// Re-exported from [`cooklang_format`], which is where the writers that
+/// depend on this spelling now live.
+pub use cooklang_format::REFERENCE_SEPARATOR;
+
 /// Look `name` up under `base_path`, returning the file it resolves to.
 ///
 /// `name` may be a path or a bare recipe name, with or without an extension —

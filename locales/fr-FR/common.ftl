@@ -52,3 +52,13 @@ new-recipe-create = Creer la Recette
 delete-recipe = Supprimer la Recette
 delete-recipe-confirm = Êtes-vous sûr de vouloir supprimer cette recette?
 delete-recipe-warning = Cette action est irréversible.
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Changer de thème
+aria-keyboard-shortcuts = Raccourcis clavier
+aria-more-options = Plus d'options
+aria-preferences = Préférences
+aria-dismiss = Fermer
+aria-decrease-scale = Réduire l'échelle
+aria-increase-scale = Augmenter l'échelle
+aria-close = Fermer

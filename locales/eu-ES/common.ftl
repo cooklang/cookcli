@@ -1,7 +1,7 @@
 # Navigation
 nav-recipes = Errezeta
 nav-shopping-list = Erosketa zerrenda
-nav-pantry = Despentsa
+nav-pantry = Jaki-tokia
 nav-preferences = Ezarpenak
 
 # Search
@@ -22,7 +22,7 @@ action-preview = Aurrebista
 
 # Common Labels
 label-scale = Eskala
-label-servings = Anoak
+label-servings = Anoa
 label-time = Denbora
 label-difficulty = Zailtasuna
 label-name = Izena
@@ -52,3 +52,13 @@ new-recipe-create = Sortu errezeta
 delete-recipe = Ezabatu errezeta
 delete-recipe-confirm = Ziur zaude errezeta hau ezabatu nahi duzula?
 delete-recipe-warning = Ekintza hau ezin da desegin.
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Gaia aldatu
+aria-keyboard-shortcuts = Teklatu-lasterbideak
+aria-more-options = Aukera gehiago
+aria-preferences = Hobespenak
+aria-dismiss = Itxi
+aria-decrease-scale = Eskala txikitu
+aria-increase-scale = Eskala handitu
+aria-close = Itxi

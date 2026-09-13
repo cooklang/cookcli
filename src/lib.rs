@@ -2,6 +2,7 @@
 
 // Commands - make them available as public modules
 pub mod build;
+pub mod completions;
 pub mod doctor;
 #[cfg(feature = "import")]
 pub mod import;

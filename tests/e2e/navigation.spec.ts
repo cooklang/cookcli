@@ -26,7 +26,7 @@ test.describe('Navigation', () => {
 
     if (count > 0) {
       const firstRecipe = recipeCards.first();
-      const recipeName = await firstRecipe.locator('h3').textContent();
+      const recipeName = await firstRecipe.locator('.recipe-card-title').textContent();
 
       await firstRecipe.click();
       await page.waitForLoadState('networkidle');
@@ -139,7 +139,7 @@ test.describe('Navigation', () => {
     const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops"]');
     await expect(simpleRecipeCard).toBeVisible();
 
-    const recipeName = await simpleRecipeCard.locator('h3').textContent();
+    const recipeName = await simpleRecipeCard.locator('.recipe-card-title').textContent();
     expect(recipeName).toContain('Sicilian-style Scottadito Lamb Chops');
 
     await simpleRecipeCard.click();

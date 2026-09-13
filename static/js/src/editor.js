@@ -89,16 +89,18 @@ async function cooklangCompletions(context) {
     }
 }
 
-// Custom highlight style for Cooklang syntax
+// Custom highlight style for Cooklang syntax. Each token kind gets a fixed
+// class; colour and weight live in static/css/input.css (`.cm-cook-*`) so
+// they resolve through the theme tokens and flip with light/dark.
 const cooklangHighlightStyle = HighlightStyle.define([
-  { tag: t.variableName, color: "#ea580c", fontWeight: "600" },  // Ingredients (orange)
-  { tag: t.keyword, color: "#16a34a", fontWeight: "600" },       // Cookware (green)
-  { tag: t.number, color: "#dc2626", fontWeight: "600" },        // Timers (red)
-  { tag: t.comment, color: "#9ca3af", fontStyle: "italic" },     // Comments
-  { tag: t.meta, color: "#8b5cf6" },                             // Metadata
-  { tag: t.unit, color: "#6366f1" },                             // Units
-  { tag: t.heading, color: "#0891b2", fontWeight: "700", fontSize: "1.1em" },  // Sections (cyan)
-  { tag: t.string, color: "#d97706", fontStyle: "italic" }       // Prep instructions (amber italic)
+  { tag: t.variableName, class: "cm-cook-ingredient" },
+  { tag: t.keyword, class: "cm-cook-cookware" },
+  { tag: t.number, class: "cm-cook-timer" },
+  { tag: t.comment, class: "cm-cook-comment" },
+  { tag: t.meta, class: "cm-cook-metadata" },
+  { tag: t.unit, class: "cm-cook-unit" },
+  { tag: t.heading, class: "cm-cook-section" },
+  { tag: t.string, class: "cm-cook-prep" }
 ]);
 
 // Editor base theme for layout

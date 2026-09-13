@@ -10,13 +10,12 @@ pub struct SearchArgs {
     ///
     /// Can be one or more words to search for in recipes.
     /// The search looks through file names and the whole recipe text.
-    /// A recipe matching any one term is a match, so extra terms broaden
-    /// the results rather than narrowing them; the best matches are
-    /// listed first.
+    /// Every term must match, so extra terms narrow the results; the
+    /// best matches are listed first.
     ///
     /// Examples:
     ///   cook search chicken              # Find recipes with "chicken"
-    ///   cook search chicken rice         # Find recipes with "chicken" or "rice"
+    ///   cook search chicken rice         # Find recipes with both "chicken" and "rice"
     ///   cook search "olive oil"          # Rank file names containing "olive oil" highest
     #[arg(required = true, num_args = 1.., value_name = "TERMS")]
     query: Vec<String>,

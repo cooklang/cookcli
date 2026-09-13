@@ -213,3 +213,9 @@ cook pantry -f json depleted
 - Unit comparisons only work when units match (e.g., `g` vs `g`, not `kg` vs `g`)
 - For items without units, use plain numbers (e.g., `eggs = { quantity = "6", low = "2" }`)
 - `pantry update` merges new values over existing attributes — omitted flags are left unchanged
+- `pantry add`, `remove` and `update` edit `pantry.conf` in place: comments,
+  blank lines, key order and attributes CookCLI does not recognise are left as
+  you wrote them. Only the item named is touched
+- An item written above the first `[section]` header can only carry a quantity,
+  so `--bought`, `--expire` and `--low` are refused there; move it into a
+  section to give it those

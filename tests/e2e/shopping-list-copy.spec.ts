@@ -66,8 +66,15 @@ test.describe('Copy shopping list to clipboard', () => {
     expect(text).toMatch(/^egg 3$/m);
     expect(text).toMatch(/^flour 125 g$/m);
     expect(text).toMatch(/^milk 250 ml$/m);
-    // Two quantities of the same ingredient stay on one line.
-    expect(text).toMatch(/^salt 1 tbsp, pinch$/m);
+    // Two quantities of the same ingredient stay on one line, ordered by unit
+    // name with the unitless component first — so `pinch` precedes `1 tbsp`.
+    //
+    // This used to expect the other order. `GET /api/shopping-list` served the
+    // components straight out of a HashMap, so it was really in a random order
+    // per request that happened to come out that way here, and it disagreed
+    // with what `cook shopping-list` printed for the same recipe. Both go
+    // through the one ordering helper now (#441).
+    expect(text).toMatch(/^salt pinch, 1 tbsp$/m);
 
     // Aisle headings are present and are not themselves item lines. A heading
     // opens the text or follows the blank line that closes the previous group.

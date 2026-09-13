@@ -24,11 +24,13 @@ impl Tr {
     /// Translate a pluralized message. Passes `$count` as a number so Fluent
     /// plural selectors (`[one]` / `[other]`, etc.) resolve correctly.
     pub fn tn(&self, key: &str, count: &usize) -> String {
-        let args = std::collections::HashMap::from([("count", fluent::FluentValue::from(count))]);
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("count"),
+            fluent::FluentValue::from(count),
+        )]);
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
-    #[cfg(feature = "server")]
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
@@ -726,7 +728,7 @@ pub struct ParamDoc {
 #[cfg(feature = "server")]
 pub struct EndpointDoc {
     pub method: String,
-    /// Path in axum route syntax, e.g. "/api/pantry/:section/:name".
+    /// Path in axum route syntax, e.g. "/api/pantry/{section}/{name}".
     pub path: String,
     pub summary: String,
     /// Longer prose. Empty string means "no extra detail".
@@ -746,11 +748,11 @@ impl EndpointDoc {
     /// template so the template needs no conditional chain per endpoint.
     pub fn method_classes(&self) -> &'static str {
         match self.method.as_str() {
-            "GET" => "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-            "POST" => "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-            "PUT" => "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-            "DELETE" => "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-            _ => "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+            "GET" => "bg-sunk text-text",
+            "POST" => "bg-ok-soft text-ok",
+            "PUT" => "bg-accent-soft text-accent-text",
+            "DELETE" => "bg-danger-soft text-danger",
+            _ => "bg-sunk text-muted",
         }
     }
 }
@@ -806,3 +808,58 @@ pub struct ApiDocsTemplate {
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
 }
+
+/// Askama's axum integration lived in the `askama_axum` crate, which was
+/// deprecated and never updated for axum 0.8. It provided a blanket
+/// `IntoResponse` for every `Template`; a blanket impl is not available to us
+/// (both traits are foreign), so each response template opts in explicitly.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for $t {
+            fn into_response(self) -> axum::response::Response {
+                match askama::Template::render(&self) {
+                    Ok(body) => axum::response::Html(body).into_response(),
+                    Err(err) => {
+                        tracing::error!("failed to render template: {err}");
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            "Template rendering failed",
+                        )
+                            .into_response()
+                    }
+                }
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response!(
+    ErrorTemplate,
+    RecipesTemplate,
+    RecipeTemplate,
+    MenuTemplate,
+    ShoppingListTemplate,
+    PreferencesTemplate,
+    PantryTemplate,
+    EditTemplate,
+    NewTemplate,
+    ApiDocsTemplate,
+);
+
+/// The two large templates are handed around boxed, and `Box<T>` is not
+/// itself a `Template`.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response_boxed {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for Box<$t> {
+            fn into_response(self) -> axum::response::Response {
+                (*self).into_response()
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response_boxed!(RecipeTemplate, MenuTemplate);

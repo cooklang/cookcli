@@ -291,7 +291,13 @@ pub async fn get_expiring(
 
     let pantry_conf = load_pantry(&state).await?;
     let today = Local::now().date_naive();
-    let threshold = today + chrono::Duration::days(days);
+    // A `days` big enough to run off the end of the calendar means every date
+    // is within it. Saturating rather than panicking matters here more than in
+    // the CLI: `days` comes straight off the query string, so an out-of-range
+    // value would take down the request handler.
+    let threshold = today
+        .checked_add_signed(chrono::Duration::days(days))
+        .unwrap_or(NaiveDate::MAX);
 
     let mut items = Vec::new();
 

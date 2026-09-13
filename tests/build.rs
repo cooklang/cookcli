@@ -98,6 +98,45 @@ fn build_lang_arg_changes_ui_locale() {
 }
 
 #[test]
+fn build_lang_arg_sets_html_lang_attribute() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--lang",
+            "fr-FR",
+        ])
+        .assert()
+        .success();
+
+    // The resolved build language must be reflected on <html lang>, not left
+    // hardcoded to en. Screen readers and search engines rely on it.
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        index.contains(r#"<html lang="fr-FR""#),
+        "index should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+    assert!(
+        !index.contains(r#"<html lang="en""#),
+        "index must not keep the hardcoded lang=\"en\""
+    );
+
+    let recipe = std::fs::read_to_string(out.join("recipe/Risotto.html")).unwrap();
+    assert!(
+        recipe.contains(r#"<html lang="fr-FR""#),
+        "recipe page should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+}
+
+#[test]
 fn build_lang_arg_rejects_unsupported() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
@@ -324,11 +363,26 @@ fn build_writes_search_index() {
         .assert()
         .success();
 
-    let idx = out.join("static/search-index.json");
-    assert!(idx.is_file(), "search-index.json should exist");
+    let idx = out.join("static/search-index.js");
+    assert!(idx.is_file(), "search-index.js should exist");
 
-    let json: serde_json::Value =
-        serde_json::from_reader(std::fs::File::open(&idx).unwrap()).unwrap();
+    let source = std::fs::read_to_string(&idx).unwrap();
+    assert!(
+        source.starts_with("window.__SEARCH_INDEX__"),
+        "index should assign window.__SEARCH_INDEX__, got: {:.40}",
+        source
+    );
+    let (_, payload) = source
+        .split_once('=')
+        .expect("index should be an assignment");
+    let payload = payload.trim().trim_end_matches(';');
+
+    assert!(
+        !out.join("static/search-index.json").exists(),
+        "search-index.json should no longer be emitted"
+    );
+
+    let json: serde_json::Value = serde_json::from_str(payload).unwrap();
     let arr = json.as_array().expect("index is array");
     assert!(!arr.is_empty(), "index should not be empty for seed");
 
@@ -347,6 +401,36 @@ fn build_writes_search_index() {
         risotto.get("title").and_then(|t| t.as_str()),
         Some("Classic Risotto alla Milanese"),
         "title should be the metadata title; path should be the file stem"
+    );
+}
+
+#[test]
+fn search_js_loads_index_as_script() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let js = std::fs::read_to_string(out.join("static/js/search.js")).unwrap();
+
+    assert!(
+        js.contains("search-index.js"),
+        "search.js should load the index as a script (a fetch breaks file://)"
+    );
+    assert!(
+        js.contains("__SEARCH_INDEX__"),
+        "search.js should read the index from the global the script assigns"
     );
 }
 
@@ -618,7 +702,7 @@ fn build_compress_writes_gzip_variants() {
     for file in [
         "index.html",
         "static/css/output.css",
-        "static/search-index.json",
+        "static/search-index.js",
     ] {
         let gz_path = out.join(format!("{file}.gz"));
         assert!(gz_path.is_file(), "{file}.gz should exist");

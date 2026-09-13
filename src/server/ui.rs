@@ -2,12 +2,13 @@ use crate::server::AppState;
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use axum::{
-    extract::{Extension, Host, Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Form, Router,
 };
+use axum_extra::extract::Host;
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -34,9 +35,9 @@ fn error_page(
 pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
-        .route("/directory/*path", get(recipes_directory))
-        .route("/recipe/*path", get(recipe_page))
-        .route("/edit/*path", get(edit_page))
+        .route("/directory/{*path}", get(recipes_directory))
+        .route("/recipe/{*path}", get(recipe_page))
+        .route("/edit/{*path}", get(edit_page))
         .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
@@ -222,7 +223,7 @@ async fn new_page(
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
     Query(query): Query<NewPageQuery>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     crate::web::templates::NewTemplate {
         active: "recipes".to_string(),
         tr: Tr::new(lang),
@@ -253,54 +254,35 @@ fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::
 
 /// Validates that the request originated from the same host (CSRF protection)
 fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
-    // Check Origin header first (preferred for CSRF protection)
+    // Origin first: it is the header a browser always sends on a form POST,
+    // and the one an attacker cannot forge.
     if let Some(origin) = headers.get(header::ORIGIN) {
-        if let Ok(origin_str) = origin.to_str() {
-            // Origin format is scheme://host[:port]
-            if let Ok(origin_url) = url::Url::parse(origin_str) {
-                if let Some(origin_host) = origin_url.host_str() {
-                    let origin_with_port = if let Some(port) = origin_url.port() {
-                        format!("{}:{}", origin_host, port)
-                    } else {
-                        origin_host.to_string()
-                    };
-                    return origin_with_port == host || origin_host == host;
-                }
-            }
-        }
-        return false;
+        return origin
+            .to_str()
+            .is_ok_and(|origin| super::cors::origin_matches_host(origin, host));
     }
 
-    // Fallback to Referer header (less reliable but better than nothing)
+    // Referer is less reliable but better than nothing.
     if let Some(referer) = headers.get(header::REFERER) {
-        if let Ok(referer_str) = referer.to_str() {
-            if let Ok(referer_url) = url::Url::parse(referer_str) {
-                if let Some(referer_host) = referer_url.host_str() {
-                    let referer_with_port = if let Some(port) = referer_url.port() {
-                        format!("{}:{}", referer_host, port)
-                    } else {
-                        referer_host.to_string()
-                    };
-                    return referer_with_port == host || referer_host == host;
-                }
-            }
-        }
-        return false;
+        return referer
+            .to_str()
+            .is_ok_and(|referer| super::cors::origin_matches_host(referer, host));
     }
 
-    // No Origin or Referer header - reject for safety
-    // (though browsers should always send one for form submissions)
+    // Neither header: reject. Browsers always send one for a form submission,
+    // unlike the API, where a missing Origin just means a non-browser client.
     false
 }
 
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
-    Host(host): Host,
     headers: HeaderMap,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
-    // CSRF protection: verify request came from same origin
-    if !validate_same_origin(&headers, &host) {
+    // The raw `Host` header, not axum-extra's `Host` extractor: that one
+    // prefers `X-Forwarded-Host`, which any client can set.
+    let host = super::cors::host_header(&headers).unwrap_or_default();
+    if state.csrf_check && !validate_same_origin(&headers, host) {
         tracing::warn!("CSRF validation failed for create_recipe request");
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }
@@ -459,7 +441,7 @@ async fn shopping_list_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
         tr: Tr::new(lang),
@@ -474,7 +456,7 @@ async fn pantry_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> Result<impl askama_axum::IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, StatusCode> {
     // Load pantry configuration
     let pantry_path = state.pantry_path.as_ref();
 
@@ -524,9 +506,9 @@ async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     #[cfg(feature = "sync")]
-    let (sync_logged_in, sync_email, sync_syncing) = state.sync_status().await;
+    let (sync_logged_in, sync_email, sync_syncing, _sync_reason) = state.sync_status().await;
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
@@ -561,7 +543,7 @@ async fn api_docs_page(
     Host(host): Host,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
-) -> impl askama_axum::IntoResponse {
+) -> impl IntoResponse {
     ApiDocsTemplate {
         active: "preferences".to_string(),
         // Rendered so integrators can copy a working URL rather than a

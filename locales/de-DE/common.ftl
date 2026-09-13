@@ -52,3 +52,13 @@ new-recipe-create = Rezept erstellen
 delete-recipe = Rezept löschen
 delete-recipe-confirm = Möchten Sie dieses Rezept wirklich löschen?
 delete-recipe-warning = Diese Aktion kann nicht rückgängig gemacht werden.
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Design umschalten
+aria-keyboard-shortcuts = Tastenkürzel
+aria-more-options = Weitere Optionen
+aria-preferences = Einstellungen
+aria-dismiss = Schließen
+aria-decrease-scale = Skalierung verringern
+aria-increase-scale = Skalierung erhöhen
+aria-close = Schließen
