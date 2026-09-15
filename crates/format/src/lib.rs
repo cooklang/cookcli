@@ -174,8 +174,9 @@ pub(crate) mod test_support {
     use cooklang::{Converter, CooklangParser, Extensions, Recipe};
     use std::sync::LazyLock;
 
-    pub(crate) static PARSER: LazyLock<CooklangParser> =
-        LazyLock::new(|| CooklangParser::new(Extensions::COMPONENT_MODIFIERS, Converter::default()));
+    pub(crate) static PARSER: LazyLock<CooklangParser> = LazyLock::new(|| {
+        CooklangParser::new(Extensions::COMPONENT_MODIFIERS, Converter::default())
+    });
 
     /// Stands in for `cookcli_core::Outcome`, of which the formatter tests use
     /// `.value` and `.diagnostics`.

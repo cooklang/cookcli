@@ -422,7 +422,9 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         };
 
         // Mark as optional only if ALL occurrences are optional
-        let is_optional = ingredient_list.iter().all(|igr| igr.modifiers().is_optional());
+        let is_optional = ingredient_list
+            .iter()
+            .all(|igr| igr.modifiers().is_optional());
 
         ingredients.push(IngredientData {
             name: display_name,
@@ -430,7 +432,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             unit: formatted_unit,
             note: combined_note,
             reference_path,
-            is_optional
+            is_optional,
         });
     }
 
@@ -680,9 +682,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             .collect();
                     (Some(quantities.join(", ")), None)
                 };
-        
+
                 // Mark as optional only if ALL occurrences are optional
-                let is_optional = ingredient_list.iter().all(|igr| igr.modifiers().is_optional());
+                let is_optional = ingredient_list
+                    .iter()
+                    .all(|igr| igr.modifiers().is_optional());
 
                 section_ingredients.push(IngredientData {
                     name: display_name,
@@ -690,7 +694,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     unit: formatted_unit,
                     note: combined_note,
                     reference_path,
-                    is_optional
+                    is_optional,
                 });
             }
 
@@ -723,7 +727,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             unit: formatted_unit,
                             note: ingredient.note.clone(),
                             reference_path: None,
-                            is_optional: ingredient.modifiers().is_optional()
+                            is_optional: ingredient.modifiers().is_optional(),
                         },
                     ));
                 }
