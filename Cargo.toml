@@ -62,7 +62,7 @@ anstream = "1.0"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
-axum-extra = { version = "0.10", optional = true }
+axum-extra = { version = "0.12", optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
