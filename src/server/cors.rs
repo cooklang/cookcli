@@ -8,7 +8,7 @@
 use anyhow::{bail, Result};
 use axum::{
     extract::{Request, State},
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -163,12 +163,13 @@ pub(super) fn host_header(headers: &HeaderMap) -> Option<&str> {
 /// deployment behind a proxy that rewrites `Host` names its public origin with
 /// `--cors-origin` instead.
 fn request_host(request: &Request) -> Option<&str> {
-    host_header(request.headers()).or_else(|| {
-        request
-            .uri()
-            .authority()
-            .map(|authority| authority.as_str())
-    })
+    request_authority(request.headers(), request.uri())
+}
+
+/// [`request_host`] for a handler, which is given headers and URI separately
+/// rather than the whole [`Request`].
+pub(super) fn request_authority<'a>(headers: &'a HeaderMap, uri: &'a Uri) -> Option<&'a str> {
+    host_header(headers).or_else(|| uri.authority().map(|authority| authority.as_str()))
 }
 
 /// Whether an `Origin` value denotes the same host the request was sent to.
@@ -536,6 +537,17 @@ mod tests {
         ));
     }
 
+    fn headers_from(headers: &[(&str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in headers {
+            map.append(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).expect("valid header name"),
+                HeaderValue::from_str(value).expect("valid header value"),
+            );
+        }
+        map
+    }
+
     fn request_with(headers: &[(&str, &str)]) -> Request {
         let mut builder = axum::http::Request::builder().uri("/api/pantry/add");
         for (name, value) in headers {
@@ -571,6 +583,28 @@ mod tests {
         // compares against. Fail closed instead.
         let request = request_with(&[("host", "evil.test"), ("host", "127.0.0.1:9080")]);
         assert_eq!(request_host(&request), None);
+    }
+
+    #[test]
+    fn request_authority_ignores_a_forwarded_host() {
+        // `api_docs_page` renders this into a copyable URL, so a client that
+        // sets `X-Forwarded-Host` must not choose what the page tells the next
+        // reader to call.
+        let headers = headers_from(&[
+            ("host", "127.0.0.1:9080"),
+            ("x-forwarded-host", "evil.test"),
+        ]);
+        let uri: Uri = "/api-docs".parse().expect("valid uri");
+        assert_eq!(request_authority(&headers, &uri), Some("127.0.0.1:9080"));
+    }
+
+    #[test]
+    fn request_authority_has_nothing_without_a_host_or_authority() {
+        // An HTTP/1.1 request with no Host is malformed; the caller renders a
+        // relative URL rather than one with an empty authority.
+        let headers = headers_from(&[]);
+        let uri: Uri = "/api-docs".parse().expect("valid uri");
+        assert_eq!(request_authority(&headers, &uri), None);
     }
 
     #[test]
