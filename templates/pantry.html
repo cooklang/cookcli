@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="px-4 sm:px-8 lg:px-12 xl:px-16">
+<div>
     <div id="pantry-error-banner" class="hidden mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
         <div class="flex items-start gap-3">
             <div class="shrink-0 text-danger">
@@ -18,7 +18,7 @@
         </div>
     </div>
 
-    <div class="mt-8 mb-6">
+    <div class="mb-8">
         <div class="flex items-center justify-between">
             <h1 class="text-display font-bold text-text">{{ tr.t("pantry-title") }}</h1>
             {% if !sections.is_empty() %}
