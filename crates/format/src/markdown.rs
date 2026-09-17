@@ -274,14 +274,12 @@ pub(crate) fn print_md_with_options(
         match opts.description {
             DescriptionStyle::Hidden => {}
             DescriptionStyle::Blockquote => {
-                print_wrapped_with_options(&mut writer, desc, |o| {
-                    o.initial_indent("> ").subsequent_indent("> ")
-                })?;
+                write_block(&mut writer, desc, "> ", "> ")?;
                 writeln!(writer)?;
             }
             DescriptionStyle::Heading => {
                 writeln!(writer, "## {}\n", opts.heading.description)?;
-                print_wrapped(&mut writer, desc)?;
+                write_block(&mut writer, desc, "", "")?;
                 writeln!(writer)?;
             }
         }
@@ -458,13 +456,14 @@ fn w_section(
 }
 
 fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) -> io::Result<()> {
-    let mut step_str = step.number.to_string();
+    let mut marker = step.number.to_string();
     if opts.escape_step_numbers {
-        step_str.push_str("\\. ")
+        marker.push_str("\\. ")
     } else {
-        step_str.push_str(". ")
+        marker.push_str(". ")
     }
 
+    let mut step_str = String::new();
     for item in &step.items {
         match item {
             Item::Text { value } => {
@@ -502,25 +501,105 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
             }
         }
     }
-    print_wrapped(w, &step_str)?;
+    // A list item's content starts after its marker, so a line break inside the
+    // step has to be indented to that column to stay inside the item.
+    let indent = " ".repeat(marker.chars().count());
+    write_block(w, &step_str, &marker, &indent)?;
     Ok(())
 }
 
-fn print_wrapped(w: &mut impl io::Write, text: &str) -> io::Result<()> {
-    print_wrapped_with_options(w, text, |o| o)
-}
-
-static TERM_WIDTH: std::sync::LazyLock<usize> =
-    std::sync::LazyLock::new(|| textwrap::termwidth().min(80));
-
-fn print_wrapped_with_options<F>(w: &mut impl io::Write, text: &str, f: F) -> io::Result<()>
-where
-    F: FnOnce(textwrap::Options) -> textwrap::Options,
-{
-    let options = f(textwrap::Options::new(*TERM_WIDTH));
-    let lines = textwrap::wrap(text, options);
-    for line in lines {
-        writeln!(w, "{line}")?;
+/// Writes `text` with `first` before its first line and `rest` before the rest.
+///
+/// Nothing is re-wrapped. A Markdown document is not a terminal: hard wrapping
+/// a step broke sentences at whatever column the terminal happened to be, and
+/// the continuation lines then sat at column zero, which ends the ordered list
+/// for a CommonMark parser (<https://github.com/cooklang/cookcli/issues/497>).
+/// Only the line breaks the recipe itself has survive, indented so they stay
+/// part of the block they belong to.
+fn write_block(w: &mut impl io::Write, text: &str, first: &str, rest: &str) -> io::Result<()> {
+    // `split` rather than `lines` so an empty `text` still writes its prefix —
+    // a step with no items must keep its number.
+    for (i, line) in text.trim_end_matches('\n').split('\n').enumerate() {
+        let prefix = if i == 0 { first } else { rest };
+        // Trailing whitespace is invisible in Markdown source but two spaces of
+        // it are a hard line break, so a blank quoted line must not keep the
+        // space from its prefix.
+        writeln!(w, "{}", format!("{prefix}{line}").trim_end())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{parse_recipe, PARSER};
+
+    /// The step from the issue: both it and the description run well past any
+    /// terminal width, and the step puts a multi-word ingredient right where
+    /// the wrapping used to break the line.
+    const FIXTURE: &str = "\
+---
+title: Long Lines
+description: A description that is comfortably longer than eighty columns so that any hard wrapping shows up as an extra line.
+---
+
+Place the base on a lightly floured surface and spread @San Marzano tomato \
+sauce{5%tbsp} on it. Add some fresh @basil leaves{} and fresh \
+@mozzarella cheese{100%grams}.
+";
+
+    fn render(text: &str) -> String {
+        let recipe = parse_recipe(text, "Long Lines", 1.0)
+            .expect("the fixture parses")
+            .value;
+        let mut buf = Vec::new();
+        print_md(&recipe, "Long Lines", 1.0, PARSER.converter(), &mut buf).expect("formats");
+        String::from_utf8(buf).expect("utf8")
+    }
+
+    /// <https://github.com/cooklang/cookcli/issues/497>: the step was hard
+    /// wrapped at the terminal width, putting a line break in the middle of a
+    /// sentence — and, worse, making the output depend on the terminal.
+    #[test]
+    fn step_text_is_not_hard_wrapped() {
+        let md = render(FIXTURE);
+
+        let step = md
+            .lines()
+            .find(|l| l.starts_with("1. "))
+            .expect("the step is numbered");
+        assert_eq!(
+            step,
+            "1. Place the base on a lightly floured surface and spread San Marzano tomato \
+sauce on it. Add some fresh basil leaves and fresh mozzarella cheese.",
+            "the step should be one line, in:\n{md}"
+        );
+    }
+
+    #[test]
+    fn description_is_not_hard_wrapped() {
+        let md = render(FIXTURE);
+
+        let quoted: Vec<_> = md.lines().filter(|l| l.starts_with("> ")).collect();
+        assert_eq!(
+            quoted,
+            [
+                "> A description that is comfortably longer than eighty columns so that any hard \
+wrapping shows up as an extra line."
+            ],
+            "the description should be one blockquote line, in:\n{md}"
+        );
+    }
+
+    /// A line break the source *does* have stays, but it has to be indented to
+    /// the step's content column or CommonMark ends the ordered list at it.
+    #[test]
+    fn a_list_inside_a_step_is_indented_under_the_number() {
+        let md = render("Gather the following:\n- @plain flour{200%g}\n- @whole milk{250%ml}\n");
+
+        assert!(
+            md.contains("1. Gather the following: - plain flour\n   - whole milk\n"),
+            "the bullet should be indented under the step, in:\n{md}"
+        );
+    }
 }
