@@ -24,7 +24,7 @@ chrono = "0.4"
 cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 # Recipe lookup by path or bare name. Keep this declaration in step with the
 # root manifest's, so both crates resolve the same version.
-cooklang-find = { version = "0.6.1", default-features = false }
+cooklang-find = { version = "0.7.0", default-features = false }
 # The output formatters, split out so other projects can render recipes
 # without depending on the CLI's internals. `version` + `path`: local builds
 # use the workspace copy, the published crate resolves from crates.io.
