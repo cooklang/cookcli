@@ -21,6 +21,16 @@ fn cook(dir: &Path) -> Command {
     command
 }
 
+/// A relative path as the CLI prints it, which on Windows means backslashes.
+///
+/// Recipe paths are reported with [`std::path::MAIN_SEPARATOR`], as
+/// `cook doctor validate` has always reported the file it is talking about: it
+/// is a file to go and open, not a Cooklang recipe reference, which is always
+/// written with `/` (see `cooklang_format::REFERENCE_SEPARATOR`).
+fn native(path: &str) -> String {
+    path.replace('/', std::path::MAIN_SEPARATOR_STR)
+}
+
 /// A collection of one recipe, with whatever configuration the caller wants.
 fn collection(recipe: &str, aisle: Option<&str>, pantry: Option<&str>) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -219,7 +229,10 @@ fn aisle_show_recipes_names_every_recipe_that_writes_the_ingredient() {
         .success()
         .stdout(predicate::str::contains("  - oats (2 recipes)"))
         // Relative to the scanned directory, as `doctor validate` reports one.
-        .stdout(predicate::str::contains("      Breakfast/porridge.cook"))
+        .stdout(predicate::str::contains(format!(
+            "      {}",
+            native("Breakfast/porridge.cook")
+        )))
         .stdout(predicate::str::contains("      muesli.cook"))
         .stdout(predicate::str::contains("  - milk (1 recipe)"))
         // The hint is pointless once the names are there.

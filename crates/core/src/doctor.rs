@@ -1341,7 +1341,12 @@ mod tests {
     }
 
     /// The recipes listed against one ingredient, by name.
-    fn recipes_for<'a>(coverage: &'a IngredientCoverage, name: &str) -> Vec<&'a str> {
+    ///
+    /// As paths rather than strings, so that the expectations can be written
+    /// with `/` and still hold on Windows: `Utf8Path` compares component by
+    /// component, where `&str` would compare `Breakfast/porridge.cook` against
+    /// the `Breakfast\porridge.cook` the platform actually produces.
+    fn recipes_for<'a>(coverage: &'a IngredientCoverage, name: &str) -> Vec<&'a Utf8Path> {
         coverage
             .ingredients
             .iter()
@@ -1349,7 +1354,7 @@ mod tests {
             .unwrap_or_else(|| panic!("{name} is in the coverage"))
             .recipes
             .iter()
-            .map(|path| path.as_str())
+            .map(Utf8PathBuf::as_path)
             .collect()
     }
 
@@ -1498,7 +1503,7 @@ mod tests {
         );
         assert_eq!(
             recipes_for(&coverage, "oats"),
-            ["Breakfast/porridge.cook"],
+            [Utf8Path::new("Breakfast/porridge.cook")],
             "a recipe is named relative to the directory that was scanned"
         );
     }
@@ -1519,10 +1524,13 @@ mod tests {
 
         assert_eq!(
             recipes_for(&coverage, "ground cumin"),
-            ["curry.cook", "dal.cook"],
+            [Utf8Path::new("curry.cook"), Utf8Path::new("dal.cook")],
             "shared by two recipes, listed once each, in path order"
         );
-        assert_eq!(recipes_for(&coverage, "cumin powder"), ["stew.cook"]);
+        assert_eq!(
+            recipes_for(&coverage, "cumin powder"),
+            [Utf8Path::new("stew.cook")]
+        );
     }
 
     /// A recipe naming the same ingredient twice is still one recipe: the
@@ -1531,7 +1539,7 @@ mod tests {
     fn a_recipe_using_an_ingredient_twice_is_listed_once() {
         let dir = one_recipe("Add @salt{1%tsp}, then more @salt{1%tsp}.\n");
         let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
-        assert_eq!(recipes_for(&coverage, "salt"), ["dish.cook"]);
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("dish.cook")]);
     }
 
     /// Spellings are separate ingredients, so each keeps its own recipes —
@@ -1543,8 +1551,8 @@ mod tests {
         write(&base(&dir).join("b.cook"), "Add @salt{1%tsp}.\n");
 
         let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
-        assert_eq!(recipes_for(&coverage, "Salt"), ["a.cook"]);
-        assert_eq!(recipes_for(&coverage, "salt"), ["b.cook"]);
+        assert_eq!(recipes_for(&coverage, "Salt"), [Utf8Path::new("a.cook")]);
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("b.cook")]);
     }
 
     /// The pantry check tracks recipes too: it says which of your recipes an
@@ -1557,7 +1565,10 @@ mod tests {
 
         let coverage = checked(&pantry_ctx(&dir, "[pantry]\nrice = \"5%kg\"\n"), false).value;
         assert_eq!(known(&coverage), ["rice"]);
-        assert_eq!(recipes_for(&coverage, "rice"), ["a.cook", "b.cook"]);
+        assert_eq!(
+            recipes_for(&coverage, "rice"),
+            [Utf8Path::new("a.cook"), Utf8Path::new("b.cook")]
+        );
     }
 
     /// A recipe that cannot be parsed still counts as scanned — the CLI has
