@@ -3,12 +3,11 @@ use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use axum::{
     extract::{Extension, Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode, Uri},
     response::IntoResponse,
     routing::get,
     Form, Router,
 };
-use axum_extra::extract::Host;
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -540,15 +539,26 @@ async fn preferences_page(
 
 async fn api_docs_page(
     State(state): State<Arc<AppState>>,
-    Host(host): Host,
+    headers: HeaderMap,
+    uri: Uri,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
 ) -> impl IntoResponse {
+    // Rendered so integrators can copy a working URL rather than a relative
+    // path. The authority the request was addressed to, not `Forwarded` /
+    // `X-Forwarded-Host`: see `cors::request_authority`. Behind a proxy that
+    // rewrites `Host` this shows the internal name, which is the same
+    // trade-off the CSRF guard makes. A request that carries no usable
+    // authority at all is malformed under HTTP/1.1, so fall back to the
+    // relative path rather than printing `http:///api`.
+    let base_url = match super::cors::request_authority(&headers, &uri) {
+        Some(host) => format!("http://{host}{}/api", state.url_prefix),
+        None => format!("{}/api", state.url_prefix),
+    };
+
     ApiDocsTemplate {
         active: "preferences".to_string(),
-        // Rendered so integrators can copy a working URL rather than a
-        // relative path. `Host` reflects however the client reached us.
-        base_url: format!("http://{host}{}/api", state.url_prefix),
+        base_url,
         preamble: crate::web::api_docs::preamble(),
         sections: crate::web::api_docs::sections(),
         tr: Tr::new(lang),
