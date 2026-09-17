@@ -1,4 +1,4 @@
-use super::common::{check_path, json_error};
+use super::common::{check_path, json_error, normalize_tags};
 use crate::server::AppState;
 use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
 use axum::{
@@ -203,13 +203,17 @@ pub async fn get_menu(
     let mut ref_info_cache: HashMap<String, RecipeInfo> = HashMap::new();
 
     // Build metadata as a JSON object
-    let metadata = if recipe.metadata.map.is_empty() {
-        serde_json::Value::Object(serde_json::Map::new())
-    } else {
+    let mut metadata = {
         let mut map = serde_json::Map::new();
         for (key, value) in recipe.metadata.map.iter() {
             if let Some(key_str) = key.as_str() {
-                let val = if let Some(s) = value.as_str() {
+                let val = if key_str == "tags" {
+                    // `tags` keeps its YAML shape so that a sequence survives:
+                    // the stringification below would report `tags: [a, b]` as
+                    // null. `normalize_tags` then gives the comma-separated
+                    // spelling the same array shape.
+                    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
+                } else if let Some(s) = value.as_str() {
                     serde_json::Value::String(s.to_string())
                 } else if let Some(n) = value.as_i64() {
                     serde_json::Value::String(n.to_string())
@@ -223,6 +227,7 @@ pub async fn get_menu(
         }
         serde_json::Value::Object(map)
     };
+    normalize_tags(&mut metadata);
 
     // Extract the menu name
     let menu_name = recipe

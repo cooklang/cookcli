@@ -1,4 +1,7 @@
-use crate::{server::AppState, util::PARSER};
+use crate::{
+    server::{handlers::common::normalize_tags, AppState},
+    util::PARSER,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -48,12 +51,27 @@ pub async fn all_recipes(
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
 
-    let recipes = serde_json::to_value(recipes).map_err(|e| {
+    let mut recipes = serde_json::to_value(recipes).map_err(|e| {
         tracing::error!("Failed to serialize recipes: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    normalize_tree_tags(&mut recipes);
 
     Ok(Json(recipes))
+}
+
+/// Normalises `tags` on every recipe node of a serialised recipe tree.
+///
+/// Directory nodes carry a null `recipe` and only recurse.
+fn normalize_tree_tags(node: &mut serde_json::Value) {
+    if let Some(metadata) = node.pointer_mut("/recipe/metadata") {
+        normalize_tags(metadata);
+    }
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_object_mut()) {
+        for child in children.values_mut() {
+            normalize_tree_tags(child);
+        }
+    }
 }
 
 pub async fn recipe(
@@ -131,12 +149,15 @@ pub async fn recipe(
         grouped_ingredients,
     };
 
-    let value = serde_json::json!({
+    let mut value = serde_json::json!({
         "recipe": api_recipe,
         "image": image_path,
         "scale": query.scale.unwrap_or(1.0),
         // TODO: add more metadata if needed
     });
+    if let Some(metadata) = value.pointer_mut("/recipe/metadata/map") {
+        normalize_tags(metadata);
+    }
 
     Ok(Json(value))
 }

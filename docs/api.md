@@ -43,7 +43,7 @@ Browse, read, write and delete `.cook` files under the server's recipe directory
 
 List every recipe as a directory tree
 
-Returns the recipe tree rooted at the server's base path. Every node — root, directory, and file alike — carries the same four keys: `children`, `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null for a file; that is the discriminator, not the key's presence. Menus (`.menu`) appear in the same tree as recipes.
+Returns the recipe tree rooted at the server's base path. Every node — root, directory, and file alike — carries the same four keys: `children`, `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null for a file; that is the discriminator, not the key's presence. Menus (`.menu`) appear in the same tree as recipes. A recipe's `metadata` keeps the types its frontmatter used, except `tags`, which is always an array of strings: the comma-separated spelling `tags: breakfast, quick` is split into the same array the list spelling `tags: [breakfast, quick]` gives.
 
 Response:
 
@@ -60,6 +60,7 @@ Response:
             "metadata": {
               "author": "CookCLI Team",
               "servings": 2,
+              "tags": ["breakfast", "quick"],
               "description": "Simple crepes that are perfect for a lazy weekend breakfast."
             },
             "source": {
@@ -84,7 +85,7 @@ Response:
 
 Read one parsed recipe
 
-Parses the recipe and returns its ingredients, cookware, timers and steps. `grouped_ingredients` aggregates repeated ingredients and indexes back into `ingredients`. `inline_quantities` is also present alongside them at the top level of `recipe`. The `image` field is a URL under `/api/static/` when the recipe has a title image, otherwise null.
+Parses the recipe and returns its ingredients, cookware, timers and steps. `grouped_ingredients` aggregates repeated ingredients and indexes back into `ingredients`. `inline_quantities` is also present alongside them at the top level of `recipe`. The `image` field is a URL under `/api/static/` when the recipe has a title image, otherwise null. Frontmatter lands under `metadata.map` with the types it was written in, except `tags`, which is always an array of strings — `tags: breakfast, quick` is split on commas into the same array as `tags: [breakfast, quick]`.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -102,6 +103,7 @@ Response:
       "map": {
         "author": "CookCLI Team",
         "servings": 4,
+        "tags": ["breakfast", "quick"],
         "description": "Simple crepes that are perfect for a lazy weekend breakfast."
       }
     },
@@ -265,7 +267,7 @@ Response:
 
 Read one menu
 
-Sections correspond to days; a `date` is extracted when the section name contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't use that convention, so `date` is null below. A meal's `time` is likewise extracted from its header, e.g. `Breakfast (08:30):` yields `"type": "Breakfast", "time": "08:30"`; none of the seed menus set a time either, hence null throughout. Meal items are tagged by `kind`: `recipe_reference` points at another file; `ingredient` is a loose item written directly in the menu. Plain connecting text in the menu (e.g. "with") is dropped — only structured references and ingredients are returned. Returns 400 if the path is not a menu file, 404 if it does not exist. The response below is trimmed to the first of this menu's two `sections`; the second follows the same shape. A `recipe_reference`'s `scale` is a ready-to-use multiplier for the referenced recipe, resolved from the menu's `{...}` notation per the Cooklang spec: a bare `{2}` is a raw multiplier, `{3%servings}` targets servings against the referenced recipe's own `servings` metadata, any other unit targets its `yield`, and `{}` means 1. The example below shows `5.0` because the menu asks for `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` query multiplies these, so `?scale=2` yields `10.0`. `POST /api/shopping_list/add_menu` resolves references identically, so the two endpoints always agree.
+Sections correspond to days; a `date` is extracted when the section name contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't use that convention, so `date` is null below. A meal's `time` is likewise extracted from its header, e.g. `Breakfast (08:30):` yields `"type": "Breakfast", "time": "08:30"`; none of the seed menus set a time either, hence null throughout. Meal items are tagged by `kind`: `recipe_reference` points at another file; `ingredient` is a loose item written directly in the menu. Plain connecting text in the menu (e.g. "with") is dropped — only structured references and ingredients are returned. Returns 400 if the path is not a menu file, 404 if it does not exist. The response below is trimmed to the first of this menu's two `sections`; the second follows the same shape. A `recipe_reference`'s `scale` is a ready-to-use multiplier for the referenced recipe, resolved from the menu's `{...}` notation per the Cooklang spec: a bare `{2}` is a raw multiplier, `{3%servings}` targets servings against the referenced recipe's own `servings` metadata, any other unit targets its `yield`, and `{}` means 1. The example below shows `5.0` because the menu asks for `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` query multiplies these, so `?scale=2` yields `10.0`. `POST /api/shopping_list/add_menu` resolves references identically, so the two endpoints always agree. `metadata` values are strings, except `tags`, which is always an array of strings whichever way the frontmatter spelled it.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
