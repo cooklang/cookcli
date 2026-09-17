@@ -520,6 +520,33 @@ fn a_yield_target_in_another_unit_is_a_reference_error() {
     }
 }
 
+/// The other way `target_factor` can decline to answer: a servings target
+/// against a recipe that declares no servings. `an_unscalable_reference_is_a_reference_error`
+/// pins the yield half of this; this is the servings half.
+///
+/// The reference carries a sub-recipe below it deliberately. If `cooklang`
+/// ever stopped refusing this, expansion would carry on with the
+/// `unwrap_or(1.0)` fallback and the stock would be counted at the sauce's
+/// authored amounts whatever was asked for — silently. The error is what
+/// keeps that fallback unreachable, so the error is what is pinned.
+#[test]
+fn a_servings_target_on_a_recipe_without_servings_is_a_reference_error() {
+    let dir = dir_with(&[
+        // No `servings` metadata, so scaling to a servings target cannot work.
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("sauce"), "{name}");
+            assert!(message.contains("6"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
 /// The recursion is bounded by the ancestor chain, not by a depth limit, so a
 /// cycle that only closes further down is still caught — and still counted
 /// once rather than looping.
