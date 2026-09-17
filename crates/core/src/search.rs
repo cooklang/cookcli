@@ -526,27 +526,35 @@ mod tests {
 
     /// A recipe carrying a byte that is not valid UTF-8 is still a recipe.
     ///
-    /// `cook search tuna` used to die with "Failed to read '<path>' / stream
+    /// `cook search tuna` used to die with "Failed to read '<root>' / stream
     /// did not contain valid UTF-8" over one Latin-1 file, taking every other
     /// recipe's results with it
     /// (<https://github.com/cooklang/cookcli/issues/498>). The bad bytes are
     /// decoded as U+FFFD, so the recipe is found and the text around them still
     /// matches.
     ///
-    /// The front matter here is deliberately clean: that is what puts the
-    /// failure in *this* crate. `cooklang-find` reads only front matter to
-    /// build the entry, so it hands the file over happily and
-    /// [`matches_every_term`] is what used to choke on the body. A bad byte in
-    /// the front matter fails inside the library instead, and is fixed there
-    /// (cooklang/cooklang-find#13).
+    /// Both files here are needed, because the report had two causes in two
+    /// crates. A bad byte in the **body** was this crate's:
+    /// [`matches_every_term`] read candidates with `read_to_string`. A bad byte
+    /// in the **front matter** was `cooklang-find`'s, which propagated it out
+    /// of its own walk instead of skipping the file the way `build_tree` does —
+    /// that is the arm that named the search root rather than the file, and it
+    /// needs 0.7.1 (cooklang/cooklang-find#13).
     #[test]
     fn a_recipe_that_is_not_valid_utf8_is_still_searchable() {
         let dir = fixture();
         let base = base(&dir);
-        // Latin-1: 0xe8 is an "è" that never made it to UTF-8.
+        // Latin-1: 0xe8 and 0xe9 are an "è" and an "é" that never made it to
+        // UTF-8. One file carries its bad byte in the body, the other in the
+        // front matter.
         std::fs::write(
             base.join("tuna mornay.cook"),
             b"---\ntitle: Tuna Mornay\n---\n\nBake @tuna{1%can} with cr\xe8me.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            base.join("salmon.cook"),
+            b"---\ntitle: Saumon \xe9tuv\xe9\n---\n\nSteam @salmon{2} with @dill{}.\n",
         )
         .unwrap();
 
@@ -555,6 +563,30 @@ mod tests {
             ["tuna mornay.cook"],
             "a bad byte in the body must not fail the search"
         );
+        assert_eq!(
+            relative_paths(&run(&base, "salmon")),
+            ["salmon.cook"],
+            "nor must one in the front matter"
+        );
+
+        // Found by an ingredient that only appears in the body, so the hit
+        // cannot be coming from the file name. This is what needed 0.7.1:
+        // 0.7.0 could not score such a file's contents at all.
+        assert_eq!(
+            relative_paths(&run(&base, "dill")),
+            ["salmon.cook"],
+            "a term only in the contents must still match"
+        );
+        assert_eq!(
+            relative_paths(&run(&base, "steam dill")),
+            ["salmon.cook"],
+            "and must still satisfy every term of an AND query"
+        );
+
+        // The title survives, bad byte and all, rather than the entry being
+        // dropped or left nameless.
+        let hit = run(&base, "salmon");
+        assert_eq!(hit[0].name.as_deref(), Some("Saumon \u{fffd}tuv\u{fffd}"));
 
         // The part the bug was really about: one bad file used to fail every
         // query, not just the ones that matched it.
@@ -568,10 +600,10 @@ mod tests {
     /// on either side of one is still searchable, and still counts towards an
     /// AND query.
     ///
-    /// Exercised through [`matches_every_term`] directly, because
-    /// `cooklang-find` 0.7.0 cannot score the contents of such a file at all —
-    /// it only reaches the AND filter when its *name* matched — so a
-    /// whole-search test could not tell a content match from a name match.
+    /// Exercised through [`matches_every_term`] directly, so that the AND
+    /// filter's own reading of a malformed file is pinned here rather than
+    /// only through a whole search, where `cooklang-find`'s scoring decides
+    /// what the filter ever sees.
     #[test]
     fn text_around_an_invalid_byte_still_matches() {
         let dir = tempfile::TempDir::new().unwrap();
