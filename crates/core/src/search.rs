@@ -97,8 +97,8 @@ pub struct SearchHit {
 ///   not be read, or its front matter could not be understood. One such file
 ///   fails the whole search rather than being skipped — that is
 ///   `cooklang-find`'s behaviour and this crate does not paper over it. Bytes
-///   that are not valid UTF-8 are not such a failure; see
-///   [`matches_every_term`].
+///   that are not valid UTF-8 are not such a failure; they are decoded as
+///   U+FFFD, as `matches_every_term` describes.
 pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit>>, CoreError> {
     let base_dir = req
         .base_dir
@@ -626,6 +626,25 @@ mod tests {
         assert!(
             !matches("bake kohlrabi"),
             "AND still narrows: one missing term is enough"
+        );
+    }
+
+    /// A file with no valid text in it at all — a binary that landed under a
+    /// `.cook` name — is the degenerate case of the same thing: nothing to
+    /// match, but nothing to fail over either.
+    #[test]
+    fn a_file_with_no_valid_text_matches_nothing_and_fails_nothing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = base(&dir).join("junk.cook");
+        std::fs::write(&path, [0xff, 0xfe, 0xff, 0xfe, 0x80, 0x81]).unwrap();
+
+        assert!(
+            !matches_every_term(&path, &["tuna".to_string()]).expect("must not fail"),
+            "there is no text in it to match"
+        );
+        assert!(
+            matches_every_term(&path, &["junk".to_string()]).expect("must not fail"),
+            "but the file name is still a surface to match on"
         );
     }
 
