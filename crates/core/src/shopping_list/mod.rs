@@ -648,11 +648,20 @@ impl Expansion<'_> {
             // reaches but well below where the recursion runs out of stack —
             // see `MAX_REFERENCE_DEPTH`.
             if ancestors.len() >= MAX_REFERENCE_DEPTH {
-                self.diagnostics.push(Diagnostic::warning(format!(
+                let stopped = Diagnostic::warning(format!(
                     "Stopped at recipe reference '{ref_path}': references are nested more \
                      than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
                      list"
-                )));
+                ));
+                // Attributed to the recipe holding the reference, the way
+                // `cycle_warning` attributes itself, so a caller can group or
+                // open it rather than reading the file name back out of the
+                // message. `ancestors` is non-empty here: it is long enough to
+                // have hit the limit.
+                self.diagnostics.push(match ancestors.last() {
+                    Some(path) => stopped.at_file(path.clone()),
+                    None => stopped,
+                });
                 continue;
             }
 

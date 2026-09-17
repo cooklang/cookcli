@@ -520,6 +520,34 @@ fn a_yield_target_in_another_unit_is_a_reference_error() {
     }
 }
 
+/// `cooklang` rounds a servings target to a whole number before scaling, and
+/// `target_factor` rounds it the same way. On whole targets the two agree
+/// whatever either does, so this asks for 6.4 servings: the sauce below the
+/// reference comes out at three times its amounts, not 3.2 times.
+#[test]
+fn a_fractional_servings_target_rounds_the_same_way_all_the_way_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6.4%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6.4 rounds to 6, which is three times what the dinner makes.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12".to_string()]),
+        "12, not 12.8: the factor passed down is rounded like the one applied"
+    );
+}
+
 /// The other way `target_factor` can decline to answer: a servings target
 /// against a recipe that declares no servings. `an_unscalable_reference_is_a_reference_error`
 /// pins the yield half of this; this is the servings half.
@@ -801,6 +829,21 @@ fn a_chain_deeper_than_any_real_collection_stops_and_says_so() {
     assert!(
         quantities(&outcome.value, &format!("ing{}", depth - 1)).is_none(),
         "and everything below it is not"
+    );
+
+    let stopped = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("deep"))
+        .expect("checked above");
+    assert!(
+        stopped
+            .location
+            .as_ref()
+            .and_then(|l| l.file.as_deref())
+            .is_some(),
+        "like the cycle warning, it names the recipe it concerns so a UI does \
+         not have to read the file name back out of the message: {stopped:?}"
     );
 }
 
