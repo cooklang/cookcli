@@ -181,7 +181,10 @@ fn recipes() -> ApiSection {
                  root, directory, and file alike — carries the same four keys: `children`, \
                  `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null \
                  for a file; that is the discriminator, not the key's presence. Menus \
-                 (`.menu`) appear in the same tree as recipes.",
+                 (`.menu`) appear in the same tree as recipes. A recipe's `metadata` keeps \
+                 the types its frontmatter used, except `tags`, which is always an array of \
+                 strings: the comma-separated spelling `tags: breakfast, quick` is split \
+                 into the same array the list spelling `tags: [breakfast, quick]` gives.",
             )
             .response(
                 r#"
@@ -197,6 +200,7 @@ fn recipes() -> ApiSection {
             "metadata": {
               "author": "CookCLI Team",
               "servings": 2,
+              "tags": ["breakfast", "quick"],
               "description": "Simple crepes that are perfect for a lazy weekend breakfast."
             },
             "source": {
@@ -225,7 +229,10 @@ fn recipes() -> ApiSection {
                  `grouped_ingredients` aggregates repeated ingredients and indexes back into \
                  `ingredients`. `inline_quantities` is also present alongside them at the top \
                  level of `recipe`. The `image` field is a URL under `/api/static/` when the \
-                 recipe has a title image, otherwise null.",
+                 recipe has a title image, otherwise null. Frontmatter lands under \
+                 `metadata.map` with the types it was written in, except `tags`, which is \
+                 always an array of strings — `tags: breakfast, quick` is split on commas \
+                 into the same array as `tags: [breakfast, quick]`.",
             )
             .params(vec![
                 path_param("path", "Recipe path relative to the recipe directory, e.g. `Breakfast/Easy Pancakes.cook`. The `.cook` extension is optional — the server tries the bare path first, then `.cook`, then `.menu`."),
@@ -241,6 +248,7 @@ fn recipes() -> ApiSection {
       "map": {
         "author": "CookCLI Team",
         "servings": 4,
+        "tags": ["breakfast", "quick"],
         "description": "Simple crepes that are perfect for a lazy weekend breakfast."
       }
     },
@@ -440,7 +448,9 @@ fn menus() -> ApiSection {
                  `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` \
                  query multiplies these, so `?scale=2` yields `10.0`. \
                  `POST /api/shopping_list/add_menu` resolves references identically, so the \
-                 two endpoints always agree.",
+                 two endpoints always agree. `metadata` values are strings, except `tags`, \
+                 which is always an array of strings whichever way the frontmatter spelled \
+                 it.",
             )
             .params(vec![
                 path_param(
