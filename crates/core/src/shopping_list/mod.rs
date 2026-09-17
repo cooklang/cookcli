@@ -455,8 +455,9 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// Expansion is recursive: every reference is followed, and so is every
 /// reference inside what it leads to, however deep the chain runs. It used to
 /// stop three files in, and anything below that fell off the list with no
-/// warning (<https://github.com/cooklang/cookcli/issues/509>). The cycle check
-/// below is what bounds the descent.
+/// warning (<https://github.com/cooklang/cookcli/issues/509>). Two things bound
+/// the descent: the cycle check below, and [`MAX_REFERENCE_DEPTH`] for a chain
+/// long enough to exhaust the stack without ever repeating itself.
 ///
 /// A reference with no quantity of its own inherits the factor the recipe that
 /// named it was scaled by, so scaling a menu scales everything under it. One
@@ -545,6 +546,21 @@ pub fn extract_ingredients(
     Ok(diagnostics)
 }
 
+/// How deep a chain of recipe references is followed before the expansion gives
+/// up and says so.
+///
+/// The ancestor chain refuses a reference that leads back on itself, so the
+/// recursion is already bounded — but it is bounded at one level per recipe in
+/// the collection, and expanding a few thousand of them as native recursion
+/// overflows the stack and aborts the process. This is the second bound, and
+/// the one that keeps a pathological collection a diagnostic rather than a
+/// crash.
+///
+/// A menu of dinners of sauces of preparations is four. A hundred is not a
+/// number of levels anyone reaches by writing recipes, and it leaves an order
+/// of magnitude of headroom below where an unoptimised build runs out of stack.
+const MAX_REFERENCE_DEPTH: usize = 100;
+
 /// What stays the same for the whole of one expansion — where to look recipes
 /// up, and what to accumulate into — so the recursion carries only what
 /// actually changes as it goes down.
@@ -574,9 +590,11 @@ impl Expansion<'_> {
     ///
     /// `ancestors` is the chain of recipes currently being expanded, innermost
     /// last; see "Cycles" on [`extract_ingredients`] for why it is the chain rather
-    /// than everything seen. It is what bounds this recursion: a reference leading
-    /// back into its own chain is refused, so a finite collection of recipes is a
-    /// finite descent however the references are wired.
+    /// than everything seen. It is the first of the two things that bound this
+    /// recursion: a reference leading back into its own chain is refused, so a
+    /// finite collection of recipes is a finite descent however the references
+    /// are wired. Its length is also the depth, which is how
+    /// [`MAX_REFERENCE_DEPTH`] — the second — is checked.
     fn expand(
         &mut self,
         recipe: &Recipe,
@@ -625,6 +643,19 @@ impl Expansion<'_> {
             } else {
                 reference.path(find::REFERENCE_SEPARATOR)
             };
+            // `ancestors` holds one recipe per level, so its length is how deep
+            // this reference sits. Stop well above anything a real collection
+            // reaches but well below where the recursion runs out of stack —
+            // see `MAX_REFERENCE_DEPTH`.
+            if ancestors.len() >= MAX_REFERENCE_DEPTH {
+                self.diagnostics.push(Diagnostic::warning(format!(
+                    "Stopped at recipe reference '{ref_path}': references are nested more \
+                     than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
+                     list"
+                )));
+                continue;
+            }
+
             let ref_entry = find::get_recipe(self.base_path, &ref_path)?;
 
             if let Some(cycle) = cycle_warning(ancestors, &ref_entry, &ref_path) {

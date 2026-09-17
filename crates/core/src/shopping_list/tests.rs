@@ -466,6 +466,60 @@ fn a_scaled_reference_passes_the_factor_it_reached_further_down() {
     );
 }
 
+/// The other half of `target_factor`: a target measured against the recipe's
+/// `yield` rather than its servings, which is its own arithmetic.
+#[test]
+fn a_yield_target_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1000%g\n---\n\nSimmer @tomatoes{4} with @./stock{}.\n",
+        ),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // Half of what the sauce yields is half of everything it asks for.
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["2".to_string()]));
+    assert_eq!(
+        quantities(&list, "bones"),
+        Some(vec!["100 g".to_string()]),
+        "the stock the sauce calls for is halved too"
+    );
+}
+
+/// `cooklang`'s `scale_to_yield` compares the yield's unit to the target's as
+/// plain strings — the converter it is handed only refits quantities once the
+/// factor is known, and never reconciles `kg` with `g`. So a target in another
+/// unit is an error rather than a conversion.
+///
+/// Pinned because `target_factor` compares the two the same way, and a
+/// `cooklang` that started converting would make it quietly answer `None` — and
+/// a `None` is a factor of 1 for everything below the reference. This test
+/// fails first if that ever changes.
+#[test]
+fn a_yield_target_in_another_unit_is_a_reference_error() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1%kg\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("sauce"), "{name}");
+            assert!(message.contains("500"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
 /// The recursion is bounded by the ancestor chain, not by a depth limit, so a
 /// cycle that only closes further down is still caught — and still counted
 /// once rather than looping.
@@ -671,6 +725,55 @@ fn a_recipe_referenced_by_two_others_is_counted_for_both() {
             .any(|d| d.message.contains("circular")),
         "a shared sub-recipe is not a cycle: {:?}",
         outcome.diagnostics
+    );
+}
+
+/// The ancestor chain bounds the recursion, but it bounds it at "every recipe
+/// in the collection" — one file per level. Expanding that as native recursion
+/// overflowed the stack and aborted at around two thousand levels, which
+/// `cook server` and `cook sync` can both be pointed at.
+///
+/// So there is a depth limit as well, far above anything a real collection
+/// reaches. It says so rather than truncating quietly.
+#[test]
+fn a_chain_deeper_than_any_real_collection_stops_and_says_so() {
+    let depth = 150;
+    let files: Vec<(String, String)> = (0..depth)
+        .map(|i| {
+            let next = if i + 1 < depth {
+                format!("Make @./r{}{{}} and ", i + 1)
+            } else {
+                String::new()
+            };
+            (
+                format!("r{i}.cook"),
+                format!("{next}add @ing{i}{{1%tsp}}.\n"),
+            )
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(name, text)| (name.as_str(), text.as_str()))
+        .collect();
+    let dir = dir_with(&borrowed);
+
+    let outcome = generate(&ctx(&dir), request(&["r0.cook"])).expect("a deep chain must not fail");
+
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning && d.message.contains("deep")),
+        "the shopper has to be told the list stops short: {:?}",
+        outcome.diagnostics
+    );
+    assert!(
+        quantities(&outcome.value, "ing0").is_some(),
+        "everything above the limit is still on the list"
+    );
+    assert!(
+        quantities(&outcome.value, &format!("ing{}", depth - 1)).is_none(),
+        "and everything below it is not"
     );
 }
 
