@@ -415,6 +415,16 @@ pub struct CheckedIngredient {
     pub name: String,
     /// Whether the configuration names this ingredient.
     pub known: bool,
+    /// The recipes that write this ingredient, as paths relative to the
+    /// scanned directory, in path order and without repeats.
+    ///
+    /// Spellings are separate ingredients here, so the recipes writing `Salt`
+    /// and those writing `salt` are listed against their own spelling. That is
+    /// the point of tracking them: it is how a collection's inconsistencies —
+    /// `ground cumin`, `cumin powder`, `cummin` — become findable.
+    ///
+    /// Never empty: an ingredient is only here because some recipe used it.
+    pub recipes: Vec<Utf8PathBuf>,
 }
 
 /// How much of a collection's ingredients a configuration accounts for.
@@ -456,7 +466,8 @@ impl IngredientCoverage {
     /// The ingredients the configuration knows, in the order of
     /// [`ingredients`](IngredientCoverage::ingredients).
     pub fn known(&self) -> impl Iterator<Item = &str> {
-        self.filtered(true)
+        self.known_entries()
+            .map(|ingredient| ingredient.name.as_str())
     }
 
     /// The ingredients the configuration does not know, in the order of
@@ -466,14 +477,30 @@ impl IngredientCoverage {
     /// known. Ask [`ConfigSource::is_unset`] if you need to tell that from a
     /// configuration that simply covers nothing.
     pub fn unknown(&self) -> impl Iterator<Item = &str> {
+        self.unknown_entries()
+            .map(|ingredient| ingredient.name.as_str())
+    }
+
+    /// As [`known`](IngredientCoverage::known), but keeping each ingredient
+    /// whole — its [`recipes`](CheckedIngredient::recipes) along with its name.
+    pub fn known_entries(&self) -> impl Iterator<Item = &CheckedIngredient> {
+        self.filtered(true)
+    }
+
+    /// As [`unknown`](IngredientCoverage::unknown), but keeping each ingredient
+    /// whole — its [`recipes`](CheckedIngredient::recipes) along with its name.
+    ///
+    /// This is the view that answers "which recipes do I have to go and fix?":
+    /// an uncategorised ingredient is usually a misspelling of a categorised
+    /// one, and the recipes listed against it are where that misspelling is.
+    pub fn unknown_entries(&self) -> impl Iterator<Item = &CheckedIngredient> {
         self.filtered(false)
     }
 
-    fn filtered(&self, known: bool) -> impl Iterator<Item = &str> {
+    fn filtered(&self, known: bool) -> impl Iterator<Item = &CheckedIngredient> {
         self.ingredients
             .iter()
             .filter(move |ingredient| ingredient.known == known)
-            .map(|ingredient| ingredient.name.as_str())
     }
 }
 
@@ -592,22 +619,35 @@ fn coverage(
     let entries = walk(&tree);
     let total_recipes = entries.len();
 
-    // A set, so an ingredient two recipes share is one ingredient. Ordered, so
-    // that the answer does not depend on the order `cooklang-find` happened to
-    // yield the directories in.
-    let mut names: BTreeSet<String> = BTreeSet::new();
+    // A map, so an ingredient two recipes share is one ingredient carrying
+    // both of them. Ordered throughout, so that neither the ingredients nor
+    // any one ingredient's recipes depend on the order `cooklang-find`
+    // happened to yield the directories in.
+    let mut names: BTreeMap<String, BTreeSet<Utf8PathBuf>> = BTreeMap::new();
     for entry in entries {
         let Some(recipe) = parse_or_skip(entry, &mut diagnostics) else {
             continue;
         };
-        names.extend(listed_ingredients(&recipe));
+        // Relative to the directory that was scanned, as `validate` reports a
+        // recipe's path, so that both halves of `cook doctor` name a file the
+        // same way. The fallbacks are `validate_entry`'s and unreachable for
+        // the same reason: `build_tree` only makes named, file-backed entries.
+        let path = entry
+            .path()
+            .map(|path| relative_to(&base_dir, path))
+            .or_else(|| entry.name().clone().map(Utf8PathBuf::from))
+            .unwrap_or_else(|| Utf8PathBuf::from("unknown"));
+        for name in listed_ingredients(&recipe) {
+            names.entry(name).or_default().insert(path.clone());
+        }
     }
 
     let ingredients = names
         .into_iter()
-        .map(|name| CheckedIngredient {
+        .map(|(name, recipes)| CheckedIngredient {
             known: known.contains(&name.to_lowercase()),
             name,
+            recipes: recipes.into_iter().collect(),
         })
         .collect();
 
@@ -1300,6 +1340,24 @@ mod tests {
             .collect()
     }
 
+    /// The recipes listed against one ingredient, by name.
+    ///
+    /// As paths rather than strings, so that the expectations can be written
+    /// with `/` and still hold on Windows: `Utf8Path` compares component by
+    /// component, where `&str` would compare `Breakfast/porridge.cook` against
+    /// the `Breakfast\porridge.cook` the platform actually produces.
+    fn recipes_for<'a>(coverage: &'a IngredientCoverage, name: &str) -> Vec<&'a Utf8Path> {
+        coverage
+            .ingredients
+            .iter()
+            .find(|ingredient| ingredient.name == name)
+            .unwrap_or_else(|| panic!("{name} is in the coverage"))
+            .recipes
+            .iter()
+            .map(Utf8PathBuf::as_path)
+            .collect()
+    }
+
     #[test]
     fn an_aisle_splits_the_collection_into_categorised_and_not() {
         let dir = one_recipe("Add @salt{1%tsp}, @water{1%l} and @leek{1}.\n");
@@ -1442,6 +1500,74 @@ mod tests {
             unknown(&coverage),
             ["oats"],
             "a subdirectory must be walked"
+        );
+        assert_eq!(
+            recipes_for(&coverage, "oats"),
+            [Utf8Path::new("Breakfast/porridge.cook")],
+            "a recipe is named relative to the directory that was scanned"
+        );
+    }
+
+    /// The point of the recipe list: an odd spelling is one recipe against the
+    /// collection's many, and the list says which one to go and open.
+    #[test]
+    fn an_ingredient_carries_every_recipe_that_writes_it() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("curry.cook"),
+            "Add @ground cumin{1%tsp}.\n",
+        );
+        write(&base(&dir).join("dal.cook"), "Add @ground cumin{2%tsp}.\n");
+        write(&base(&dir).join("stew.cook"), "Add @cumin powder{1%tsp}.\n");
+
+        let coverage = checked(&aisle_ctx(&dir, "[spices]\nground cumin\n"), true).value;
+
+        assert_eq!(
+            recipes_for(&coverage, "ground cumin"),
+            [Utf8Path::new("curry.cook"), Utf8Path::new("dal.cook")],
+            "shared by two recipes, listed once each, in path order"
+        );
+        assert_eq!(
+            recipes_for(&coverage, "cumin powder"),
+            [Utf8Path::new("stew.cook")]
+        );
+    }
+
+    /// A recipe naming the same ingredient twice is still one recipe: the
+    /// count beside the name is recipes, not mentions.
+    #[test]
+    fn a_recipe_using_an_ingredient_twice_is_listed_once() {
+        let dir = one_recipe("Add @salt{1%tsp}, then more @salt{1%tsp}.\n");
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("dish.cook")]);
+    }
+
+    /// Spellings are separate ingredients, so each keeps its own recipes —
+    /// otherwise the report could not tell which file writes `Salt`.
+    #[test]
+    fn each_spelling_keeps_its_own_recipes() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("a.cook"), "Add @Salt{1%tsp}.\n");
+        write(&base(&dir).join("b.cook"), "Add @salt{1%tsp}.\n");
+
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(recipes_for(&coverage, "Salt"), [Utf8Path::new("a.cook")]);
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("b.cook")]);
+    }
+
+    /// The pantry check tracks recipes too: it says which of your recipes an
+    /// item in stock is keeping off the shopping list.
+    #[test]
+    fn the_pantry_check_lists_recipes_as_well() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("a.cook"), "Add @rice{100%g}.\n");
+        write(&base(&dir).join("b.cook"), "Add @rice{200%g}.\n");
+
+        let coverage = checked(&pantry_ctx(&dir, "[pantry]\nrice = \"5%kg\"\n"), false).value;
+        assert_eq!(known(&coverage), ["rice"]);
+        assert_eq!(
+            recipes_for(&coverage, "rice"),
+            [Utf8Path::new("a.cook"), Utf8Path::new("b.cook")]
         );
     }
 

@@ -2,7 +2,9 @@ use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand};
 use cookcli_core::{
-    doctor::{aisle_coverage, broken_references, pantry_coverage, CoverageRequest},
+    doctor::{
+        aisle_coverage, broken_references, pantry_coverage, CheckedIngredient, CoverageRequest,
+    },
     Diagnostic, Severity,
 };
 use std::collections::BTreeSet;
@@ -28,8 +30,9 @@ enum DoctorCommand {
     /// dairy, etc.) for better organized shopping lists.
     ///
     /// Example:
-    ///   cook doctor aisle              # Check current directory
-    ///   cook doctor aisle -b ~/recipes # Check specific directory
+    ///   cook doctor aisle                # Check current directory
+    ///   cook doctor aisle -b ~/recipes   # Check specific directory
+    ///   cook doctor aisle --show-recipes # Name the recipes using each one
     Aisle(AisleArgs),
 
     /// Check which recipe ingredients are in your pantry
@@ -41,8 +44,9 @@ enum DoctorCommand {
     /// with quantities and can be used to exclude items from shopping lists.
     ///
     /// Example:
-    ///   cook doctor pantry             # Check current directory
-    ///   cook doctor pantry -b ~/recipes # Check specific directory
+    ///   cook doctor pantry                # Check current directory
+    ///   cook doctor pantry -b ~/recipes   # Check specific directory
+    ///   cook doctor pantry --show-recipes # Name the recipes using each one
     Pantry(PantryArgs),
 
     /// Validate all recipes for syntax errors and warnings
@@ -69,6 +73,14 @@ struct AisleArgs {
     /// Defaults to the current directory.
     #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
+
+    /// List the recipes each uncategorized ingredient comes from
+    ///
+    /// An ingredient missing from aisle.conf is often a misspelling of one
+    /// that is in it - "cumin powder" where the rest of the collection says
+    /// "ground cumin". This names the files to go and fix.
+    #[arg(long)]
+    show_recipes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -80,6 +92,13 @@ struct PantryArgs {
     /// Defaults to the current directory.
     #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     base_path: Option<Utf8PathBuf>,
+
+    /// List the recipes each pantry ingredient comes from
+    ///
+    /// Shows which of your recipes a pantry item is actually keeping off the
+    /// shopping list.
+    #[arg(long)]
+    show_recipes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -132,10 +151,26 @@ pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
             ));
 
             println!("\n=== Aisle Check ===");
-            report_check(run_aisle(ctx, AisleArgs { base_path: None }));
+            // `cook doctor` with no subcommand is a summary of three checks;
+            // naming every recipe behind every ingredient would bury it. The
+            // flag is for the subcommand you run once the summary has pointed
+            // you at it.
+            report_check(run_aisle(
+                ctx,
+                AisleArgs {
+                    base_path: None,
+                    show_recipes: false,
+                },
+            ));
 
             println!("\n=== Pantry Check ===");
-            report_check(run_pantry(ctx, PantryArgs { base_path: None }));
+            report_check(run_pantry(
+                ctx,
+                PantryArgs {
+                    base_path: None,
+                    show_recipes: false,
+                },
+            ));
 
             Ok(())
         }
@@ -186,6 +221,31 @@ fn log_diagnostics(diagnostics: &[Diagnostic]) {
     }
 }
 
+/// How many recipes an ingredient is used by, as it is printed beside the name.
+///
+/// The count is on every line whether or not `--show-recipes` was passed: it is
+/// what makes an odd spelling stand out — one recipe saying `cumin powder`
+/// against twelve saying `ground cumin` — and it costs one line either way.
+fn usage(ingredient: &CheckedIngredient) -> String {
+    match ingredient.recipes.len() {
+        1 => "(1 recipe)".to_string(),
+        n => format!("({n} recipes)"),
+    }
+}
+
+/// The recipes behind one ingredient, indented under it, when asked for.
+///
+/// Every one of them, uncapped: the whole point is to go and open them, and a
+/// list truncated at three hides exactly the stray recipe being hunted for.
+fn print_recipes(ingredient: &CheckedIngredient, show: bool) {
+    if !show {
+        return;
+    }
+    for recipe in &ingredient.recipes {
+        println!("      {recipe}");
+    }
+}
+
 fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
     if ctx.pantry().is_unset() {
         println!("No pantry configuration found.");
@@ -217,7 +277,7 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
         coverage.total_ingredients()
     );
 
-    let in_pantry: Vec<&str> = coverage.known().collect();
+    let in_pantry: Vec<&CheckedIngredient> = coverage.known_entries().collect();
     if in_pantry.is_empty() {
         println!("\n✓ No recipe ingredients are currently in your pantry");
     } else {
@@ -226,7 +286,8 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
             in_pantry.len()
         );
         for ingredient in in_pantry {
-            println!("  ✓ {ingredient}");
+            println!("  ✓ {} {}", ingredient.name, usage(ingredient));
+            print_recipes(ingredient, args.show_recipes);
         }
         println!("\nThese ingredients will be excluded from shopping lists.");
     }
@@ -266,7 +327,7 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
         return Ok(());
     }
 
-    let missing: Vec<&str> = coverage.unknown().collect();
+    let missing: Vec<&CheckedIngredient> = coverage.unknown_entries().collect();
     if missing.is_empty() {
         println!("✓ All ingredients are present in aisle configuration");
     } else {
@@ -275,7 +336,11 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
             missing.len()
         );
         for ingredient in missing {
-            println!("  - {ingredient}");
+            println!("  - {} {}", ingredient.name, usage(ingredient));
+            print_recipes(ingredient, args.show_recipes);
+        }
+        if !args.show_recipes {
+            println!("\nRun `cook doctor aisle --show-recipes` to see which recipes use them.");
         }
         println!("\nConsider adding these ingredients to your aisle.conf file.");
     }

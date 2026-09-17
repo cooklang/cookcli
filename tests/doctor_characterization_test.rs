@@ -21,6 +21,16 @@ fn cook(dir: &Path) -> Command {
     command
 }
 
+/// A relative path as the CLI prints it, which on Windows means backslashes.
+///
+/// Recipe paths are reported with [`std::path::MAIN_SEPARATOR`], as
+/// `cook doctor validate` has always reported the file it is talking about: it
+/// is a file to go and open, not a Cooklang recipe reference, which is always
+/// written with `/` (see `cooklang_format::REFERENCE_SEPARATOR`).
+fn native(path: &str) -> String {
+    path.replace('/', std::path::MAIN_SEPARATOR_STR)
+}
+
 /// A collection of one recipe, with whatever configuration the caller wants.
 fn collection(recipe: &str, aisle: Option<&str>, pantry: Option<&str>) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -170,6 +180,65 @@ fn aisle_without_a_configuration_still_scans_and_explains_itself() {
         ));
 }
 
+/// An uncategorised ingredient is usually a misspelling of a categorised one,
+/// and the give-away is that one recipe writes it where a dozen write the
+/// other. The count is on every line so that stands out without a flag
+/// (<https://github.com/cooklang/cookcli/issues/485>).
+#[test]
+fn aisle_counts_the_recipes_behind_each_uncategorised_ingredient() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir(dir.path().join("config")).unwrap();
+    fs::write(
+        dir.path().join("config").join("aisle.conf"),
+        "[spices]\nground cumin\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("curry.cook"), "Add @cumin powder{1%tsp}.\n").unwrap();
+    fs::write(dir.path().join("dal.cook"), "Add @cummin{1%tsp}.\n").unwrap();
+    fs::write(dir.path().join("stew.cook"), "Add @cummin{2%tsp}.\n").unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "aisle"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("  - cumin powder (1 recipe)"))
+        .stdout(predicate::str::contains("  - cummin (2 recipes)"))
+        // The names themselves wait for the flag, and the output says so.
+        .stdout(predicate::str::contains(
+            "Run `cook doctor aisle --show-recipes` to see which recipes use them.",
+        ))
+        .stdout(predicate::str::contains("curry.cook").not());
+}
+
+/// With the flag, every recipe writing the ingredient is named — uncapped,
+/// because the one stray file is exactly what a truncated list would hide.
+#[test]
+fn aisle_show_recipes_names_every_recipe_that_writes_the_ingredient() {
+    let dir = collection("Boil @water{1%l}.\n", Some("[pantry]\nwater\n"), None);
+    fs::create_dir(dir.path().join("Breakfast")).unwrap();
+    fs::write(
+        dir.path().join("Breakfast").join("porridge.cook"),
+        "Simmer @oats{50%g} in @milk{200%ml}.\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("muesli.cook"), "Soak @oats{50%g}.\n").unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "aisle", "--show-recipes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("  - oats (2 recipes)"))
+        // Relative to the scanned directory, as `doctor validate` reports one.
+        .stdout(predicate::str::contains(format!(
+            "      {}",
+            native("Breakfast/porridge.cook")
+        )))
+        .stdout(predicate::str::contains("      muesli.cook"))
+        .stdout(predicate::str::contains("  - milk (1 recipe)"))
+        // The hint is pointless once the names are there.
+        .stdout(predicate::str::contains("--show-recipes to see").not());
+}
+
 // ---------------------------------------------------------------------------
 // doctor pantry
 // ---------------------------------------------------------------------------
@@ -308,6 +377,26 @@ fn pantry_without_a_configuration_explains_itself_instead_of_scanning() {
         .stdout(predicate::str::contains("Scanned").not());
 }
 
+/// The pantry check counts and names recipes the same way, so that an item in
+/// stock says which of your recipes it is keeping off the shopping list.
+#[test]
+fn pantry_show_recipes_names_the_recipes_an_item_covers() {
+    let dir = collection(
+        "Add @rice{100%g}.\n",
+        None,
+        Some("[pantry]\nrice = \"5%kg\"\n"),
+    );
+    fs::write(dir.path().join("pilaf.cook"), "Add @rice{200%g}.\n").unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "pantry", "--show-recipes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("  ✓ rice (2 recipes)"))
+        .stdout(predicate::str::contains("      dish.cook"))
+        .stdout(predicate::str::contains("      pilaf.cook"));
+}
+
 // ---------------------------------------------------------------------------
 // doctor, with no subcommand
 // ---------------------------------------------------------------------------
@@ -413,6 +502,20 @@ fn a_broken_reference_fails_a_strict_validation() {
         .args(["doctor", "validate", "--strict"])
         .assert()
         .failure();
+}
+
+/// `cook doctor` is a summary of three checks. It carries the counts, which
+/// cost a line each, and never the recipe names, which would bury it.
+#[test]
+fn doctor_with_no_subcommand_counts_recipes_but_does_not_name_them() {
+    let dir = collection("Boil @water{1%l}.\n", Some("[pantry]\nsalt\n"), None);
+
+    cook(dir.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("  - water (1 recipe)"))
+        .stdout(predicate::str::contains("      dish.cook").not());
 }
 
 /// Every check runs, in order, off one invocation.
