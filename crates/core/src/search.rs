@@ -96,7 +96,9 @@ pub struct SearchHit {
 /// - [`CoreError::Io`] if a file under the root turned up in the walk but could
 ///   not be read, or its front matter could not be understood. One such file
 ///   fails the whole search rather than being skipped — that is
-///   `cooklang-find`'s behaviour and this crate does not paper over it.
+///   `cooklang-find`'s behaviour and this crate does not paper over it. Bytes
+///   that are not valid UTF-8 are not such a failure; see
+///   [`matches_every_term`].
 pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit>>, CoreError> {
     let base_dir = req
         .base_dir
@@ -144,17 +146,24 @@ pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit
 ///
 /// An empty term list matches everything, which is what an all-whitespace query
 /// should do: `cooklang-find` returns nothing for it anyway.
+///
+/// Bytes that are not valid UTF-8 are decoded as U+FFFD rather than refused.
+/// A recipe saved from a Latin-1 editor is still a recipe, and rejecting it
+/// here failed the whole search over one stray byte in one file
+/// (<https://github.com/cooklang/cookcli/issues/498>). Only the bad bytes
+/// themselves stop matching — a term either side of one still does. A genuine
+/// I/O failure is a different thing and is still an error, because an
+/// unreadable file is not an empty one.
 fn matches_every_term(path: &Utf8Path, terms: &[String]) -> Result<bool, CoreError> {
     if terms.is_empty() {
         return Ok(true);
     }
 
-    let contents = std::fs::read_to_string(path)
-        .map_err(|source| CoreError::Io {
-            path: path.to_owned(),
-            source,
-        })?
-        .to_lowercase();
+    let bytes = std::fs::read(path).map_err(|source| CoreError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    let contents = String::from_utf8_lossy(&bytes).to_lowercase();
     let stem = path.file_stem().unwrap_or_default().to_lowercase();
 
     Ok(terms
@@ -512,6 +521,97 @@ mod tests {
                 "expected CoreError::Search, got {:?}",
                 other.map(|o| o.value)
             ),
+        }
+    }
+
+    /// A recipe carrying a byte that is not valid UTF-8 is still a recipe.
+    ///
+    /// `cook search tuna` used to die with "Failed to read '<path>' / stream
+    /// did not contain valid UTF-8" over one Latin-1 file, taking every other
+    /// recipe's results with it
+    /// (<https://github.com/cooklang/cookcli/issues/498>). The bad bytes are
+    /// decoded as U+FFFD, so the recipe is found and the text around them still
+    /// matches.
+    ///
+    /// The front matter here is deliberately clean: that is what puts the
+    /// failure in *this* crate. `cooklang-find` reads only front matter to
+    /// build the entry, so it hands the file over happily and
+    /// [`matches_every_term`] is what used to choke on the body. A bad byte in
+    /// the front matter fails inside the library instead, and is fixed there
+    /// (cooklang/cooklang-find#13).
+    #[test]
+    fn a_recipe_that_is_not_valid_utf8_is_still_searchable() {
+        let dir = fixture();
+        let base = base(&dir);
+        // Latin-1: 0xe8 is an "è" that never made it to UTF-8.
+        std::fs::write(
+            base.join("tuna mornay.cook"),
+            b"---\ntitle: Tuna Mornay\n---\n\nBake @tuna{1%can} with cr\xe8me.\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            relative_paths(&run(&base, "tuna")),
+            ["tuna mornay.cook"],
+            "a bad byte in the body must not fail the search"
+        );
+
+        // The part the bug was really about: one bad file used to fail every
+        // query, not just the ones that matched it.
+        assert_eq!(
+            relative_paths(&run(&base, "flour")),
+            ["Breakfast/pancakes.cook"]
+        );
+    }
+
+    /// The bad bytes are the only thing that stops matching: the readable text
+    /// on either side of one is still searchable, and still counts towards an
+    /// AND query.
+    ///
+    /// Exercised through [`matches_every_term`] directly, because
+    /// `cooklang-find` 0.7.0 cannot score the contents of such a file at all —
+    /// it only reaches the AND filter when its *name* matched — so a
+    /// whole-search test could not tell a content match from a name match.
+    #[test]
+    fn text_around_an_invalid_byte_still_matches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = base(&dir).join("tuna mornay.cook");
+        std::fs::write(&path, b"Bake @tuna{1%can} with cr\xe8me.\n").unwrap();
+
+        let matches = |query: &str| {
+            let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+            matches_every_term(&path, &terms).expect("a bad byte is not an i/o failure")
+        };
+
+        assert!(matches("bake"), "text before the bad byte");
+        assert!(matches("me."), "text after the bad byte");
+        assert!(matches("bake mornay"), "body and file name together");
+        assert!(matches("bake me."), "both sides of the bad byte");
+        assert!(
+            !matches("kohlrabi"),
+            "and a term that is absent still misses"
+        );
+        assert!(
+            !matches("bake kohlrabi"),
+            "AND still narrows: one missing term is enough"
+        );
+    }
+
+    /// A file that cannot be read at all is still an error. Lossy decoding is
+    /// for bytes that are there and malformed, not for bytes that never
+    /// arrived — silently treating an unreadable recipe as an empty one would
+    /// turn a fixable problem into results that are quietly wrong.
+    #[test]
+    fn an_unreadable_file_is_still_an_io_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let missing = base(&dir).join("gone.cook");
+
+        match matches_every_term(&missing, &["tuna".to_string()]) {
+            Err(CoreError::Io { path, source }) => {
+                assert_eq!(path, missing);
+                assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected CoreError::Io, got {other:?}"),
         }
     }
 
