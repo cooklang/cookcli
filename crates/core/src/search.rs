@@ -96,7 +96,9 @@ pub struct SearchHit {
 /// - [`CoreError::Io`] if a file under the root turned up in the walk but could
 ///   not be read, or its front matter could not be understood. One such file
 ///   fails the whole search rather than being skipped — that is
-///   `cooklang-find`'s behaviour and this crate does not paper over it.
+///   `cooklang-find`'s behaviour and this crate does not paper over it. Bytes
+///   that are not valid UTF-8 are not such a failure; they are decoded as
+///   U+FFFD, as `matches_every_term` describes.
 pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit>>, CoreError> {
     let base_dir = req
         .base_dir
@@ -144,17 +146,24 @@ pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit
 ///
 /// An empty term list matches everything, which is what an all-whitespace query
 /// should do: `cooklang-find` returns nothing for it anyway.
+///
+/// Bytes that are not valid UTF-8 are decoded as U+FFFD rather than refused.
+/// A recipe saved from a Latin-1 editor is still a recipe, and rejecting it
+/// here failed the whole search over one stray byte in one file
+/// (<https://github.com/cooklang/cookcli/issues/498>). Only the bad bytes
+/// themselves stop matching — a term either side of one still does. A genuine
+/// I/O failure is a different thing and is still an error, because an
+/// unreadable file is not an empty one.
 fn matches_every_term(path: &Utf8Path, terms: &[String]) -> Result<bool, CoreError> {
     if terms.is_empty() {
         return Ok(true);
     }
 
-    let contents = std::fs::read_to_string(path)
-        .map_err(|source| CoreError::Io {
-            path: path.to_owned(),
-            source,
-        })?
-        .to_lowercase();
+    let bytes = std::fs::read(path).map_err(|source| CoreError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    let contents = String::from_utf8_lossy(&bytes).to_lowercase();
     let stem = path.file_stem().unwrap_or_default().to_lowercase();
 
     Ok(terms
@@ -512,6 +521,148 @@ mod tests {
                 "expected CoreError::Search, got {:?}",
                 other.map(|o| o.value)
             ),
+        }
+    }
+
+    /// A recipe carrying a byte that is not valid UTF-8 is still a recipe.
+    ///
+    /// `cook search tuna` used to die with "Failed to read '<root>' / stream
+    /// did not contain valid UTF-8" over one Latin-1 file, taking every other
+    /// recipe's results with it
+    /// (<https://github.com/cooklang/cookcli/issues/498>). The bad bytes are
+    /// decoded as U+FFFD, so the recipe is found and the text around them still
+    /// matches.
+    ///
+    /// Both files here are needed, because the report had two causes in two
+    /// crates. A bad byte in the **body** was this crate's:
+    /// [`matches_every_term`] read candidates with `read_to_string`. A bad byte
+    /// in the **front matter** was `cooklang-find`'s, which propagated it out
+    /// of its own walk instead of skipping the file the way `build_tree` does —
+    /// that is the arm that named the search root rather than the file, and it
+    /// needs 0.7.1 (cooklang/cooklang-find#13).
+    #[test]
+    fn a_recipe_that_is_not_valid_utf8_is_still_searchable() {
+        let dir = fixture();
+        let base = base(&dir);
+        // Latin-1: 0xe8 and 0xe9 are an "è" and an "é" that never made it to
+        // UTF-8. One file carries its bad byte in the body, the other in the
+        // front matter.
+        std::fs::write(
+            base.join("tuna mornay.cook"),
+            b"---\ntitle: Tuna Mornay\n---\n\nBake @tuna{1%can} with cr\xe8me.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            base.join("salmon.cook"),
+            b"---\ntitle: Saumon \xe9tuv\xe9\n---\n\nSteam @salmon{2} with @dill{}.\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            relative_paths(&run(&base, "tuna")),
+            ["tuna mornay.cook"],
+            "a bad byte in the body must not fail the search"
+        );
+        assert_eq!(
+            relative_paths(&run(&base, "salmon")),
+            ["salmon.cook"],
+            "nor must one in the front matter"
+        );
+
+        // Found by an ingredient that only appears in the body, so the hit
+        // cannot be coming from the file name. This is what needed 0.7.1:
+        // 0.7.0 could not score such a file's contents at all.
+        assert_eq!(
+            relative_paths(&run(&base, "dill")),
+            ["salmon.cook"],
+            "a term only in the contents must still match"
+        );
+        assert_eq!(
+            relative_paths(&run(&base, "steam dill")),
+            ["salmon.cook"],
+            "and must still satisfy every term of an AND query"
+        );
+
+        // The title survives, bad byte and all, rather than the entry being
+        // dropped or left nameless.
+        let hit = run(&base, "salmon");
+        assert_eq!(hit[0].name.as_deref(), Some("Saumon \u{fffd}tuv\u{fffd}"));
+
+        // The part the bug was really about: one bad file used to fail every
+        // query, not just the ones that matched it.
+        assert_eq!(
+            relative_paths(&run(&base, "flour")),
+            ["Breakfast/pancakes.cook"]
+        );
+    }
+
+    /// The bad bytes are the only thing that stops matching: the readable text
+    /// on either side of one is still searchable, and still counts towards an
+    /// AND query.
+    ///
+    /// Exercised through [`matches_every_term`] directly, so that the AND
+    /// filter's own reading of a malformed file is pinned here rather than
+    /// only through a whole search, where `cooklang-find`'s scoring decides
+    /// what the filter ever sees.
+    #[test]
+    fn text_around_an_invalid_byte_still_matches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = base(&dir).join("tuna mornay.cook");
+        std::fs::write(&path, b"Bake @tuna{1%can} with cr\xe8me.\n").unwrap();
+
+        let matches = |query: &str| {
+            let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+            matches_every_term(&path, &terms).expect("a bad byte is not an i/o failure")
+        };
+
+        assert!(matches("bake"), "text before the bad byte");
+        assert!(matches("me."), "text after the bad byte");
+        assert!(matches("bake mornay"), "body and file name together");
+        assert!(matches("bake me."), "both sides of the bad byte");
+        assert!(
+            !matches("kohlrabi"),
+            "and a term that is absent still misses"
+        );
+        assert!(
+            !matches("bake kohlrabi"),
+            "AND still narrows: one missing term is enough"
+        );
+    }
+
+    /// A file with no valid text in it at all — a binary that landed under a
+    /// `.cook` name — is the degenerate case of the same thing: nothing to
+    /// match, but nothing to fail over either.
+    #[test]
+    fn a_file_with_no_valid_text_matches_nothing_and_fails_nothing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = base(&dir).join("junk.cook");
+        std::fs::write(&path, [0xff, 0xfe, 0xff, 0xfe, 0x80, 0x81]).unwrap();
+
+        assert!(
+            !matches_every_term(&path, &["tuna".to_string()]).expect("must not fail"),
+            "there is no text in it to match"
+        );
+        assert!(
+            matches_every_term(&path, &["junk".to_string()]).expect("must not fail"),
+            "but the file name is still a surface to match on"
+        );
+    }
+
+    /// A file that cannot be read at all is still an error. Lossy decoding is
+    /// for bytes that are there and malformed, not for bytes that never
+    /// arrived — silently treating an unreadable recipe as an empty one would
+    /// turn a fixable problem into results that are quietly wrong.
+    #[test]
+    fn an_unreadable_file_is_still_an_io_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let missing = base(&dir).join("gone.cook");
+
+        match matches_every_term(&missing, &["tuna".to_string()]) {
+            Err(CoreError::Io { path, source }) => {
+                assert_eq!(path, missing);
+                assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected CoreError::Io, got {other:?}"),
         }
     }
 
