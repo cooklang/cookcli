@@ -380,6 +380,123 @@ fn references_are_expanded_into_their_ingredients() {
     );
 }
 
+/// Expansion follows a chain of references all the way down. It used to stop
+/// three files in — the named recipe, what it references, and what *those*
+/// reference — and anything deeper fell off the list with no warning and a
+/// clean exit (<https://github.com/cooklang/cookcli/issues/509>).
+///
+/// `paprika`, four files down, is the one that was missing.
+#[test]
+fn references_are_expanded_however_deep_the_chain_runs() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./d{} and add @cumin{1%tsp}.\n"),
+        ("d.cook", "Add @paprika{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("generates");
+
+    for name in ["salt", "pepper", "cumin", "paprika"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once somewhere down the chain: {:?}",
+            outcome.value.items
+        );
+    }
+}
+
+/// The scale asked for on the command line reaches the bottom of the chain,
+/// not just the first recipe under it. A reference carrying no quantity of its
+/// own is "some of this recipe", so doubling the menu doubles it too.
+#[test]
+fn the_request_scale_reaches_every_recipe_down_the_chain() {
+    let dir = dir_with(&[
+        ("menu.cook", "Serve @./dinner{}.\n"),
+        ("dinner.cook", "Prepare @./sauce{} with @rice{100%g}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Path("menu.cook".into()),
+                2.0,
+            )],
+            ignore_references: false,
+            extra_items: Vec::new(),
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "rice"), Some(vec!["200 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["8".to_string()]),
+        "the recipe two levels down is scaled like the one above it"
+    );
+}
+
+/// A reference that names a target does not take the caller's factor — but the
+/// factor it *reaches* carries on down to what it references in turn.
+#[test]
+fn a_scaled_reference_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6 servings of a recipe that makes 2 is three times as much of everything.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12".to_string()]),
+        "the sauce the dinner calls for is needed three times over too"
+    );
+}
+
+/// The recursion is bounded by the ancestor chain, not by a depth limit, so a
+/// cycle that only closes further down is still caught — and still counted
+/// once rather than looping.
+#[test]
+fn a_cycle_that_closes_three_recipes_down_is_still_refused() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./a{} and add @cumin{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("a cycle must not fail");
+
+    for name in ["salt", "pepper", "cumin"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once: {:?}",
+            outcome.value.items
+        );
+    }
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("circular")),
+        "expected a cycle warning: {:?}",
+        outcome.diagnostics
+    );
+}
+
 /// Records today's surprising behaviour: suppressing expansion does not drop
 /// the reference, it leaves it on the list as a quantity-less item.
 #[test]
