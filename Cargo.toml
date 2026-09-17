@@ -19,7 +19,6 @@ default = ["self-update", "sync", "server", "import", "lsp"]
 # `cook server` - the axum web UI. Pulls in the whole HTTP server stack.
 server = [
     "dep:axum",
-    "dep:axum-extra",
     "dep:tower",
     "dep:tower-http",
     "dep:notify",
@@ -62,7 +61,6 @@ anstream = "1.0"
 anyhow = "1"
 askama = { version = "0.12", features = ["serde-json"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
-axum-extra = { version = "0.10", optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
