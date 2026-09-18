@@ -456,8 +456,9 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// reference inside what it leads to, however deep the chain runs. It used to
 /// stop three files in, and anything below that fell off the list with no
 /// warning (<https://github.com/cooklang/cookcli/issues/509>). Two things bound
-/// the descent: the cycle check below, and [`MAX_REFERENCE_DEPTH`] for a chain
-/// long enough to exhaust the stack without ever repeating itself.
+/// the descent: the cycle check below, and a hard depth limit for a chain long
+/// enough to exhaust the stack without ever repeating itself — a hundred
+/// levels, which no collection written by hand comes near.
 ///
 /// A reference with no quantity of its own inherits the factor the recipe that
 /// named it was scaled by, so scaling a menu scales everything under it. One
@@ -648,7 +649,7 @@ impl Expansion<'_> {
             // reaches but well below where the recursion runs out of stack —
             // see `MAX_REFERENCE_DEPTH`.
             if ancestors.len() >= MAX_REFERENCE_DEPTH {
-                let stopped = Diagnostic::warning(format!(
+                let mut stopped = Diagnostic::warning(format!(
                     "Stopped at recipe reference '{ref_path}': references are nested more \
                      than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
                      list"
@@ -656,12 +657,13 @@ impl Expansion<'_> {
                 // Attributed to the recipe holding the reference, the way
                 // `cycle_warning` attributes itself, so a caller can group or
                 // open it rather than reading the file name back out of the
-                // message. `ancestors` is non-empty here: it is long enough to
-                // have hit the limit.
-                self.diagnostics.push(match ancestors.last() {
-                    Some(path) => stopped.at_file(path.clone()),
-                    None => stopped,
-                });
+                // message. `ancestors` cannot be empty here — it is long enough
+                // to have hit the limit — but an unattributed warning is a
+                // better answer to being wrong about that than a panic.
+                if let Some(path) = ancestors.last() {
+                    stopped = stopped.at_file(path.clone());
+                }
+                self.diagnostics.push(stopped);
                 continue;
             }
 
@@ -755,6 +757,18 @@ impl Expansion<'_> {
 /// `None` when the recipe cannot answer: servings that are not a number, no
 /// yield, or a yield measured in another unit. `scale_to_target` raises the
 /// error for each of those, so nothing here has to.
+///
+/// Unit names are matched exactly, including case, because that is how
+/// `cooklang` matches them — mirroring it is the whole point, and matching
+/// more loosely here would answer where `scale_to_target` refuses, which is
+/// the one way the caller's fallback could be reached. The menu feature's
+/// `reference_scale_factor`, over in the `cookcli` crate's
+/// `util::menu_scale`, does the same conversion case-insensitively and falls
+/// back to the raw target rather than to one. The two cannot share an
+/// implementation while
+/// they disagree about that: this one is a shadow of `cooklang`'s arithmetic
+/// and has to match it exactly, and that one is a policy about what a menu
+/// author probably meant.
 fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64> {
     let base = match unit {
         // No unit at all is already a factor rather than an amount.

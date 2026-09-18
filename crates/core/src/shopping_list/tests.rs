@@ -548,6 +548,35 @@ fn a_fractional_servings_target_rounds_the_same_way_all_the_way_down() {
     );
 }
 
+/// The third case where `target_factor` declines: a recipe whose servings are
+/// not a whole number. `cooklang` exposes servings as a `u32`, so `1.5` reaches
+/// `as_number()` as `None` exactly as a missing value would.
+///
+/// Worth its own test rather than folding into the one below, because the
+/// recipe *has* servings metadata here — the question is whether `cooklang`
+/// refuses a base it cannot represent as firmly as it refuses one that is not
+/// there. If it ever started coping, the sauce under this reference would be
+/// counted at a factor of one without a word said.
+#[test]
+fn a_servings_target_against_a_fractional_base_is_a_reference_error() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 1.5\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("dinner"), "{name}");
+            assert!(message.contains("6"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
 /// The other way `target_factor` can decline to answer: a servings target
 /// against a recipe that declares no servings. `an_unscalable_reference_is_a_reference_error`
 /// pins the yield half of this; this is the servings half.
@@ -875,6 +904,57 @@ fn included_references_selects_which_references_to_follow() {
     assert!(
         !names.contains(&&"bones".to_string()),
         "an excluded reference must not be expanded: {names:?}"
+    );
+}
+
+/// `included_references` names the references of the recipe a shopper is
+/// looking at, so it filters that level and nothing below it. A sub-recipe
+/// reached *through* an included reference is followed whether or not it was
+/// named — the shopper never saw it to tick it.
+///
+/// `stock` is the one that matters: excluded where `main` names it directly,
+/// still counted where the sauce calls for it. One kilo, not two and not none.
+#[test]
+fn included_references_filter_the_top_level_only() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{1%kg}.\n"),
+    ]);
+
+    let mut list = IngredientList::new();
+    let included = ["sauce".to_string()];
+    extract_ingredients(
+        &ctx(&dir),
+        &at_path("main.cook"),
+        &ExtractOptions {
+            ignore_references: false,
+            included_references: Some(&included),
+        },
+        &mut list,
+    )
+    .expect("extracts");
+
+    let items: Vec<(&String, String)> = list
+        .iter()
+        .map(|(name, q)| {
+            (
+                name,
+                q.iter().map(quantity_fmt).collect::<Vec<_>>().join(", "),
+            )
+        })
+        .collect();
+    assert!(
+        items.iter().any(|(name, _)| *name == "tomatoes"),
+        "{items:?}"
+    );
+    assert_eq!(
+        items
+            .iter()
+            .find(|(name, _)| *name == "bones")
+            .map(|(_, q)| q.as_str()),
+        Some("1 kg"),
+        "the stock the sauce calls for is counted, the one main names is not: {items:?}"
     );
 }
 
