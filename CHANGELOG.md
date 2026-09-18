@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.37.0](https://github.com/cooklang/cookcli/compare/v0.36.0...v0.37.0) (2026-09-18)
+
+
+### Features
+
+* **server:** render URL metadata values as clickable links ([20950f7](https://github.com/cooklang/cookcli/commit/20950f745f0f8aef29b352fa168509b7484a5034))
+* **server:** render URL metadata values as clickable links ([e3e7c7e](https://github.com/cooklang/cookcli/commit/e3e7c7eb05bf9144c1ec3514908c8618a0b255f1))
+
 ## [0.36.0](https://github.com/cooklang/cookcli/compare/v0.35.0...v0.36.0) (2026-09-18)
 
 
