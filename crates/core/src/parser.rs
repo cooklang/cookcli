@@ -12,10 +12,10 @@ use cooklang::{
 };
 use std::sync::LazyLock;
 
-/// The shared parser. Matches CookCLI's configuration exactly: no extensions,
+/// The shared parser. Matches CookCLI's configuration exactly: only component modifiers extensions,
 /// default converter for unit support.
 pub static PARSER: LazyLock<CooklangParser> =
-    LazyLock::new(|| CooklangParser::new(Extensions::empty(), Converter::default()));
+    LazyLock::new(|| CooklangParser::new(Extensions::COMPONENT_MODIFIERS, Converter::default()));
 
 /// Parse recipe text, scale it, and collect diagnostics.
 ///

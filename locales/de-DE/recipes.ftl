@@ -23,6 +23,7 @@ recipe-print = Rezept drucken
 recipe-added = Hinzugefügt!
 recipe-main-section = Hauptteil
 recipe-preparation = Vorbereitung
+recipe-optional = Fakultativ
 
 # Recipe Metadata
 meta-course = Gang

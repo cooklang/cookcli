@@ -23,6 +23,7 @@ recipe-print = Skruv ut recept
 recipe-added = Tillagd!
 recipe-main-section = Huvud
 recipe-preparation = förberedelse
+recipe-optional = Valfri
 
 # Recipe Metadata
 meta-course = Redskap

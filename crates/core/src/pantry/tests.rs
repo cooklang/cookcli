@@ -708,27 +708,23 @@ fn a_reference_to_another_recipe_is_not_counted() {
     );
 }
 
-/// With CookCLI's parser configuration there is no such thing as a hidden
-/// ingredient: `@-salt{}` parses as an ingredient *named* `-salt`, and counts
-/// like any other. Pinned because the code filters on `should_be_listed`,
-/// which reads as though it would leave this out.
+//  With CookCLI's parser configuration for component modifiers, a 
+//  hidden ingredient `@-salt{}` parses as an ingredient named `salt`, 
+//  but does not count like any other. Pinned because the code filters
+//  on `should_be_listed`, so we should honor this.
 #[test]
-fn a_dash_prefixed_ingredient_is_wanted_like_any_other() {
+fn a_dash_prefixed_ingredient_is_not_wanted() {
     let dir = temp();
     write(
         &base(&dir).join("pasta.cook"),
         "Cook @pasta{200%g} with a pinch of @-salt{}.\n",
     );
 
-    let found = matches(&dir, "[test]\npasta = \"1%kg\"\n", 50);
-    assert!(found.full.is_empty(), "{found:?}");
+    let found = matches(&dir, "[test]\npasta = \"1%kg\"\n", 100);
     assert_eq!(
-        found.partial,
-        [PartialMatch {
-            name: "pasta".to_string(),
-            percentage: 50,
-            missing: vec!["-salt".to_string()],
-        }]
+        found.full,
+        ["pasta"],
+        "pasta is the only ingredient that counts: {found:?}"
     );
 }
 
