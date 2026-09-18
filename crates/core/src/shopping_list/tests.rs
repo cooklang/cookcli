@@ -380,6 +380,261 @@ fn references_are_expanded_into_their_ingredients() {
     );
 }
 
+/// Expansion follows a chain of references all the way down. It used to stop
+/// three files in — the named recipe, what it references, and what *those*
+/// reference — and anything deeper fell off the list with no warning and a
+/// clean exit (<https://github.com/cooklang/cookcli/issues/509>).
+///
+/// `paprika`, four files down, is the one that was missing.
+#[test]
+fn references_are_expanded_however_deep_the_chain_runs() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./d{} and add @cumin{1%tsp}.\n"),
+        ("d.cook", "Add @paprika{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("generates");
+
+    for name in ["salt", "pepper", "cumin", "paprika"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once somewhere down the chain: {:?}",
+            outcome.value.items
+        );
+    }
+}
+
+/// The scale asked for on the command line reaches the bottom of the chain,
+/// not just the first recipe under it. A reference carrying no quantity of its
+/// own is "some of this recipe", so doubling the menu doubles it too.
+#[test]
+fn the_request_scale_reaches_every_recipe_down_the_chain() {
+    let dir = dir_with(&[
+        ("menu.cook", "Serve @./dinner{}.\n"),
+        ("dinner.cook", "Prepare @./sauce{} with @rice{100%g}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Path("menu.cook".into()),
+                2.0,
+            )],
+            ignore_references: false,
+            extra_items: Vec::new(),
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "rice"), Some(vec!["200 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["8".to_string()]),
+        "the recipe two levels down is scaled like the one above it"
+    );
+}
+
+/// A reference that names a target does not take the caller's factor — but the
+/// factor it *reaches* carries on down to what it references in turn.
+#[test]
+fn a_scaled_reference_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6 servings of a recipe that makes 2 is three times as much of everything.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12".to_string()]),
+        "the sauce the dinner calls for is needed three times over too"
+    );
+}
+
+/// The other half of `target_factor`: a target measured against the recipe's
+/// `yield` rather than its servings, which is its own arithmetic.
+#[test]
+fn a_yield_target_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1000%g\n---\n\nSimmer @tomatoes{4} with @./stock{}.\n",
+        ),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // Half of what the sauce yields is half of everything it asks for.
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["2".to_string()]));
+    assert_eq!(
+        quantities(&list, "bones"),
+        Some(vec!["100 g".to_string()]),
+        "the stock the sauce calls for is halved too"
+    );
+}
+
+/// `cooklang`'s `scale_to_yield` compares the yield's unit to the target's as
+/// plain strings — the converter it is handed only refits quantities once the
+/// factor is known, and never reconciles `kg` with `g`. So a target in another
+/// unit is an error rather than a conversion.
+///
+/// Pinned because `target_factor` compares the two the same way, and a
+/// `cooklang` that started converting would make it quietly answer `None` — and
+/// a `None` is a factor of 1 for everything below the reference. This test
+/// fails first if that ever changes.
+#[test]
+fn a_yield_target_in_another_unit_is_a_reference_error() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1%kg\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("sauce"), "{name}");
+            assert!(message.contains("500"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
+/// `cooklang` rounds a servings target to a whole number before scaling, and
+/// `target_factor` rounds it the same way. On whole targets the two agree
+/// whatever either does, so this asks for 6.4 servings: the sauce below the
+/// reference comes out at three times its amounts, not 3.2 times.
+#[test]
+fn a_fractional_servings_target_rounds_the_same_way_all_the_way_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6.4%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6.4 rounds to 6, which is three times what the dinner makes.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12".to_string()]),
+        "12, not 12.8: the factor passed down is rounded like the one applied"
+    );
+}
+
+/// The third case where `target_factor` declines: a recipe whose servings are
+/// not a whole number. `cooklang` exposes servings as a `u32`, so `1.5` reaches
+/// `as_number()` as `None` exactly as a missing value would.
+///
+/// Worth its own test rather than folding into the one below, because the
+/// recipe *has* servings metadata here — the question is whether `cooklang`
+/// refuses a base it cannot represent as firmly as it refuses one that is not
+/// there. If it ever started coping, the sauce under this reference would be
+/// counted at a factor of one without a word said.
+#[test]
+fn a_servings_target_against_a_fractional_base_is_a_reference_error() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 1.5\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("dinner"), "{name}");
+            assert!(message.contains("6"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
+/// The other way `target_factor` can decline to answer: a servings target
+/// against a recipe that declares no servings. `an_unscalable_reference_is_a_reference_error`
+/// pins the yield half of this; this is the servings half.
+///
+/// The reference carries a sub-recipe below it deliberately. If `cooklang`
+/// ever stopped refusing this, expansion would carry on with the
+/// `unwrap_or(1.0)` fallback and the stock would be counted at the sauce's
+/// authored amounts whatever was asked for — silently. The error is what
+/// keeps that fallback unreachable, so the error is what is pinned.
+#[test]
+fn a_servings_target_on_a_recipe_without_servings_is_a_reference_error() {
+    let dir = dir_with(&[
+        // No `servings` metadata, so scaling to a servings target cannot work.
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    match generate(&ctx(&dir), request(&["main.cook"])) {
+        Err(CoreError::Reference { name, message }) => {
+            assert!(name.contains("sauce"), "{name}");
+            assert!(message.contains("6"), "{message}");
+        }
+        other => panic!("expected CoreError::Reference, got {other:?}"),
+    }
+}
+
+/// The recursion is bounded by the ancestor chain, not by a depth limit, so a
+/// cycle that only closes further down is still caught — and still counted
+/// once rather than looping.
+#[test]
+fn a_cycle_that_closes_three_recipes_down_is_still_refused() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./a{} and add @cumin{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("a cycle must not fail");
+
+    for name in ["salt", "pepper", "cumin"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once: {:?}",
+            outcome.value.items
+        );
+    }
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("circular")),
+        "expected a cycle warning: {:?}",
+        outcome.diagnostics
+    );
+}
+
 /// Records today's surprising behaviour: suppressing expansion does not drop
 /// the reference, it leaves it on the list as a quantity-less item.
 #[test]
@@ -557,6 +812,70 @@ fn a_recipe_referenced_by_two_others_is_counted_for_both() {
     );
 }
 
+/// The ancestor chain bounds the recursion, but it bounds it at "every recipe
+/// in the collection" — one file per level. Expanding that as native recursion
+/// overflowed the stack and aborted at around two thousand levels, which
+/// `cook server` and `cook sync` can both be pointed at.
+///
+/// So there is a depth limit as well, far above anything a real collection
+/// reaches. It says so rather than truncating quietly.
+#[test]
+fn a_chain_deeper_than_any_real_collection_stops_and_says_so() {
+    let depth = 150;
+    let files: Vec<(String, String)> = (0..depth)
+        .map(|i| {
+            let next = if i + 1 < depth {
+                format!("Make @./r{}{{}} and ", i + 1)
+            } else {
+                String::new()
+            };
+            (
+                format!("r{i}.cook"),
+                format!("{next}add @ing{i}{{1%tsp}}.\n"),
+            )
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(name, text)| (name.as_str(), text.as_str()))
+        .collect();
+    let dir = dir_with(&borrowed);
+
+    let outcome = generate(&ctx(&dir), request(&["r0.cook"])).expect("a deep chain must not fail");
+
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning && d.message.contains("deep")),
+        "the shopper has to be told the list stops short: {:?}",
+        outcome.diagnostics
+    );
+    assert!(
+        quantities(&outcome.value, "ing0").is_some(),
+        "everything above the limit is still on the list"
+    );
+    assert!(
+        quantities(&outcome.value, &format!("ing{}", depth - 1)).is_none(),
+        "and everything below it is not"
+    );
+
+    let stopped = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("deep"))
+        .expect("checked above");
+    assert!(
+        stopped
+            .location
+            .as_ref()
+            .and_then(|l| l.file.as_deref())
+            .is_some(),
+        "like the cycle warning, it names the recipe it concerns so a UI does \
+         not have to read the file name back out of the message: {stopped:?}"
+    );
+}
+
 /// `included_references` is what the web server uses to let a shopper drop one
 /// sub-recipe from a menu without dropping the rest.
 #[test]
@@ -585,6 +904,57 @@ fn included_references_selects_which_references_to_follow() {
     assert!(
         !names.contains(&&"bones".to_string()),
         "an excluded reference must not be expanded: {names:?}"
+    );
+}
+
+/// `included_references` names the references of the recipe a shopper is
+/// looking at, so it filters that level and nothing below it. A sub-recipe
+/// reached *through* an included reference is followed whether or not it was
+/// named — the shopper never saw it to tick it.
+///
+/// `stock` is the one that matters: excluded where `main` names it directly,
+/// still counted where the sauce calls for it. One kilo, not two and not none.
+#[test]
+fn included_references_filter_the_top_level_only() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{1%kg}.\n"),
+    ]);
+
+    let mut list = IngredientList::new();
+    let included = ["sauce".to_string()];
+    extract_ingredients(
+        &ctx(&dir),
+        &at_path("main.cook"),
+        &ExtractOptions {
+            ignore_references: false,
+            included_references: Some(&included),
+        },
+        &mut list,
+    )
+    .expect("extracts");
+
+    let items: Vec<(&String, String)> = list
+        .iter()
+        .map(|(name, q)| {
+            (
+                name,
+                q.iter().map(quantity_fmt).collect::<Vec<_>>().join(", "),
+            )
+        })
+        .collect();
+    assert!(
+        items.iter().any(|(name, _)| *name == "tomatoes"),
+        "{items:?}"
+    );
+    assert_eq!(
+        items
+            .iter()
+            .find(|(name, _)| *name == "bones")
+            .map(|(_, q)| q.as_str()),
+        Some("1 kg"),
+        "the stock the sauce calls for is counted, the one main names is not: {items:?}"
     );
 }
 

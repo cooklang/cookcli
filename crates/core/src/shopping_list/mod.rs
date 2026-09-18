@@ -55,7 +55,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{
-    aisle::AisleConf, ingredient_list::IngredientList, pantry::PantryConf,
+    aisle::AisleConf, convert::Converter, ingredient_list::IngredientList, pantry::PantryConf,
     quantity::GroupedQuantity, quantity::Value, Recipe,
 };
 use cooklang_find::RecipeEntry;
@@ -452,9 +452,18 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// ingredients. A quantity on the reference (`@./sauce{500%ml}`) scales the
 /// referenced recipe to that target rather than multiplying it.
 ///
-/// Expansion is iterative and stops three files deep: the named recipe, the
-/// recipes it references, and the recipes *those* reference — whose own
-/// references are not followed.
+/// Expansion is recursive: every reference is followed, and so is every
+/// reference inside what it leads to, however deep the chain runs. It used to
+/// stop three files in, and anything below that fell off the list with no
+/// warning (<https://github.com/cooklang/cookcli/issues/509>). Two things bound
+/// the descent: the cycle check below, and a hard depth limit for a chain long
+/// enough to exhaust the stack without ever repeating itself — a hundred
+/// levels, which no collection written by hand comes near.
+///
+/// A reference with no quantity of its own inherits the factor the recipe that
+/// named it was scaled by, so scaling a menu scales everything under it. One
+/// with a quantity names an absolute target instead, and the factor *that*
+/// reaches is what carries on down from there.
 ///
 /// **Every reference is resolved from disk**, under [`Context::base_path`],
 /// including the references of a [`RecipeSource::Content`] recipe. Only the
@@ -520,8 +529,83 @@ pub fn extract_ingredients(
     );
 
     if !options.ignore_references {
-        for ref_index in ref_indices {
-            let ingredient = &parsed.ingredients[ref_index];
+        Expansion {
+            base_path,
+            converter,
+            list,
+            diagnostics: &mut diagnostics,
+        }
+        .expand(
+            &parsed,
+            &ref_indices,
+            recipe.scale,
+            options.included_references,
+            &ancestors,
+        )?;
+    }
+
+    Ok(diagnostics)
+}
+
+/// How deep a chain of recipe references is followed before the expansion gives
+/// up and says so.
+///
+/// The ancestor chain refuses a reference that leads back on itself, so the
+/// recursion is already bounded — but it is bounded at one level per recipe in
+/// the collection, and expanding a few thousand of them as native recursion
+/// overflows the stack and aborts the process. This is the second bound, and
+/// the one that keeps a pathological collection a diagnostic rather than a
+/// crash.
+///
+/// A menu of dinners of sauces of preparations is four. A hundred is not a
+/// number of levels anyone reaches by writing recipes, and it leaves an order
+/// of magnitude of headroom below where an unoptimised build runs out of stack.
+const MAX_REFERENCE_DEPTH: usize = 100;
+
+/// What stays the same for the whole of one expansion — where to look recipes
+/// up, and what to accumulate into — so the recursion carries only what
+/// actually changes as it goes down.
+struct Expansion<'a> {
+    base_path: &'a Utf8Path,
+    converter: &'a Converter,
+    list: &'a mut IngredientList,
+    diagnostics: &'a mut Vec<Diagnostic>,
+}
+
+impl Expansion<'_> {
+    /// Expand the recipes `recipe` references into `list`, and the recipes *those*
+    /// reference, all the way down.
+    ///
+    /// `ref_indices` is what [`IngredientList::add_recipe`] returned for `recipe`:
+    /// its own ingredients are already on the list, and the references it skipped
+    /// are what is left to follow.
+    ///
+    /// `scale` is the factor `recipe` was scaled by. A reference that carries no
+    /// quantity of its own inherits it, so scaling a menu scales every recipe
+    /// underneath it.
+    ///
+    /// `included` selects which references to follow, and applies to **this level
+    /// only** — the web UI's checkboxes name the references of the recipe a shopper
+    /// is looking at, and nothing deeper is theirs to name. The recursion passes
+    /// `None`.
+    ///
+    /// `ancestors` is the chain of recipes currently being expanded, innermost
+    /// last; see "Cycles" on [`extract_ingredients`] for why it is the chain rather
+    /// than everything seen. It is the first of the two things that bound this
+    /// recursion: a reference leading back into its own chain is refused, so a
+    /// finite collection of recipes is a finite descent however the references
+    /// are wired. Its length is also the depth, which is how
+    /// [`MAX_REFERENCE_DEPTH`] — the second — is checked.
+    fn expand(
+        &mut self,
+        recipe: &Recipe,
+        ref_indices: &[usize],
+        scale: f64,
+        included: Option<&[String]>,
+        ancestors: &[Utf8PathBuf],
+    ) -> Result<(), CoreError> {
+        for &ref_index in ref_indices {
+            let ingredient = &recipe.ingredients[ref_index];
             let Some(reference) = ingredient.reference.as_ref() else {
                 continue;
             };
@@ -536,7 +620,7 @@ pub fn extract_ingredients(
             // If the caller specified which references to include, skip others.
             // Normalize by stripping "./" prefix so paths stored without one
             // still match display paths, which may carry one.
-            if let Some(included) = options.included_references {
+            if let Some(included) = included {
                 fn strip_dot_slash(s: &str) -> &str {
                     s.strip_prefix("./").unwrap_or(s)
                 }
@@ -552,19 +636,54 @@ pub fn extract_ingredients(
                 }
             }
 
-            let ref_path = reference.path(find::REFERENCE_SEPARATOR);
-            let ref_entry = find::get_recipe(base_path, &ref_path)?;
+            // `path` supplies the separator itself, so a reference with no
+            // components — a bare `@recipe{}` rather than `@./recipe{}` — would
+            // come out spelled `/recipe` and be looked up under that name.
+            let ref_path = if reference.components.is_empty() {
+                reference.name.clone()
+            } else {
+                reference.path(find::REFERENCE_SEPARATOR)
+            };
+            // `ancestors` holds one recipe per level, so its length is how deep
+            // this reference sits. Stop well above anything a real collection
+            // reaches but well below where the recursion runs out of stack —
+            // see `MAX_REFERENCE_DEPTH`.
+            if ancestors.len() >= MAX_REFERENCE_DEPTH {
+                let mut stopped = Diagnostic::warning(format!(
+                    "Stopped at recipe reference '{ref_path}': references are nested more \
+                     than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
+                     list"
+                ));
+                // Attributed to the recipe holding the reference, so a caller
+                // can group or open it rather than reading the file name back
+                // out of the message. Not the same choice `cycle_warning`
+                // makes — that one names the recipe being referenced, which in
+                // a cycle is the interesting end of it. Here the reference is
+                // one of many that stop at the same place, and what a reader
+                // wants is where the list stopped.
+                //
+                // `ancestors` cannot be empty here — it is long enough to have
+                // hit the limit — but an unattributed warning is a better
+                // answer to being wrong about that than a panic.
+                if let Some(path) = ancestors.last() {
+                    stopped = stopped.at_file(path.clone());
+                }
+                self.diagnostics.push(stopped);
+                continue;
+            }
 
-            if let Some(cycle) = cycle_warning(&ancestors, &ref_entry, &ref_path) {
-                diagnostics.push(cycle);
+            let ref_entry = find::get_recipe(self.base_path, &ref_path)?;
+
+            if let Some(cycle) = cycle_warning(ancestors, &ref_entry, &ref_path) {
+                self.diagnostics.push(cycle);
                 continue;
             }
             // Expanding this one, so it is an ancestor of anything inside it.
-            let mut ancestors = ancestors.clone();
+            let mut ancestors = ancestors.to_vec();
             ancestors.extend(ref_entry.path().cloned());
 
             // Parse and scale the recipe based on the quantity specification.
-            let ref_recipe = match ingredient.quantity.as_ref() {
+            let (ref_recipe, ref_scale) = match ingredient.quantity.as_ref() {
                 Some(quantity) => {
                     let target_value =
                         match quantity.value() {
@@ -584,7 +703,7 @@ pub fn extract_ingredients(
 
                     let (mut ref_recipe, ref_diagnostics) =
                         parse_entry(&ref_entry, &ref_path, None)?;
-                    diagnostics.extend(ref_diagnostics);
+                    self.diagnostics.extend(ref_diagnostics);
 
                     tracing::debug!(
                         "Scaling recipe '{}' to target {} {}",
@@ -592,8 +711,11 @@ pub fn extract_ingredients(
                         target_value,
                         quantity.unit().unwrap_or("(no unit)")
                     );
+                    // Read before scaling: the servings and yield this is worked
+                    // out from are what scaling rewrites.
+                    let reached = target_factor(&ref_recipe, target_value, quantity.unit());
                     ref_recipe
-                        .scale_to_target(target_value, quantity.unit(), converter)
+                        .scale_to_target(target_value, quantity.unit(), self.converter)
                         .map_err(|e| CoreError::Reference {
                             name: ref_path.clone(),
                             message: format!(
@@ -603,95 +725,87 @@ pub fn extract_ingredients(
                             ),
                         })?;
 
-                    // No further scaling: the target already accounts for it.
-                    ref_recipe
+                    // The target is absolute, so the caller's factor does not
+                    // multiply into it — but the factor it *reached* carries on
+                    // down to whatever this recipe references in turn.
+                    (ref_recipe, reached.unwrap_or(1.0))
                 }
                 None => {
                     // No quantity specified, so the caller's scaling applies.
                     let (ref_recipe, ref_diagnostics) =
-                        parse_entry(&ref_entry, &ref_path, Some(recipe.scale))?;
-                    diagnostics.extend(ref_diagnostics);
-                    ref_recipe
+                        parse_entry(&ref_entry, &ref_path, Some(scale))?;
+                    self.diagnostics.extend(ref_diagnostics);
+                    (ref_recipe, scale)
                 }
             };
 
-            // References inside the referenced recipe, one level further down.
-            let nested_refs: Vec<usize> = ref_recipe
-                .ingredients
-                .iter()
-                .enumerate()
-                .filter(|(_, ingredient)| ingredient.reference.is_some())
-                .map(|(index, _)| index)
-                .collect();
-
-            tracing::debug!("Found {} nested references to process", nested_refs.len());
-            for nested_index in nested_refs {
-                let nested_ingredient = &ref_recipe.ingredients[nested_index];
-                tracing::debug!("Processing nested ingredient: {:?}", nested_ingredient.name);
-                let Some(nested_ref) = &nested_ingredient.reference else {
-                    continue;
-                };
-
-                // Same shape as the outer `ref_path` above. `path` supplies
-                // the leading `.` itself, so prepending another — as this used
-                // to — spelled the lookup `././sub/sauce`, which resolved but
-                // named itself that way in any error about it.
-                let nested_path = if nested_ref.components.is_empty() {
-                    nested_ref.name.clone()
-                } else {
-                    nested_ref.path(find::REFERENCE_SEPARATOR)
-                };
-
-                let nested_entry = find::get_recipe(base_path, &nested_path)?;
-
-                if let Some(cycle) = cycle_warning(&ancestors, &nested_entry, &nested_path) {
-                    diagnostics.push(cycle);
-                    continue;
-                }
-
-                let (mut nested_recipe, nested_diagnostics) =
-                    parse_entry(&nested_entry, &nested_path, None)?;
-                diagnostics.extend(nested_diagnostics);
-
-                // Scaling a nested reference depends on the unit it names.
-                match &nested_ingredient.quantity {
-                    Some(quantity) if quantity.unit() == Some("servings") => {
-                        // The quantity is the number of servings wanted.
-                        if let Value::Number(target_servings) = quantity.value() {
-                            let target = target_servings.to_string().parse().unwrap_or(1.0);
-                            tracing::debug!("Scaling nested recipe to {} servings", target);
-                            nested_recipe
-                                .scale_to_target(target, Some("servings"), converter)
-                                .map_err(|e| CoreError::Reference {
-                                    name: nested_path.clone(),
-                                    message: format!("cannot scale to {target} servings: {e}"),
-                                })?;
-                            // References are expanded above, so exclude them here.
-                            list.add_recipe(&nested_recipe, converter, false);
-                        }
-                    }
-                    Some(quantity) => {
-                        // Any other unit is treated as a plain scaling factor,
-                        // covering cases like "2 cups" of something.
-                        if let Value::Number(num) = quantity.value() {
-                            let scaling = num.to_string().parse().unwrap_or(1.0);
-                            nested_recipe.scale(scaling, converter);
-                            list.add_recipe(&nested_recipe, converter, false);
-                        }
-                    }
-                    None => {
-                        list.add_recipe(&nested_recipe, converter, false);
-                    }
-                }
-            }
-
-            // The referenced recipe's own ingredients go in last, after its
-            // nested references, so they are not counted twice.
-            list.add_recipe(&ref_recipe, converter, false);
+            // The referenced recipe's own ingredients, and then the recipes it
+            // references in turn — `add_recipe` hands back the ones it skipped,
+            // which is exactly what is left to follow.
+            let nested = self.list.add_recipe(&ref_recipe, self.converter, false);
+            tracing::debug!("Found {} nested references to process", nested.len());
+            self.expand(&ref_recipe, &nested, ref_scale, None, &ancestors)?;
         }
-    }
 
-    Ok(diagnostics)
+        Ok(())
+    }
+}
+
+/// The factor [`Recipe::scale_to_target`] works out for `target`, so that
+/// references *inside* the scaled recipe that carry no quantity of their own
+/// can inherit it.
+///
+/// `scale_to_target` applies the factor without reporting it, so this derives
+/// it the same way — and must run first, while the recipe still holds the
+/// servings and yield that scaling rewrites.
+///
+/// `None` when the recipe cannot answer: servings that are not a whole number
+/// — `cooklang` holds them as a `u32`, so `1.5` is as unreadable to it as none
+/// at all — no yield, or a yield measured in another unit. `scale_to_target`
+/// raises the error for each of those, so nothing here has to, and the
+/// caller's `unwrap_or(1.0)` is unreachable.
+///
+/// With one exception, which is why that fallback is a `1` and not an
+/// `expect`: a **zero** base, `servings: 0` or `yield: 0%g`. `cooklang`
+/// divides by it and scales the recipe by infinity; this returns `None` and
+/// what the recipe references is left alone. Both readings of such a recipe
+/// are nonsense, and confining the nonsense to the one recipe `cooklang`
+/// itself scaled beats spreading infinity down the chain.
+///
+/// Unit names are matched exactly, including case, because that is how
+/// `cooklang` matches them — mirroring it is the whole point, and matching
+/// more loosely here would answer where `scale_to_target` refuses, which is
+/// the one way the fallback could be reached in earnest. The menu feature's
+/// `reference_scale_factor`, over in the `cookcli` crate's
+/// `util::menu_scale`, does the same conversion case-insensitively and falls
+/// back to the raw target rather than to one. The two cannot share an
+/// implementation while they disagree about that: this one is a shadow of
+/// `cooklang`'s arithmetic and has to match it exactly, and that one is a
+/// policy about what a menu author probably meant.
+fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64> {
+    let base = match unit {
+        // No unit at all is already a factor rather than an amount.
+        None => return Some(target),
+        // Whole servings only, rounded the way `scale_to_servings` rounds
+        // them, so that half a serving asked for does not put the two out of
+        // step.
+        Some("servings") | Some("serving") => {
+            return match f64::from(recipe.metadata.servings()?.as_number()?) {
+                0.0 => None,
+                base => Some(target.round() / base),
+            }
+        }
+        Some(unit) => {
+            // The one yield spelling `scale_to_yield` accepts: `1000%g`.
+            let (value, yield_unit) = recipe.metadata.get("yield")?.as_str()?.split_once('%')?;
+            if yield_unit != unit {
+                return None;
+            }
+            value.parse::<f64>().ok()?
+        }
+    };
+
+    (base != 0.0).then(|| target / base)
 }
 
 /// The warning to raise if expanding `entry` would lead back up its own chain,
