@@ -106,19 +106,31 @@
 
                 {% match metadata.source %}
                 {% when Some with (source) %}
+                {% if source|is_web_url %}
+                <span class="metadata-pill metadata-source">📖 <a href="{{ source.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-source">📖 {{ source }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 {% match metadata.source_url %}
                 {% when Some with (source_url) %}
-                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url }}" class="text-info hover:underline ml-1">{{ source_url|hostname }}</a></span>
+                {% if source_url|is_web_url %}
+                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source_url.trim()|hostname }}</a></span>
+                {% else %}
+                <span class="metadata-pill metadata-source-url">🔗 {{ source_url }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
+                {% if value|is_web_url %}
+                <span class="metadata-pill metadata-custom">{{ key }}: <a href="{{ value.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ value.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
+                {% endif %}
                 {% endfor %}
             </div>
 

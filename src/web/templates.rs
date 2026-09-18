@@ -49,6 +49,27 @@ mod tr_tests {
     }
 }
 
+#[cfg(test)]
+mod is_web_url_tests {
+    use super::filters::is_web_url;
+
+    #[test]
+    fn accepts_http_and_https() {
+        assert!(is_web_url("https://example.com/recipe").unwrap());
+        assert!(is_web_url("http://example.com").unwrap());
+        assert!(is_web_url(" https://example.com ").unwrap());
+    }
+
+    #[test]
+    fn rejects_other_schemes_and_plain_text() {
+        assert!(!is_web_url("javascript:alert(1)").unwrap());
+        assert!(!is_web_url("mailto:me@example.com").unwrap());
+        assert!(!is_web_url("Grandma's cookbook").unwrap());
+        assert!(!is_web_url("example.com").unwrap());
+        assert!(!is_web_url("see https://example.com").unwrap());
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod inline_code_tests {
     use super::filters::inline_code;
@@ -94,6 +115,19 @@ mod filters {
             .ok()
             .and_then(|u| u.host_str().map(String::from))
             .unwrap_or_else(|| url.to_string()))
+    }
+
+    /// True when a metadata value is an absolute http(s) URL, so templates
+    /// can render it as a link. Other schemes (`javascript:`, `data:`, …)
+    /// stay plain text.
+    pub fn is_web_url(value: &str) -> Result<bool> {
+        let value = value.trim();
+        if value.contains(char::is_whitespace) {
+            return Ok(false);
+        }
+        Ok(Url::parse(value)
+            .map(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some())
+            .unwrap_or(false))
     }
 
     /// Render Markdown-style `inline code` spans as `<code>` elements.
