@@ -654,12 +654,17 @@ impl Expansion<'_> {
                      than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
                      list"
                 ));
-                // Attributed to the recipe holding the reference, the way
-                // `cycle_warning` attributes itself, so a caller can group or
-                // open it rather than reading the file name back out of the
-                // message. `ancestors` cannot be empty here — it is long enough
-                // to have hit the limit — but an unattributed warning is a
-                // better answer to being wrong about that than a panic.
+                // Attributed to the recipe holding the reference, so a caller
+                // can group or open it rather than reading the file name back
+                // out of the message. Not the same choice `cycle_warning`
+                // makes — that one names the recipe being referenced, which in
+                // a cycle is the interesting end of it. Here the reference is
+                // one of many that stop at the same place, and what a reader
+                // wants is where the list stopped.
+                //
+                // `ancestors` cannot be empty here — it is long enough to have
+                // hit the limit — but an unattributed warning is a better
+                // answer to being wrong about that than a panic.
                 if let Some(path) = ancestors.last() {
                     stopped = stopped.at_file(path.clone());
                 }
@@ -754,21 +759,29 @@ impl Expansion<'_> {
 /// it the same way — and must run first, while the recipe still holds the
 /// servings and yield that scaling rewrites.
 ///
-/// `None` when the recipe cannot answer: servings that are not a number, no
-/// yield, or a yield measured in another unit. `scale_to_target` raises the
-/// error for each of those, so nothing here has to.
+/// `None` when the recipe cannot answer: servings that are not a whole number
+/// — `cooklang` holds them as a `u32`, so `1.5` is as unreadable to it as none
+/// at all — no yield, or a yield measured in another unit. `scale_to_target`
+/// raises the error for each of those, so nothing here has to, and the
+/// caller's `unwrap_or(1.0)` is unreachable.
+///
+/// With one exception, which is why that fallback is a `1` and not an
+/// `expect`: a **zero** base, `servings: 0` or `yield: 0%g`. `cooklang`
+/// divides by it and scales the recipe by infinity; this returns `None` and
+/// what the recipe references is left alone. Both readings of such a recipe
+/// are nonsense, and confining the nonsense to the one recipe `cooklang`
+/// itself scaled beats spreading infinity down the chain.
 ///
 /// Unit names are matched exactly, including case, because that is how
 /// `cooklang` matches them — mirroring it is the whole point, and matching
 /// more loosely here would answer where `scale_to_target` refuses, which is
-/// the one way the caller's fallback could be reached. The menu feature's
+/// the one way the fallback could be reached in earnest. The menu feature's
 /// `reference_scale_factor`, over in the `cookcli` crate's
 /// `util::menu_scale`, does the same conversion case-insensitively and falls
 /// back to the raw target rather than to one. The two cannot share an
-/// implementation while
-/// they disagree about that: this one is a shadow of `cooklang`'s arithmetic
-/// and has to match it exactly, and that one is a policy about what a menu
-/// author probably meant.
+/// implementation while they disagree about that: this one is a shadow of
+/// `cooklang`'s arithmetic and has to match it exactly, and that one is a
+/// policy about what a menu author probably meant.
 fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64> {
     let base = match unit {
         // No unit at all is already a factor rather than an amount.
