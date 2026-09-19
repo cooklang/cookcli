@@ -264,6 +264,22 @@ pub enum RecipeBuildOutput {
     Menu(Box<MenuTemplate>),
 }
 
+/// Converts a timer's quantity to a whole number of seconds, if its unit is a
+/// recognized time unit. Returns `None` for ranges, text values, or units this
+/// simple lookup doesn't recognize.
+fn timer_duration_seconds(quantity: &cooklang::quantity::Quantity) -> Option<i64> {
+    let cooklang::Value::Number(n) = quantity.value() else {
+        return None;
+    };
+    let multiplier = match quantity.unit()?.to_lowercase().as_str() {
+        "s" | "sec" | "secs" | "second" | "seconds" => 1.0,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60.0,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3600.0,
+        _ => return None,
+    };
+    Some((n.value() * multiplier).round() as i64)
+}
+
 /// Build a [`RecipeTemplate`] or [`MenuTemplate`] for the given recipe path.
 pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildOutput> {
     let RecipeBuildInput {
@@ -506,6 +522,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             Item::Timer { index } => {
                                 if let Some(timer) = recipe.timers.get(*index) {
                                     let mut timer_text = String::new();
+                                    let mut seconds = None;
 
                                     // Add timer quantity and unit
                                     if let Some(quantity) = &timer.quantity {
@@ -522,6 +539,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                             }
                                             timer_text.push_str(unit);
                                         }
+                                        seconds = timer_duration_seconds(quantity);
                                     }
 
                                     // If no duration info, just show "timer"
@@ -529,7 +547,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                         timer_text = "timer".to_string();
                                     }
 
-                                    step_items.push(StepItem::Timer(timer_text));
+                                    step_items.push(StepItem::Timer {
+                                        display: timer_text,
+                                        seconds,
+                                    });
                                 }
                             }
                             Item::InlineQuantity { index } => {

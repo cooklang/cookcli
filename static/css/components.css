@@ -412,6 +412,64 @@
         white-space: nowrap;
     }
 
+    /* Timers are only interactive inside cooking mode (static/js/timers.js) —
+       the same badge in the plain recipe view stays a plain, static label. */
+    .cooking-overlay .timer-badge[data-timer] {
+        cursor: pointer;
+    }
+
+    .cooking-overlay .timer-badge[data-timer]:hover,
+    .cooking-overlay .timer-badge[data-timer]:focus-visible {
+        border-color: var(--border-strong);
+    }
+
+    .timer-badge.timer-running {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-text);
+    }
+
+    .timer-badge.timer-done {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* Compact per-timer pill shown in the header while a recipe has active timers. */
+    .timer-chip {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+        color: var(--accent-text);
+        cursor: pointer;
+    }
+
+    .timer-chip.timer-done {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* Large countdown in the enlarged single-timer view. */
+    .timer-modal-time {
+        font-size: 3rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent-text);
+    }
+
+    .timer-modal-time.timer-done {
+        color: var(--danger);
+    }
+
     /* main's 32px circle, on a flat accent tint. */
     .step-number {
         flex: 0 0 32px;

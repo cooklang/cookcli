@@ -407,7 +407,7 @@ fn step_text(step: &StepData) -> String {
             StepItem::Text(t) => out.push_str(t),
             StepItem::Ingredient { name, .. } => out.push_str(name),
             StepItem::Cookware(c) => out.push_str(c),
-            StepItem::Timer(t) => out.push_str(t),
+            StepItem::Timer { display, .. } => out.push_str(display),
             StepItem::Quantity(q) => out.push_str(q),
             StepItem::LineBreak => out.push(' '),
         }
@@ -711,7 +711,10 @@ pub enum StepItem {
         reference_path: Option<String>,
     },
     Cookware(String),
-    Timer(String),
+    Timer {
+        display: String,
+        seconds: Option<i64>,
+    },
     Quantity(String),
     LineBreak,
 }
