@@ -287,6 +287,15 @@ cargo run -- server ./seed
 make dev_server  # Builds CSS and starts server
 ```
 
+### Easypanel
+
+You can also deploy the CookCLI web server with one click using the official [Easypanel](https://easypanel.io) template:
+
+[![Deploy on Easypanel][easypanel-btn]][easypanel-deploy]
+
+[easypanel-btn]: https://easypanel.io/img/deploy-on-easypanel-40.svg
+[easypanel-deploy]: https://easypanel.io/templates/cookcli
+
 ## 🛠 Commands
 
 CookCLI follows the UNIX philosophy: each command does one thing well.
