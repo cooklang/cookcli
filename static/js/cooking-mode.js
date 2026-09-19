@@ -197,6 +197,11 @@
             sectionsNav.appendChild(pill);
         });
 
+        // Populated by static/js/timers.js while any timer is active for this recipe.
+        const timerStrip = document.createElement('div');
+        timerStrip.id = 'cooking-timer-strip';
+        timerStrip.className = 'hidden items-center gap-1 flex-shrink-0 overflow-x-auto max-w-[35vw]';
+
         const closeBtn = document.createElement('button');
         closeBtn.className = 'cooking-close-btn';
         closeBtn.setAttribute('aria-label', 'Close cooking mode');
@@ -207,6 +212,7 @@
         if (data.sections.length > 1 || (data.sections[0] && data.sections[0].name)) {
             header.appendChild(sectionsNav);
         }
+        header.appendChild(timerStrip);
         header.appendChild(closeBtn);
 
         // Carousel
@@ -540,6 +546,10 @@
         document.body.style.overflow = 'hidden';
 
         updateCards();
+
+        // Let static/js/timers.js know it can refresh #cooking-timer-strip and
+        // any timer badges in the freshly-built cards.
+        document.dispatchEvent(new CustomEvent('cookingmode:opened'));
 
         // Add event listeners
         const carousel = document.getElementById('cooking-carousel');
