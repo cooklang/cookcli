@@ -798,3 +798,85 @@ fn build_compress_twice_does_not_gzip_gzip() {
         "no double-compressed files: {double_gz:?}"
     );
 }
+
+#[test]
+fn build_writes_feeds_when_feed_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--feed",
+            "https://recipes.example.com",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("atom.xml and rss.xml"));
+
+    let atom = std::fs::read_to_string(out.join("atom.xml")).unwrap();
+    assert!(atom.contains(r#"<feed xmlns="http://www.w3.org/2005/Atom""#));
+    assert!(
+        atom.contains("https://recipes.example.com/recipe/Breakfast/Easy%20Pancakes.html"),
+        "atom feed should link recipe pages with absolute URLs"
+    );
+
+    let rss = std::fs::read_to_string(out.join("rss.xml")).unwrap();
+    assert!(rss.contains(r#"<rss version="2.0""#));
+    assert_eq!(
+        atom.matches("<entry>").count(),
+        rss.matches("<item>").count(),
+        "both feeds should list the same recipes"
+    );
+    assert!(rss.matches("<item>").count() > 1);
+}
+
+#[test]
+fn build_omits_feeds_when_feed_not_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    assert!(!out.join("atom.xml").exists());
+    assert!(!out.join("rss.xml").exists());
+}
+
+#[test]
+fn build_feed_rejects_relative_url() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--feed",
+            "/recipes/",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--feed"));
+}

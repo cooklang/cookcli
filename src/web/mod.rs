@@ -30,7 +30,7 @@
 use rust_embed::RustEmbed;
 
 pub mod builders;
-mod i18n;
+pub(crate) mod i18n;
 pub mod language;
 pub mod menus;
 pub mod templates;
