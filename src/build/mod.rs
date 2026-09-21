@@ -1,4 +1,4 @@
-mod feed;
+pub(crate) mod feed;
 mod index;
 mod links;
 mod renderer;

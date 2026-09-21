@@ -1,5 +1,7 @@
-//! Web feeds (`atom.xml` and `rss.xml`) for the static site, one item per
-//! recipe or menu page.
+//! Web feeds (`atom.xml` and `rss.xml`), one item per recipe or menu page.
+//!
+//! Shared by `cook build web --feed` (written next to the static site) and
+//! `cook server` (rendered per request), which differ only in page URLs.
 
 use crate::build::sitemap::{build_loc, xml_escape};
 use anyhow::Result;
@@ -86,14 +88,36 @@ fn item_author(metadata: &cooklang_find::Metadata) -> Option<String> {
     })
 }
 
-/// Walk the recipe tree into feed items, newest first.
-///
-/// Like the sitemap, only pages that were actually written under `output` are
-/// listed, so the feed never links to a recipe that failed to render. Ties on
-/// date are broken by path so repeated builds produce a stable file.
-fn build_feed_items(tree: &RecipeTree, output: &Utf8Path) -> Vec<FeedItem> {
+/// Where the pages an item links to live.
+#[derive(Clone, Copy)]
+pub(crate) enum PageUrls<'a> {
+    /// Static site: `recipe/<path>.html` and `menu/<path>.html`. Only pages
+    /// actually written under `output` are listed, like the sitemap, so the
+    /// feed never links to a recipe that failed to render.
+    Static { output: &'a Utf8Path },
+    /// `cook server`: `recipe/<path>` for recipes and menus alike.
+    Server,
+}
+
+impl PageUrls<'_> {
+    /// Page path relative to the site root, or `None` to leave the item out.
+    fn relpath(self, sub: &str, is_menu: bool) -> Option<String> {
+        match self {
+            PageUrls::Static { output } => {
+                let kind = if is_menu { "menu" } else { "recipe" };
+                let relpath = format!("{kind}/{sub}.html");
+                output.join(&relpath).exists().then_some(relpath)
+            }
+            PageUrls::Server => Some(format!("recipe/{sub}")),
+        }
+    }
+}
+
+/// Walk the recipe tree into feed items, newest first. Ties on date are broken
+/// by path so repeated builds produce a stable file.
+fn build_feed_items(tree: &RecipeTree, urls: PageUrls) -> Vec<FeedItem> {
     let mut out = Vec::new();
-    collect(tree, String::new(), output, &mut out);
+    collect(tree, String::new(), urls, &mut out);
     out.sort_by(|a, b| {
         b.updated
             .cmp(&a.updated)
@@ -102,7 +126,7 @@ fn build_feed_items(tree: &RecipeTree, output: &Utf8Path) -> Vec<FeedItem> {
     out
 }
 
-fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<FeedItem>) {
+fn collect(tree: &RecipeTree, prefix: String, urls: PageUrls, out: &mut Vec<FeedItem>) {
     for (name, child) in &tree.children {
         if child.children.is_empty() {
             let Some(recipe) = child.recipe.as_ref() else {
@@ -124,14 +148,9 @@ fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<F
             } else {
                 format!("{prefix}/{stem}")
             };
-            let relpath = if recipe.is_menu() {
-                format!("menu/{sub}.html")
-            } else {
-                format!("recipe/{sub}.html")
-            };
-            if !output.join(&relpath).exists() {
+            let Some(relpath) = urls.relpath(&sub, recipe.is_menu()) else {
                 continue;
-            }
+            };
             let metadata = recipe.metadata();
             out.push(FeedItem {
                 relpath,
@@ -149,7 +168,7 @@ fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<F
             } else {
                 format!("{prefix}/{name}")
             };
-            collect(child, sub, output, out);
+            collect(child, sub, urls, out);
         }
     }
 }
@@ -285,6 +304,55 @@ fn render_rss(info: &FeedInfo, items: &[FeedItem]) -> String {
     out
 }
 
+/// Feed format served or written.
+#[derive(Clone, Copy)]
+pub(crate) enum FeedFormat {
+    Atom,
+    Rss,
+}
+
+impl FeedFormat {
+    pub(crate) fn content_type(self) -> &'static str {
+        match self {
+            FeedFormat::Atom => "application/atom+xml; charset=utf-8",
+            FeedFormat::Rss => "application/rss+xml; charset=utf-8",
+        }
+    }
+}
+
+/// The host is the most meaningful publisher name we know about.
+fn publisher(base: &str) -> String {
+    url::Url::parse(base)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| base.to_string())
+}
+
+/// Render one feed document for the pages `urls` points at.
+///
+/// `base` is the absolute URL of the site root (scheme, host and any subpath).
+pub(crate) fn render_feed(
+    format: FeedFormat,
+    tree: &RecipeTree,
+    urls: PageUrls,
+    base: &str,
+    title: &str,
+    lang: &str,
+) -> String {
+    let items = build_feed_items(tree, urls);
+    let author = publisher(base);
+    let info = FeedInfo {
+        base,
+        title,
+        author: &author,
+        lang,
+    };
+    match format {
+        FeedFormat::Atom => render_atom(&info, &items),
+        FeedFormat::Rss => render_rss(&info, &items),
+    }
+}
+
 /// Build and write `atom.xml` and `rss.xml` to the output root.
 ///
 /// `base` must already be validated as an absolute http(s) URL.
@@ -295,16 +363,12 @@ pub fn write_feeds(
     lang: &str,
     tree: &RecipeTree,
 ) -> Result<usize> {
-    let items = build_feed_items(tree, output);
-    // The host is the most meaningful publisher name we know about.
-    let host = url::Url::parse(base)
-        .ok()
-        .and_then(|u| u.host_str().map(str::to_string))
-        .unwrap_or_else(|| base.to_string());
+    let items = build_feed_items(tree, PageUrls::Static { output });
+    let author = publisher(base);
     let info = FeedInfo {
         base,
         title,
-        author: &host,
+        author: &author,
         lang,
     };
     crate::build::writer::write_bytes(
@@ -417,7 +481,7 @@ mod tests {
         fs::write(out_root.join("recipe/Breakfast/Pancakes.html"), "x").unwrap();
         fs::write(out_root.join("recipe/Omelette.html"), "x").unwrap();
 
-        let items = build_feed_items(&tree, out_root);
+        let items = build_feed_items(&tree, PageUrls::Static { output: out_root });
         let paths: Vec<&str> = items.iter().map(|i| i.relpath.as_str()).collect();
         assert_eq!(
             paths,
@@ -427,6 +491,36 @@ mod tests {
         assert_eq!(pancakes.title, "Fluffy Pancakes");
         assert_eq!(pancakes.summary.as_deref(), Some("Sunday treat"));
         assert_eq!(pancakes.tags, vec!["sweet".to_string()]);
+    }
+
+    #[test]
+    fn server_urls_list_every_recipe_without_extension() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let src = TempDir::new().unwrap();
+        let src_root = Utf8Path::from_path(src.path()).unwrap();
+        fs::create_dir_all(src_root.join("Breakfast")).unwrap();
+        fs::write(
+            src_root.join("Breakfast/Pancakes.cook"),
+            "Mix @flour{1}.
+",
+        )
+        .unwrap();
+        fs::write(
+            src_root.join("Week.menu"),
+            "== Monday ==
+",
+        )
+        .unwrap();
+
+        let tree = cooklang_find::build_tree(src_root).unwrap();
+        let mut paths: Vec<String> = build_feed_items(&tree, PageUrls::Server)
+            .into_iter()
+            .map(|i| i.relpath)
+            .collect();
+        paths.sort();
+        assert_eq!(paths, vec!["recipe/Breakfast/Pancakes", "recipe/Week"]);
     }
 
     #[test]

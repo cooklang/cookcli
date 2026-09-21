@@ -42,6 +42,8 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/pantry", get(pantry_page))
         .route("/preferences", get(preferences_page))
         .route("/api-docs", get(api_docs_page))
+        .route("/atom.xml", get(atom_feed))
+        .route("/rss.xml", get(rss_feed))
 }
 
 async fn recipes_page(
@@ -537,6 +539,109 @@ async fn preferences_page(
     }
 }
 
+async fn atom_feed(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    uri: Uri,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> axum::response::Response {
+    feed_response(
+        crate::build::feed::FeedFormat::Atom,
+        &state,
+        &headers,
+        &uri,
+        lang,
+    )
+    .await
+}
+
+async fn rss_feed(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    uri: Uri,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> axum::response::Response {
+    feed_response(
+        crate::build::feed::FeedFormat::Rss,
+        &state,
+        &headers,
+        &uri,
+        lang,
+    )
+    .await
+}
+
+/// Absolute URL of the site root for links in a feed.
+///
+/// Feeds need absolute links. Like `api_docs_page`, the host is the authority
+/// the request was addressed to, never `X-Forwarded-Host` (see
+/// `cors::request_authority`). `X-Forwarded-Proto: https` is honoured so a
+/// TLS-terminating proxy yields https links; it can only change the scheme
+/// of the response sent back to the same client.
+fn feed_base_url(headers: &HeaderMap, uri: &Uri, url_prefix: &str) -> Option<String> {
+    let host = super::cors::request_authority(headers, uri)?;
+    let https = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("https"));
+    let scheme = if https { "https" } else { "http" };
+    let base = format!("{scheme}://{host}{url_prefix}/");
+    // Reject a Host that would smuggle a path, query or credentials into the
+    // links: it must parse back to exactly scheme + authority + prefix.
+    let parsed = url::Url::parse(&base).ok()?;
+    let clean = parsed.host().is_some()
+        && parsed.username().is_empty()
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+        && parsed.path() == format!("{url_prefix}/");
+    clean.then_some(base)
+}
+
+async fn feed_response(
+    format: crate::build::feed::FeedFormat,
+    state: &AppState,
+    headers: &HeaderMap,
+    uri: &Uri,
+    lang: LanguageIdentifier,
+) -> axum::response::Response {
+    use fluent_templates::Loader;
+
+    let Some(base) = feed_base_url(headers, uri, &state.url_prefix) else {
+        return (StatusCode::BAD_REQUEST, "Missing or invalid Host header").into_response();
+    };
+    let title = crate::web::i18n::LOCALES.lookup(&lang, "recipes-title");
+    let lang_tag = lang.to_string();
+    let base_path = state.base_path.clone();
+
+    // Walking the recipe tree reads every file: keep it off the async runtime.
+    let rendered = tokio::task::spawn_blocking(move || {
+        let tree = cooklang_find::build_tree(&base_path)
+            .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+        Ok::<_, anyhow::Error>(crate::build::feed::render_feed(
+            format,
+            &tree,
+            crate::build::feed::PageUrls::Server,
+            &base,
+            &title,
+            &lang_tag,
+        ))
+    })
+    .await;
+
+    match rendered {
+        Ok(Ok(xml)) => ([(header::CONTENT_TYPE, format.content_type())], xml).into_response(),
+        Ok(Err(e)) => {
+            tracing::error!("Failed to render feed: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to render feed").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Feed task failed: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to render feed").into_response()
+        }
+    }
+}
+
 async fn api_docs_page(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -566,5 +671,63 @@ async fn api_docs_page(
         static_mode: false,
         repo_url: None,
         features,
+    }
+}
+
+#[cfg(test)]
+mod feed_url_tests {
+    use super::feed_base_url;
+    use axum::http::{HeaderMap, HeaderValue, Uri};
+
+    fn headers(pairs: &[(&'static str, &'static str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.append(*name, HeaderValue::from_static(value));
+        }
+        map
+    }
+
+    fn uri() -> Uri {
+        "/atom.xml".parse().unwrap()
+    }
+
+    #[test]
+    fn uses_host_and_prefix() {
+        let h = headers(&[("host", "cook.lan:9080")]);
+        assert_eq!(
+            feed_base_url(&h, &uri(), "").as_deref(),
+            Some("http://cook.lan:9080/")
+        );
+        assert_eq!(
+            feed_base_url(&h, &uri(), "/cook").as_deref(),
+            Some("http://cook.lan:9080/cook/")
+        );
+    }
+
+    #[test]
+    fn honours_forwarded_proto_but_not_forwarded_host() {
+        let h = headers(&[
+            ("host", "cook.example.com"),
+            ("x-forwarded-proto", "https"),
+            ("x-forwarded-host", "evil.test"),
+        ]);
+        assert_eq!(
+            feed_base_url(&h, &uri(), "").as_deref(),
+            Some("https://cook.example.com/")
+        );
+    }
+
+    #[test]
+    fn rejects_missing_or_smuggling_hosts() {
+        assert_eq!(feed_base_url(&headers(&[]), &uri(), ""), None);
+        for bad in [
+            "evil.test/path",
+            "user@evil.test",
+            "evil.test?x=1",
+            "evil.test#x",
+        ] {
+            let h = headers(&[("host", bad)]);
+            assert_eq!(feed_base_url(&h, &uri(), ""), None, "{bad}");
+        }
     }
 }
