@@ -40,7 +40,7 @@ pub enum BuildCommand {
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
     ///   cook build web --compress              # Also write .gz copies for precompressed hosting
-    ///   cook build web --feed https://recipes.example.com  # Also write atom.xml and rss.xml
+    ///   cook build web --sitemap https://recipes.example.com --feed  # Also write atom.xml and rss.xml
     Web(WebBuildArgs),
 }
 
@@ -88,16 +88,19 @@ pub struct WebBuildArgs {
     #[arg(long)]
     pub sitemap: Option<String>,
 
-    /// Full base URL of the deployed site to generate web feeds
+    /// Generate web feeds, optionally for a given site URL
     ///
-    /// When set (e.g. https://recipes.example.com), writes `atom.xml` and
-    /// `rss.xml` at the output root with one item per recipe and menu, newest
-    /// first. An item's date is its `date` metadata (YYYY-MM-DD or RFC 3339)
-    /// when present, otherwise the file's modification time. Like --sitemap,
-    /// this is the complete URL prefix and is independent of --base-url.
+    /// Writes `atom.xml` and `rss.xml` at the output root with one item per
+    /// recipe and menu, newest first. An item's date is its `date` metadata
+    /// (YYYY-MM-DD or RFC 3339) when present, otherwise the file's
+    /// modification time.
+    ///
+    /// Feeds need absolute links, so they need the site's full base URL.
+    /// `--feed` alone reuses the --sitemap URL; `--feed=URL` (with `=`) sets
+    /// it explicitly. Like --sitemap, this is independent of --base-url.
     /// Omit it to skip feed generation.
-    #[arg(long)]
-    pub feed: Option<String>,
+    #[arg(long, value_name = "URL", num_args = 0..=1, require_equals = true)]
+    pub feed: Option<Option<String>>,
 
     /// URL of the recipe repository, linked from the site footer
     ///
@@ -143,6 +146,16 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         bail!("Source base path is not a directory: {source}");
     }
 
+    // `--feed https://...` (space, not `=`) leaves the URL as the positional
+    // output directory. Catch it before creating a directory named `https:`.
+    if let Some(dir) = &args.output_dir {
+        if dir.as_str().contains("://") {
+            bail!(
+                "Output directory looks like a URL: {dir}. To give --feed a URL, use --feed={dir}"
+            );
+        }
+    }
+
     let output_raw = args
         .output_dir
         .clone()
@@ -165,10 +178,20 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     if let Some(base) = sitemap_base {
         validate_site_url("--sitemap", base)?;
     }
-    let feed_base = args.feed.as_deref();
-    if let Some(base) = feed_base {
-        validate_site_url("--feed", base)?;
-    }
+    // `--feed` alone reuses the --sitemap URL (already validated above).
+    let feed_base = match &args.feed {
+        None => None,
+        Some(Some(base)) => {
+            validate_site_url("--feed", base)?;
+            Some(base.as_str())
+        }
+        Some(None) => match sitemap_base {
+            Some(base) => Some(base),
+            None => bail!(
+                "--feed needs the site's URL: pass --sitemap <URL>, or --feed=<URL>, e.g. --feed=https://recipes.example.com"
+            ),
+        },
+    };
 
     // Validate the repo URL up front for the same reason as --sitemap above.
     let repo_url = args.repo_url.as_deref();
