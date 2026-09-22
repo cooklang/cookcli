@@ -1310,11 +1310,16 @@ fn realtime() -> ApiSection {
                 "/api/shopping_list/events",
                 "Server-sent events for shopping list changes",
                 "Emits a `change` event whenever `.shopping-list` or `.shopping-checked` is \
-                 modified on disk — including by another client or by the `cook` CLI. The \
-                 event's `file` field is `\"list\"` or `\"checked\"`, naming which file changed \
-                 (captured live below by editing the shopping list in a second shell while \
-                 connected). It is not a snapshot of what changed, so the intended pattern is \
-                 to re-fetch the list on each event rather than to apply a diff. A `ping` \
+                 written, created, replaced or removed on disk — by any client of this server \
+                 (a client's own changes are announced back to it too), by CookCloud sync, or \
+                 by hand. Reading the files, through this API or otherwise, never emits one. \
+                 The event's `file` field is `\"list\"` or `\"checked\"`, naming which file \
+                 changed (captured live below by editing the shopping list in a second shell \
+                 while connected). It is not a snapshot of what changed, so the intended \
+                 pattern is to re-fetch on each event rather than to apply a diff: after \
+                 `\"checked\"` only the ticks changed, and `GET /api/shopping_list/checked` has \
+                 them; after `\"list\"`, regenerate the list. A subscriber that falls too far \
+                 behind to be told every change is sent a `\"list\"` event instead. A `ping` \
                  keep-alive comment is sent every 30 seconds. If the filesystem watcher failed \
                  to start, the stream still connects and returns 200 but never emits an event.",
             )
