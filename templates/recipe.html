@@ -306,14 +306,14 @@
         </div>
 
         <div class="md:col-span-2">
-            <div class="card p-6">
-                {% for section in sections %}
+            <div class="card p-6" data-recipe-path="{{ recipe_path }}">
+                {% for (section_index, section) in sections.iter().enumerate() %}
                 {% match section.name %}
                 {% when Some with (name) %}
                 <h2 class="text-title font-semibold mt-6 mb-4 text-accent-text border-b border-line pb-2">{{ name }}</h2>
                 {% when None %}
                 {% endmatch %}
-                <ol class="step-list space-y-4 {% if !loop.first %}mt-4{% endif %}">
+                <ol class="step-list space-y-4 {% if section_index > 0 %}mt-4{% endif %}">
                     {% for item in section.items %}
                     {% match item %}
                     {% when crate::web::templates::RecipeSectionItem::Step with (step) %}
@@ -328,9 +328,9 @@
                                 <div class="step-number">{{ step.number }}</div>
                                 <div class="flex-1">
                                     <div class="step-body mb-2">
-                                        {% for step_item in step.items %}
+                                        {% for (item_index, step_item) in step.items.iter().enumerate() %}
                                         {% match step_item %}
-                                        {% when crate::web::templates::StepItem::Text with (text) %}{{ text }}{% when crate::web::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::web::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::web::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-accent-text">{{ qty }}</span>{% when crate::web::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
+                                        {% when crate::web::templates::StepItem::Text with (text) %}{{ text }}{% when crate::web::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::web::templates::StepItem::Timer with { display, seconds } %}{% match seconds %}{% when Some with (secs) %}<span class="timer-badge" data-timer data-timer-key="{{ section_index }}-{{ step.number }}-{{ item_index }}" data-seconds="{{ secs }}" data-display="{{ display }}" data-section="{% match section.name %}{% when Some with (n) %}{{ n }}{% when None %}{% endmatch %}" data-step="{{ step.number }}" role="button" tabindex="0">⏱️ {{ display }}</span>{% when None %}<span class="timer-badge">⏱️ {{ display }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-accent-text">{{ qty }}</span>{% when crate::web::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
                                     </div>
                                     {% if step.ingredients.len() > 0 %}
                                     <div class="step-refs">
@@ -496,4 +496,5 @@ function goToScale(value) {
 {% block scripts %}
 <link rel="stylesheet" href="{{ prefix }}/static/css/cooking-mode.css">
 <script src="{{ prefix }}/static/js/cooking-mode.js"></script>
+<script src="{{ prefix }}/static/js/timers.js"></script>
 {% endblock %}
