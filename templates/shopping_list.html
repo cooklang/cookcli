@@ -129,19 +129,91 @@ function hideError() {
     document.getElementById('error-banner').classList.add('hidden');
 }
 
-async function loadShoppingList() {
-    try {
-        const response = await fetch('{{ prefix }}/api/shopping_list/items');
-        shoppingList = await response.json();
-        renderSelectedRecipes();
+// The last markup written into each container. Renders compare against it —
+// never against `innerHTML`, which the browser re-serialises — and leave the
+// DOM alone when nothing changed, so a refresh that brings back the same list
+// doesn't recreate the checkbox under the user's finger.
+const renderedHtml = new WeakMap();
 
-        // Automatically generate the shopping list if there are items
-        if (shoppingList.length > 0) {
-            await generateList();
-        }
-    } catch (error) {
-        console.error('Failed to load shopping list:', error);
+function setHtml(element, html) {
+    if (renderedHtml.get(element) === html) return;
+    element.innerHTML = html;
+    renderedHtml.set(element, html);
+}
+
+// Refreshes run one at a time. 'list' regenerates the whole list (whose
+// response carries the ticks as well); 'checked' only re-reads the ticks.
+// Asking for either while one runs queues a single follow-up, 'list' winning,
+// so a burst of requests costs at most one extra round.
+let pendingRefresh = null;
+let refreshing = null;
+
+function requestRefresh(kind) {
+    if (pendingRefresh !== 'list') {
+        pendingRefresh = kind;
     }
+    if (!refreshing) {
+        refreshing = runRefreshes();
+    }
+    return refreshing;
+}
+
+async function runRefreshes() {
+    // The `finally` belongs in here, not on the returned promise: one attached
+    // with `.finally()` runs a tick late, and a request arriving in that gap
+    // would queue behind a loop that has already stopped.
+    try {
+        while (pendingRefresh) {
+            const kind = pendingRefresh;
+            pendingRefresh = null;
+            try {
+                await (kind === 'list' ? refreshList() : refreshChecked());
+            } catch (error) {
+                console.error('Failed to refresh the shopping list:', error);
+            }
+        }
+    } finally {
+        refreshing = null;
+    }
+}
+
+// The `/items` response the list on the page was last generated from. A 'list'
+// refresh that reads the same items back — the echo of a change this page made
+// itself, or the refresh every event-stream connection starts with — only
+// re-reads the ticks instead of re-parsing every recipe.
+let generatedFrom = null;
+
+async function refreshList() {
+    const ticks = tickSnapshot();
+    const response = await fetch('{{ prefix }}/api/shopping_list/items');
+    if (!response.ok) {
+        throw new Error(`loading the shopping list answered ${response.status}`);
+    }
+    const items = await response.text();
+    if (items === generatedFrom) {
+        return refreshChecked(ticks);
+    }
+
+    generatedFrom = null;
+    shoppingList = JSON.parse(items);
+    renderSelectedRecipes();
+
+    // Automatically generate the shopping list if there are items
+    if (shoppingList.length > 0) {
+        const data = await generateList();
+        if (!data) return;
+        displayShoppingList(data);
+        applyServerChecked(data.checked || [], ticks);
+    }
+    generatedFrom = items;
+}
+
+async function refreshChecked(ticks = tickSnapshot()) {
+    const response = await fetch('{{ prefix }}/api/shopping_list/checked');
+    if (!response.ok) {
+        throw new Error(`loading the ticked items answered ${response.status}`);
+    }
+    applyServerChecked(await response.json(), ticks);
 }
 
 function renderSelectedRecipes() {
@@ -154,14 +226,15 @@ function renderSelectedRecipes() {
     setHeaderVisible(shoppingList.length > 0);
 
     if (shoppingList.length === 0) {
-        container.innerHTML = '<p class="text-faint text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>';
-        document.getElementById('list-content').innerHTML = '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
+        setHtml(container, '<p class="text-faint text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>');
+        setHtml(document.getElementById('list-content'), '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>');
+        document.getElementById('pantry-section').classList.add('hidden');
         lastListData = null;
         updateCopyButtonVisibility();
         return;
     }
 
-    container.innerHTML = shoppingList.map((item, index) => {
+    setHtml(container, shoppingList.map((item, index) => {
         // Plan/menu entry — show nested recipes
         if (item.recipes) {
             const recipesHtml = item.recipes.map(recipe => {
@@ -233,7 +306,7 @@ function renderSelectedRecipes() {
             </div>
             ${refsHtml}
         </div>`;
-    }).join('');
+    }).join(''));
 }
 
 // Event delegation for dynamically-rendered remove buttons: avoids inline
@@ -251,7 +324,7 @@ document.addEventListener('click', (event) => {
 document.addEventListener('change', (event) => {
     const input = event.target.closest('[data-action="toggle-item"]');
     if (!input) return;
-    toggleItem(input.dataset.itemId, input.checked, input.dataset.ingredientName);
+    toggleItem(input);
 });
 
 async function removeRecipe(path) {
@@ -266,7 +339,7 @@ async function removeRecipe(path) {
 
         if (response.ok) {
             hideError();
-            await loadShoppingList();
+            await requestRefresh('list');
         } else {
             const data = await response.json().catch(() => ({}));
             showError(data.error || 'Failed to remove recipe');
@@ -285,7 +358,7 @@ async function clearList() {
 
         if (response.ok) {
             hideError();
-            await loadShoppingList();
+            await requestRefresh('list');
         } else {
             const data = await response.json().catch(() => ({}));
             showError(data.error || 'Failed to clear list');
@@ -296,12 +369,14 @@ async function clearList() {
     }
 }
 
+// Generate the list for the recipes in `shoppingList`. Returns the generated
+// list, or null once it has shown why there isn't one.
 async function generateList() {
     hideError();
 
     if (shoppingList.length === 0) {
         showError({{ tr.t("shopping-add-recipes-first")|json|safe }});
-        return;
+        return null;
     }
 
     try {
@@ -341,12 +416,13 @@ async function generateList() {
         const data = await response.json();
         if (!response.ok) {
             showError(data.error || {{ tr.t("shopping-failed-to-generate")|json|safe }});
-            return;
+            return null;
         }
-        displayShoppingList(data);
+        return data;
     } catch (error) {
         console.error('Failed to generate shopping list:', error);
         showError({{ tr.t("shopping-failed-to-generate")|json|safe }});
+        return null;
     }
 }
 
@@ -451,17 +527,16 @@ function decimalToFraction(value) {
     return null;
 }
 
+// Render the generated list. The markup carries no ticks — those are applied
+// separately by applyCheckedStates() — so a list whose items haven't changed
+// renders to the same markup and setHtml() leaves it in place.
 function displayShoppingList(data) {
     const resultsDiv = document.getElementById('shopping-list-results');
     const contentDiv = document.getElementById('list-content');
     const pantrySection = document.getElementById('pantry-section');
     const pantryItems = document.getElementById('pantry-items');
 
-    // Populate checked set from server response
-    checkedItems = new Set((data.checked || []).map(n => n.toLowerCase()));
-
     lastListData = data;
-    updateCopyButtonVisibility();
     // Live updates from another tab render here too, so make sure the
     // container is showing whatever hid it earlier.
     resultsDiv.classList.remove('hidden');
@@ -470,23 +545,24 @@ function displayShoppingList(data) {
 
     // Display items to buy (organized by aisle)
     if (data.categories && data.categories.length > 0) {
-        html += data.categories.map(category => `
+        html += data.categories.map((category, categoryIndex) => `
             <div class="aisle-section mb-6 card p-4">
                 <h2 class="aisle-name font-semibold text-title mb-3 text-accent-text">${escHtml(category.category)}</h2>
                 <ul class="space-y-2">
-                    ${category.items.map((item, idx) => {
-                        // Use ingredient name as the unique ID for localStorage
-                        const itemId = `item-${item.name.replace(/\s+/g, '-')}`;
+                    ${category.items.map((item, itemIndex) => {
+                        // Positional rather than derived from the name, which
+                        // could collide ("olive oil" and "olive-oil") and send
+                        // a click on one label to the other's checkbox.
+                        const itemId = `item-${categoryIndex}-${itemIndex}`;
                         return `
                         <li class="flex items-center justify-between py-2 px-3 hover:bg-sunk rounded-[var(--radius-control)]">
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
-                                    id="${escHtml(itemId)}"
+                                    id="${itemId}"
                                     class="list-checkbox accent-[var(--accent)] mr-3"
                                     data-action="toggle-item"
-                                    data-item-id="${escHtml(itemId)}"
                                     data-ingredient-name="${escHtml(item.name)}">
-                                <label for="${escHtml(itemId)}" class="cursor-pointer flex-1">
+                                <label for="${itemId}" class="cursor-pointer flex-1">
                                     <span class="item-name">${escHtml(item.name)}</span>
                                 </label>
                             </div>
@@ -503,7 +579,7 @@ function displayShoppingList(data) {
     // Display pantry items in sidebar
     if (data.pantry_items && data.pantry_items.length > 0) {
         pantrySection.classList.remove('hidden');
-        pantryItems.innerHTML = `
+        setHtml(pantryItems, `
             <ul class="space-y-2 text-sm">
                 ${data.pantry_items.map((item, idx) => {
                     // Handle both string array and object array formats
@@ -523,17 +599,15 @@ function displayShoppingList(data) {
                     </li>
                 `}).join('')}
             </ul>
-        `;
+        `);
     } else {
         pantrySection.classList.add('hidden');
     }
 
     if (html === '') {
-        contentDiv.innerHTML = '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
+        setHtml(contentDiv, '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>');
     } else {
-        contentDiv.innerHTML = html;
-        // Load saved checked states
-        loadCheckedStates();
+        setHtml(contentDiv, html);
     }
 }
 
@@ -556,6 +630,18 @@ function formatQuantities(quantities) {
 
 // Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
+
+// Ticks sent but not yet confirmed, and a count of every tick made on this
+// page. A read of the checked log that overlapped a tick may have been answered
+// before that tick was written, so its answer can't be trusted: see
+// applyServerChecked().
+let togglesInFlight = 0;
+let toggleEpoch = 0;
+let resyncWhenIdle = false;
+// Ticks go to the server one at a time, in the order they were made. Two
+// requests in flight at once can land either way round, and a quick tick and
+// untick of the same item landing backwards would leave it ticked.
+let toggleChain = Promise.resolve();
 
 // What the copy button puts on the clipboard. Persisted so the choice survives
 // a reload — this is a per-device preference, not list state, so it stays in
@@ -721,79 +807,123 @@ function updateCopyButtonVisibility() {
     }
 }
 
-async function toggleItem(itemId, checked, ingredientName) {
-    const storageKey = ingredientName || itemId;
-    const endpoint = checked ? 'check' : 'uncheck';
-
-    try {
-        const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: storageKey })
-        });
-
-        if (!response.ok) {
-            console.error(`Failed to ${endpoint} item:`, await response.text());
-            return;
-        }
-    } catch (error) {
-        console.error(`Failed to ${endpoint} item:`, error);
-        return;
-    }
-
-    if (checked) {
-        checkedItems.add(storageKey.toLowerCase());
-    } else {
-        checkedItems.delete(storageKey.toLowerCase());
-    }
-
-    applyCheckedStyle(itemId, checked);
+// Tick every box whose ingredient is in `checkedItems` and untick the rest.
+// The strike-through follows the box itself in CSS
+// (`.list-checkbox:checked + label`), so the boxes are all there is to keep in
+// step — and a box set from script fires no `change`, so this can't loop back
+// into toggleItem().
+function applyCheckedStates() {
+    document.querySelectorAll('#list-content [data-action="toggle-item"]').forEach(box => {
+        box.checked = checkedItems.has(box.dataset.ingredientName.toLowerCase());
+    });
     updateCopyButtonVisibility();
 }
 
-function applyCheckedStyle(itemId, checked) {
-    const element = document.querySelector(`#${CSS.escape(itemId)}`);
-    if (!element) return;
-    const nameEl = element.parentElement.querySelector('.item-name');
-    if (nameEl) {
-        nameEl.style.textDecoration = checked ? 'line-through' : 'none';
-        nameEl.style.opacity = checked ? '0.6' : '1';
-    }
+function tickSnapshot() {
+    return { epoch: toggleEpoch, busy: togglesInFlight > 0 };
 }
 
-function loadCheckedStates() {
-    // Apply checked states from the set populated by displayShoppingList
-    document.querySelectorAll('.item-name').forEach(nameElement => {
-        const ingredientName = nameElement.textContent.trim();
-        if (checkedItems.has(ingredientName.toLowerCase())) {
-            const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = true;
-                nameElement.style.textDecoration = 'line-through';
-                nameElement.style.opacity = '0.6';
+// Adopt the server's ticks, read after `ticks` was taken — unless a tick made
+// on this page overlapped that read, which may then predate it. Applying such a
+// read would briefly untick a box the user had just ticked, inviting a second
+// tap that unticks it for real.
+function applyServerChecked(names, ticks) {
+    if (!ticks.busy && ticks.epoch === toggleEpoch) {
+        checkedItems = new Set(names.map(name => String(name).toLowerCase()));
+    } else if (togglesInFlight === 0) {
+        // The overlapping tick has landed since; read again.
+        requestRefresh('checked');
+    } else {
+        resyncWhenIdle = true;
+    }
+    applyCheckedStates();
+}
+
+function toggleItem(box) {
+    const name = box.dataset.ingredientName;
+    const key = name.toLowerCase();
+    const checked = box.checked;
+    const endpoint = checked ? 'check' : 'uncheck';
+
+    // Show the tick straight away; the request only has to confirm it.
+    if (checked) {
+        checkedItems.add(key);
+    } else {
+        checkedItems.delete(key);
+    }
+    applyCheckedStates();
+
+    togglesInFlight++;
+    toggleEpoch++;
+    toggleChain = toggleChain.then(async () => {
+        try {
+            const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+        } catch (error) {
+            console.error(`Failed to ${endpoint} item:`, error);
+            // Take the tick back, and re-read what the server has once every
+            // pending tick has settled.
+            if (checked) {
+                checkedItems.delete(key);
+            } else {
+                checkedItems.add(key);
+            }
+            applyCheckedStates();
+            resyncWhenIdle = true;
+        } finally {
+            togglesInFlight--;
+            if (togglesInFlight === 0 && resyncWhenIdle) {
+                resyncWhenIdle = false;
+                requestRefresh('checked');
             }
         }
     });
 }
 
 loadCopyOptions();
-loadShoppingList();
+requestRefresh('list');
 
 // Subscribe to server-pushed change events so sync pulls, other-tab edits,
-// or direct `.shopping-list` edits refresh the UI without reload.
+// or direct `.shopping-list` edits refresh the UI without reload. Each event
+// names the file that changed, and a change to the ticks alone only re-reads
+// the ticks. This page's own changes come back too; they re-read, find nothing
+// new, and leave the page as it is.
 // EventSource auto-reconnects on disconnect; we just close it on unload.
 let shoppingListEvents = null;
-let reloadTimer = null;
+let eventRefreshTimer = null;
+let eventRefreshKind = null;
 function subscribeToShoppingListEvents() {
     try {
         shoppingListEvents = new EventSource('{{ prefix }}/api/shopping_list/events');
-        shoppingListEvents.addEventListener('change', () => {
+        // Whatever changed while there was no connection went unannounced —
+        // including between the first load above and this subscription — so
+        // every connection, first or reconnect, starts with a refresh.
+        shoppingListEvents.addEventListener('open', () => requestRefresh('list'));
+        shoppingListEvents.addEventListener('change', (event) => {
+            let file = null;
+            try {
+                file = JSON.parse(event.data).file;
+            } catch (e) {
+                // No usable payload: refresh everything.
+            }
+            if (eventRefreshKind !== 'list') {
+                eventRefreshKind = file === 'checked' ? 'checked' : 'list';
+            }
             // Coalesce bursts (e.g. .shopping-list and .shopping-checked
-            // changing together) into one fetch. Without this, two
-            // concurrent loadShoppingList() calls race on the module-level
-            // `shoppingList` variable.
-            clearTimeout(reloadTimer);
-            reloadTimer = setTimeout(() => loadShoppingList(), 100);
+            // changing together) into one refresh.
+            clearTimeout(eventRefreshTimer);
+            eventRefreshTimer = setTimeout(() => {
+                const kind = eventRefreshKind;
+                eventRefreshKind = null;
+                requestRefresh(kind);
+            }, 100);
         });
         shoppingListEvents.addEventListener('error', () => {
             // Browser will auto-reconnect. Nothing to do.

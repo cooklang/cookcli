@@ -324,6 +324,14 @@
     .ref-checkbox { width: 16px; height: 16px; }
     .list-checkbox { width: 20px; height: 20px; }
 
+    /* A ticked-off shopping list item is struck through by its own checkbox,
+       so the tick shows the moment it is made and a refresh that re-ticks
+       boxes needs no styling of its own. */
+    .list-checkbox:checked + label .item-name {
+        text-decoration: line-through;
+        opacity: .6;
+    }
+
     /* Recipe ingredient rows: main's tinted row, on the sunk surface. */
     .ingredient-list { list-style: none; margin: 0; padding: 0; }
 
