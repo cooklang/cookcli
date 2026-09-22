@@ -9,6 +9,10 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{{ prefix }}/static/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ prefix }}/static/apple-touch-icon.png">
     <link rel="manifest" href="{{ prefix }}/static/site.webmanifest">
+    {% if !static_mode %}
+    <link rel="alternate" type="application/atom+xml" title="{{ tr.t("recipes-title") }}" href="{{ prefix }}/atom.xml">
+    <link rel="alternate" type="application/rss+xml" title="{{ tr.t("recipes-title") }}" href="{{ prefix }}/rss.xml">
+    {% endif %}
     <link href="{{ prefix }}/static/css/output.css" rel="stylesheet">
     <script>
         // Check for saved theme preference, or check for prefers-color-scheme, or default to light

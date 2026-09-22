@@ -13,11 +13,13 @@ struct SitemapUrl {
     lastmod: Option<NaiveDate>,
 }
 
-/// XML-escape element text: `&`, `<`, `>`.
-fn xml_escape(s: &str) -> String {
+/// XML-escape text for element content or double-quoted attribute values:
+/// `&`, `<`, `>`, `"`.
+pub(super) fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// Percent-encode each `/`-separated path segment, preserving the separators.
@@ -31,7 +33,7 @@ fn encode_path(relpath: &str) -> String {
 
 /// Build the `<loc>` text: trimmed base + "/" + encoded path, XML-escaped.
 /// The empty relpath yields `<base>/`.
-fn build_loc(base: &str, relpath: &str) -> String {
+pub(super) fn build_loc(base: &str, relpath: &str) -> String {
     let base = base.trim_end_matches('/');
     let loc = format!("{base}/{}", encode_path(relpath));
     xml_escape(&loc)
@@ -216,7 +218,10 @@ mod tests {
 
     #[test]
     fn escapes_xml_specials() {
-        assert_eq!(xml_escape("a & b < c > d"), "a &amp; b &lt; c &gt; d");
+        assert_eq!(
+            xml_escape("a & b < c > \"d\""),
+            "a &amp; b &lt; c &gt; &quot;d&quot;"
+        );
     }
 
     #[test]

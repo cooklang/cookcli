@@ -1,3 +1,4 @@
+pub(crate) mod feed;
 mod index;
 mod links;
 mod renderer;
@@ -10,6 +11,7 @@ use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
+use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Args)]
@@ -38,6 +40,7 @@ pub enum BuildCommand {
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
     ///   cook build web --compress              # Also write .gz copies for precompressed hosting
+    ///   cook build web --sitemap https://recipes.example.com --feed  # Also write atom.xml and rss.xml
     Web(WebBuildArgs),
 }
 
@@ -85,6 +88,20 @@ pub struct WebBuildArgs {
     #[arg(long)]
     pub sitemap: Option<String>,
 
+    /// Generate web feeds, optionally for a given site URL
+    ///
+    /// Writes `atom.xml` and `rss.xml` at the output root with one item per
+    /// recipe and menu, newest first. An item's date is its `date` metadata
+    /// (YYYY-MM-DD or RFC 3339) when present, otherwise the file's
+    /// modification time.
+    ///
+    /// Feeds need absolute links, so they need the site's full base URL.
+    /// `--feed` alone reuses the --sitemap URL; `--feed=URL` (with `=`) sets
+    /// it explicitly. Like --sitemap, this is independent of --base-url.
+    /// Omit it to skip feed generation.
+    #[arg(long, value_name = "URL", num_args = 0..=1, require_equals = true)]
+    pub feed: Option<Option<String>>,
+
     /// URL of the recipe repository, linked from the site footer
     ///
     /// When set, the generated footer's "Built with CookCLI" line gains a
@@ -129,6 +146,16 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         bail!("Source base path is not a directory: {source}");
     }
 
+    // `--feed https://...` (space, not `=`) leaves the URL as the positional
+    // output directory. Catch it before creating a directory named `https:`.
+    if let Some(dir) = &args.output_dir {
+        if dir.as_str().contains("://") {
+            bail!(
+                "Output directory looks like a URL: {dir}. To give --feed a URL, use --feed={dir}"
+            );
+        }
+    }
+
     let output_raw = args
         .output_dir
         .clone()
@@ -149,16 +176,22 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     // time rendering the whole site. The actual sitemap is written at the end.
     let sitemap_base = args.sitemap.as_deref();
     if let Some(base) = sitemap_base {
-        let parsed =
-            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
-        if parsed.host().is_none()
-            || !matches!(parsed.scheme(), "http" | "https")
-            || parsed.query().is_some()
-            || parsed.fragment().is_some()
-        {
-            bail!("--sitemap must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
-        }
+        validate_site_url("--sitemap", base)?;
     }
+    // `--feed` alone reuses the --sitemap URL (already validated above).
+    let feed_base = match &args.feed {
+        None => None,
+        Some(Some(base)) => {
+            validate_site_url("--feed", base)?;
+            Some(base.as_str())
+        }
+        Some(None) => match sitemap_base {
+            Some(base) => Some(base),
+            None => bail!(
+                "--feed needs the site's URL: pass --sitemap <URL>, or --feed=<URL>, e.g. --feed=https://recipes.example.com"
+            ),
+        },
+    };
 
     // Validate the repo URL up front for the same reason as --sitemap above.
     let repo_url = args.repo_url.as_deref();
@@ -226,6 +259,19 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         false
     };
 
+    let feed_count = if let Some(base) = feed_base {
+        let title = crate::web::i18n::LOCALES.lookup(&lang, "recipes-title");
+        Some(feed::write_feeds(
+            &output,
+            base,
+            &title,
+            &lang.to_string(),
+            &tree,
+        )?)
+    } else {
+        None
+    };
+
     let compressed_note = if args.compress {
         let compressed_count = writer::compress_output(&output)?;
         format!(", {compressed_count} files compressed")
@@ -234,9 +280,27 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     };
 
     let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
+    let feed_note = match feed_count {
+        Some(n) => format!(", atom.xml and rss.xml ({n} items)"),
+        None => String::new(),
+    };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{compressed_note}"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{feed_note}{compressed_note}"
     );
+    Ok(())
+}
+
+/// Check that `base` is an absolute http(s) site URL usable as a prefix for
+/// absolute page links (sitemap, feeds). `flag` names the option in errors.
+fn validate_site_url(flag: &str, base: &str) -> Result<()> {
+    let parsed = url::Url::parse(base).with_context(|| format!("Invalid {flag} URL: {base}"))?;
+    if parsed.host().is_none()
+        || !matches!(parsed.scheme(), "http" | "https")
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        bail!("{flag} must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
+    }
     Ok(())
 }
 
