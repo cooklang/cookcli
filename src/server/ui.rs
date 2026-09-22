@@ -249,21 +249,25 @@ fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::
     .into_response()
 }
 
-/// Validates that the request originated from the same host (CSRF protection)
-fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
+/// Validates that the request came from a page the server trusts: its own
+/// address, or a `--cors-origin` (CSRF protection)
+fn validate_same_origin(headers: &HeaderMap, host: &str, cors: &super::cors::CorsConfig) -> bool {
     // Origin first: it is the header a browser always sends on a form POST,
     // and the one an attacker cannot forge.
     if let Some(origin) = headers.get(header::ORIGIN) {
         return origin
             .to_str()
-            .is_ok_and(|origin| super::cors::origin_matches_host(origin, host));
+            .is_ok_and(|origin| cors.trusts(origin, host));
     }
 
-    // Referer is less reliable but better than nothing.
+    // Referer is less reliable but better than nothing. The write guard lets
+    // a request without Origin through, so this is the only check it gets.
     if let Some(referer) = headers.get(header::REFERER) {
         return referer
             .to_str()
-            .is_ok_and(|referer| super::cors::origin_matches_host(referer, host));
+            .ok()
+            .and_then(super::cors::origin_of)
+            .is_some_and(|origin| cors.trusts(&origin, host));
     }
 
     // Neither header: reject. Browsers always send one for a form submission,
@@ -279,7 +283,7 @@ async fn create_recipe(
     // The raw `Host` header, not axum-extra's `Host` extractor: that one
     // prefers `X-Forwarded-Host`, which any client can set.
     let host = super::cors::host_header(&headers).unwrap_or_default();
-    if state.csrf_check && !validate_same_origin(&headers, host) {
+    if state.csrf_check && !validate_same_origin(&headers, host, &state.cors) {
         tracing::warn!("CSRF validation failed for create_recipe request");
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }

@@ -69,7 +69,9 @@ pub struct ServerArgs {
     /// for security. Use this flag to allow access from other devices
     /// on your network. If an IP address is provided the server will
     /// only listen on that address. Be cautious when using this flag
-    /// on public networks.
+    /// on public networks. A device that opens the web UI by host name
+    /// rather than IP address (e.g. http://nas.local:9080) also needs that
+    /// origin passed to --cors-origin, or the UI cannot save changes.
     #[arg(long, num_args = 0..=1, value_name = "ADDRESS")]
     host: Option<Option<IpAddr>>,
 
@@ -117,10 +119,13 @@ pub struct ServerArgs {
 
     /// Disable same-origin enforcement on requests that modify recipes
     ///
-    /// By default a request is rejected unless its Origin matches the Host it
-    /// was sent to, or is named by --cors-origin. This has nothing to do with
-    /// the cross-origin read policy the other --cors-* flags configure. Use it
-    /// only when a reverse proxy rewrites Host in a way that cannot be
+    /// By default a browser request is rejected unless its Origin is the
+    /// server's own address -- the Host it was sent to, when that is localhost
+    /// or an IP address -- or is named by --cors-origin. Any other host name
+    /// has to be named too, or a site could point a domain of its own at the
+    /// server (DNS rebinding) and pass as same-origin. This has nothing to do
+    /// with the cross-origin read policy the other --cors-* flags configure.
+    /// Use it only when a reverse proxy rewrites Host in a way that cannot be
     /// expressed with --cors-origin. The former spelling --no-cors still works.
     #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
     csrf_check: bool,
@@ -156,9 +161,12 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     // Validate before binding or printing anything, so a bad flag combination
     // fails immediately rather than after the "Listening on ..." banner.
-    let cors = cors::CorsConfig::from_args(&args.cors_origin, args.cors_allow_credentials)?;
+    let cors = Arc::new(cors::CorsConfig::from_args(
+        &args.cors_origin,
+        args.cors_allow_credentials,
+    )?);
 
-    let state = build_state(ctx, args)?;
+    let state = build_state(ctx, args, Arc::clone(&cors))?;
 
     if state.url_prefix.is_empty() {
         println!("Listening on http://{addr}");
@@ -234,7 +242,6 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let state_for_shutdown = state.clone();
 
     let cors_layer = cors.layer();
-    let cors = Arc::new(cors);
 
     let app = app
         .with_state(state)
@@ -298,7 +305,11 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     Ok(())
 }
 
-fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
+fn build_state(
+    ctx: Context,
+    args: ServerArgs,
+    cors: Arc<cors::CorsConfig>,
+) -> Result<Arc<AppState>> {
     let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
@@ -368,6 +379,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         pantry_path,
         url_prefix,
         csrf_check: args.csrf_check,
+        cors,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
@@ -417,9 +429,13 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
-    /// When true, requests that modify recipes must be same-origin or come
-    /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
+    /// When true, browser requests that modify recipes must come from an
+    /// origin `cors` trusts: the server's own address, or a `--cors-origin`.
+    /// Cleared by `--no-csrf-check`.
     pub csrf_check: bool,
+    /// The `--cors-origin` policy. Besides CORS, it decides which origins
+    /// may modify recipes, for the write guard and the new-recipe form alike.
+    pub cors: Arc<cors::CorsConfig>,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
     pub lsp_sessions: lsp_bridge::SessionLimit,

@@ -21,7 +21,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
-- `403` — a cross-origin request tried to modify recipes. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
+- `403` — a browser request tried to modify recipes from an origin the server does not trust: another site, or this server's web UI opened at a host name other than `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `500` — the server could not read or write a file.
 - `503` — every language server session is in use, or the bridge is switched off. Only `GET /api/ws/lsp` returns this; see `--max-lsp-sessions`.

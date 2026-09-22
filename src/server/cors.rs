@@ -2,8 +2,10 @@
 //! `--cors-allow-credentials` flags.
 //!
 //! CORS is enforced by browsers only, so this governs what cross-origin web
-//! pages may do with the API. The web UI itself, `curl`, and every non-browser
-//! client are unaffected by anything here.
+//! pages may do with the API. `curl` and every non-browser client are
+//! unaffected by anything here, and so is the web UI when it is opened at
+//! `localhost` or an IP address. Opened at any other host name, it needs that
+//! origin named with `--cors-origin` to modify recipes: see [`is_own_origin`].
 
 use anyhow::{bail, Result};
 use axum::{
@@ -121,7 +123,14 @@ impl CorsConfig {
         let Ok(origin) = origin.to_str() else {
             return false;
         };
-        origin_matches_host(origin, host) || self.lists_origin(origin)
+        self.trusts(origin, host)
+    }
+
+    /// Whether a browser request from `origin`, sent to `host`, may modify
+    /// recipes: it comes from the server's own address ([`is_own_origin`]),
+    /// or from an origin named with `--cors-origin`.
+    pub(super) fn trusts(&self, origin: &str, host: &str) -> bool {
+        is_own_origin(origin, host) || self.lists_origin(origin)
     }
 
     fn lists_origin(&self, origin: &str) -> bool {
@@ -174,18 +183,21 @@ pub(super) fn request_authority<'a>(headers: &'a HeaderMap, uri: &'a Uri) -> Opt
 
 /// Whether an `Origin` value denotes the same host the request was sent to.
 ///
+/// Necessary for a request to come from the server's own address, but not
+/// sufficient: a page can make its own host name resolve to this server. See
+/// [`is_own_origin`], the check to use.
+///
 /// `Origin` is `scheme://host[:port]` while `Host` is `host[:port]`, and a
 /// browser omits the port when it is the scheme's default — so the comparison
 /// has to allow `https://a.test` to match either `a.test` or `a.test:443`.
 ///
 /// The scheme is deliberately not compared. `cook server` speaks plaintext
 /// HTTP, but is routinely fronted by a TLS-terminating proxy that passes
-/// `Host` through unchanged, so `Origin: https://cook.example.com` against
-/// `Host: cook.example.com` is the *normal* proxied case — rejecting it would
-/// break those deployments. The converse reading, an `https://` page reaching
-/// a plaintext server on port 80, is blocked by browsers' mixed-content
-/// policy, so nothing reachable is given up.
-pub(super) fn origin_matches_host(origin: &str, host: &str) -> bool {
+/// `Host` through unchanged, so an `https://` origin against a bare `Host` is
+/// the *normal* proxied case. That lets an `https://` page match a plaintext
+/// server on port 80 too, which is harmless only because [`is_own_origin`]
+/// never trusts a name DNS could have pointed there, whatever the scheme.
+fn origin_matches_host(origin: &str, host: &str) -> bool {
     let Ok(url) = url::Url::parse(origin) else {
         return false;
     };
@@ -202,6 +214,62 @@ pub(super) fn origin_matches_host(origin: &str, host: &str) -> bool {
             None => host.eq_ignore_ascii_case(origin_host),
         },
     }
+}
+
+/// Whether `origin` is the server's own: it matches the `host` the request
+/// was sent to, under a name nobody can have pointed at this server.
+///
+/// A match alone proves nothing. A page served from `http://evil.test:9080`
+/// can make `evil.test` resolve to 127.0.0.1 once it has loaded — DNS
+/// rebinding — and its requests then carry `Origin: http://evil.test:9080`
+/// *and* `Host: evil.test:9080`. Only a host that takes no DNS lookup is safe
+/// from that ([`cannot_be_rebound`]); the web UI opened at any other name
+/// needs its origin named with `--cors-origin`.
+///
+/// Classifying the origin's host rather than `Host` itself comes to the same
+/// thing, since [`origin_matches_host`] has just found them equal, and `url`
+/// has already parsed it.
+fn is_own_origin(origin: &str, host: &str) -> bool {
+    origin_matches_host(origin, host)
+        && url::Url::parse(origin).is_ok_and(|url| url.host().is_some_and(cannot_be_rebound))
+}
+
+/// Whether reaching `host` takes no DNS lookup, so no DNS answer can point it
+/// at another machine.
+///
+/// An IP address, or `localhost` itself, which browsers and operating systems
+/// resolve to loopback on their own. Not `*.localhost` or `.local` names:
+/// most systems resolve those locally too, but not all, and a name that falls
+/// through to DNS goes wherever whoever answers says.
+fn cannot_be_rebound(host: url::Host<&str>) -> bool {
+    match host {
+        url::Host::Ipv4(_) | url::Host::Ipv6(_) => true,
+        url::Host::Domain(name) => name == "localhost",
+    }
+}
+
+/// The origin of `url` as a browser sends it in `Origin` — scheme, host, and
+/// any port that is not the scheme's default — or `None` if it has none a
+/// browser would send (`file:`, extension pages and other non-web schemes).
+///
+/// Used for a `Referer`, which is a whole URL, and to quote an origin back
+/// without echoing anything else a header carried.
+pub(super) fn origin_of(url: &str) -> Option<String> {
+    let origin = url::Url::parse(url).ok()?.origin();
+    origin.is_tuple().then(|| origin.ascii_serialization())
+}
+
+/// The `--cors-origin` value that would admit `origin`, when it was refused
+/// only for being the server's own address under a host name.
+///
+/// That is the one refusal a legitimate user meets — the web UI opened at
+/// `http://nas.local:9080`, or behind a reverse proxy — so it is the one worth
+/// a precise hint. `None` for anything else.
+fn own_origin_by_name(origin: &str, host: &str) -> Option<String> {
+    if !origin_matches_host(origin, host) || is_own_origin(origin, host) {
+        return None;
+    }
+    origin_of(origin)
 }
 
 /// Parses one `--cors-origin` value.
@@ -279,7 +347,8 @@ fn parse_origin(origin: &str) -> Result<HeaderValue> {
         .map_err(|e| anyhow::anyhow!("invalid --cors-origin {origin:?}: {e}"))
 }
 
-/// Rejects cross-origin requests that would modify recipes.
+/// Rejects browser requests that would modify recipes unless the server
+/// trusts their origin ([`CorsConfig::trusts`]).
 ///
 /// Applied inside the CORS layer, so tower-http has already answered any
 /// `OPTIONS` preflight before this runs.
@@ -293,18 +362,50 @@ pub async fn write_guard(
         return next.run(request).await;
     }
 
-    tracing::warn!(
-        method = %request.method(),
-        path = %request.uri().path(),
-        "refused a cross-origin request that would modify recipes"
-    );
+    let method = request.method();
+    let path = request.uri().path();
+    let own_origin = request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|origin| origin.to_str().ok())
+        .and_then(|origin| own_origin_by_name(origin, host));
+
+    let error = match own_origin {
+        Some(origin) => {
+            // This is also exactly what a DNS rebinding attack looks like, so
+            // the log must not talk the operator into allowing it.
+            tracing::warn!(
+                %method,
+                %path,
+                "refused a request that would modify recipes: only localhost and IP \
+                 addresses count as this server's own address. If you open the web UI at \
+                 {origin}, restart the server with --cors-origin {origin}. If you do not \
+                 recognise that address, a web page may have tried a DNS rebinding attack: \
+                 change nothing."
+            );
+            format!(
+                "Only localhost and IP addresses are trusted as this server's own address, \
+                 since another site could point any other host name at it (DNS rebinding). \
+                 If you opened the web UI at {origin}, start the server with \
+                 --cors-origin {origin}, or with --no-csrf-check to disable this check."
+            )
+        }
+        None => {
+            tracing::warn!(
+                %method,
+                %path,
+                "refused a cross-origin request that would modify recipes"
+            );
+            "Cross-origin requests may not modify recipes. Start the server with \
+             --cors-origin <ORIGIN> to allow this origin, or --no-csrf-check to \
+             disable this check."
+                .to_string()
+        }
+    };
+
     (
         StatusCode::FORBIDDEN,
-        Json(serde_json::json!({
-            "error": "Cross-origin requests may not modify recipes. Start the server with \
-                      --cors-origin <ORIGIN> to allow this origin, or --no-csrf-check to \
-                      disable this check."
-        })),
+        Json(serde_json::json!({ "error": error })),
     )
         .into_response()
 }
@@ -643,8 +744,8 @@ mod tests {
         let config = CorsConfig::from_args(&[], false).expect("valid");
         assert!(config.allows_write(
             &Method::POST,
-            &headers_with_origin("http://a.test:9080"),
-            "a.test:9080"
+            &headers_with_origin("http://127.0.0.1:9080"),
+            "127.0.0.1:9080"
         ));
     }
 
@@ -679,5 +780,151 @@ mod tests {
             &headers_with_origin("http://evil.test"),
             "a.test:9080"
         ));
+    }
+
+    #[test]
+    fn a_rebound_host_name_is_not_the_servers_own_origin() {
+        // DNS rebinding: a page on evil.test has re-pointed evil.test at this
+        // server, so its Origin and the Host it sends both say evil.test.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(!config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://evil.test:9080"),
+            "evil.test:9080"
+        ));
+        // https is no exception: `origin_matches_host` ignores the scheme, so
+        // an https page can still post a form to this server under its name.
+        assert!(!is_own_origin(
+            "https://cook.example.test",
+            "cook.example.test"
+        ));
+    }
+
+    #[test]
+    fn ip_addresses_and_localhost_are_the_servers_own_origin() {
+        for (origin, host) in [
+            ("http://127.0.0.1:9080", "127.0.0.1:9080"),
+            ("http://192.168.1.10:9080", "192.168.1.10:9080"),
+            ("http://[::1]:9080", "[::1]:9080"),
+            ("http://[::ffff:7f00:1]:9080", "[::ffff:7f00:1]:9080"),
+            ("http://localhost:9080", "localhost:9080"),
+            ("http://localhost:9080", "LOCALHOST:9080"),
+            // `Host` may or may not spell out the scheme's default port.
+            ("http://127.0.0.1", "127.0.0.1:80"),
+            ("http://localhost", "localhost"),
+        ] {
+            assert!(
+                is_own_origin(origin, host),
+                "{origin} sent to {host} must be the server's own origin"
+            );
+        }
+    }
+
+    #[test]
+    fn names_that_only_look_local_are_not_trusted() {
+        // Each of these reaches DNS in some browser or on some system, and
+        // whoever answers decides where it points.
+        for name in [
+            "sub.localhost",
+            "localhost.",
+            "localhost.evil.test",
+            "127.0.0.1.nip.io",
+            "nas.local",
+        ] {
+            let origin = format!("http://{name}:9080");
+            let host = format!("{name}:9080");
+            assert!(
+                origin_matches_host(&origin, &host),
+                "{origin} must match {host}, or this test proves nothing"
+            );
+            assert!(
+                !is_own_origin(&origin, &host),
+                "{origin} must not be trusted as the server's own origin"
+            );
+        }
+    }
+
+    #[test]
+    fn a_host_name_named_by_cors_origin_is_trusted() {
+        // How the web UI keeps working at a host name.
+        let config =
+            CorsConfig::from_args(&origins(&["http://nas.local:9080"]), false).expect("valid");
+        assert!(config.trusts("http://nas.local:9080", "nas.local:9080"));
+        assert!(!config.trusts("http://evil.test:9080", "evil.test:9080"));
+    }
+
+    #[test]
+    fn a_null_origin_is_never_trusted() {
+        // Sandboxed iframes, `file:` pages and some referrer policies send
+        // `Origin: null`, which names no site at all.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for host in ["127.0.0.1:9080", "null"] {
+            assert!(!config.allows_write(&Method::POST, &headers_with_origin("null"), host));
+        }
+    }
+
+    #[test]
+    fn a_refused_host_name_gets_the_origin_to_name() {
+        assert_eq!(
+            own_origin_by_name("http://evil.test:9080", "evil.test:9080").as_deref(),
+            Some("http://evil.test:9080")
+        );
+        // Quoted the way a browser sends it, not echoed back as received.
+        assert_eq!(
+            own_origin_by_name("https://Cook.Example.Test", "cook.example.test").as_deref(),
+            Some("https://cook.example.test")
+        );
+        // Nothing to suggest for a request that was never the server's own
+        // origin under a name, or has no origin a browser would send.
+        for (origin, host) in [
+            ("http://127.0.0.1:9080", "127.0.0.1:9080"),
+            ("http://evil.test", "127.0.0.1:9080"),
+            ("null", "null"),
+            ("tauri://nas", "nas"),
+        ] {
+            assert_eq!(
+                own_origin_by_name(origin, host),
+                None,
+                "{origin} sent to {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_suggested_origin_is_one_cors_origin_accepts() {
+        // Following the advice must work: `--cors-origin` has to take the
+        // suggestion, and the policy it builds has to trust that origin.
+        for (origin, host) in [
+            ("http://nas.local:9080", "nas.local:9080"),
+            ("https://Cook.Example.Test", "cook.example.test"),
+        ] {
+            let suggested = own_origin_by_name(origin, host).expect("a suggestion");
+            let config = CorsConfig::from_args(std::slice::from_ref(&suggested), false)
+                .unwrap_or_else(|e| panic!("{suggested:?} must be a valid --cors-origin: {e}"));
+            assert!(
+                config.trusts(&suggested, host),
+                "{suggested} sent to {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn origin_of_keeps_only_what_a_browser_sends() {
+        for (url, origin) in [
+            ("http://a.test:9080/new?x=1#top", "http://a.test:9080"),
+            ("http://user:pass@a.test/new", "http://a.test"),
+            ("https://a.test:443/", "https://a.test"),
+            ("http://[::1]:9080/new", "http://[::1]:9080"),
+        ] {
+            assert_eq!(origin_of(url).as_deref(), Some(origin), "{url}");
+        }
+        for url in [
+            "file:///home/me/recipe.html",
+            "chrome-extension://abcdefghijklmnop/page.html",
+            "not a url",
+            "null",
+        ] {
+            assert_eq!(origin_of(url), None, "{url}");
+        }
     }
 }

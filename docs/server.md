@@ -43,8 +43,13 @@ cook server ~/my-recipes
 # Custom port with auto-open
 cook server --port 8080 --open
 
-# Allow access from other devices on the network
+# Allow access from other devices on the network, which reach it by IP address
+# (http://192.168.1.20:9080) and can both read and save
 cook server --host
+
+# Only for devices that open the web UI by host name instead: name that origin,
+# or its pages can read but not save
+cook server --host --cors-origin http://nas.local:9080
 
 # Let a frontend at localhost:3000 use the full API, including writes
 cook server --cors-origin http://localhost:3000
@@ -59,6 +64,7 @@ cook server --cors-origin https://cook.example.com
 - Use `--host` on trusted networks only — recipes become accessible to anyone on the network
 - Cross-origin browser requests can read (`GET`) from any origin by default, but one that would modify recipes is refused with `403`. Naming origins with `--cors-origin` lets those origins write too, so a page you have not listed cannot change your recipes. Requests with no `Origin` header — `curl`, scripts, anything that is not a browser — are unaffected. See [the API reference](api.md).
 - Behind a reverse proxy that rewrites `Host`, pass `--cors-origin` with the public origin (for example `--cors-origin https://cook.example.com`). The same-origin check reads the real `Host` header and ignores `X-Forwarded-Host`, which any client can set freely.
+- Without more flags, the web UI can only modify recipes when it is opened at `localhost` or an IP address, such as `http://127.0.0.1:9080` or `http://192.168.1.20:9080`. Opened at any other host name — `http://nas.local:9080`, or a reverse proxy's `https://cook.example.com` even when the proxy passes `Host` through — its writes are refused until that origin is named with `--cors-origin`. Otherwise any website could point a domain of its own at your server (DNS rebinding) and pass for the web UI. The `403` and the server's log name the exact flag to add; only add origins you recognise.
 - `--no-csrf-check` turns that same-origin enforcement off entirely, for both the API and the web UI's new-recipe form. Its former spelling, `--no-cors`, still works.
 - The built-in editor gets its diagnostics and completions from a `cook lsp` subprocess, one per open edit tab, and the endpoint that starts them has no authentication. `--max-lsp-sessions` caps how many run at once (8 by default) so that a client which is not that editor cannot spawn them without bound; beyond the cap the websocket handshake is refused with `503` and the editor retries. Under `--host`, consider `--max-lsp-sessions 0`, which serves the recipes but never starts a subprocess for a remote client.
 - The web interface supports recipe browsing, scaling, search, and shopping list management
