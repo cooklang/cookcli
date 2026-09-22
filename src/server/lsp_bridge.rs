@@ -8,14 +8,16 @@ use axum::{
         ws::{Message, WebSocket},
         State, WebSocketUpgrade,
     },
-    response::IntoResponse,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
 };
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, Command},
-    sync::mpsc,
+    sync::{mpsc, OwnedSemaphorePermit, Semaphore},
 };
 use tracing::{debug, error, info, warn};
 
@@ -26,16 +28,85 @@ use super::AppState;
 /// while preventing unbounded memory growth.
 const LSP_MESSAGE_BUFFER_SIZE: usize = 32;
 
+/// How many `cook lsp` subprocesses the bridge runs at once unless
+/// `--max-lsp-sessions` says otherwise.
+///
+/// The built-in editor opens one socket per edit tab, so eight is roomy for
+/// the single-user case this server is built for, while keeping a client that
+/// is *not* that editor — a script, or anything reaching a `--host` server —
+/// from spawning subprocesses without bound.
+pub const DEFAULT_MAX_SESSIONS: u16 = 8;
+
+/// Caps how many LSP bridges — and so how many `cook lsp` subprocesses — run
+/// at once.
+///
+/// The endpoint is unauthenticated and every accepted socket costs a process,
+/// so without a cap one client can exhaust the machine's processes and memory.
+pub struct SessionLimit {
+    /// Separately `Arc`-wrapped so a permit can be owned by the bridge task,
+    /// which outlives any borrow of the [`AppState`] holding this.
+    permits: Arc<Semaphore>,
+    max: u16,
+}
+
+impl SessionLimit {
+    pub fn new(max: u16) -> Self {
+        Self {
+            permits: Arc::new(Semaphore::new(usize::from(max))),
+            max,
+        }
+    }
+
+    /// Claims a session slot, or returns `None` when every slot is taken.
+    ///
+    /// Never waits: a client queued behind a slot would hold an idle socket
+    /// open for as long as someone else keeps an editor tab open, so a refusal
+    /// the client can retry is the better answer.
+    fn try_claim(&self) -> Option<OwnedSemaphorePermit> {
+        Arc::clone(&self.permits).try_acquire_owned().ok()
+    }
+
+    /// The configured ceiling, for the message sent to a refused client.
+    fn max(&self) -> u16 {
+        self.max
+    }
+}
+
 /// WebSocket upgrade handler for LSP connections
-pub async fn lsp_websocket(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_lsp_connection(socket, state))
+pub async fn lsp_websocket(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    // Claimed before the upgrade, so a client that cannot be served is told so
+    // by the handshake rather than by a socket that opens and immediately
+    // closes — the editor treats those alike (it reconnects either way), but
+    // only one of them is diagnosable from outside.
+    let Some(permit) = state.lsp_sessions.try_claim() else {
+        let max = state.lsp_sessions.max();
+        warn!("refused an LSP WebSocket: {max} concurrent sessions allowed");
+        let error = if max == 0 {
+            "The language server bridge is disabled (--max-lsp-sessions 0).".to_string()
+        } else {
+            format!(
+                "All {max} language server sessions are in use. Close an editor tab, \
+                 or restart the server with a larger --max-lsp-sessions."
+            )
+        };
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": error })),
+        )
+            .into_response();
+    };
+
+    ws.on_upgrade(move |socket| handle_lsp_connection(socket, state, permit))
 }
 
 /// Handle a single LSP WebSocket connection
-async fn handle_lsp_connection(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_lsp_connection(
+    socket: WebSocket,
+    state: Arc<AppState>,
+    // Frees its session slot when dropped, so it has to outlive everything
+    // below — including the subprocess kill at the end of `run_bridge`.
+    _permit: OwnedSemaphorePermit,
+) {
     info!("LSP WebSocket connection established");
 
     // Spawn the LSP subprocess
@@ -68,6 +139,12 @@ async fn spawn_lsp_process(base_path: &camino::Utf8Path) -> Result<Child, std::i
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit()) // Pass stderr through for debugging
+        // `run_bridge` kills the child on every path it returns from, but it
+        // can also be dropped mid-await — its task is aborted at shutdown, and
+        // an early `?` returns before the kill. A child that outlives its
+        // permit would make the session cap a cap on nothing, so tie the
+        // process to the handle that holds the permit.
+        .kill_on_drop(true)
         .spawn()
 }
 

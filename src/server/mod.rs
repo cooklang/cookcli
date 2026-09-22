@@ -124,6 +124,18 @@ pub struct ServerArgs {
     /// expressed with --cors-origin. The former spelling --no-cors still works.
     #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
     csrf_check: bool,
+
+    /// Maximum number of language server sessions to run at once
+    ///
+    /// The built-in editor opens one websocket per edit tab, and each one runs
+    /// a `cook lsp` subprocess for as long as that tab stays open. Once this
+    /// many are running, further connections are refused with 503 until one
+    /// closes; the editor reconnects on its own, so a refused tab recovers
+    /// when a slot frees up. Raise it if you keep many tabs open. Set it to 0
+    /// to turn the bridge off entirely, which is worth doing when serving
+    /// --host on a network you do not control.
+    #[arg(long, value_name = "N", default_value_t = lsp_bridge::DEFAULT_MAX_SESSIONS)]
+    max_lsp_sessions: u16,
 }
 
 impl ServerArgs {
@@ -356,6 +368,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         pantry_path,
         url_prefix,
         csrf_check: args.csrf_check,
+        lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
         #[cfg(feature = "sync")]
@@ -407,6 +420,9 @@ pub struct AppState {
     /// When true, requests that modify recipes must be same-origin or come
     /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
     pub csrf_check: bool,
+    /// How many LSP websockets — and so how many `cook lsp` subprocesses —
+    /// may run at once. Set by `--max-lsp-sessions`.
+    pub lsp_sessions: lsp_bridge::SessionLimit,
     /// Serializes access to `.shopping-checked` within this process.
     /// File-level `flock` doesn't prevent two tasks in the *same* process
     /// from racing on the file (the kernel treats them as one lock owner),

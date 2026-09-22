@@ -24,6 +24,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 - `403` — a cross-origin request tried to modify recipes. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `500` — the server could not read or write a file.
+- `503` — every language server session is in use, or the bridge is switched off. Only `GET /api/ws/lsp` returns this; see `--max-lsp-sessions`.
 
 ## Contents
 
@@ -936,7 +937,7 @@ data: {"file":"checked"}
 
 Language server bridge (websocket)
 
-Upgrades to a websocket (verified: a plain WebSocket handshake against this path returns `101 Switching Protocols`) that bridges to a `cook lsp` subprocess, providing diagnostics and completions to the built-in editor. Messages are Language Server Protocol messages framed with `Content-Length` headers exactly as LSP over stdio would be — see the LSP specification for the format. Not a REST endpoint and not usable with a plain HTTP client.
+Upgrades to a websocket (verified: a plain WebSocket handshake against this path returns `101 Switching Protocols`) that bridges to a `cook lsp` subprocess, providing diagnostics and completions to the built-in editor. Messages are Language Server Protocol messages framed with `Content-Length` headers exactly as LSP over stdio would be — see the LSP specification for the format. Not a REST endpoint and not usable with a plain HTTP client. Each open socket holds a subprocess, so no more than `--max-lsp-sessions` of them (8 by default) run at once; a handshake beyond that is refused with `503` and the usual JSON error body instead of being upgraded, and succeeds once an earlier socket closes. `--max-lsp-sessions 0` turns the endpoint off, which is worth doing when serving `--host` on a network you do not control.
 
 ## Sync
 
