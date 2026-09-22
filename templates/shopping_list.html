@@ -191,7 +191,7 @@ async function refreshList() {
     }
     const items = await response.text();
     if (items === generatedFrom) {
-        return refreshChecked(ticks);
+        return refreshChecked();
     }
 
     generatedFrom = null;
@@ -209,6 +209,13 @@ async function refreshList() {
 }
 
 async function refreshChecked(ticks = tickSnapshot()) {
+    // With a tick in flight the answer couldn't be trusted (see
+    // applyServerChecked), and that tick's own announcement will ask again
+    // once it has landed.
+    if (ticks.busy) {
+        resyncLater();
+        return;
+    }
     const response = await fetch('{{ prefix }}/api/shopping_list/checked');
     if (!response.ok) {
         throw new Error(`loading the ticked items answered ${response.status}`);
@@ -637,11 +644,12 @@ let checkedItems = new Set();
 // applyServerChecked().
 let togglesInFlight = 0;
 let toggleEpoch = 0;
-let resyncWhenIdle = false;
 // Ticks go to the server one at a time, in the order they were made. Two
 // requests in flight at once can land either way round, and a quick tick and
 // untick of the same item landing backwards would leave it ticked.
 let toggleChain = Promise.resolve();
+// Pending re-read of the ticks after one couldn't be used: see resyncLater().
+let resyncTimer = null;
 
 // What the copy button puts on the clipboard. Persisted so the choice survives
 // a reload — this is a per-device preference, not list state, so it stays in
@@ -823,6 +831,17 @@ function tickSnapshot() {
     return { epoch: toggleEpoch, busy: togglesInFlight > 0 };
 }
 
+// A read of the ticks couldn't be used because a tick overlapped it. Nothing
+// needs doing straight away: every tick that lands is announced back to this
+// page, and that announcement re-reads the ticks within a few hundred
+// milliseconds. This only makes sure a read still happens if no announcement
+// does — a failed tick has nothing to announce, and neither does a server
+// whose watcher didn't start.
+function resyncLater() {
+    clearTimeout(resyncTimer);
+    resyncTimer = setTimeout(() => requestRefresh('checked'), 1000);
+}
+
 // Adopt the server's ticks, read after `ticks` was taken — unless a tick made
 // on this page overlapped that read, which may then predate it. Applying such a
 // read would briefly untick a box the user had just ticked, inviting a second
@@ -830,11 +849,9 @@ function tickSnapshot() {
 function applyServerChecked(names, ticks) {
     if (!ticks.busy && ticks.epoch === toggleEpoch) {
         checkedItems = new Set(names.map(name => String(name).toLowerCase()));
-    } else if (togglesInFlight === 0) {
-        // The overlapping tick has landed since; read again.
-        requestRefresh('checked');
+        clearTimeout(resyncTimer);
     } else {
-        resyncWhenIdle = true;
+        resyncLater();
     }
     applyCheckedStates();
 }
@@ -868,21 +885,17 @@ function toggleItem(box) {
             }
         } catch (error) {
             console.error(`Failed to ${endpoint} item:`, error);
-            // Take the tick back, and re-read what the server has once every
-            // pending tick has settled.
+            // Take the tick back, then re-read what the server has: nothing
+            // was written, so no announcement will come to do it.
             if (checked) {
                 checkedItems.delete(key);
             } else {
                 checkedItems.add(key);
             }
             applyCheckedStates();
-            resyncWhenIdle = true;
+            resyncLater();
         } finally {
             togglesInFlight--;
-            if (togglesInFlight === 0 && resyncWhenIdle) {
-                resyncWhenIdle = false;
-                requestRefresh('checked');
-            }
         }
     });
 }
