@@ -1,6 +1,9 @@
 //! Filesystem watcher that broadcasts `.shopping-list` / `.shopping-checked`
 //! changes so open browsers can refresh without reload.
 //!
+//! Only events that can mean a file changed are announced; a file merely
+//! being read is not (see `is_read`).
+//!
 //! Startup is best-effort: if `notify` fails to initialize (permission
 //! issues, unsupported platform), the server logs a warning and continues
 //! without live updates. The SSE endpoint still serves — it just never emits.
@@ -9,8 +12,8 @@ use camino::Utf8Path;
 use serde::Serialize;
 use std::path::Path;
 
-/// Which of the two watched files changed. The client uses this only as a
-/// hint for logging; it re-fetches regardless.
+/// Which of the two watched files changed. The shopping list page re-reads
+/// only what this names: the ticks for `Checked`, the whole list for `List`.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum WatchedFile {
@@ -44,6 +47,61 @@ pub fn classify_path(base_path: &Utf8Path, path: &Path) -> Option<WatchedFile> {
         ".shopping-checked" => Some(WatchedFile::Checked),
         _ => None,
     }
+}
+
+use notify::event::{AccessKind, AccessMode};
+use notify::EventKind;
+use notify_debouncer_full::DebouncedEvent;
+
+/// Whether an event only reports a file being opened or read, which says
+/// nothing about its contents.
+///
+/// On Linux, notify subscribes to inotify's `IN_OPEN`, so every `open()` of a
+/// watched file arrives as `Access(Open)` — including the reads the shopping
+/// list page makes when it re-fetches. Passing those on made each re-fetch
+/// announce another change, and an open page reloaded the list every second
+/// or so for as long as it stayed open. `Access(Close(Write))` is the
+/// exception: it marks the end of a write.
+fn is_read(kind: &EventKind) -> bool {
+    match kind {
+        EventKind::Access(AccessKind::Close(AccessMode::Write)) => false,
+        EventKind::Access(_) => true,
+        _ => false,
+    }
+}
+
+/// The watched files a debounced batch of events changed, each at most once,
+/// `.shopping-list` before `.shopping-checked`.
+///
+/// Every path of an event is classified, not only the first: an atomic
+/// rewrite can arrive as a rename whose paths are the staging file and then
+/// the file it replaced. A rescan notice means the platform dropped events,
+/// so either file may have changed.
+fn changed_files(base_path: &Utf8Path, events: &[DebouncedEvent]) -> Vec<WatchedFile> {
+    if events.iter().any(|event| event.need_rescan()) {
+        return vec![WatchedFile::List, WatchedFile::Checked];
+    }
+
+    let mut list = false;
+    let mut checked = false;
+    for event in events.iter().filter(|event| !is_read(&event.kind)) {
+        for path in &event.paths {
+            match classify_path(base_path, path) {
+                Some(WatchedFile::List) => list = true,
+                Some(WatchedFile::Checked) => checked = true,
+                None => {}
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    if list {
+        files.push(WatchedFile::List);
+    }
+    if checked {
+        files.push(WatchedFile::Checked);
+    }
+    files
 }
 
 use anyhow::{Context, Result};
@@ -106,32 +164,9 @@ pub fn spawn(base_path: camino::Utf8PathBuf) -> Result<ChangeSender> {
         while let Some(result) = evt_rx.recv().await {
             match result {
                 Ok(events) => {
-                    // Collapse the batch: at most one event per file.
-                    let mut fired_list = false;
-                    let mut fired_checked = false;
-                    for event in events {
-                        for path in &event.paths {
-                            match classify_path(&base_for_task, path) {
-                                Some(WatchedFile::List) if !fired_list => {
-                                    fired_list = true;
-                                }
-                                Some(WatchedFile::Checked) if !fired_checked => {
-                                    fired_checked = true;
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    if fired_list {
+                    for file in changed_files(&base_for_task, &events) {
                         // Send returns Err when there are no receivers — fine.
-                        let _ = tx_for_task.send(ShoppingListChangeEvent {
-                            file: WatchedFile::List,
-                        });
-                    }
-                    if fired_checked {
-                        let _ = tx_for_task.send(ShoppingListChangeEvent {
-                            file: WatchedFile::Checked,
-                        });
+                        let _ = tx_for_task.send(ShoppingListChangeEvent { file });
                     }
                 }
                 Err(errors) => {
@@ -194,5 +229,111 @@ mod tests {
     fn ignores_path_outside_base() {
         let p = PathBuf::from("/etc/.shopping-list");
         assert_eq!(classify_path(&base(), &p), None);
+    }
+
+    use notify::event::{CreateKind, DataChange, Flag, ModifyKind, RemoveKind, RenameMode};
+    use notify::Event;
+    use std::time::Instant;
+
+    fn event(kind: EventKind, name: &str) -> Event {
+        Event::new(kind).add_path(PathBuf::from(format!("/tmp/recipes/{name}")))
+    }
+
+    fn changed(events: Vec<Event>) -> Vec<WatchedFile> {
+        let batch: Vec<DebouncedEvent> = events
+            .into_iter()
+            .map(|event| DebouncedEvent::new(event, Instant::now()))
+            .collect();
+        changed_files(&base(), &batch)
+    }
+
+    /// Linux reports every `open()` of a watched file, and the shopping list
+    /// page reads both files whenever it re-fetches — so counting a read as a
+    /// change kept the page re-fetching in a loop.
+    #[test]
+    fn reading_a_file_is_not_a_change() {
+        for kind in [
+            EventKind::Access(AccessKind::Open(AccessMode::Any)),
+            EventKind::Access(AccessKind::Read),
+            EventKind::Access(AccessKind::Close(AccessMode::Read)),
+        ] {
+            assert_eq!(
+                changed(vec![
+                    event(kind, ".shopping-list"),
+                    event(kind, ".shopping-checked"),
+                ]),
+                vec![],
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn closing_a_file_after_writing_it_is_a_change() {
+        let kind = EventKind::Access(AccessKind::Close(AccessMode::Write));
+        assert_eq!(
+            changed(vec![event(kind, ".shopping-checked")]),
+            vec![WatchedFile::Checked]
+        );
+    }
+
+    #[test]
+    fn writing_creating_and_removing_are_changes() {
+        for kind in [
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            // Windows reports a write without saying what changed.
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Create(CreateKind::File),
+            EventKind::Remove(RemoveKind::File),
+        ] {
+            assert_eq!(
+                changed(vec![event(kind, ".shopping-checked")]),
+                vec![WatchedFile::Checked],
+                "{kind:?}"
+            );
+        }
+    }
+
+    /// The store rewrites a file by renaming a staging copy over it, and the
+    /// file that was replaced is the rename's second path.
+    #[test]
+    fn a_rename_counts_for_the_file_it_replaces() {
+        let rename = Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+            .add_path(PathBuf::from("/tmp/recipes/..shopping-list.4321.tmp"))
+            .add_path(PathBuf::from("/tmp/recipes/.shopping-list"));
+        assert_eq!(changed(vec![rename]), vec![WatchedFile::List]);
+    }
+
+    #[test]
+    fn a_batch_names_each_changed_file_once_list_first() {
+        let write = EventKind::Modify(ModifyKind::Data(DataChange::Any));
+        let open = EventKind::Access(AccessKind::Open(AccessMode::Any));
+        assert_eq!(
+            changed(vec![
+                event(write, ".shopping-checked"),
+                event(open, ".shopping-list"),
+                event(write, ".shopping-list"),
+                event(write, ".shopping-list"),
+                event(write, "Pancakes.cook"),
+            ]),
+            vec![WatchedFile::List, WatchedFile::Checked]
+        );
+    }
+
+    #[test]
+    fn a_batch_of_unrelated_changes_names_nothing() {
+        let write = EventKind::Modify(ModifyKind::Data(DataChange::Any));
+        assert_eq!(changed(vec![event(write, "Pancakes.cook")]), vec![]);
+    }
+
+    /// A rescan means the platform dropped events, so there is no telling
+    /// which file they were about.
+    #[test]
+    fn a_rescan_counts_for_both_files() {
+        let rescan = Event::new(EventKind::Any).set_flag(Flag::Rescan);
+        assert_eq!(
+            changed(vec![rescan]),
+            vec![WatchedFile::List, WatchedFile::Checked]
+        );
     }
 }
