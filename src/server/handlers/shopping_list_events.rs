@@ -1,8 +1,8 @@
 //! SSE endpoint that streams `.shopping-list` / `.shopping-checked` change
-//! pings to the browser. Each connected client re-fetches the shopping
-//! list data via the existing JSON endpoints on every event.
+//! pings to the browser. Each event names the file that changed, and the
+//! client re-fetches what that file feeds via the existing JSON endpoints.
 
-use crate::server::shopping_list_watcher::ShoppingListChangeEvent;
+use crate::server::shopping_list_watcher::{ShoppingListChangeEvent, WatchedFile};
 use crate::server::AppState;
 use axum::{
     extract::State,
@@ -20,23 +20,25 @@ pub async fn shopping_list_events(
         match &state.shopping_list_events {
             Some(tx) => {
                 let rx = tx.subscribe();
-                // Lagged receivers become empty events (client will re-fetch
-                // anyway). Channel close would end the stream, but the
-                // sender is held by AppState for the life of the process.
-                let s = BroadcastStream::new(rx).filter_map(
-                    |res: Result<ShoppingListChangeEvent, _>| match res {
-                        Ok(evt) => Some(Ok(Event::default()
-                            .event("change")
-                            .json_data(evt)
-                            .unwrap_or_else(|_| Event::default().event("change")))),
-                        Err(_lagged) => {
-                            tracing::debug!(
-                                "SSE subscriber lagged — client will catch up on next fetch"
-                            );
-                            None
+                // A receiver that fell behind has lost events it can't get
+                // back, so it's told the list changed, which has the client
+                // re-fetch everything. Channel close would end the stream,
+                // but the sender is held by AppState for the life of the
+                // process.
+                let s = BroadcastStream::new(rx).map(|res| {
+                    let evt = res.unwrap_or_else(|_lagged| {
+                        tracing::debug!(
+                            "SSE subscriber lagged — sending it a full-list change instead"
+                        );
+                        ShoppingListChangeEvent {
+                            file: WatchedFile::List,
                         }
-                    },
-                );
+                    });
+                    Ok(Event::default()
+                        .event("change")
+                        .json_data(evt)
+                        .unwrap_or_else(|_| Event::default().event("change")))
+                });
                 Box::new(s)
             }
             None => {
