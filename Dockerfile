@@ -18,10 +18,11 @@ COPY . .
 # Build CSS and JS assets
 RUN npm run build-css && npm run build-js
 
-# Build Rust binary without self-update feature
+# Build Rust binary: server + lsp (the editor's /ws/lsp bridge spawns `cook lsp`),
+# but without self-update (useless in a container) or import (would pull in reqwest)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/src/cookcli/target \
-    cargo build --release --no-default-features --features server \
+    cargo build --release --no-default-features --features server,lsp \
     && cp target/release/cook /usr/local/bin/cook
 
 # --- Runtime stage ---
