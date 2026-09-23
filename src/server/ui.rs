@@ -8,7 +8,7 @@ use axum::{
     routing::get,
     Form, Router,
 };
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
@@ -132,11 +132,7 @@ async fn edit_page(
     tracing::info!("Edit page requested for path: {}", path);
 
     // Validate path to prevent directory traversal
-    let path_check = Utf8Path::new(&path);
-    if !path_check
-        .components()
-        .all(|c| matches!(c, Utf8Component::Normal(_)))
-    {
+    if !crate::util::is_safe_relative_path(&path) {
         tracing::error!("Invalid path: {path}");
         return error_page(
             lang,

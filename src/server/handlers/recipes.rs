@@ -1,5 +1,8 @@
 use crate::{
-    server::{handlers::common::normalize_tags, AppState},
+    server::{
+        handlers::common::{check_path, normalize_tags},
+        AppState,
+    },
     util::PARSER,
 };
 use axum::{
@@ -7,7 +10,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -26,21 +29,6 @@ pub struct SearchQuery {
 
 fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
     Json(serde_json::json!({ "error": msg.to_string() }))
-}
-
-fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
-    let path = Utf8Path::new(p);
-    if !path
-        .components()
-        .all(|c| matches!(c, Utf8Component::Normal(_)))
-    {
-        tracing::error!("Invalid path: {p}");
-        return Err((
-            StatusCode::BAD_REQUEST,
-            json_error(format!("Invalid path: {p}")),
-        ));
-    }
-    Ok(())
 }
 
 pub async fn all_recipes(
