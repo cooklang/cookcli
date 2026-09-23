@@ -38,7 +38,7 @@ pub use cookcli_core::format;
 pub use cookcli_core::parser::PARSER;
 
 use anyhow::{Context as _, Result};
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::Recipe;
 use cooklang_find::RecipeEntry;
 use std::sync::Arc;
@@ -205,27 +205,12 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
         })
 }
 
-/// Whether `path`, joined to a directory, is sure to stay inside it.
+/// Whether a request-supplied path, joined to a directory, stays inside it.
 ///
-/// Every component has to be a plain name. `..` climbs out, and a root, a
-/// drive letter or a UNC share makes `join` drop the directory altogether:
-/// `base.join("C:\\x")` is just `C:\x`. A leading `./` is refused as well;
-/// nothing we link to starts with one. On Windows no component may hold a `:`
-/// either. No file name can, so past a drive letter it could only pick an
-/// NTFS alternate data stream.
-///
-/// Meant for paths taken from a request, before they are joined to the recipe
-/// directory. The check is purely lexical on purpose: merely looking up
-/// `\\host\share` on disk makes Windows connect to that host and hand it the
-/// user's NTLM hash.
-pub fn is_safe_relative_path(path: &str) -> bool {
-    Utf8Path::new(path)
-        .components()
-        .all(|component| match component {
-            Utf8Component::Normal(name) => !(cfg!(windows) && name.contains(':')),
-            _ => false,
-        })
-}
+/// Re-exported from `cookcli-core`, which is where the single definition lives
+/// now that `find::resolve_reference` has to apply the same rule to a recipe
+/// reference before looking it up.
+pub use cookcli_core::find::is_safe_relative_path;
 
 /// Resolve a recipe name or path to a file, in CLI wording.
 ///
@@ -289,50 +274,5 @@ mod tests {
             split_recipe_name_and_scaling_factor("recipe.cook:abc"),
             None
         );
-    }
-
-    #[test]
-    fn plain_relative_paths_are_safe() {
-        for path in [
-            "Pancakes",
-            "Breakfast/Easy Pancakes",
-            "Breakfast/Pancakes.cook",
-            "Crème brûlée",
-        ] {
-            assert!(is_safe_relative_path(path), "{path:?} must be accepted");
-        }
-    }
-
-    #[test]
-    fn paths_that_leave_the_directory_are_not_safe() {
-        for path in [
-            "..",
-            "../Secret",
-            "Breakfast/../../Secret",
-            "/etc/passwd",
-            "./Pancakes",
-        ] {
-            assert!(!is_safe_relative_path(path), "{path:?} must be refused");
-        }
-    }
-
-    /// Drive letters, UNC shares, `\` separators and NTFS streams only mean
-    /// something on Windows; anywhere else these are odd but harmless names.
-    #[cfg(windows)]
-    #[test]
-    fn windows_prefixes_and_streams_are_not_safe() {
-        for path in [
-            "C:",
-            "C:/",
-            "C:Windows/win.ini",
-            r"..\Secret",
-            r"\\attacker\share\x.cook",
-            "//attacker/share/x.cook",
-            r"\\?\C:\Windows",
-            "Breakfast/C:/Windows/win.ini",
-            "Pancakes.cook::$DATA",
-        ] {
-            assert!(!is_safe_relative_path(path), "{path:?} must be refused");
-        }
     }
 }

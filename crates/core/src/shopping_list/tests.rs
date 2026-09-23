@@ -380,6 +380,160 @@ fn references_are_expanded_into_their_ingredients() {
     );
 }
 
+/// `./` means the recipe directory, whatever depth the recipe writing it sits
+/// at. The shipped seed depends on this: `Breakfast/Mexican Style Burrito.cook`
+/// writes `@./Shared/Red Beans` and means the one at the root.
+#[test]
+fn a_reference_that_does_not_step_up_is_read_from_the_recipe_directory() {
+    let dir = dir_with(&[
+        (
+            "Breakfast/Burrito.cook",
+            "Fill with @./Shared/Beans{}.
+",
+        ),
+        (
+            "Shared/Beans.cook",
+            "Soak @beans{200%g}.
+",
+        ),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["Breakfast/Burrito.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()]),
+        "{:?}",
+        outcome.value.items
+    );
+}
+
+/// A `..` steps up from the directory of the recipe writing it, so a reference
+/// that lands back inside the recipe directory is followed like any other.
+///
+/// It was not: every reference was resolved from the recipe directory itself,
+/// so `../Shared/Vinaigrette` was looked for *beside* that directory — outside
+/// the collection, where on Windows a `\\host\share` spelling of it would have
+/// handed the host the user's NTLM hash to go and look.
+#[test]
+fn a_reference_that_steps_up_is_resolved_from_the_recipe_writing_it() {
+    let dir = dir_with(&[
+        (
+            "Salads/Caprese.cook",
+            "Dress with @../Shared/Vinaigrette{}.
+",
+        ),
+        (
+            "Shared/Vinaigrette.cook",
+            "Whisk @oil{3%tbsp}.
+",
+        ),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["Salads/Caprese.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "oil"),
+        Some(vec!["3 tbsp".to_string()]),
+        "{:?}",
+        outcome.value.items
+    );
+}
+
+/// A reference that climbs past the recipe directory names nothing in the
+/// collection. It is skipped with a warning rather than followed, and the rest
+/// of the recipe still makes a list — the same shape as a reference that
+/// points at a file which is not there.
+#[test]
+fn a_reference_climbing_out_of_the_recipe_directory_is_skipped_and_reported() {
+    let dir = dir_with(&[(
+        "menu.cook",
+        "Serve @../Secret{} with @rice{100%g}.
+",
+    )]);
+    // The file it would reach, one level up from the recipe directory.
+    std::fs::write(
+        dir.path().parent().unwrap().join("Secret.cook"),
+        "Add @leaked-marker{1}.
+",
+    )
+    .ok();
+
+    let outcome = generate(&ctx(&dir), request(&["menu.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "leaked-marker"),
+        None,
+        "a reference outside the recipe directory must not be followed: {:?}",
+        outcome.value.items
+    );
+    assert_eq!(
+        quantities(&outcome.value, "rice"),
+        Some(vec!["100 g".to_string()]),
+        "the rest of the recipe still makes a list: {:?}",
+        outcome.value.items
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| { d.severity == Severity::Warning && d.message.contains("points outside") }),
+        "the skip must be reported: {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// `included_references` names the references of one recipe, and is matched
+/// against them resolved rather than as spelled. A caller that stored the
+/// resolved path of a `../` reference still selects it — which is what the
+/// web UI stores now — and one that stored the authored spelling, with or
+/// without the `./`, goes on selecting it too.
+#[test]
+fn included_references_are_matched_resolved_however_they_were_spelled() {
+    let files = &[
+        (
+            "Salads/Caprese.cook",
+            "Dress with @../Shared/Vinaigrette{} and @./Shared/Pesto{}.
+",
+        ),
+        (
+            "Shared/Vinaigrette.cook",
+            "Whisk @oil{3%tbsp}.
+",
+        ),
+        (
+            "Shared/Pesto.cook",
+            "Blend @basil{50%g}.
+",
+        ),
+    ];
+
+    for spelling in ["Shared/Vinaigrette", "../Shared/Vinaigrette"] {
+        let dir = dir_with(files);
+        let mut list = IngredientList::new();
+        extract_ingredients(
+            &ctx(&dir),
+            &at_path("Salads/Caprese.cook"),
+            &ExtractOptions {
+                ignore_references: false,
+                included_references: Some(&[spelling.to_string()]),
+            },
+            &mut list,
+        )
+        .unwrap_or_else(|e| panic!("{spelling}: {e}"));
+
+        let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+        assert!(
+            names.iter().any(|n| n.as_str() == "oil"),
+            "{spelling} must select the reference it names: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n.as_str() == "basil"),
+            "{spelling} must not select the one it does not: {names:?}"
+        );
+    }
+}
+
 /// Expansion follows a chain of references all the way down. It used to stop
 /// three files in — the named recipe, what it references, and what *those*
 /// reference — and anything deeper fell off the list with no warning and a

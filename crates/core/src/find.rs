@@ -2,7 +2,7 @@
 //! collection of them.
 
 use crate::{parser::parse_unscaled, CoreError, Diagnostic};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use cooklang::Recipe;
 use cooklang_find::{tree::TreeError, RecipeEntry, RecipeTree};
 use std::collections::BTreeSet;
@@ -10,6 +10,90 @@ use std::collections::BTreeSet;
 /// Re-exported from [`cooklang_format`], which is where the writers that
 /// depend on this spelling now live.
 pub use cooklang_format::REFERENCE_SEPARATOR;
+
+/// Whether `path`, joined to a directory, is sure to stay inside it.
+///
+/// Every component has to be a plain name. `..` climbs out, and a root, a
+/// drive letter or a UNC share makes `join` drop the directory altogether:
+/// `base.join("C:\\x")` is just `C:\x`. A leading `./` is refused as well;
+/// nothing we link to starts with one. On Windows no component may hold a `:`
+/// either. No file name can, so past a drive letter it could only pick an
+/// NTFS alternate data stream.
+///
+/// Meant for paths taken from a request, before they are joined to the recipe
+/// directory. The check is purely lexical on purpose: merely looking up
+/// `\\host\share` on disk makes Windows connect to that host and hand it the
+/// user's NTLM hash.
+pub fn is_safe_relative_path(path: &str) -> bool {
+    Utf8Path::new(path)
+        .components()
+        .all(|component| match component {
+            Utf8Component::Normal(name) => !(cfg!(windows) && name.contains(':')),
+            _ => false,
+        })
+}
+
+/// Resolve a recipe reference to a path relative to the collection root.
+///
+/// `reference` is the reference as the recipe writes it — `./Shared/Sauce`,
+/// `../sauces/tomato`. The parser only produces one from a name starting `./`
+/// or `../`, so it always opens with a dot component and can never be an
+/// absolute path of its own.
+///
+/// **A reference that steps up does so from the directory of the file that
+/// writes it; one that does not is read from the collection root.** That is
+/// not a new rule for the second half: `./` has always meant the root here,
+/// and the shipped seed relies on it — `Breakfast/Mexican Style Burrito.cook`
+/// writes `@./Shared/Red Beans` and means `Shared/Red Beans.cook` at the root,
+/// not one beside itself. `..` had no working meaning at all before this: it
+/// was resolved from the root like everything else, so `../sauces/tomato`
+/// landed *outside* the collection whatever wrote it.
+///
+/// `from` is that writer's directory, relative to the root and empty for a
+/// recipe sitting at it. It is ours, not a request's: an entry path with the
+/// base directory stripped off.
+///
+/// Returns `None` for a reference that still climbs above the root, or that
+/// normalises to something [`is_safe_relative_path`] refuses — a reference is
+/// free to spell `@./C:/Windows/win.ini{}`, and joining that to the recipe
+/// directory would drop the directory. Neither names a recipe in the
+/// collection, so callers report them the way they report one that is missing.
+pub fn resolve_reference(from: &Utf8Path, reference: &str) -> Option<Utf8PathBuf> {
+    let reference = reference.replace('\\', "/");
+    let parts: Vec<&str> = reference.split('/').collect();
+
+    let mut resolved: Vec<&str> = if parts.contains(&"..") {
+        from.components()
+            .map(|component| match component {
+                Utf8Component::Normal(name) => Some(name),
+                // `from` is built from an entry path, so it holds plain names.
+                // Anything else means a caller passed a path it did not strip
+                // the base directory off; resolving against it would be a
+                // guess, so give up rather than guess.
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
+
+    for part in parts {
+        match part {
+            "" | "." => {}
+            ".." => {
+                // Nothing left to step out of: this climbs above the root.
+                resolved.pop()?;
+            }
+            name => resolved.push(name),
+        }
+    }
+
+    if resolved.is_empty() {
+        return None;
+    }
+    let path = resolved.join("/");
+    is_safe_relative_path(&path).then(|| Utf8PathBuf::from(path))
+}
 
 /// Look `name` up under `base_path`, returning the file it resolves to.
 ///
@@ -230,6 +314,144 @@ mod tests {
 
     fn base(dir: &tempfile::TempDir) -> Utf8PathBuf {
         Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()
+    }
+
+    #[test]
+    fn plain_relative_paths_are_safe() {
+        for path in [
+            "Pancakes",
+            "Breakfast/Easy Pancakes",
+            "Breakfast/Pancakes.cook",
+            "Crème brûlée",
+        ] {
+            assert!(is_safe_relative_path(path), "{path:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn paths_that_leave_the_directory_are_not_safe() {
+        for path in [
+            "..",
+            "../Secret",
+            "Breakfast/../../Secret",
+            "/etc/passwd",
+            "./Pancakes",
+        ] {
+            assert!(!is_safe_relative_path(path), "{path:?} must be refused");
+        }
+    }
+
+    /// Drive letters, UNC shares, `\` separators and NTFS streams only mean
+    /// something on Windows; anywhere else these are odd but harmless names.
+    #[cfg(windows)]
+    #[test]
+    fn windows_prefixes_and_streams_are_not_safe() {
+        for path in [
+            "C:",
+            "C:/",
+            "C:Windows/win.ini",
+            r"..\Secret",
+            r"\\attacker\share\x.cook",
+            "//attacker/share/x.cook",
+            r"\\?\C:\Windows",
+            "Breakfast/C:/Windows/win.ini",
+            "Pancakes.cook::$DATA",
+        ] {
+            assert!(!is_safe_relative_path(path), "{path:?} must be refused");
+        }
+    }
+
+    fn resolved(from: &str, reference: &str) -> Option<String> {
+        resolve_reference(Utf8Path::new(from), reference).map(String::from)
+    }
+
+    /// What the shipped seed relies on: `Breakfast/Mexican Style Burrito.cook`
+    /// writes `@./Shared/Red Beans` and means the one at the root.
+    #[test]
+    fn a_reference_that_does_not_step_up_is_read_from_the_root() {
+        assert_eq!(
+            resolved("Breakfast", "./Shared/Red Beans"),
+            Some("Shared/Red Beans".to_string())
+        );
+        assert_eq!(resolved("", "./lamb-chops"), Some("lamb-chops".to_string()));
+        assert_eq!(
+            resolved("a/b/c", "./Risotto"),
+            Some("Risotto".to_string()),
+            "however deep the writer sits"
+        );
+    }
+
+    #[test]
+    fn a_reference_that_steps_up_does_so_from_the_writer() {
+        assert_eq!(
+            resolved("Breakfast", "../Shared/Vinaigrette"),
+            Some("Shared/Vinaigrette".to_string())
+        );
+        assert_eq!(
+            resolved("Menus/Autumn", "../../Risotto"),
+            Some("Risotto".to_string())
+        );
+        assert_eq!(
+            resolved("Menus/Autumn", "../Sunday"),
+            Some("Menus/Sunday".to_string())
+        );
+    }
+
+    /// The escape this exists to close: from the root there is nothing to step
+    /// out of, and no depth of writer may be over-spent.
+    #[test]
+    fn a_reference_climbing_above_the_root_resolves_to_nothing() {
+        assert_eq!(resolved("", "../Secret"), None);
+        assert_eq!(resolved("Breakfast", "../../Secret"), None);
+        assert_eq!(resolved("Menus/Autumn", "../../../Secret"), None);
+        assert_eq!(resolved("", "./../Secret"), None);
+    }
+
+    /// `.` and `..` are normalised wherever they sit, not just at the front,
+    /// so what comes back is always a plain relative path.
+    #[test]
+    fn the_result_is_normalised() {
+        assert_eq!(
+            resolved("", "./Shared/./Sauce"),
+            Some("Shared/Sauce".to_string())
+        );
+        assert_eq!(
+            resolved("Breakfast", "../Shared/Extra/../Sauce"),
+            Some("Shared/Sauce".to_string())
+        );
+        assert_eq!(resolved("", "./Shared/.."), None, "normalises to the root");
+    }
+
+    /// It is the `..` anywhere in a reference that makes it writer-relative,
+    /// not only one at the front, so a `./` in front of one does not re-anchor
+    /// it to the root and turn a step up into an escape.
+    #[test]
+    fn a_dot_in_front_of_a_step_up_does_not_re_anchor_it() {
+        assert_eq!(resolved("Breakfast", "./../Secret"), Some("Secret".into()));
+    }
+
+    /// A reference is written in a recipe file, which is not always ours: an
+    /// imported or synced one can spell anything the parser accepts.
+    #[test]
+    fn a_reference_naming_something_outside_the_collection_resolves_to_nothing() {
+        assert_eq!(resolved("", "./"), None);
+        if cfg!(windows) {
+            assert_eq!(resolved("", "./C:/Windows/win.ini"), None);
+            assert_eq!(resolved("Breakfast", "../C:/Windows/win.ini"), None);
+            assert_eq!(resolved("", r".\Sauce.cook::$DATA"), None);
+        }
+    }
+
+    /// `\` is a separator in a reference — `parse_reference` accepts `.\` and
+    /// `..\` — so it has to be normalised before the components are read, or
+    /// `..\Secret` would arrive as one plain name and be joined verbatim.
+    #[test]
+    fn backslashes_in_a_reference_are_separators() {
+        assert_eq!(
+            resolved("Breakfast", r"..\Shared\Vinaigrette"),
+            Some("Shared/Vinaigrette".to_string())
+        );
+        assert_eq!(resolved("", r"..\Secret"), None);
     }
 
     #[test]

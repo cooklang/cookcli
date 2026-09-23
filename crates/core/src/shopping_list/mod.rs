@@ -139,8 +139,10 @@ pub struct ExtractOptions<'a> {
     /// Which references to follow, by their display path (`sauces/tomato`).
     /// `None` follows all of them. Ignored when `ignore_references` is set.
     ///
-    /// A leading `./` is ignored on both sides of the comparison, so a path
-    /// stored without one still matches a reference written with one.
+    /// Both sides of the comparison are put through
+    /// [`find::resolve_reference`] first, so a reference written `@./sauce{}`
+    /// is named by `./sauce` and by `sauce` alike, and one written
+    /// `@../shared/sauce{}` by the `shared/sauce` it resolves to.
     pub included_references: Option<&'a [String]>,
 }
 
@@ -573,6 +575,24 @@ struct Expansion<'a> {
 }
 
 impl Expansion<'_> {
+    /// The directory holding the recipe currently being expanded, relative to
+    /// the recipe directory — what a `..` in one of its references steps up
+    /// from.
+    ///
+    /// Empty for a recipe sitting at the recipe directory itself. Empty too
+    /// when there is no such file to speak of — an unsaved buffer passed as
+    /// [`RecipeSource::Content`] — or when its path does not sit under
+    /// `base_path` after all, which leaves a `..` nothing to spend and so
+    /// refuses it rather than guessing where it meant to land.
+    fn reference_dir(&self, ancestors: &[Utf8PathBuf]) -> Utf8PathBuf {
+        ancestors
+            .last()
+            .and_then(|path| path.strip_prefix(self.base_path).ok())
+            .and_then(|relative| relative.parent())
+            .map(Utf8Path::to_owned)
+            .unwrap_or_default()
+    }
+
     /// Expand the recipes `recipe` references into `list`, and the recipes *those*
     /// reference, all the way down.
     ///
@@ -617,17 +637,35 @@ impl Expansion<'_> {
                 format!("{}/{}", reference.components.join("/"), reference.name)
             };
 
-            // If the caller specified which references to include, skip others.
-            // Normalize by stripping "./" prefix so paths stored without one
-            // still match display paths, which may carry one.
-            if let Some(included) = included {
-                fn strip_dot_slash(s: &str) -> &str {
-                    s.strip_prefix("./").unwrap_or(s)
+            // Where the reference points, as a path relative to the recipe
+            // directory. `..` is resolved against the directory of the recipe
+            // writing it, and a reference that climbs out of the collection —
+            // or names an absolute path of its own — resolves to nothing. See
+            // [`find::resolve_reference`].
+            let from = self.reference_dir(ancestors);
+            let Some(ref_path) = find::resolve_reference(&from, &ref_display_path) else {
+                let mut outside = Diagnostic::warning(format!(
+                    "Skipped recipe reference '{ref_display_path}': it points outside the \
+                     recipe directory, so it is not a recipe in this collection. Anything \
+                     it would have added is not on the list"
+                ));
+                if let Some(path) = ancestors.last() {
+                    outside = outside.at_file(path.clone());
                 }
-                if !included
-                    .iter()
-                    .any(|r| strip_dot_slash(r) == strip_dot_slash(&ref_display_path))
-                {
+                self.diagnostics.push(outside);
+                continue;
+            };
+            let ref_path = ref_path.to_string();
+
+            // If the caller specified which references to include, skip others.
+            // Both sides are resolved first, so a stored `./sauce`, a stored
+            // `sauce` and a reference written `@./sauce{}` are one thing —
+            // which is what the old `./`-stripping did, and it goes on holding
+            // for the `../sauces/tomato` a stored path now spells resolved.
+            if let Some(included) = included {
+                if !included.iter().any(|r| {
+                    find::resolve_reference(&from, r).is_some_and(|p| p.as_str() == ref_path)
+                }) {
                     tracing::debug!(
                         "Skipping reference '{}' — not in included_references",
                         ref_display_path
@@ -636,14 +674,6 @@ impl Expansion<'_> {
                 }
             }
 
-            // `path` supplies the separator itself, so a reference with no
-            // components — a bare `@recipe{}` rather than `@./recipe{}` — would
-            // come out spelled `/recipe` and be looked up under that name.
-            let ref_path = if reference.components.is_empty() {
-                reference.name.clone()
-            } else {
-                reference.path(find::REFERENCE_SEPARATOR)
-            };
             // `ancestors` holds one recipe per level, so its length is how deep
             // this reference sits. Stop well above anything a real collection
             // reaches but well below where the recursion runs out of stack —
