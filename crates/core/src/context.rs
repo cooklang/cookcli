@@ -2,8 +2,15 @@
 
 use crate::{ConfigSource, CoreError};
 use camino::{Utf8Path, Utf8PathBuf};
+use std::ffi::OsStr;
 
 const APP_NAME: &str = "cook";
+
+/// Environment variable that replaces the platform configuration directory.
+///
+/// See [`global_config_path`]. Set it to point every global lookup — aisle,
+/// pantry, `session.json`, `sync.db` — at one directory of your choosing.
+pub const CONFIG_DIR_ENV: &str = "COOK_CONFIG_DIR";
 pub(crate) const LOCAL_CONFIG_DIR: &str = "config";
 const AUTO_AISLE: &str = "aisle.conf";
 pub(crate) const AUTO_PANTRY: &str = "pantry.conf";
@@ -32,9 +39,10 @@ impl Context {
     }
 
     /// A context with aisle and pantry resolved using CookCLI's search order:
-    /// `<base>/config/<name>` first, then the platform configuration directory
-    /// ([`global_config_path`] — `~/.config/cook/<name>` on Linux, the platform
-    /// equivalent elsewhere).
+    /// `<base>/config/<name>` first, then the global configuration directory
+    /// ([`global_config_path`] — `$COOK_CONFIG_DIR` when set, otherwise
+    /// `~/.config/cook/<name>` on Linux and the platform equivalent
+    /// elsewhere).
     ///
     /// This is the only constructor that reads ambient state, and it is
     /// explicitly opted into.
@@ -133,17 +141,57 @@ impl Context {
     }
 }
 
-/// Resolve `name` inside the platform configuration directory for `cook`, e.g.
-/// `~/.config/cook/aisle.conf` on Linux.
+/// Resolve `name` inside the global configuration directory for `cook`.
 ///
-/// The path is returned whether or not anything exists there.
+/// That directory is [`CONFIG_DIR_ENV`] (`COOK_CONFIG_DIR`) when it is set to
+/// a non-empty value, and otherwise the platform's own — `~/.config/cook` on
+/// Linux, `~/Library/Application Support/cook` on macOS,
+/// `%APPDATA%\cook\config` on Windows.
+///
+/// The override is the only portable way to redirect these lookups. The
+/// platform directory is resolved by `directories`, which on Windows asks the
+/// Known Folder API and so ignores `HOME` and `XDG_CONFIG_HOME` entirely —
+/// setting those isolates a test on Unix and silently does nothing on Windows,
+/// where a `cook server` under test would then find the developer's real
+/// `session.json` and sync database. Tests that spawn `cook` set
+/// `COOK_CONFIG_DIR` instead.
+///
+/// The path is returned whether or not anything exists there; nothing is
+/// created.
 ///
 /// # Errors
 ///
 /// [`CoreError::Config`] if there is no home directory to resolve against, or
-/// if the platform configuration directory is not valid UTF-8. Both carry no
-/// path, because the failure is that no path could be built.
+/// if the resolved directory — the override included — is not valid UTF-8.
+/// Both carry no path, because the failure is that no path could be built.
 pub fn global_config_path(name: &str) -> Result<Utf8PathBuf, CoreError> {
+    global_config_path_in(std::env::var_os(CONFIG_DIR_ENV).as_deref(), name)
+}
+
+/// [`global_config_path`] with the override supplied rather than read.
+///
+/// Injecting it keeps the resolution testable: `std::env::set_var` mutates
+/// process-wide state that the rest of the test binary's threads share, so a
+/// test that set `COOK_CONFIG_DIR` for itself would be setting it for whatever
+/// else happened to be running.
+fn global_config_path_in(
+    override_dir: Option<&OsStr>,
+    name: &str,
+) -> Result<Utf8PathBuf, CoreError> {
+    // An empty value is treated as unset, as the XDG variables it stands in
+    // for are: exporting `COOK_CONFIG_DIR=` should not silently resolve the
+    // configuration to the process working directory.
+    if let Some(dir) = override_dir.filter(|dir| !dir.is_empty()) {
+        let dir =
+            Utf8Path::from_path(std::path::Path::new(dir)).ok_or_else(|| CoreError::Config {
+                path: None,
+                message: format!(
+                    "{CONFIG_DIR_ENV} is not valid utf-8, and cook only supports utf-8 paths"
+                ),
+            })?;
+        return Ok(dir.join(name));
+    }
+
     let dirs =
         directories::ProjectDirs::from("", "", APP_NAME).ok_or_else(|| CoreError::Config {
             path: None,
@@ -243,7 +291,11 @@ mod tests {
         // yields `…\Roaming\cook\config`, so the last component before the
         // file is `config`. What holds everywhere is that the file is named
         // last, somewhere under a directory belonging to `cook`.
-        let path = global_config_path("aisle.conf").expect("a home directory");
+        //
+        // Resolved with the override explicitly absent, so the assertion still
+        // describes the platform directory on a machine that happens to export
+        // `COOK_CONFIG_DIR`.
+        let path = global_config_path_in(None, "aisle.conf").expect("a home directory");
         assert_eq!(
             path.file_name(),
             Some("aisle.conf"),
@@ -256,6 +308,71 @@ mod tests {
         assert!(
             path.is_absolute(),
             "the platform config directory is absolute: {path}"
+        );
+    }
+
+    // The override is exercised through `global_config_path_in`, which takes
+    // the environment value as a parameter. `std::env::set_var` would reach
+    // every other thread in the test binary, and these run in parallel with
+    // `global_config_path_joins_the_app_name` above, which asserts the
+    // *un*-overridden result.
+
+    #[test]
+    fn config_dir_env_replaces_the_platform_directory() {
+        let dir = Utf8PathBuf::from("/somewhere/else");
+        let path =
+            global_config_path_in(Some(OsStr::new(dir.as_str())), "session.json").expect("a path");
+        assert_eq!(path, dir.join("session.json"));
+    }
+
+    /// The point of the override: no component of the platform directory —
+    /// `~/.config`, `Application Support`, `%APPDATA%` — survives it. Without
+    /// this, a test setting `COOK_CONFIG_DIR` could still be reading the
+    /// developer's real `session.json`.
+    #[test]
+    fn config_dir_env_leaves_nothing_of_the_platform_directory() {
+        let dir = Utf8PathBuf::from("/somewhere/isolated");
+        let overridden =
+            global_config_path_in(Some(OsStr::new(dir.as_str())), "sync.db").expect("a path");
+        let platform = global_config_path_in(None, "sync.db").expect("a home directory");
+        assert_eq!(overridden, dir.join("sync.db"));
+        assert_ne!(overridden, platform);
+    }
+
+    /// `COOK_CONFIG_DIR=` means "unset", not "the working directory".
+    #[test]
+    fn an_empty_config_dir_env_falls_back_to_the_platform_directory() {
+        let empty = global_config_path_in(Some(OsStr::new("")), "aisle.conf").expect("a path");
+        let unset = global_config_path_in(None, "aisle.conf").expect("a home directory");
+        assert_eq!(empty, unset);
+    }
+
+    /// Discovery honours the override through the same call the CLI makes, so
+    /// a global `aisle.conf` placed there is found when there is no local one.
+    #[test]
+    fn a_config_dir_env_aisle_is_discoverable() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = utf8(&dir);
+        let config = base.join("isolated");
+        write(&config.join("aisle.conf"), "[produce]\nleek");
+
+        let global =
+            global_config_path_in(Some(OsStr::new(config.as_str())), "aisle.conf").expect("a path");
+        let found = Context::search(&base, "aisle.conf", Some(&global));
+
+        assert_eq!(found, ConfigSource::Path(config.join("aisle.conf")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_config_dir_env_is_an_error() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let err = global_config_path_in(Some(OsStr::from_bytes(b"/tmp/\xff")), "session.json")
+            .expect_err("non-utf-8 override");
+        assert!(
+            err.to_string().contains(CONFIG_DIR_ENV),
+            "the message should name the variable at fault: {err}"
         );
     }
 

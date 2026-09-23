@@ -105,7 +105,14 @@ The `Context` struct (in `src/main.rs`) provides:
 
 Configuration search order:
 1. `./config/[aisle.conf|pantry.conf]` - Local to recipe directory
-2. `~/Library/Application Support/cook/` (macOS) or `~/.config/cook/` (Linux)
+2. The global config directory, resolved by `cookcli_core::global_config_path`:
+   - `$COOK_CONFIG_DIR` when set to a non-empty value
+   - otherwise `~/.config/cook/` (Linux), `~/Library/Application Support/cook/`
+     (macOS), `%APPDATA%\cook\config\` (Windows)
+
+`global_config_path` also resolves `session.json` (`src/login.rs`,
+`src/logout.rs`, `src/server/mod.rs`) and `sync.db` (`sync::sync_db_path`), so
+`COOK_CONFIG_DIR` moves the whole of CookCLI's global state at once.
 
 ### Command Modules
 
@@ -226,6 +233,26 @@ Currently no automated tests (as noted in CONTRIBUTING.md). Manual testing appro
 2. Test each command with various options
 3. Validate output formats
 4. Check error handling with invalid inputs
+
+### Isolating spawned processes from the real config
+
+Any test that spawns `cook` — and **every** test that spawns `cook server` —
+must route its `Command` through `common::with_isolated_config`
+(`tests/common/mod.rs`), which sets `COOK_CONFIG_DIR` to a directory inside the
+test's `TempDir`.
+
+This is not about tidiness. `cook server` loads `session.json` on boot and, if
+it finds one, starts syncing the directory it was given against the global
+`sync.db` — the database tracking the developer's own recipe folder. Without
+isolation, `cargo test` on a machine where someone has run `cook login` can
+upload fixture recipes to their real cook.md account, or index a temp directory
+into that database and propagate the deletions.
+
+Setting `HOME` / `XDG_CONFIG_HOME` is **not** sufficient: `directories`
+resolves the Windows config directory through the Known Folder API and ignores
+both. `COOK_CONFIG_DIR` is the only lever that works everywhere.
+`tests/config_dir_env_test.rs` is the regression guard; the Playwright
+`webServer` sets the same variable in `playwright.config.ts`.
 
 ## Release Process
 

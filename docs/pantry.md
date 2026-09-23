@@ -153,7 +153,9 @@ cook pantry plan [OPTIONS]
 
 The pantry inventory is defined in `pantry.conf` (TOML format), searched in:
 1. `./config/pantry.conf` — local to recipe directory
-2. `~/.config/cook/pantry.conf` — global configuration
+2. `~/.config/cook/pantry.conf` — global configuration (`~/Library/Application
+   Support/cook/` on macOS, `%APPDATA%\cook\config\` on Windows, or
+   `$COOK_CONFIG_DIR` when that is set)
 
 When you run `cook pantry add` and no pantry file exists, one is created
 at `./config/pantry.conf` automatically.
