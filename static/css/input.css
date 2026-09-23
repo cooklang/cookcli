@@ -312,3 +312,29 @@ body {
     color: var(--info);
     font-style: italic;
 }
+
+/* Lint (error/warning) hover bubble + autocomplete popup. Same reasoning as the
+   block above: unlayered + doubled class to beat CodeMirror's runtime styles.
+   Without this the popup keeps CodeMirror's hardcoded light background while the
+   text inherits --text, so in dark mode it is near-white on near-white. */
+.cm-tooltip.cm-tooltip {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-overlay);
+}
+
+.cm-tooltip.cm-tooltip .cm-tooltip-lint,
+.cm-tooltip.cm-tooltip .cm-diagnostic,
+.cm-tooltip.cm-tooltip .cm-diagnosticText {
+    color: var(--text);
+    background: transparent;
+}
+
+/* Accent bars — map CodeMirror's hardcoded #d11/orange/#999/#66d onto tokens so
+   they read in both themes. */
+.cm-tooltip.cm-tooltip .cm-diagnostic-error   { border-left-color: var(--danger); }
+.cm-tooltip.cm-tooltip .cm-diagnostic-warning { border-left-color: var(--accent); }
+.cm-tooltip.cm-tooltip .cm-diagnostic-info    { border-left-color: var(--info); }
+.cm-tooltip.cm-tooltip .cm-diagnostic-hint    { border-left-color: var(--info); }
