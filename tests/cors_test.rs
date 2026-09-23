@@ -87,15 +87,21 @@ fn write_fixture(dir: &TempDir) {
 /// several tests booting servers at once another one can claim it first. The
 /// server exits 1 on a bound port, so retry with a fresh one.
 async fn start_server(extra_args: &[&str]) -> ServerGuard {
+    start_server_with_env(extra_args, &[]).await
+}
+
+/// [`start_server`] with extra environment variables, for the settings a
+/// container names that way rather than on the command line.
+async fn start_server_with_env(extra_args: &[&str], env: &[(&str, &str)]) -> ServerGuard {
     for _ in 0..5 {
-        if let Some(server) = try_start_server(extra_args).await {
+        if let Some(server) = try_start_server(extra_args, env).await {
             return server;
         }
     }
     panic!("could not start cook server on a free port after 5 attempts");
 }
 
-async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
+async fn try_start_server(extra_args: &[&str], env: &[(&str, &str)]) -> Option<ServerGuard> {
     let dir = TempDir::new().expect("temp dir");
     write_fixture(&dir);
 
@@ -107,6 +113,9 @@ async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
         .arg(port.to_string());
     for arg in extra_args {
         cmd.arg(arg);
+    }
+    for (name, value) in env {
+        cmd.env(name, value);
     }
     let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
@@ -674,4 +683,94 @@ async fn new_recipe_form_honours_cors_origin() {
         let resp = post_new_recipe(&server, name, &headers).await;
         assert_recipe_created(&server, name, &resp);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Origins from the environment
+//
+// `COOK_CORS_ORIGIN` exists for containers: the published image's command
+// already names the recipe directory and `--host`, so adding one flag means
+// restating all of it, while a compose file adds a variable in one line.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn cors_origin_can_come_from_the_environment() {
+    let server = start_server_with_env(&[], &[("COOK_CORS_ORIGIN", "http://app.test")]).await;
+
+    let allowed = post_pantry_add(&server, Some("http://app.test")).await;
+    assert_eq!(
+        allowed.status(),
+        StatusCode::OK,
+        "an origin named by COOK_CORS_ORIGIN must write as if it had been passed as a flag, got {}",
+        allowed.status()
+    );
+
+    let refused = post_pantry_add(&server, Some("http://evil.test")).await;
+    assert_eq!(
+        refused.status(),
+        StatusCode::FORBIDDEN,
+        "naming one origin in the environment must not let every origin write, got {}",
+        refused.status()
+    );
+}
+
+#[tokio::test]
+async fn several_origins_fit_in_the_environment_variable() {
+    let server = start_server_with_env(
+        &[],
+        &[("COOK_CORS_ORIGIN", "http://app.test, http://other.test")],
+    )
+    .await;
+
+    for origin in ["http://app.test", "http://other.test"] {
+        let resp = post_pantry_add(&server, Some(origin)).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "{origin} was listed in COOK_CORS_ORIGIN, got {}",
+            resp.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_cors_origin_flag_overrides_the_environment() {
+    let server = start_server_with_env(
+        &["--cors-origin", "http://flag.test"],
+        &[("COOK_CORS_ORIGIN", "http://env.test")],
+    )
+    .await;
+
+    let allowed = post_pantry_add(&server, Some("http://flag.test")).await;
+    assert_eq!(
+        allowed.status(),
+        StatusCode::OK,
+        "the flag's origin must be the one in force, got {}",
+        allowed.status()
+    );
+
+    let refused = post_pantry_add(&server, Some("http://env.test")).await;
+    assert_eq!(
+        refused.status(),
+        StatusCode::FORBIDDEN,
+        "a command line must replace the environment's origins, not add to them, got {}",
+        refused.status()
+    );
+}
+
+#[tokio::test]
+async fn an_empty_cors_origin_environment_variable_is_not_an_origin() {
+    // `COOK_CORS_ORIGIN=${UNDEFINED}` in a compose file. The server must start
+    // as if nothing were set: `start_server_with_env` only returns once it
+    // answers, so getting a guard back is half the assertion.
+    let server = start_server_with_env(&[], &[("COOK_CORS_ORIGIN", "")]).await;
+
+    let own_origin = server.own_origin();
+    let resp = post_pantry_add(&server, Some(&own_origin)).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "an empty variable must leave the default policy in place, got {}",
+        resp.status()
+    );
 }

@@ -272,6 +272,28 @@ fn own_origin_by_name(origin: &str, host: &str) -> Option<String> {
     origin_of(origin)
 }
 
+/// Environment variable naming `--cors-origin` values, comma-separated.
+pub(super) const ORIGIN_ENV: &str = "COOK_CORS_ORIGIN";
+
+/// The origins named by [`ORIGIN_ENV`].
+///
+/// Containers are the reason this exists: a compose file adds an environment
+/// variable in one line, where a flag means restating the image's whole
+/// command.
+///
+/// Entries are trimmed, and empty ones dropped — `COOK_CORS_ORIGIN=` is what
+/// an undefined compose variable expands to, and it has to read as "not set"
+/// rather than as an origin that fails validation. Everything else goes
+/// through [`parse_origin`] exactly as a flag would.
+pub(super) fn origins_from_env(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|origin| !origin.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Parses one `--cors-origin` value.
 ///
 /// A browser sends a bare origin — lowercase scheme, lowercase host, optional
@@ -926,5 +948,37 @@ mod tests {
         ] {
             assert_eq!(origin_of(url), None, "{url}");
         }
+    }
+
+    #[test]
+    fn the_origin_env_var_is_a_comma_separated_list() {
+        assert_eq!(
+            origins_from_env("http://a.test,https://b.test:8443"),
+            origins(&["http://a.test", "https://b.test:8443"])
+        );
+        // Spacing around the commas is a typo waiting to happen, not an error.
+        assert_eq!(
+            origins_from_env(" http://a.test , https://b.test "),
+            origins(&["http://a.test", "https://b.test"])
+        );
+    }
+
+    #[test]
+    fn an_empty_origin_env_var_reads_as_unset() {
+        // What `COOK_CORS_ORIGIN=${SOMETHING_UNDEFINED}` expands to in a
+        // compose file. It must not read as an origin and refuse to start.
+        for value in ["", " ", ",", " , "] {
+            assert!(origins_from_env(value).is_empty(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn origins_from_the_env_var_are_validated_like_flags() {
+        let err = CorsConfig::from_args(&origins_from_env("nas.local:9080"), false)
+            .expect_err("must reject");
+        assert!(
+            err.to_string().contains("expected a scheme"),
+            "unhelpful error: {err}"
+        );
     }
 }

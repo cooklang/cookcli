@@ -31,6 +31,15 @@ cook server [OPTIONS] [BASE_PATH]
 | `--no-csrf-check` | Disable same-origin enforcement on requests that modify recipes. |
 | `--max-lsp-sessions <N>` | Language server sessions to run at once (default: 8). `0` disables the editor's language server. |
 
+## Environment
+
+| Variable | Description |
+|----------|-------------|
+| `COOK_CORS_ORIGIN` | Origins allowed to make cross-origin browser requests, separated by commas. Same values as `--cors-origin`, which overrides it. For containers, where passing a flag means restating the image's whole command. An empty value means "unset". |
+| `COOK_CONFIG_DIR` | Global configuration directory, holding `aisle.conf`, `pantry.conf`, the cook.md session and the sync database. See [the README](../README.md#cook_config_dir). |
+
+No other option can be set this way. `--no-csrf-check` in particular has to be passed on the command line.
+
 ## Examples
 
 ```bash
@@ -70,6 +79,24 @@ cook server --cors-origin https://cook.example.com
 - The web interface supports recipe browsing, scaling, search, and shopping list management
 - The UI language is negotiated per request from the browser's `Accept-Language` header — each visitor sees the interface in their own language (supported: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`). For static sites, see the `--lang` flag of [`cook build web`](build.md#localization).
 - Mobile-friendly responsive layout
+
+## Containers
+
+The published image runs `cook server /recipes --host`, so nothing extra is needed to open the web UI at `http://localhost:9080`, or at the host's address on the network — both read and save. Reaching it by host name instead, directly or through a reverse proxy, means naming that origin, and `COOK_CORS_ORIGIN` does it without restating the image's command:
+
+```yaml
+services:
+  cookcli:
+    image: ghcr.io/cooklang/cookcli:latest
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./recipes:/recipes
+    environment:
+      COOK_CORS_ORIGIN: https://cook.example.com
+```
+
+Name the origin the browser shows, so `https://` when the proxy terminates TLS, and separate several with commas. A container that calls the API from another container sends no `Origin` header and needs none of this.
 
 ## Web feeds
 

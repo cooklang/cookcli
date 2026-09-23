@@ -106,7 +106,10 @@ pub struct ServerArgs {
     /// server answers cross-origin reads but refuses cross-origin writes with
     /// 403; naming explicit origins lets those origins write too. "*" cannot
     /// be combined with explicit origins. Requests with no Origin header --
-    /// curl and other non-browser clients -- are never affected.
+    /// curl and other non-browser clients -- are never affected. Origins may
+    /// also be named in COOK_CORS_ORIGIN, separated by commas, which this flag
+    /// overrides -- for containers, where a flag means restating the whole
+    /// command.
     #[arg(long, value_name = "ORIGIN")]
     cors_origin: Vec<String>,
 
@@ -162,7 +165,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     // Validate before binding or printing anything, so a bad flag combination
     // fails immediately rather than after the "Listening on ..." banner.
     let cors = Arc::new(cors::CorsConfig::from_args(
-        &args.cors_origin,
+        &cors_origins(&args),
         args.cors_allow_credentials,
     )?);
 
@@ -303,6 +306,22 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     info!("Server stopped");
 
     Ok(())
+}
+
+/// The `--cors-origin` values to use: the flag when it is given, otherwise
+/// `COOK_CORS_ORIGIN`.
+///
+/// The flag wins, so a command line can override whatever an image or a shell
+/// profile put in the environment. There is deliberately no equivalent for
+/// `--no-csrf-check`: turning the check off should take a command someone
+/// typed, not a variable inherited from somewhere else.
+fn cors_origins(args: &ServerArgs) -> Vec<String> {
+    if !args.cors_origin.is_empty() {
+        return args.cors_origin.clone();
+    }
+    std::env::var(cors::ORIGIN_ENV)
+        .map(|value| cors::origins_from_env(&value))
+        .unwrap_or_default()
 }
 
 fn build_state(

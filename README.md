@@ -505,6 +505,20 @@ This is also how the test suite keeps itself away from your real session:
 configuration directory is resolved through the Known Folder API and ignores
 both.
 
+### `COOK_CORS_ORIGIN`
+
+Set `COOK_CORS_ORIGIN` to name the origins `cook server` accepts browser
+requests from, separated by commas — the same values as `--cors-origin`, which
+overrides the variable:
+
+```bash
+COOK_CORS_ORIGIN=https://cook.example.com cook server --host
+```
+
+It exists for containers, where passing a flag means restating the image's
+whole command. An empty value means "unset". `--no-csrf-check` has no
+equivalent variable and has to be passed on the command line.
+
 ### Aisle Configuration (`aisle.conf`)
 
 Organizes ingredients by store section for shopping lists. Items not in any category will appear under "Other".
