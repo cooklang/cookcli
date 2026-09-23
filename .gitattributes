@@ -1,0 +1,24 @@
+# Store and check out every text file as LF, on every platform.
+#
+# Git for Windows defaults to core.autocrlf=true. A CRLF docker-entrypoint.sh
+# makes the shebang "#!/bin/sh\r", so the kernel looks for an interpreter named
+# "/bin/sh\r" and the container dies at startup. The committed blobs are LF, so
+# this only ever reproduces on a local Windows build, never in CI.
+#
+# Applied to everything rather than a list of extensions: nothing here is built
+# by Windows-native tooling, so a file type added later is covered by default.
+* text=auto eol=lf
+
+# The files the rule exists for: a stray CR breaks these at runtime, not build.
+*.sh                    text eol=lf
+docker-entrypoint.sh    text eol=lf
+*.spec                  text eol=lf
+Dockerfile              text eol=lf
+Makefile                text eol=lf
+.github/**              text eol=lf
+
+# Pinned rather than sniffed: a misdetection corrupts these on checkout.
+*.png                   binary
+*.jpg                   binary
+*.jpeg                  binary
+*.ico                   binary
