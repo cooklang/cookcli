@@ -26,7 +26,7 @@ pub mod search;
 pub mod shopping_list;
 pub mod source;
 
-pub use context::{global_config_path, Context};
+pub use context::{global_config_path, Context, CONFIG_DIR_ENV};
 pub use diagnostic::{Diagnostic, Location, Severity, Span};
 pub use error::CoreError;
 pub use find::REFERENCE_SEPARATOR;

@@ -21,6 +21,9 @@
 
 #![cfg(feature = "server")]
 
+#[path = "common/mod.rs"]
+mod common;
+
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ORIGIN};
 use reqwest::{Client, Method, Response, StatusCode};
 use std::net::TcpListener;
@@ -80,18 +83,6 @@ fn write_fixture(dir: &TempDir) {
     .unwrap();
 }
 
-/// Points a spawned `cook server` at a `HOME`/`XDG_CONFIG_HOME` inside the
-/// test's own `TempDir`, so a global `~/.config/cook/pantry.conf` (or the
-/// macOS equivalent) on the machine running the test cannot change which
-/// config file `Context::discover` finds and, in turn, what these tests
-/// observe.
-fn with_isolated_home<'a>(cmd: &'a mut Command, dir: &TempDir) -> &'a mut Command {
-    let home = dir.path().join("home");
-    std::fs::create_dir_all(&home).unwrap();
-    cmd.env("HOME", &home)
-        .env("XDG_CONFIG_HOME", home.join(".config"))
-}
-
 /// `free_port` only reserves a port long enough to learn its number, so with
 /// several tests booting servers at once another one can claim it first. The
 /// server exits 1 on a bound port, so retry with a fresh one.
@@ -117,7 +108,7 @@ async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
     for arg in extra_args {
         cmd.arg(arg);
     }
-    let child = with_isolated_home(&mut cmd, &dir)
+    let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -167,7 +158,7 @@ fn run_server_startup(extra_args: &[&str]) -> Output {
     for arg in extra_args {
         cmd.arg(arg);
     }
-    with_isolated_home(&mut cmd, &dir)
+    common::with_isolated_config(&mut cmd, dir.path())
         .output()
         .expect("run cook server")
 }

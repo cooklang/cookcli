@@ -9,6 +9,9 @@
 
 #![cfg(feature = "server")]
 
+#[path = "common/mod.rs"]
+mod common;
+
 use serde_json::Value;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
@@ -91,11 +94,12 @@ async fn try_start_server() -> Option<ServerGuard> {
     write_fixture(&dir);
 
     let port = free_port();
-    let child = Command::new(assert_cmd::cargo::cargo_bin("cook"))
-        .arg("server")
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin("cook"));
+    cmd.arg("server")
         .arg(dir.path())
         .arg("--port")
-        .arg(port.to_string())
+        .arg(port.to_string());
+    let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

@@ -473,12 +473,33 @@ Detailed documentation for each command is available in the [docs/](docs/) direc
 CookCLI looks for configuration files in:
 
 * `./config/` - in your recipe directory (highest priority)
-* `~/.config/cooklang/` - in your home directory (fallback)
-* `~/Library/Application Support/cook/` - on macOS (fallback)
+* the global configuration directory (fallback):
+  * `~/.config/cook/` - on Linux
+  * `~/Library/Application Support/cook/` - on macOS
+  * `%APPDATA%\cook\config\` - on Windows
 
 Configuration files:
 * `aisle.conf` - Organizes ingredients by store section
 * `pantry.conf` - Tracks your ingredient inventory with quantities
+
+### `COOK_CONFIG_DIR`
+
+Set `COOK_CONFIG_DIR` to use a different global configuration directory. It
+replaces the platform default above for *everything* CookCLI keeps there —
+`aisle.conf`, `pantry.conf`, your CookCloud session and the sync database — so
+it gives you a self-contained CookCLI:
+
+```bash
+COOK_CONFIG_DIR=~/kitchen/cook-config cook shopping-list dinner.cook
+```
+
+A local `./config/` still takes priority. An empty value means "unset", and the
+platform default applies.
+
+This is also how the test suite keeps itself away from your real session:
+`HOME` and `XDG_CONFIG_HOME` cannot do the job, because the Windows
+configuration directory is resolved through the Known Folder API and ignores
+both.
 
 ### Aisle Configuration (`aisle.conf`)
 

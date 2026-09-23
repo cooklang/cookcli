@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
 
 /**
  * Read environment variables from file.
@@ -102,6 +103,14 @@ export default defineConfig({
       ? './target/debug/cook server ./seed --port 9080'  // In CI, use pre-built binary
       : 'npm run build-css && npm run build-js && cargo build && ./target/debug/cook server ./seed --port 9080',  // Local dev
     url: 'http://localhost:9080',
+    env: {
+      // Keep the server under test away from the developer's real CookCloud
+      // session. Without this, `npm test` on a machine where someone has run
+      // `cook login` starts syncing ./seed to their account, against the same
+      // sync.db that tracks their own recipe folder. `test-results/` is
+      // gitignored. See tests/config_dir_env_test.rs.
+      COOK_CONFIG_DIR: path.join(__dirname, 'test-results', 'cook-config'),
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 60 * 1000, // 1 minute should be enough with pre-built binary
     stdout: 'pipe',

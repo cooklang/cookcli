@@ -5,6 +5,41 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
+/// Points a spawned `cook` at a configuration directory inside `dir`, so
+/// nothing the test does can reach the real one.
+///
+/// This is not a nicety. `cook server` loads `session.json` from the global
+/// configuration directory and, when it finds one, starts syncing the
+/// directory it was pointed at against the global `sync.db` — the same
+/// database that tracks the developer's own recipe folder. Without isolation,
+/// `cargo test` on a machine where someone has run `cook login` can upload
+/// fixture recipes to their real account, or index a temp directory into that
+/// database and propagate the resulting deletions.
+///
+/// `COOK_CONFIG_DIR` is what does the work, and it is the only part that works
+/// everywhere: `directories` resolves the Windows configuration directory
+/// through the Known Folder API, which ignores `HOME` and `XDG_CONFIG_HOME`
+/// entirely. Those two are still set, for anything else in the process that
+/// reads them directly.
+///
+/// Every test that spawns `cook server` must route its command through here.
+#[allow(dead_code)]
+pub fn with_isolated_config<'a>(
+    cmd: &'a mut std::process::Command,
+    dir: &Path,
+) -> &'a mut std::process::Command {
+    // Dot-prefixed and distinct from the `config/` that fixtures use for
+    // *local* configuration, which shares the same temp directory in several
+    // suites.
+    let config = dir.join(".cook-config");
+    fs::create_dir_all(&config).expect("create isolated config dir");
+    let home = dir.join("home");
+    fs::create_dir_all(&home).expect("create isolated home");
+    cmd.env(cookcli_core::CONFIG_DIR_ENV, &config)
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+}
+
 /// Creates a temporary directory with test recipes
 #[allow(dead_code)]
 pub fn setup_test_recipes() -> Result<TempDir> {
