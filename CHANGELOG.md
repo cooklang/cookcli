@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.37.0](https://github.com/cooklang/cookcli/compare/v0.36.0...v0.37.0) (2026-09-24)
+
+
+### Features
+
+* **build:** generate Atom and RSS feeds with --feed ([f612a38](https://github.com/cooklang/cookcli/commit/f612a3856c5b1deefe1100770ad9310e6863af0f)), closes [#503](https://github.com/cooklang/cookcli/issues/503)
+* **build:** let --feed reuse the --sitemap URL ([4fcb1ed](https://github.com/cooklang/cookcli/commit/4fcb1edc9f49ddbe8391320d3b7113f2001496df))
+* **cooking-mode:** add interactive countdown timers ([4e15c36](https://github.com/cooklang/cookcli/commit/4e15c36a7d6c17238ee9ec3d10e359c9b70066da))
+* **server:** render URL metadata values as clickable links ([20950f7](https://github.com/cooklang/cookcli/commit/20950f745f0f8aef29b352fa168509b7484a5034))
+* **server:** render URL metadata values as clickable links ([e3e7c7e](https://github.com/cooklang/cookcli/commit/e3e7c7eb05bf9144c1ec3514908c8618a0b255f1))
+* **server:** serve Atom and RSS feeds at /atom.xml and /rss.xml ([353941f](https://github.com/cooklang/cookcli/commit/353941fbab8e7fc8f5cbac61c61203b7ef9dc8fc))
+
+
+### Bug Fixes
+
+* **core:** honour COOK_CONFIG_DIR so tests cannot reach a real session ([be252dc](https://github.com/cooklang/cookcli/commit/be252dc5e5d6197112137bb3edd87201ceb18c01))
+* **core:** honour COOK_CONFIG_DIR so tests cannot reach a real session ([ea19b1a](https://github.com/cooklang/cookcli/commit/ea19b1a54ae02b5906f124ce559f8ff0003fc470))
+* **docker:** embed the lsp feature so the web editor works ([eb0bfc8](https://github.com/cooklang/cookcli/commit/eb0bfc8c8b13c13bddddf1fcb0d817d5a0ae036e))
+* **docker:** embed the lsp feature so the web editor works ([63a54d6](https://github.com/cooklang/cookcli/commit/63a54d60f296ab39ee3920d258165802a5371d39))
+* **server:** cap concurrent LSP sessions ([3a31c01](https://github.com/cooklang/cookcli/commit/3a31c0128baa841357a82f188ef89dcc6a0b5999))
+* **server:** cap concurrent LSP sessions ([f2cafac](https://github.com/cooklang/cookcli/commit/f2cafac3bdb571a833d981d2c9892f4bb074869a))
+* **server:** don't announce reads of the shopping list as changes ([3f8b445](https://github.com/cooklang/cookcli/commit/3f8b44537f565ecec4c30a8f1572d0d094f8b4c2))
+* **server:** keep /recipe and /directory inside the recipe directory ([9652975](https://github.com/cooklang/cookcli/commit/9652975489211368361b3e701a95c2735e1b76fd))
+* **server:** keep request-supplied paths inside the recipe directory ([b32e76e](https://github.com/cooklang/cookcli/commit/b32e76e00703c7c3d5200ab6a779f03b51414ce2))
+* **server:** keep the shopping list inside the recipe directory ([c81609e](https://github.com/cooklang/cookcli/commit/c81609eb8c6433041adbd497a5cff82224278f49))
+* **server:** tell a lagging SSE subscriber the whole list changed ([227873f](https://github.com/cooklang/cookcli/commit/227873fc47ac4bcdd355283bdcb87d6dcc8e5713))
+* **web:** leave re-reading the ticks to the tick's own announcement ([3e17fb5](https://github.com/cooklang/cookcli/commit/3e17fb5194edee07af152ee3a6aad3af0cf915fb))
+* **web:** make the editor diagnostic popup readable in dark mode ([331696c](https://github.com/cooklang/cookcli/commit/331696caa66d8286f94198bffaa12ac7d90228a5))
+* **web:** make the editor diagnostic popup readable in dark mode ([f4e86cb](https://github.com/cooklang/cookcli/commit/f4e86cb4da0e536236e40cd1f2577fc31cd1ef25))
+* **web:** only re-render the shopping list where it changed ([f3e1181](https://github.com/cooklang/cookcli/commit/f3e11813e145c58c1bd54bb67cc1a5f424982dbd))
+
 ## [0.36.0](https://github.com/cooklang/cookcli/compare/v0.35.0...v0.36.0) (2026-09-18)
 
 
