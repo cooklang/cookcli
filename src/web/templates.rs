@@ -573,6 +573,9 @@ pub struct EditTemplate {
     pub recipe_path: String,
     pub content: String,
     pub base_path: String,
+    /// Largest title picture upload the server takes, checked in the browser
+    /// before sending so a too-big file fails at once rather than after it.
+    pub max_image_bytes: usize,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,

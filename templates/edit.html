@@ -5,7 +5,7 @@
 {% block content %}
 <div class="flex flex-col h-[calc(100vh-12rem)]">
     <!-- Header bar -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-4">
             <a href="{{ prefix }}/recipe/{{ recipe_path }}" class="btn">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17,6 +17,12 @@
         </div>
         <div class="flex items-center gap-3">
             <span id="save-status" class="text-sm text-muted"></span>
+            <button onclick="showPictureModal()" class="btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                {{ tr.t("picture-button") }}
+            </button>
             <button onclick="showDeleteModal()" class="btn btn-danger">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -46,6 +52,47 @@
                 <button onclick="deleteRecipe()" class="btn btn-danger">
                     {{ tr.t("action-delete") }}
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Title picture dialog -->
+    <div id="picture-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-lg mx-4" role="dialog" aria-modal="true" aria-labelledby="picture-heading">
+            <h2 id="picture-heading" class="text-title font-bold text-text mb-4">{{ tr.t("picture-title") }}</h2>
+            <div id="picture-drop" onclick="choosePicture()"
+                 class="flex items-center justify-center h-64 rounded-[var(--radius-control)] border border-dashed border-line-strong bg-sunk overflow-hidden cursor-pointer">
+                <img id="picture-preview" class="hidden w-full h-full object-contain" alt="{{ tr.t("picture-title") }}">
+                <p id="picture-empty" class="text-sm text-muted text-center px-6">{{ tr.t("picture-none") }}</p>
+            </div>
+            <p id="picture-metadata-note" class="hidden text-sm text-muted mt-3">{{ tr.t("picture-from-metadata") }}</p>
+            <p class="text-xs text-faint mt-3">{{ tr.t("picture-hint") }}</p>
+            <!-- No image/heic here: iOS converts a HEIC photo to JPEG on upload
+                 only while the picker does not ask for HEIC, and the server
+                 cannot read HEIC. -->
+            <input id="picture-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+            <div id="picture-actions" class="flex flex-wrap items-center justify-end gap-3 mt-6">
+                <span id="picture-status" class="text-sm text-muted mr-auto" aria-live="polite"></span>
+                <button id="picture-remove" type="button" onclick="askRemovePicture()" class="btn hidden disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ tr.t("picture-remove") }}
+                </button>
+                <button type="button" onclick="hidePictureModal()" class="btn">
+                    {{ tr.t("aria-close") }}
+                </button>
+                <button id="picture-choose" type="button" onclick="choosePicture()" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ tr.t("picture-choose") }}
+                </button>
+            </div>
+            <div id="picture-confirm" class="hidden mt-6">
+                <p class="text-sm text-danger mb-3">{{ tr.t("picture-remove-confirm") }}</p>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="cancelRemovePicture()" class="btn">
+                        {{ tr.t("action-cancel") }}
+                    </button>
+                    <button type="button" onclick="removePicture()" class="btn btn-danger">
+                        {{ tr.t("picture-remove") }}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -247,8 +294,202 @@ document.getElementById('delete-modal').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         hideDeleteModal();
+        hidePictureModal();
     }
 });
+
+// Title picture: the Recipe.jpg beside the recipe file
+const pictureUrl = `{{ prefix }}/api/recipe_image/${encodeURIComponent(recipePath)}`;
+const MAX_IMAGE_BYTES = {{ max_image_bytes }};
+const pictureText = {
+    choose: {{ tr.t("picture-choose")|json|safe }},
+    replace: {{ tr.t("picture-replace")|json|safe }},
+    uploading: {{ tr.t("picture-uploading")|json|safe }},
+    removing: {{ tr.t("picture-removing")|json|safe }},
+    loadFailed: {{ tr.t("picture-load-failed")|json|safe }},
+    uploadFailed: {{ tr.t("picture-upload-failed")|json|safe }},
+    removeFailed: {{ tr.t("picture-remove-failed")|json|safe }},
+    tooLarge: {{ tr.t("picture-too-large")|json|safe }},
+    heif: {{ tr.t("picture-heif")|json|safe }},
+};
+let pictureSource = null;
+let pictureBusy = false;
+
+function showPictureModal() {
+    const modal = document.getElementById('picture-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    cancelRemovePicture();
+    // Asked afresh each time: an `image:` line typed into the editor since the
+    // page loaded changes which picture the recipe shows.
+    loadPicture();
+}
+
+function hidePictureModal() {
+    const modal = document.getElementById('picture-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+async function loadPicture() {
+    try {
+        const response = await fetch(pictureUrl);
+        if (!response.ok) {
+            showToast(await pictureError(response, pictureText.loadFailed));
+            return;
+        }
+        renderPicture(await response.json(), false);
+    } catch (error) {
+        showToast(`${pictureText.loadFailed}: ${error.message}`);
+    }
+}
+
+// `state` is the API's { image, source }. `changed` means the file was just
+// written or removed, so an <img> already showing that URL must fetch it again.
+function renderPicture(state, changed) {
+    pictureSource = state.source;
+    const preview = document.getElementById('picture-preview');
+    const empty = document.getElementById('picture-empty');
+    if (state.image) {
+        preview.src = changed && state.source === 'file'
+            ? `${state.image}?v=${Date.now()}`
+            : state.image;
+        preview.classList.remove('hidden');
+        empty.classList.add('hidden');
+    } else {
+        preview.removeAttribute('src');
+        preview.classList.add('hidden');
+        empty.classList.remove('hidden');
+    }
+
+    const fromMetadata = state.source === 'metadata';
+    document.getElementById('picture-metadata-note').classList.toggle('hidden', !fromMetadata);
+    document.getElementById('picture-remove').classList.toggle('hidden', state.source !== 'file');
+    const choose = document.getElementById('picture-choose');
+    choose.textContent = state.source === 'file' ? pictureText.replace : pictureText.choose;
+    updatePictureControls();
+}
+
+function updatePictureControls() {
+    const locked = pictureBusy || pictureSource === 'metadata';
+    document.getElementById('picture-choose').disabled = locked;
+    document.getElementById('picture-remove').disabled = locked;
+    document.getElementById('picture-drop').classList.toggle('cursor-pointer', !locked);
+}
+
+function setPictureBusy(label) {
+    pictureBusy = label !== null;
+    document.getElementById('picture-status').textContent = label || '';
+    updatePictureControls();
+}
+
+function choosePicture() {
+    if (pictureBusy || pictureSource === 'metadata') return;
+    document.getElementById('picture-input').click();
+}
+
+async function uploadPicture(file) {
+    if (!file || pictureBusy || pictureSource === 'metadata') return;
+    if (file.size > MAX_IMAGE_BYTES) {
+        showToast(pictureText.tooLarge);
+        return;
+    }
+
+    setPictureBusy(pictureText.uploading);
+    try {
+        // The file itself is the body, not a form: the server reads raw bytes.
+        const response = await fetch(pictureUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            body: file,
+        });
+        if (response.ok) {
+            renderPicture(await response.json(), true);
+        } else {
+            showToast(await pictureError(response, pictureText.uploadFailed));
+        }
+    } catch (error) {
+        showToast(`${pictureText.uploadFailed}: ${error.message}`);
+    } finally {
+        setPictureBusy(null);
+        document.getElementById('picture-input').value = '';
+    }
+}
+
+function askRemovePicture() {
+    if (pictureBusy) return;
+    document.getElementById('picture-actions').classList.add('hidden');
+    document.getElementById('picture-confirm').classList.remove('hidden');
+}
+
+function cancelRemovePicture() {
+    document.getElementById('picture-confirm').classList.add('hidden');
+    document.getElementById('picture-actions').classList.remove('hidden');
+}
+
+async function removePicture() {
+    cancelRemovePicture();
+    setPictureBusy(pictureText.removing);
+    try {
+        const response = await fetch(pictureUrl, { method: 'DELETE' });
+        if (response.ok) {
+            renderPicture(await response.json(), true);
+        } else {
+            showToast(await pictureError(response, pictureText.removeFailed));
+            // A 404 means it was already gone; show what is there now.
+            loadPicture();
+        }
+    } catch (error) {
+        showToast(`${pictureText.removeFailed}: ${error.message}`);
+    } finally {
+        setPictureBusy(null);
+    }
+}
+
+// Turns an error response into a message. The server answers in JSON with a
+// `code` for the cases worth a translated sentence; axum's own 413, for a body
+// over the limit, is plain text.
+async function pictureError(response, fallback) {
+    if (response.status === 413) return pictureText.tooLarge;
+    let body = null;
+    try {
+        body = await response.json();
+    } catch (_) {
+        // not JSON
+    }
+    if (body && body.code === 'heif') return pictureText.heif;
+    if (body && body.code === 'too_large') return pictureText.tooLarge;
+    return `${fallback}: ${(body && body.error) || response.statusText}`;
+}
+
+document.getElementById('picture-input').addEventListener('change', function() {
+    uploadPicture(this.files[0]);
+});
+
+const pictureDrop = document.getElementById('picture-drop');
+pictureDrop.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    if (!pictureBusy && pictureSource !== 'metadata') {
+        this.classList.add('border-accent');
+    }
+});
+pictureDrop.addEventListener('dragleave', function() {
+    this.classList.remove('border-accent');
+});
+pictureDrop.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('border-accent');
+    uploadPicture(e.dataTransfer.files[0]);
+});
+
+document.getElementById('picture-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        hidePictureModal();
+    }
+});
+// A file dropped beside the drop zone would otherwise replace the whole page.
+document.getElementById('picture-modal').addEventListener('dragover', e => e.preventDefault());
+document.getElementById('picture-modal').addEventListener('drop', e => e.preventDefault());
 
 // LSP WebSocket connection
 let lspSocket = null;

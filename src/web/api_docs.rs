@@ -60,7 +60,11 @@ pub fn preamble() -> ApiPreamble {
                  non-browser clients — are unaffected. `content-type` is always an allowed \
                  request header.",
             ),
-            note("Request size limit", "1 MB."),
+            note(
+                "Request size limit",
+                "1 MB, except a title picture upload (`PUT /api/recipe_image/{*path}`), which \
+                 takes up to 40 MB.",
+            ),
             note(
                 "Content type",
                 "JSON in and out, except where noted — raw recipe text is `text/plain`.",
@@ -85,6 +89,16 @@ pub fn preamble() -> ApiPreamble {
                 "404",
                 "the recipe, menu, or pantry section does not exist, or no pantry file is \
                  configured.",
+            ),
+            note(
+                "413",
+                "the request body is over the size limit, or a title picture has more pixels \
+                 than the server will decode.",
+            ),
+            note(
+                "415",
+                "a title picture in a format the server cannot read. The body adds a `code`; \
+                 see `PUT /api/recipe_image/{*path}`.",
             ),
             note("500", "the server could not read or write a file."),
             note(
@@ -392,11 +406,98 @@ Mix the @flour{200%g} and @water{120%ml}.
             ),
             ep(
                 "GET",
+                "/api/recipe_image/{*path}",
+                "Read a recipe's title picture",
+                "Reports the picture the recipe page shows. `image` is a URL — under \
+                 `/api/static/`, with the server's `--url-prefix`, or the value itself when \
+                 the metadata names an `http(s)` address — and null when there is none. \
+                 `source` says where it comes from: `metadata` when the recipe's `image` \
+                 (or `images`, `picture`, `pictures`) metadata names it, which takes \
+                 precedence over any file; `file` for a `Recipe.jpg`, `.jpeg`, `.png` or \
+                 `.webp` beside the recipe; null for none. The upload and removal endpoints \
+                 answer with this same shape.",
+            )
+            .params(vec![path_param(
+                "path",
+                "Recipe path relative to the recipe directory; the `.cook` extension is \
+                 optional.",
+            )])
+            .response(
+                r#"
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "source": "file"
+}
+"#,
+            ),
+            ep(
+                "PUT",
+                "/api/recipe_image/{*path}",
+                "Upload a recipe's title picture",
+                "The request body is the picture's bytes — not a multipart form. JPEG, PNG \
+                 and WebP are accepted, up to 40 MB; the format is read from the bytes, not \
+                 the `Content-Type`. The picture is turned upright from its Exif orientation, \
+                 scaled down to at most 2048 px on its longer edge, laid over white if it has \
+                 transparency, and saved as JPEG at `Recipe.jpg` beside the recipe. A JPEG \
+                 that needs none of that and would not come out smaller is kept as sent. Any \
+                 `Recipe.jpeg`, `.png` or `.webp` from before is removed; step pictures \
+                 (`Recipe.1.jpg`) are not touched. A picture the metadata names still wins \
+                 over the uploaded file — see `source` in the response. Errors carry a \
+                 `code` next to `error`: `415` with `heif` for a HEIC or AVIF photo, which \
+                 the server cannot read (an iPhone's own browser converts them to JPEG when \
+                 uploading), `415` with `unsupported` for any other format, `400` with \
+                 `invalid` for a file that does not decode, and `413` with `too_large` for \
+                 one with more pixels than the decoder takes on. A body over 40 MB is refused \
+                 with a plain-text `413` once the server has read past the limit.",
+            )
+            .params(vec![path_param(
+                "path",
+                "Recipe path relative to the recipe directory; the `.cook` extension is \
+                 optional. The recipe must exist.",
+            )])
+            .request("<the picture's bytes>")
+            .response(
+                r#"
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "source": "file"
+}
+"#,
+            ),
+            ep(
+                "DELETE",
+                "/api/recipe_image/{*path}",
+                "Remove a recipe's title picture",
+                "Deletes every `Recipe.jpg`, `.jpeg`, `.png` and `.webp` beside the recipe, \
+                 for good — there is no undo and no trash. Returns `404` when there was none. \
+                 A picture named by the recipe's metadata is left alone; remove it by editing \
+                 the recipe.",
+            )
+            .params(vec![path_param(
+                "path",
+                "Recipe path relative to the recipe directory; the `.cook` extension is \
+                 optional.",
+            )])
+            .response(
+                r#"
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": null,
+  "source": null
+}
+"#,
+            ),
+            ep(
+                "GET",
                 "/api/static/{*path}",
                 "Fetch a recipe asset",
                 "Serves files straight from the recipe directory — this is where recipe images \
                  live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL \
-                 into this route.",
+                 into this route. Responses carry `Cache-Control: no-cache`, so a browser checks \
+                 back each time — a cheap `304` through the `ETag` when nothing changed — and a \
+                 picture replaced under the same name shows up at once.",
             )
             .params(vec![path_param(
                 "path",

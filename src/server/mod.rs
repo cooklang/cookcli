@@ -34,7 +34,7 @@ use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path},
-    http::{header, Response, StatusCode},
+    http::{header, HeaderValue, Response, StatusCode},
     routing::{get, post},
     Router,
 };
@@ -43,7 +43,7 @@ use clap::Args;
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
-use tower_http::services::ServeDir;
+use tower_http::{services::ServeDir, set_header::SetResponseHeader};
 use tracing::{error, info};
 
 mod cors;
@@ -51,6 +51,7 @@ mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
 mod shopping_list_watcher;
+mod title_image;
 mod ui;
 
 #[derive(Debug, Args)]
@@ -218,7 +219,17 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         .nest("/api", api(&state)?)
         .merge(ui::ui())
         .route("/static/{*file}", get(serve_static))
-        .nest_service("/api/static", ServeDir::new(&state.base_path));
+        // `no-cache` makes the browser ask again each time, which ServeDir
+        // answers with a 304 unless the file changed. Without it a title
+        // picture replaced under the same name keeps showing the old one.
+        .nest_service(
+            "/api/static",
+            SetResponseHeader::overriding(
+                ServeDir::new(&state.base_path),
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("no-cache"),
+            ),
+        );
 
     let app = if state.url_prefix.is_empty() {
         inner
@@ -535,6 +546,15 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             get(handlers::recipe)
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
+        )
+        .route(
+            "/recipe_image/{*path}",
+            get(handlers::recipe_image_get)
+                .put(handlers::recipe_image_put)
+                .delete(handlers::recipe_image_delete)
+                // A phone photo is well past the 1 MiB every other route is
+                // held to; this layer sits inside that one, so it wins.
+                .layer(DefaultBodyLimit::max(title_image::MAX_UPLOAD_BYTES)),
         )
         .route("/menus", get(handlers::list_menus))
         .route("/menus/{*path}", get(handlers::get_menu))

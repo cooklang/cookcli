@@ -61,7 +61,7 @@ cook server --cors-origin https://cook.example.com
 - Behind a reverse proxy that rewrites `Host`, pass `--cors-origin` with the public origin (for example `--cors-origin https://cook.example.com`). The same-origin check reads the real `Host` header and ignores `X-Forwarded-Host`, which any client can set freely.
 - `--no-csrf-check` turns that same-origin enforcement off entirely, for both the API and the web UI's new-recipe form. Its former spelling, `--no-cors`, still works.
 - The built-in editor gets its diagnostics and completions from a `cook lsp` subprocess, one per open edit tab, and the endpoint that starts them has no authentication. `--max-lsp-sessions` caps how many run at once (8 by default) so that a client which is not that editor cannot spawn them without bound; beyond the cap the websocket handshake is refused with `503` and the editor retries. Under `--host`, consider `--max-lsp-sessions 0`, which serves the recipes but never starts a subprocess for a remote client.
-- The web interface supports recipe browsing, scaling, search, and shopping list management
+- The web interface supports recipe browsing, scaling, search, editing, and shopping list management
 - The UI language is negotiated per request from the browser's `Accept-Language` header — each visitor sees the interface in their own language (supported: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`). For static sites, see the `--lang` flag of [`cook build web`](build.md#localization).
 - Mobile-friendly responsive layout
 
@@ -72,3 +72,15 @@ The server publishes an Atom feed at `/atom.xml` and an RSS 2.0 feed at `/rss.xm
 Items use the same metadata as the static site's feeds (`title`, `date`, `description`, `author`, `tags`); see [Web feeds](build.md#web-feeds). The feed title and language follow the request's `Accept-Language` header.
 
 Feed links are absolute. They are built from the request's `Host` header and `--url-prefix`. Behind a TLS-terminating reverse proxy, send `X-Forwarded-Proto: https` to get `https://` links. As with the same-origin check, `X-Forwarded-Host` is ignored, so the proxy must pass the public `Host` through.
+
+## Title pictures
+
+The recipe editor's **Picture** button adds, replaces or removes a recipe's title picture — the `Recipe.jpg` next to `Recipe.cook` that the recipe page and the recipe list show — without touching the server's files directly. Choose a file or drop one on the dialog.
+
+- JPEG, PNG and WebP are accepted, up to 40 MB. Every picture is saved as `Recipe.jpg`: turned upright from the photo's orientation data, scaled down to 2048 px on its longer edge, laid over white where it is transparent, and re-encoded. A JPEG that needs none of that and would not come out smaller is kept as it was sent.
+- Re-encoding drops the photo's metadata, including its GPS location.
+- An older `Recipe.jpeg`, `Recipe.png` or `Recipe.webp` is removed when a new picture is saved. Step pictures (`Recipe.1.jpg`) are never touched.
+- HEIC and AVIF photos cannot be read. An iPhone's own browser converts a HEIC photo to JPEG as it uploads it; from a computer, export the photo as JPEG first, or set the iPhone camera to **Most Compatible** (Settings › Camera › Formats).
+- A recipe whose metadata names a picture (`image:` in its frontmatter) shows that one instead. The dialog says so; remove the line to use an uploaded picture.
+
+The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
