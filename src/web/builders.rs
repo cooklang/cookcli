@@ -37,6 +37,10 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     } = input;
 
     let search_path = if let Some(p) = sub_path {
+        // On the server `p` comes straight from the `/directory/{*path}` URL.
+        if !crate::util::is_safe_relative_path(p) {
+            anyhow::bail!("Invalid path: {p}");
+        }
         base_path.join(p)
     } else {
         base_path.to_path_buf()
@@ -293,6 +297,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         repo_url,
         features,
     } = input;
+
+    // On the server `recipe_path` comes straight from the `/recipe/{*path}` URL.
+    if !crate::util::is_safe_relative_path(recipe_path) {
+        anyhow::bail!("Invalid path: {recipe_path}");
+    }
 
     let recipe_path_buf = Utf8PathBuf::from(recipe_path);
     tracing::info!(

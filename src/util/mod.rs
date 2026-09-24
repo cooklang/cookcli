@@ -205,6 +205,13 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
         })
 }
 
+/// Whether a request-supplied path, joined to a directory, stays inside it.
+///
+/// Re-exported from `cookcli-core`, which is where the single definition lives
+/// now that `find::resolve_reference` has to apply the same rule to a recipe
+/// reference before looking it up.
+pub use cookcli_core::find::is_safe_relative_path;
+
 /// Resolve a recipe name or path to a file, in CLI wording.
 ///
 /// The lookup itself lives in `cookcli-core`; this wrapper only translates the

@@ -1,9 +1,10 @@
+use crate::server::handlers::common::check_path;
 use crate::server::AppState;
 use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
 use anyhow::Context as _;
 use axum::{extract::State, http::StatusCode, Json};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
     extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingListStore,
     StoredEntry,
@@ -30,6 +31,11 @@ pub async fn shopping_list(
 
     for entry in payload {
         let name = entry.recipe;
+        // Straight to `cooklang_find`, which joins it to the recipe directory
+        // and asks the filesystem. Checked before that happens, not after:
+        // on Windows, merely looking up `\\host\share` hands that host the
+        // user's NTLM hash.
+        check_path(&name)?;
         let recipe = ScaledRecipe {
             source: cookcli_core::RecipeSource::Path(name.as_str().into()),
             scale: entry.scale.unwrap_or(1.0),
@@ -220,6 +226,12 @@ pub async fn add_to_shopping_list(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AddItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    // Nothing is read here, but the path is persisted and resolved later —
+    // by `/api/shopping_list` when the page posts it back, and by
+    // `aggregate_current_ingredient_names` on the way to a compact. Refuse it
+    // at the door rather than storing something those have to defend against.
+    check_path(&payload.path)?;
+
     let store = ShoppingListStore::new(&state.base_path);
     // `name` is derived from `path` on load — any client-supplied display
     // name would be silently discarded, so it's not accepted here.
@@ -396,6 +408,17 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     // legitimately contain the same recipe more than once (e.g. duplicate
     // entries from the legacy format), and that is not a cycle.
     let mut add = |path: &str, scale: f64, included: Option<&[String]>| -> anyhow::Result<()> {
+        // `.shopping-list` is a file, and one written before these endpoints
+        // checked what they stored can still hold a path that leaves the
+        // recipe directory. Skipping it costs the compact the ingredients of
+        // an entry that was never a recipe in this collection; following it
+        // would read whatever it names.
+        if !crate::util::is_safe_relative_path(path) {
+            tracing::warn!(
+                "Ignoring stored shopping list path outside the recipe directory: {path}"
+            );
+            return Ok(());
+        }
         extract_ingredients(
             &core_ctx,
             &ScaledRecipe {
@@ -444,6 +467,8 @@ pub async fn add_menu_to_shopping_list(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AddMenuRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    check_path(&payload.path)?;
+
     let store = ShoppingListStore::new(&state.base_path);
     let menu_scale = payload.scale;
 
@@ -469,6 +494,14 @@ pub async fn add_menu_to_shopping_list(
 
     let mut recipes = Vec::new();
 
+    // What a `..` in one of the menu's references steps up from. `payload.path`
+    // is the menu as the client named it, which `check_path` has established is
+    // a plain relative path, so its parent is relative to the recipe directory.
+    let menu_dir = recipe_path
+        .parent()
+        .map(Utf8Path::to_owned)
+        .unwrap_or_default();
+
     for ingredient in &menu.ingredients {
         if let Some(ref recipe_ref) = ingredient.reference {
             // Build display path from reference components
@@ -478,9 +511,24 @@ pub async fn add_menu_to_shopping_list(
                 format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
             };
 
+            // Where the reference actually points, relative to the recipe
+            // directory — `./Shared/Sauce` from the root, `../Shared/Sauce`
+            // from the menu's own directory. This is both what gets looked up
+            // and what gets stored, so `.shopping-list` holds a path the rest
+            // of the server can use without resolving a reference again.
+            let Some(path) = cookcli_core::resolve_reference(&menu_dir, &ref_display) else {
+                tracing::warn!(
+                    "Skipping recipe reference '{}' in menu '{}': it points outside the \
+                     recipe directory",
+                    ref_display,
+                    payload.path
+                );
+                continue;
+            };
+            let path = path.to_string();
+
             // Resolve this recipe's sub-recipe references, default servings, and yield
-            let ref_path_for_find = recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
-            let info = match resolve_recipe_info(&state.base_path, &ref_path_for_find) {
+            let info = match resolve_recipe_info(&state.base_path, &path) {
                 Ok(info) => info,
                 Err(e) => {
                     tracing::warn!(
@@ -504,12 +552,6 @@ pub async fn add_menu_to_shopping_list(
                 reference_scale_factor(ingredient.quantity.as_ref(), &info, &ref_display);
             let final_scale = recipe_factor * menu_scale;
             let sub_refs = info.sub_refs;
-
-            // Strip ./ prefix for storage (the format writer adds it back)
-            let path = ref_display
-                .strip_prefix("./")
-                .unwrap_or(&ref_display)
-                .to_string();
 
             recipes.push(StoredEntry {
                 name: recipe_display_name(&path),

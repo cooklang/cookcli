@@ -360,10 +360,12 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
 /// whose references resolve are left out entirely, so an empty map means every
 /// reference in the collection is good.
 ///
-/// Every reference is resolved against [`ValidationReport::base_dir`], the root
-/// that was validated, rather than against the directory of the recipe making
-/// it. That is what `cook doctor validate` has always done, and it means a
-/// reference is judged by whether *the collection* holds a recipe of that name.
+/// Every reference is resolved by [`find::resolve_reference`], the same way
+/// the shopping list follows one: from [`ValidationReport::base_dir`], the root
+/// that was validated, except for a `..`, which steps up from the directory of
+/// the recipe making it. A reference is judged by whether *the collection*
+/// holds a recipe of that name, so one pointing outside the validated root is
+/// broken however readable the file it lands on happens to be.
 ///
 /// "Broken" is the whole of "could not be resolved to a readable recipe": a
 /// reference naming a file that exists but cannot be opened counts, exactly as
@@ -378,9 +380,17 @@ pub fn broken_references(report: &ValidationReport) -> BTreeMap<&Utf8Path, Vec<S
         .references()
         .into_iter()
         .filter_map(|(recipe, references)| {
+            // `recipe` is the referring file, relative to the validated root;
+            // its directory is what a `..` in one of its references steps up
+            // from.
+            let from = recipe.parent().unwrap_or(Utf8Path::new("")).to_owned();
             let broken: Vec<String> = references
                 .iter()
-                .filter(|reference| crate::find::get_recipe(&report.base_dir, reference).is_err())
+                .filter(|reference| {
+                    crate::find::resolve_reference(&from, reference).is_none_or(|path| {
+                        crate::find::get_recipe(&report.base_dir, path.as_str()).is_err()
+                    })
+                })
                 .cloned()
                 .collect();
             (!broken.is_empty()).then_some((recipe, broken))
