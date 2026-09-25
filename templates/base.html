@@ -250,7 +250,7 @@
                         <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="brand-mark h-8 w-8 rounded-md" width="32" height="32">
                     </a>
 
-                    <div class="relative z-50 order-2 flex-1 md:ml-2 md:mr-4" id="search-container">
+                    <div class="relative z-50 order-2 flex-1 min-w-0 mr-2 md:ml-2 md:mr-4" id="search-container">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-5 w-5 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -266,7 +266,7 @@
                         </div>
                     </div>
 
-                    <div class="order-3 w-full md:w-auto flex items-center gap-1 lg:gap-2">
+                    <div class="order-3 flex items-center gap-1 lg:gap-2">
                         {% if features.show_shopping_list || features.show_pantry %}
                         <div class="hidden md:flex items-center gap-1 mr-2 lg:mr-4">
                             <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}"
