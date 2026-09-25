@@ -1,6 +1,11 @@
-target/
-node_modules/
+# Patterns are matched from the context root, so a bare `target/` only
+# excludes the top-level directory. `**/` also catches nested copies.
+**/target/
+**/node_modules/
 .git/
+# Local Claude Code state, including git worktrees that each carry their own
+# multi-GB target/ and node_modules/.
+.claude/
 test-results/
 playwright-report/
 playwright/.cache/
