@@ -35,6 +35,26 @@ editor-saving = Gordetzen...
 editor-save-failed = Errorea gordetzerakoan
 editor-placeholder = Idatzi hemen zure errezeta...
 
+# Editor toolbar
+editor-toolbar-label = Cooklang formatua
+editor-toolbar-inline = Lerro barneko elementuak
+editor-toolbar-block = Lerro-elementuak
+editor-toolbar-ingredient = Osagaia
+editor-toolbar-ingredient-title = Txertatu osagai bat (@), edo bihurtu hautapena osagai
+editor-toolbar-cookware = Tresna
+editor-toolbar-cookware-title = Txertatu tresna bat (#), edo bihurtu hautapena tresna
+editor-toolbar-timer = Tenporizadorea
+editor-toolbar-timer-title = Txertatu tenporizadore bat (~) minututan, edo eman hautapenaren izena
+editor-toolbar-section = Atala
+editor-toolbar-section-title = Hasi atal berri bat (== Atala ==), hautapenaren izenarekin
+editor-toolbar-section-default = Atala
+editor-toolbar-note = Oharra
+editor-toolbar-note-title = Bihurtu uneko lerroak ohar (>), edo itzuli urratsetara
+editor-toolbar-comment = Iruzkina
+editor-toolbar-comment-title = Iruzkindu uneko lerroak (--), edo lerro bateko hautapena
+editor-toolbar-metadata = Metadatuak
+editor-toolbar-metadata-title = Gehitu metadatu-lerro bat goiburuan (---)
+
 # LSP Status
 lsp-connected = LSP konektatuta
 lsp-disconnected = Deskonektatuta
