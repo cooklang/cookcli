@@ -9,7 +9,7 @@ Start the server with [`cook server`](server.md); every endpoint below is served
 - **Base URL:** `http://localhost:9080/api`
 - **Authentication:** None. Anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network.
 - **CORS:** `GET` is allowed from any origin. A cross-origin request that would modify recipes is refused with `403` unless the server was started with a matching `--cors-origin <ORIGIN>`. Requests with no `Origin` header — `curl` and other non-browser clients — are unaffected. `content-type` is always an allowed request header.
-- **Request size limit:** 1 MB.
+- **Request size limit:** 1 MB, except a title picture upload (`PUT /api/recipe_image/{*path}`), which takes up to 10 MB.
 - **Content type:** JSON in and out, except where noted — raw recipe text is `text/plain`.
 
 ## Errors
@@ -23,6 +23,8 @@ Every failure returns the same shape, with the status code carrying the meaning:
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
 - `403` — a cross-origin request tried to modify recipes. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
+- `413` — the request body is over the size limit, or a title picture has more pixels than the server will decode.
+- `415` — a title picture in a format the server cannot read. The body adds a `code`; see `PUT /api/recipe_image/{*path}`.
 - `500` — the server could not read or write a file.
 - `503` — every language server session is in use, or the bridge is switched off. Only `GET /api/ws/lsp` returns this; see `--max-lsp-sessions`.
 
@@ -235,11 +237,77 @@ Response:
 }
 ```
 
+### `GET /api/recipe_image/{*path}`
+
+Read a recipe's title picture
+
+Reports the picture the recipe page shows. `image` is a URL — under `/api/static/`, with the server's `--url-prefix`, or the value itself when the metadata names an `http(s)` address — and null when there is none. `source` says where it comes from: `metadata` when the recipe's `image` (or `images`, `picture`, `pictures`) metadata names it, which takes precedence over any file; `file` for a `Recipe.jpg`, `.jpeg`, `.png` or `.webp` beside the recipe; null for none. The upload and removal endpoints answer with this same shape.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. |
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "source": "file"
+}
+```
+
+### `PUT /api/recipe_image/{*path}`
+
+Upload a recipe's title picture
+
+The request body is the picture's bytes — not a multipart form. JPEG, PNG and WebP are accepted, up to 10 MB; the format is read from the bytes, not the `Content-Type`. The picture is turned upright from its Exif orientation, scaled down to at most 2048 px on its longer edge, laid over white if it has transparency, and saved as JPEG at `Recipe.jpg` beside the recipe. It is always re-encoded, never stored as sent, so the file holds no Exif (GPS position included) and nothing that rode along after the image. The web editor scales a photo down in the browser before sending it, which is why 10 MB is plenty; another client may send the original. Any `Recipe.jpeg`, `.png` or `.webp` from before is removed; step pictures (`Recipe.1.jpg`) are not touched. A picture the metadata names still wins over the uploaded file — see `source` in the response. Errors carry a `code` next to `error`: `415` with `heif` for a HEIC or AVIF photo, which the server cannot read (an iPhone's own browser converts them to JPEG when uploading), `415` with `unsupported` for any other format, `400` with `invalid` for a file that does not decode, and `413` with `too_large` for one with more pixels than the decoder takes on. A body over 10 MB is refused with a plain-text `413` once the server has read past the limit.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. The recipe must exist. |
+
+Request body:
+
+```text
+<the picture's bytes>
+```
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "source": "file"
+}
+```
+
+### `DELETE /api/recipe_image/{*path}`
+
+Remove a recipe's title picture
+
+Deletes every `Recipe.jpg`, `.jpeg`, `.png` and `.webp` beside the recipe, for good — there is no undo and no trash. Returns `404` when there was none. A picture named by the recipe's metadata is left alone; remove it by editing the recipe.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. |
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": null,
+  "source": null
+}
+```
+
 ### `GET /api/static/{*path}`
 
 Fetch a recipe asset
 
-Serves files straight from the recipe directory — this is where recipe images live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL into this route.
+Serves files straight from the recipe directory — this is where recipe images live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL into this route. Responses carry `Cache-Control: no-cache`, so a browser checks back each time — a cheap `304` through the `ETag` when nothing changed — and a picture replaced under the same name shows up at once.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|

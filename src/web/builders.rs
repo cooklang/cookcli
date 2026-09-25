@@ -1160,7 +1160,11 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
     Some(count)
 }
 
-fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Option<String> {
+pub(crate) fn get_image_path(
+    base_path: &Utf8Path,
+    prefix: &str,
+    img_path: String,
+) -> Option<String> {
     tracing::debug!("Recipe image path from entry: {}", img_path);
     // If it's a URL, use it directly
     if img_path.starts_with("http://") || img_path.starts_with("https://") {
