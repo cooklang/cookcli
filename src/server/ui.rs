@@ -1,3 +1,4 @@
+use crate::server::cors::CorsConfig;
 use crate::server::AppState;
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
@@ -249,21 +250,33 @@ fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::
     .into_response()
 }
 
-/// Validates that the request originated from the same host (CSRF protection)
-fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
+/// Validates that the request originated from the same host, or from an
+/// origin named by `--cors-origin` (CSRF protection).
+///
+/// Same rule as the API's write guard, so a deployment that can edit recipes
+/// can also create them. Unlike the guard, a request with neither `Origin`
+/// nor `Referer` is refused: this endpoint is only ever reached by a browser
+/// form, and browsers always send one of them.
+fn validate_same_origin(headers: &HeaderMap, host: &str, cors: &CorsConfig) -> bool {
     // Origin first: it is the header a browser always sends on a form POST,
     // and the one an attacker cannot forge.
     if let Some(origin) = headers.get(header::ORIGIN) {
         return origin
             .to_str()
-            .is_ok_and(|origin| super::cors::origin_matches_host(origin, host));
+            .is_ok_and(|origin| cors.allows_origin(origin, host));
     }
 
-    // Referer is less reliable but better than nothing.
+    // Referer is less reliable but better than nothing. It is a full URL, so
+    // reduce it to its origin before checking it against the `--cors-origin`
+    // list, which holds bare origins.
     if let Some(referer) = headers.get(header::REFERER) {
         return referer
             .to_str()
-            .is_ok_and(|referer| super::cors::origin_matches_host(referer, host));
+            .ok()
+            .and_then(|referer| url::Url::parse(referer).ok())
+            .is_some_and(|referer| {
+                cors.allows_origin(&referer.origin().ascii_serialization(), host)
+            });
     }
 
     // Neither header: reject. Browsers always send one for a form submission,
@@ -274,13 +287,21 @@ fn validate_same_origin(headers: &HeaderMap, host: &str) -> bool {
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    uri: Uri,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
-    // The raw `Host` header, not axum-extra's `Host` extractor: that one
-    // prefers `X-Forwarded-Host`, which any client can set.
-    let host = super::cors::host_header(&headers).unwrap_or_default();
-    if state.csrf_check && !validate_same_origin(&headers, host) {
-        tracing::warn!("CSRF validation failed for create_recipe request");
+    // The raw `Host` header (or, for HTTP/2, the URI authority), resolved
+    // exactly as the write guard does. Not axum-extra's `Host` extractor: that
+    // one prefers `X-Forwarded-Host`, which any client can set.
+    let host = super::cors::request_authority(&headers, &uri).unwrap_or_default();
+    if state.csrf_check && !validate_same_origin(&headers, host, &state.cors) {
+        tracing::warn!(
+            origin = ?headers.get(header::ORIGIN),
+            referer = ?headers.get(header::REFERER),
+            host,
+            "CSRF validation failed for create_recipe request; behind a reverse proxy \
+             that rewrites Host, pass the public origin with --cors-origin"
+        );
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }
 

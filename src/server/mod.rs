@@ -156,9 +156,12 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
 
     // Validate before binding or printing anything, so a bad flag combination
     // fails immediately rather than after the "Listening on ..." banner.
-    let cors = cors::CorsConfig::from_args(&args.cors_origin, args.cors_allow_credentials)?;
+    let cors = Arc::new(cors::CorsConfig::from_args(
+        &args.cors_origin,
+        args.cors_allow_credentials,
+    )?);
 
-    let state = build_state(ctx, args)?;
+    let state = build_state(ctx, args, Arc::clone(&cors))?;
 
     if state.url_prefix.is_empty() {
         println!("Listening on http://{addr}");
@@ -234,7 +237,6 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let state_for_shutdown = state.clone();
 
     let cors_layer = cors.layer();
-    let cors = Arc::new(cors);
 
     let app = app
         .with_state(state)
@@ -298,7 +300,11 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     Ok(())
 }
 
-fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
+fn build_state(
+    ctx: Context,
+    args: ServerArgs,
+    cors: Arc<cors::CorsConfig>,
+) -> Result<Arc<AppState>> {
     let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
@@ -368,6 +374,7 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         pantry_path,
         url_prefix,
         csrf_check: args.csrf_check,
+        cors,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
@@ -420,6 +427,9 @@ pub struct AppState {
     /// When true, requests that modify recipes must be same-origin or come
     /// from a `--cors-origin`. Cleared by `--no-csrf-check`.
     pub csrf_check: bool,
+    /// The `--cors-origin` policy. The write guard enforces it as middleware;
+    /// the new-recipe form consults it for its own same-origin check.
+    pub cors: Arc<cors::CorsConfig>,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
     pub lsp_sessions: lsp_bridge::SessionLimit,

@@ -35,7 +35,7 @@ use tempfile::TempDir;
 struct ServerGuard {
     child: Child,
     port: u16,
-    #[allow(dead_code)] // keeps the fixture directory alive for the server's lifetime
+    /// Keeps the fixture directory alive for the server's lifetime.
     dir: TempDir,
 }
 
@@ -426,6 +426,103 @@ async fn no_csrf_check_disables_the_write_guard() {
         StatusCode::FORBIDDEN,
         "--no-csrf-check must disable the write guard entirely, got {status}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// New-recipe form (`POST /new`)
+//
+// The form has its own same-origin check on top of the write guard. It must
+// accept exactly what the guard accepts, or a deployment that can edit
+// recipes through the API still cannot create one.
+// ---------------------------------------------------------------------------
+
+/// Submits the new-recipe form with the given `Origin` / `Referer` headers.
+/// Redirects are not followed: success is a `303` to the editor.
+async fn post_new_recipe(
+    server: &ServerGuard,
+    name: &str,
+    origin: Option<&str>,
+    referer: Option<&str>,
+) -> Response {
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("client");
+    let mut req = client
+        .post(server.url("/new"))
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(format!("filename={name}"));
+    if let Some(origin) = origin {
+        req = req.header(ORIGIN, origin);
+    }
+    if let Some(referer) = referer {
+        req = req.header(reqwest::header::REFERER, referer);
+    }
+    req.send().await.expect("new recipe request")
+}
+
+fn assert_created(server: &ServerGuard, resp: &Response, name: &str) {
+    assert_eq!(
+        resp.status(),
+        StatusCode::SEE_OTHER,
+        "creating {name} must redirect to the editor"
+    );
+    assert_eq!(
+        header(resp.headers(), "location").as_deref(),
+        Some(format!("/edit/{name}.cook").as_str())
+    );
+    assert!(server.dir.path().join(format!("{name}.cook")).is_file());
+}
+
+#[tokio::test]
+async fn new_recipe_form_accepts_a_same_origin_submission() {
+    let server = start_server(&[]).await;
+    let own_origin = server.own_origin();
+    let resp = post_new_recipe(&server, "Same", Some(&own_origin), None).await;
+    assert_created(&server, &resp, "Same");
+}
+
+#[tokio::test]
+async fn new_recipe_form_accepts_a_listed_cors_origin() {
+    // Behind a proxy that rewrites `Host`, the browser's `Origin` is the
+    // public one and never matches. `--cors-origin` is the documented fix,
+    // and it already lets the editor save; it must let the form create too.
+    let server = start_server(&["--cors-origin", "http://app.test"]).await;
+
+    let resp = post_new_recipe(&server, "Listed", Some("http://app.test"), None).await;
+    assert_created(&server, &resp, "Listed");
+
+    let resp = post_new_recipe(
+        &server,
+        "ListedReferer",
+        None,
+        Some("http://app.test/new?error=x"),
+    )
+    .await;
+    assert_created(&server, &resp, "ListedReferer");
+}
+
+#[tokio::test]
+async fn new_recipe_form_refuses_an_unlisted_origin() {
+    let server = start_server(&["--cors-origin", "http://app.test"]).await;
+
+    let resp = post_new_recipe(&server, "Evil", Some("http://evil.test"), None).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // No `Origin` gets past the write guard (it means a non-browser client
+    // there), so this one is refused by the form's own check.
+    let resp = post_new_recipe(&server, "EvilReferer", None, Some("http://evil.test/")).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    let resp = post_new_recipe(&server, "Bare", None, None).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    for name in ["Evil", "EvilReferer", "Bare"] {
+        assert!(!server.dir.path().join(format!("{name}.cook")).exists());
+    }
 }
 
 // ---------------------------------------------------------------------------

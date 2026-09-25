@@ -121,6 +121,16 @@ impl CorsConfig {
         let Ok(origin) = origin.to_str() else {
             return false;
         };
+        self.allows_origin(origin, host)
+    }
+
+    /// Whether a browser request carrying this `Origin` may modify recipes:
+    /// it matches the `Host` the request was sent to, or is named by
+    /// `--cors-origin`.
+    ///
+    /// Shared with the new-recipe form, so a reverse-proxy deployment that
+    /// names its public origin can create recipes as well as edit them.
+    pub(super) fn allows_origin(&self, origin: &str, host: &str) -> bool {
         origin_matches_host(origin, host) || self.lists_origin(origin)
     }
 
