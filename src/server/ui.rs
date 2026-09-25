@@ -2,11 +2,12 @@ use crate::server::handlers::common::{is_request_path, recipe_file, RecipeFile};
 use crate::server::AppState;
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
+use crate::web::viewer::Viewer;
 use axum::{
     extract::{Extension, Path, Query, State},
     http::{header, HeaderMap, StatusCode, Uri},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Form, Router,
 };
 use serde::Deserialize;
@@ -18,6 +19,7 @@ fn error_page(
     prefix: &str,
     msg: impl std::fmt::Display,
     features: FeatureFlags,
+    viewer: Viewer,
 ) -> axum::response::Response {
     let template = ErrorTemplate {
         active: String::new(),
@@ -27,6 +29,7 @@ fn error_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     };
     template.into_response()
 }
@@ -46,14 +49,20 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/api-docs", get(api_docs_page))
         .route("/atom.xml", get(atom_feed))
         .route("/rss.xml", get(rss_feed))
+        .route(
+            "/login",
+            get(super::auth::handlers::login_page).post(super::auth::handlers::login),
+        )
+        .route("/logout", post(super::auth::handlers::logout))
 }
 
 async fn recipes_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
-    recipes_handler(state, None, lang, features).await
+    recipes_handler(state, None, lang, features, viewer).await
 }
 
 async fn recipes_directory(
@@ -61,8 +70,9 @@ async fn recipes_directory(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
-    recipes_handler(state, Some(path), lang, features).await
+    recipes_handler(state, Some(path), lang, features, viewer).await
 }
 
 async fn recipes_handler(
@@ -70,6 +80,7 @@ async fn recipes_handler(
     path: Option<String>,
     lang: LanguageIdentifier,
     features: FeatureFlags,
+    viewer: Viewer,
 ) -> axum::response::Response {
     let input = crate::web::builders::RecipesBuildInput {
         base_path: &state.base_path,
@@ -79,12 +90,13 @@ async fn recipes_handler(
         static_mode: false,
         repo_url: None,
         features,
+        viewer: viewer.clone(),
     };
     match crate::web::builders::build_recipes_template(input) {
         Ok(template) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipes template: {:?}", e);
-            error_page(lang, &state.url_prefix, &e, features)
+            error_page(lang, &state.url_prefix, &e, features, viewer)
         }
     }
 }
@@ -93,8 +105,9 @@ async fn random_recipe_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
-    random_recipe_handler(&state, None, lang, features)
+    random_recipe_handler(&state, None, lang, features, viewer)
 }
 
 async fn random_recipe_directory(
@@ -102,8 +115,9 @@ async fn random_recipe_directory(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
-    random_recipe_handler(&state, Some(&path), lang, features)
+    random_recipe_handler(&state, Some(&path), lang, features, viewer)
 }
 
 /// Redirect to a `.cook` recipe picked at random from a folder and everything
@@ -113,11 +127,12 @@ fn random_recipe_handler(
     path: Option<&str>,
     lang: LanguageIdentifier,
     features: FeatureFlags,
+    viewer: Viewer,
 ) -> axum::response::Response {
     let prefix = &state.url_prefix;
     let dir = match path {
         Some(p) if !crate::util::is_safe_relative_path(p) => {
-            let page = error_page(lang, prefix, format!("Invalid path: {p}"), features);
+            let page = error_page(lang, prefix, format!("Invalid path: {p}"), features, viewer);
             return (StatusCode::BAD_REQUEST, page).into_response();
         }
         Some(p) => state.base_path.join(p),
@@ -131,13 +146,14 @@ fn random_recipe_handler(
                 prefix,
                 format!("Failed to list recipes: {e}"),
                 features,
+                viewer,
             );
             return (StatusCode::NOT_FOUND, page).into_response();
         }
     };
     let recipes = crate::web::builders::cook_recipe_paths(&tree);
     if recipes.is_empty() {
-        let page = error_page(lang, prefix, "No recipes in this folder", features);
+        let page = error_page(lang, prefix, "No recipes in this folder", features, viewer);
         return (StatusCode::NOT_FOUND, page).into_response();
     }
 
@@ -145,7 +161,7 @@ fn random_recipe_handler(
     // `build_tree` joins what it finds onto `dir`, which starts with the base.
     let Ok(relative) = picked.strip_prefix(&state.base_path) else {
         tracing::error!("Random recipe {picked} is outside {}", state.base_path);
-        let page = error_page(lang, prefix, "Failed to pick a recipe", features);
+        let page = error_page(lang, prefix, "Failed to pick a recipe", features, viewer);
         return (StatusCode::INTERNAL_SERVER_ERROR, page).into_response();
     };
     let url_path = relative
@@ -173,6 +189,7 @@ async fn recipe_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
     let scale = query.scale.unwrap_or(1.0);
 
@@ -186,6 +203,7 @@ async fn recipe_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer: viewer.clone(),
     };
 
     match crate::web::builders::build_recipe_template(input) {
@@ -193,7 +211,7 @@ async fn recipe_page(
         Ok(crate::web::builders::RecipeBuildOutput::Menu(template)) => template.into_response(),
         Err(e) => {
             tracing::error!("Failed to build recipe template: {:?}", e);
-            error_page(lang, &state.url_prefix, &e, features)
+            error_page(lang, &state.url_prefix, &e, features, viewer)
         }
     }
 }
@@ -203,6 +221,7 @@ async fn edit_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
     tracing::info!("Edit page requested for path: {}", path);
 
@@ -216,6 +235,7 @@ async fn edit_page(
             &state.url_prefix,
             format!("Invalid path: {path}"),
             features,
+            viewer,
         );
     }
 
@@ -228,6 +248,7 @@ async fn edit_page(
                 &state.url_prefix,
                 format!("Recipe not found: {path}"),
                 features,
+                viewer,
             );
         }
     };
@@ -242,6 +263,7 @@ async fn edit_page(
                 &state.url_prefix,
                 format!("Failed to read recipe file: {e}"),
                 features,
+                viewer,
             );
         }
     };
@@ -267,6 +289,7 @@ async fn edit_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     };
 
     template.into_response()
@@ -282,6 +305,7 @@ async fn new_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
     Query(query): Query<NewPageQuery>,
 ) -> impl IntoResponse {
     crate::web::templates::NewTemplate {
@@ -293,6 +317,7 @@ async fn new_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     }
 }
 
@@ -505,6 +530,7 @@ async fn shopping_list_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> impl IntoResponse {
     ShoppingListTemplate {
         active: "shopping".to_string(),
@@ -513,6 +539,7 @@ async fn shopping_list_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     }
 }
 
@@ -520,6 +547,7 @@ async fn pantry_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Load pantry configuration
     let pantry_path = state.pantry_path.as_ref();
@@ -563,6 +591,7 @@ async fn pantry_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     })
 }
 
@@ -570,9 +599,18 @@ async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> impl IntoResponse {
+    // The sync section names the linked cook.md account and can link or
+    // unlink one, so guests do not get it at all.
+    let sync_enabled = cfg!(feature = "sync") && viewer.can_edit();
     #[cfg(feature = "sync")]
-    let (sync_logged_in, sync_email, sync_syncing, _sync_reason) = state.sync_status().await;
+    let (sync_logged_in, sync_email, sync_syncing) = if sync_enabled {
+        let (logged_in, email, syncing, _reason) = state.sync_status().await;
+        (logged_in, email, syncing)
+    } else {
+        (false, None, false)
+    };
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
@@ -591,7 +629,7 @@ async fn preferences_page(
         base_path: state.base_path.to_string(),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
         tr: Tr::new(lang),
-        sync_enabled: cfg!(feature = "sync"),
+        sync_enabled,
         sync_logged_in,
         sync_email,
         sync_syncing,
@@ -599,6 +637,7 @@ async fn preferences_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     }
 }
 
@@ -643,12 +682,11 @@ async fn rss_feed(
 /// of the response sent back to the same client.
 fn feed_base_url(headers: &HeaderMap, uri: &Uri, url_prefix: &str) -> Option<String> {
     let host = super::cors::request_authority(headers, uri)?;
-    let https = headers
-        .get("x-forwarded-proto")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .is_some_and(|v| v.trim().eq_ignore_ascii_case("https"));
-    let scheme = if https { "https" } else { "http" };
+    let scheme = if forwarded_https(headers) {
+        "https"
+    } else {
+        "http"
+    };
     let base = format!("{scheme}://{host}{url_prefix}/");
     // Reject a Host that would smuggle a path, query or credentials into the
     // links: it must parse back to exactly scheme + authority + prefix.
@@ -659,6 +697,17 @@ fn feed_base_url(headers: &HeaderMap, uri: &Uri, url_prefix: &str) -> Option<Str
         && parsed.fragment().is_none()
         && parsed.path() == format!("{url_prefix}/");
     clean.then_some(base)
+}
+
+/// Whether a TLS-terminating proxy says the client connected over https
+/// (`X-Forwarded-Proto: https`). Anyone can send the header, so it only ever
+/// decides things about the response to that same client.
+pub(super) fn forwarded_https(headers: &HeaderMap) -> bool {
+    headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("https"))
 }
 
 async fn feed_response(
@@ -711,6 +760,7 @@ async fn api_docs_page(
     uri: Uri,
     Extension(lang): Extension<LanguageIdentifier>,
     Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
 ) -> impl IntoResponse {
     // Rendered so integrators can copy a working URL rather than a relative
     // path. The authority the request was addressed to, not `Forwarded` /
@@ -734,6 +784,7 @@ async fn api_docs_page(
         static_mode: false,
         repo_url: None,
         features,
+        viewer,
     }
 }
 

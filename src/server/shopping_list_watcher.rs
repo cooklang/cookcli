@@ -62,7 +62,7 @@ use notify_debouncer_full::DebouncedEvent;
 /// announce another change, and an open page reloaded the list every second
 /// or so for as long as it stayed open. `Access(Close(Write))` is the
 /// exception: it marks the end of a write.
-fn is_read(kind: &EventKind) -> bool {
+pub(super) fn is_read(kind: &EventKind) -> bool {
     match kind {
         EventKind::Access(AccessKind::Close(AccessMode::Write)) => false,
         EventKind::Access(_) => true,
