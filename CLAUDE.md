@@ -225,6 +225,7 @@ Component classes live in `static/css/components.css` and resolve every colour t
 - `.ingredient-row`, `.row`, `.row-value`, `.row-note` - List rows
 - `.pantry-item`, `.pantry-actions`, `.item-status-dot` - Pantry blocks and stock state
 - `.stepper`, `.select`, `.search-input` - Form controls
+- `.editor-toolbar`, `.editor-toolbar-group`, `.editor-toolbar-glyph` - Cooklang insert toolbar above the editor (`static/js/src/toolbar.js`)
 
 ## Testing Approach
 

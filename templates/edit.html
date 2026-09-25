@@ -97,6 +97,49 @@
         </div>
     </div>
 
+    <!-- Cooklang toolbar: each button inserts the markup or wraps the selection -->
+    <div id="editor-toolbar" class="editor-toolbar" role="toolbar" aria-label="{{ tr.t("editor-toolbar-label") }}" data-mode="recipe">
+        <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-inline") }}">
+            <button type="button" class="btn btn-sm" data-action="ingredient"
+                    title="{{ tr.t("editor-toolbar-ingredient-title") }}" aria-label="{{ tr.t("editor-toolbar-ingredient") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">@</span>
+                {{ tr.t("editor-toolbar-ingredient") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="cookware"
+                    title="{{ tr.t("editor-toolbar-cookware-title") }}" aria-label="{{ tr.t("editor-toolbar-cookware") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">#</span>
+                {{ tr.t("editor-toolbar-cookware") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="timer"
+                    title="{{ tr.t("editor-toolbar-timer-title") }}" aria-label="{{ tr.t("editor-toolbar-timer") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">~</span>
+                {{ tr.t("editor-toolbar-timer") }}
+            </button>
+        </div>
+        <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-block") }}">
+            <button type="button" class="btn btn-sm" data-action="section" data-default="{{ tr.t("editor-toolbar-section-default") }}"
+                    title="{{ tr.t("editor-toolbar-section-title") }}" aria-label="{{ tr.t("editor-toolbar-section") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">==</span>
+                {{ tr.t("editor-toolbar-section") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="note"
+                    title="{{ tr.t("editor-toolbar-note-title") }}" aria-label="{{ tr.t("editor-toolbar-note") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">&gt;</span>
+                {{ tr.t("editor-toolbar-note") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="comment"
+                    title="{{ tr.t("editor-toolbar-comment-title") }}" aria-label="{{ tr.t("editor-toolbar-comment") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">--</span>
+                {{ tr.t("editor-toolbar-comment") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="metadata"
+                    title="{{ tr.t("editor-toolbar-metadata-title") }}" aria-label="{{ tr.t("editor-toolbar-metadata") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">---</span>
+                {{ tr.t("editor-toolbar-metadata") }}
+            </button>
+        </div>
+    </div>
+
     <!-- Editor area -->
     <div id="editor-container" class="flex-1 card overflow-hidden"></div>
 
@@ -156,6 +199,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, LSP_DEBOUNCE_MS);
         }
     });
+
+    window.CooklangEditor.initToolbar(document.getElementById('editor-toolbar'), editorView);
 
     // Set up cursor position tracking (must be after editor init)
     window.CooklangEditor.setCursorPositionCallback((line, col) => {

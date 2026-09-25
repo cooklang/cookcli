@@ -35,6 +35,26 @@ editor-saving = Saving...
 editor-save-failed = Save failed
 editor-placeholder = Enter your recipe here...
 
+# Editor toolbar
+editor-toolbar-label = Cooklang formatting
+editor-toolbar-inline = Inline elements
+editor-toolbar-block = Line elements
+editor-toolbar-ingredient = Ingredient
+editor-toolbar-ingredient-title = Insert an ingredient (@), or turn the selection into one
+editor-toolbar-cookware = Cookware
+editor-toolbar-cookware-title = Insert cookware (#), or turn the selection into cookware
+editor-toolbar-timer = Timer
+editor-toolbar-timer-title = Insert a timer (~) in minutes, or name it after the selection
+editor-toolbar-section = Section
+editor-toolbar-section-title = Start a new section (== Section ==), named after the selection
+editor-toolbar-section-default = Section
+editor-toolbar-note = Note
+editor-toolbar-note-title = Turn the current lines into a note (>), or back into steps
+editor-toolbar-comment = Comment
+editor-toolbar-comment-title = Comment out the current lines (--), or the selection within a line
+editor-toolbar-metadata = Metadata
+editor-toolbar-metadata-title = Add a metadata line to the frontmatter (---)
+
 # LSP Status
 lsp-connected = LSP Connected
 lsp-disconnected = Disconnected

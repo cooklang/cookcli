@@ -672,6 +672,49 @@
     .pantry-actions .icon-btn { width: 28px; height: 28px; }
     .pantry-actions .icon-btn svg { width: 16px; height: 16px; }
 
+    /* ---------- Editor toolbar ---------- */
+    /* Cooklang insert buttons above the recipe editor. Groups wrap as a
+       whole on narrow screens, then their buttons wrap inside them. */
+    .editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 6px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+    }
+
+    .editor-toolbar-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .editor-toolbar-group + .editor-toolbar-group {
+        padding-left: 12px;
+        border-left: 1px solid var(--border);
+    }
+
+    /* Groups stack here, so the divider would hang off the second row. */
+    @media (max-width: 767px) {
+        .editor-toolbar-group + .editor-toolbar-group {
+            padding-left: 0;
+            border-left: 0;
+        }
+    }
+
+    .editor-toolbar .btn-sm { padding: 0 10px; gap: 6px; }
+
+    .editor-toolbar-glyph {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-weight: 600;
+        color: var(--accent-text);
+    }
+
     /* ---------- Coarse pointers ---------- */
     /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
     @media (pointer: coarse) {
