@@ -63,7 +63,7 @@ pub fn preamble() -> ApiPreamble {
             note(
                 "Request size limit",
                 "1 MB, except a title picture upload (`PUT /api/recipe_image/{*path}`), which \
-                 takes up to 40 MB.",
+                 takes up to 10 MB.",
             ),
             note(
                 "Content type",
@@ -436,11 +436,14 @@ Mix the @flour{200%g} and @water{120%ml}.
                 "/api/recipe_image/{*path}",
                 "Upload a recipe's title picture",
                 "The request body is the picture's bytes — not a multipart form. JPEG, PNG \
-                 and WebP are accepted, up to 40 MB; the format is read from the bytes, not \
+                 and WebP are accepted, up to 10 MB; the format is read from the bytes, not \
                  the `Content-Type`. The picture is turned upright from its Exif orientation, \
                  scaled down to at most 2048 px on its longer edge, laid over white if it has \
-                 transparency, and saved as JPEG at `Recipe.jpg` beside the recipe. A JPEG \
-                 that needs none of that and would not come out smaller is kept as sent. Any \
+                 transparency, and saved as JPEG at `Recipe.jpg` beside the recipe. It is \
+                 always re-encoded, never stored as sent, so the file holds no Exif (GPS \
+                 position included) and nothing that rode along after the image. The web \
+                 editor scales a photo down in the browser before sending it, which is why \
+                 10 MB is plenty; another client may send the original. Any \
                  `Recipe.jpeg`, `.png` or `.webp` from before is removed; step pictures \
                  (`Recipe.1.jpg`) are not touched. A picture the metadata names still wins \
                  over the uploaded file — see `source` in the response. Errors carry a \
@@ -448,7 +451,7 @@ Mix the @flour{200%g} and @water{120%ml}.
                  the server cannot read (an iPhone's own browser converts them to JPEG when \
                  uploading), `415` with `unsupported` for any other format, `400` with \
                  `invalid` for a file that does not decode, and `413` with `too_large` for \
-                 one with more pixels than the decoder takes on. A body over 40 MB is refused \
+                 one with more pixels than the decoder takes on. A body over 10 MB is refused \
                  with a plain-text `413` once the server has read past the limit.",
             )
             .params(vec![path_param(

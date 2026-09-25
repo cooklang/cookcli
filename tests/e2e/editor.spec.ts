@@ -114,4 +114,64 @@ test.describe('Recipe editor title picture', () => {
     await expect(page.getByText('Most Compatible')).toBeVisible();
     expect(fs.existsSync(PICTURE_FILE)).toBe(false);
   });
+
+  test('scales a large picture down in the browser before sending it', async ({ page }) => {
+    await page.goto(PICTURE_EDIT_URL);
+    await page.getByRole('button', { name: 'Picture', exact: true }).click();
+
+    // A 3000 × 1500 PNG, drawn by the browser: Node has no encoder at hand.
+    const png = Buffer.from(
+      await page.evaluate(async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 3000;
+        canvas.height = 1500;
+        const context = canvas.getContext('2d')!;
+        const gradient = context.createLinearGradient(0, 0, 3000, 1500);
+        gradient.addColorStop(0, '#c0392b');
+        gradient.addColorStop(1, '#2980b9');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 3000, 1500);
+        const blob: Blob = await new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'));
+        return Array.from(new Uint8Array(await blob.arrayBuffer()));
+      }),
+    );
+
+    // Playwright does not hand back a request body sent as a Blob, so note
+    // what the page gives `fetch` instead.
+    await page.evaluate(() => {
+      const w = window as any;
+      const original = window.fetch;
+      w.sentPictures = [];
+      window.fetch = async (input, init) => {
+        if (init?.method === 'PUT' && init.body instanceof Blob) {
+          const bitmap = await createImageBitmap(init.body);
+          const head = new Uint8Array(await init.body.slice(0, 3).arrayBuffer());
+          w.sentPictures.push({
+            type: init.body.type,
+            size: init.body.size,
+            head: Array.from(head),
+            width: bitmap.width,
+            height: bitmap.height,
+          });
+        }
+        return original(input, init);
+      };
+    });
+
+    await page.locator('#picture-input').setInputFiles({
+      name: 'large.png',
+      mimeType: 'image/png',
+      buffer: png,
+    });
+
+    // What crossed the network is already a JPEG, at the stored size.
+    await expect.poll(() => page.evaluate(() => (window as any).sentPictures.length)).toBe(1);
+    const sent = await page.evaluate(() => (window as any).sentPictures[0]);
+    expect(sent.type).toBe('image/jpeg');
+    expect(sent.head).toEqual([0xff, 0xd8, 0xff]);
+    expect([sent.width, sent.height]).toEqual([2048, 1024]);
+
+    const preview = page.locator('#picture-preview');
+    await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2048);
+  });
 });

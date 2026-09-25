@@ -61,14 +61,14 @@ picture-choose = Aukeratu argazkia
 picture-replace = Ordeztu argazkia
 picture-remove = Kendu
 picture-remove-confirm = Argazki hau kendu? Fitxategia ezabatu egingo da eta ezin izango da berreskuratu.
-picture-hint = JPEG, PNG edo WebP, gehienez 40 MB. JPEG gisa gordetzen da; argazki handiak 2048 px-ra txikitzen dira.
+picture-hint = JPEG, PNG edo WebP. JPEG gisa gordetzen da; argazki handiak 2048 px-ra txikitzen dira.
 picture-from-metadata = Errezeta honen argazkia bere metadatuetako image eremuak zehazten du. Kendu lerro hori igotako argazki bat erabiltzeko.
 picture-uploading = Igotzen...
 picture-removing = Kentzen...
 picture-load-failed = Ezin izan da argazkia kargatu
 picture-upload-failed = Igoerak huts egin du
 picture-remove-failed = Ezin izan da argazkia kendu
-picture-too-large = Argazki hau handiegia da. Muga 40 MB da.
+picture-too-large = Argazki hau handiegia da. Muga 10 MB da.
 picture-heif = HEIC eta AVIF argazkiak ezin dira irakurri. Igo telefonoaren beraren nabigatzailetik, JPEG bihurtzen baititu, edo ezarri iPhonearen kamera "Bateragarriena" aukeran (Ezarpenak > Kamera > Formatuak).
 
 # Icon button labels (aria-label / title)

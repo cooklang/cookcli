@@ -77,10 +77,11 @@ Feed links are absolute. They are built from the request's `Host` header and `--
 
 The recipe editor's **Picture** button adds, replaces or removes a recipe's title picture — the `Recipe.jpg` next to `Recipe.cook` that the recipe page and the recipe list show — without touching the server's files directly. Choose a file or drop one on the dialog.
 
-- JPEG, PNG and WebP are accepted, up to 40 MB. Every picture is saved as `Recipe.jpg`: turned upright from the photo's orientation data, scaled down to 2048 px on its longer edge, laid over white where it is transparent, and re-encoded. A JPEG that needs none of that and would not come out smaller is kept as it was sent.
+- JPEG, PNG and WebP are accepted. The browser scales a photo down before sending it, so a phone photo of several megabytes goes up as a few hundred kilobytes; the server takes at most 10 MB.
+- Every picture is saved as `Recipe.jpg`: turned upright from the photo's orientation data, scaled down to 2048 px on its longer edge, laid over white where it is transparent, and always re-encoded on the server — never stored as sent — so a malformed or doctored file cannot reach the recipe folder.
 - Re-encoding drops the photo's metadata, including its GPS location.
 - An older `Recipe.jpeg`, `Recipe.png` or `Recipe.webp` is removed when a new picture is saved. Step pictures (`Recipe.1.jpg`) are never touched.
-- HEIC and AVIF photos cannot be read. An iPhone's own browser converts a HEIC photo to JPEG as it uploads it; from a computer, export the photo as JPEG first, or set the iPhone camera to **Most Compatible** (Settings › Camera › Formats).
+- HEIC and AVIF photos cannot be read by the server. An iPhone's own browser converts a HEIC photo to JPEG as it uploads it, and so does Safari on a Mac; from another browser, export the photo as JPEG first, or set the iPhone camera to **Most Compatible** (Settings › Camera › Formats).
 - A recipe whose metadata names a picture (`image:` in its frontmatter) shows that one instead. The dialog says so; remove the line to use an uploaded picture.
 
 The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).

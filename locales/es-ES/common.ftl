@@ -61,14 +61,14 @@ picture-choose = Elegir foto
 picture-replace = Reemplazar foto
 picture-remove = Quitar
 picture-remove-confirm = ¿Quitar esta foto? El archivo se eliminará y no se podrá recuperar.
-picture-hint = JPEG, PNG o WebP, hasta 40 MB. Se guarda como JPEG; las fotos grandes se reducen a 2048 px.
+picture-hint = JPEG, PNG o WebP. Se guarda como JPEG; las fotos grandes se reducen a 2048 px.
 picture-from-metadata = La foto de esta receta la define el campo image de sus metadatos. Elimina esa línea para usar una foto subida.
 picture-uploading = Subiendo...
 picture-removing = Quitando...
 picture-load-failed = No se pudo cargar la foto
 picture-upload-failed = Error al subir
 picture-remove-failed = No se pudo quitar la foto
-picture-too-large = Esta foto es demasiado grande. El límite es de 40 MB.
+picture-too-large = Esta foto es demasiado grande. El límite es de 10 MB.
 picture-heif = Las fotos HEIC y AVIF no se pueden leer. Súbela desde el navegador del propio teléfono, que la convierte a JPEG, o configura la cámara del iPhone en «Más compatible» (Ajustes > Cámara > Formatos).
 
 # Icon button labels (aria-label / title)

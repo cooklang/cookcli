@@ -196,6 +196,32 @@ async fn an_upload_is_stored_as_the_recipes_jpeg_and_reported() {
     assert_eq!(body["image"], "/api/static/Pancakes.jpg");
 }
 
+/// A JPEG that needs no resizing is still rebuilt from its pixels, so what
+/// rode along after the image never reaches the recipe folder.
+#[tokio::test]
+async fn a_jpeg_is_stored_re_encoded_not_as_sent() {
+    const SMUGGLED: &[u8] = b"<script>alert(1)</script>";
+    let server = start_server().await;
+
+    let mut sent = Cursor::new(Vec::new());
+    DynamicImage::ImageRgb8(RgbImage::from_pixel(32, 32, Rgb([200, 120, 40])))
+        .write_to(&mut sent, ImageFormat::Jpeg)
+        .unwrap();
+    let mut sent = sent.into_inner();
+    sent.extend_from_slice(SMUGGLED);
+
+    let (status, body) = put(&server, "Pancakes", sent.clone()).await;
+    assert_eq!(status, 200, "{body}");
+
+    let stored = std::fs::read(server.file("Pancakes.jpg")).unwrap();
+    assert_ne!(stored, sent);
+    assert!(
+        !stored.windows(SMUGGLED.len()).any(|w| w == SMUGGLED),
+        "the trailing data reached the disk"
+    );
+    assert_is_jpeg(&server.file("Pancakes.jpg"));
+}
+
 #[tokio::test]
 async fn an_upload_replaces_older_pictures_but_not_step_pictures() {
     let server = start_server().await;
@@ -222,8 +248,9 @@ async fn an_upload_replaces_older_pictures_but_not_step_pictures() {
     );
 }
 
-/// Every other route is held to 1 MiB. A phone photo is several times that,
-/// so this route carries its own limit, and it has to win.
+/// Every other route is held to 1 MiB. A photo the editor has already scaled
+/// down can still pass that, and another client may send the original, so
+/// this route carries its own limit, and it has to win.
 #[tokio::test]
 async fn a_picture_over_one_megabyte_is_accepted() {
     let server = start_server().await;
@@ -245,7 +272,7 @@ async fn a_picture_over_one_megabyte_is_accepted() {
 /// reset, which can swallow the response before the test reads it.
 #[tokio::test]
 async fn a_body_over_the_upload_limit_is_refused() {
-    const LIMIT: usize = 40 * 1024 * 1024;
+    const LIMIT: usize = 10 * 1024 * 1024;
     let server = start_server().await;
 
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", server.port))

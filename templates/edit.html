@@ -301,6 +301,10 @@ document.addEventListener('keydown', function(e) {
 // Title picture: the Recipe.jpg beside the recipe file
 const pictureUrl = `{{ prefix }}/api/recipe_image/${encodeURIComponent(recipePath)}`;
 const MAX_IMAGE_BYTES = {{ max_image_bytes }};
+const MAX_IMAGE_EDGE = {{ max_image_edge }};
+// Above the server's own 85: it re-encodes every upload, so this copy only
+// has to survive that second pass, not be the final file.
+const SHRINK_QUALITY = 0.92;
 const pictureText = {
     choose: {{ tr.t("picture-choose")|json|safe }},
     replace: {{ tr.t("picture-replace")|json|safe }},
@@ -388,20 +392,62 @@ function choosePicture() {
     document.getElementById('picture-input').click();
 }
 
+// Scales a photo down to what the server stores anyway, before it crosses the
+// network: a phone photo of several megabytes goes up as a few hundred
+// kilobytes. The server still resizes and re-encodes whatever arrives, so
+// this only has to save bandwidth, not be exact.
+//
+// An <img> rather than createImageBitmap: every browser turns it upright from
+// the photo's Exif orientation, and Safari decodes HEIC with it, so an iPhone
+// photo dropped on a Mac goes up as JPEG. What cannot be decoded here is sent
+// as it is, for the server to accept or explain.
+async function shrinkPicture(file) {
+    const url = URL.createObjectURL(file);
+    try {
+        const img = new Image();
+        img.src = url;
+        try {
+            await img.decode();
+        } catch (_) {
+            return file;
+        }
+
+        const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        // A JPEG that already fits gains nothing from an extra encode here.
+        if (scale === 1 && file.type === 'image/jpeg') return file;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        // JPEG has no transparency; lay the picture over white, as the server does.
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', SHRINK_QUALITY));
+        return blob || file;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
 async function uploadPicture(file) {
     if (!file || pictureBusy || pictureSource === 'metadata') return;
-    if (file.size > MAX_IMAGE_BYTES) {
-        showToast(pictureText.tooLarge);
-        return;
-    }
 
     setPictureBusy(pictureText.uploading);
     try {
-        // The file itself is the body, not a form: the server reads raw bytes.
+        const body = await shrinkPicture(file);
+        // Checked on what is sent: a photo too big to send may shrink below it.
+        if (body.size > MAX_IMAGE_BYTES) {
+            showToast(pictureText.tooLarge);
+            return;
+        }
+        // The picture itself is the body, not a form: the server reads raw bytes.
         const response = await fetch(pictureUrl, {
             method: 'PUT',
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
-            body: file,
+            headers: { 'Content-Type': body.type || 'application/octet-stream' },
+            body,
         });
         if (response.ok) {
             renderPicture(await response.json(), true);

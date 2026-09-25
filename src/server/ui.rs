@@ -200,6 +200,7 @@ async fn edit_page(
         content,
         base_path: state.base_path.to_string(),
         max_image_bytes: super::title_image::MAX_UPLOAD_BYTES,
+        max_image_edge: super::title_image::MAX_EDGE,
         tr: crate::web::templates::Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,

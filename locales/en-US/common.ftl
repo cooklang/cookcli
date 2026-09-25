@@ -61,14 +61,14 @@ picture-choose = Choose picture
 picture-replace = Replace picture
 picture-remove = Remove
 picture-remove-confirm = Remove this picture? The file is deleted and cannot be restored.
-picture-hint = JPEG, PNG or WebP, up to 40 MB. Saved as JPEG; large pictures are scaled down to 2048 px.
+picture-hint = JPEG, PNG or WebP. Saved as JPEG; large pictures are scaled down to 2048 px.
 picture-from-metadata = This recipe's picture is set by the image field in its metadata. Remove that line to use an uploaded picture.
 picture-uploading = Uploading...
 picture-removing = Removing...
 picture-load-failed = Could not load the picture
 picture-upload-failed = Upload failed
 picture-remove-failed = Could not remove the picture
-picture-too-large = This picture is too large. The limit is 40 MB.
+picture-too-large = This picture is too large. The limit is 10 MB.
 picture-heif = HEIC and AVIF photos can't be read. Upload from the phone's own browser, which converts them to JPEG, or set the iPhone camera to Most Compatible (Settings > Camera > Formats).
 
 # Errors

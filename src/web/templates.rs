@@ -576,6 +576,9 @@ pub struct EditTemplate {
     /// Largest title picture upload the server takes, checked in the browser
     /// before sending so a too-big file fails at once rather than after it.
     pub max_image_bytes: usize,
+    /// Longest edge the server stores a title picture at; the browser scales
+    /// a photo down to it before sending.
+    pub max_image_edge: u32,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,

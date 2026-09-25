@@ -61,14 +61,14 @@ picture-choose = Bild auswählen
 picture-replace = Bild ersetzen
 picture-remove = Entfernen
 picture-remove-confirm = Dieses Bild entfernen? Die Datei wird gelöscht und kann nicht wiederhergestellt werden.
-picture-hint = JPEG, PNG oder WebP, bis 40 MB. Wird als JPEG gespeichert; große Bilder werden auf 2048 px verkleinert.
+picture-hint = JPEG, PNG oder WebP. Wird als JPEG gespeichert; große Bilder werden auf 2048 px verkleinert.
 picture-from-metadata = Das Bild dieses Rezepts wird durch das Feld image in seinen Metadaten festgelegt. Entfernen Sie diese Zeile, um ein hochgeladenes Bild zu verwenden.
 picture-uploading = Wird hochgeladen...
 picture-removing = Wird entfernt...
 picture-load-failed = Das Bild konnte nicht geladen werden
 picture-upload-failed = Hochladen fehlgeschlagen
 picture-remove-failed = Das Bild konnte nicht entfernt werden
-picture-too-large = Dieses Bild ist zu groß. Die Grenze liegt bei 40 MB.
+picture-too-large = Dieses Bild ist zu groß. Die Grenze liegt bei 10 MB.
 picture-heif = HEIC- und AVIF-Fotos können nicht gelesen werden. Laden Sie sie über den Browser des Telefons hoch, der sie in JPEG umwandelt, oder stellen Sie die iPhone-Kamera auf „Maximale Kompatibilität“ (Einstellungen > Kamera > Formate).
 
 # Icon button labels (aria-label / title)

@@ -4,6 +4,14 @@
 //! page and the listing cards never show one wider than a laptop screen — and
 //! the listing loads every card's picture at full size. So an upload is
 //! decoded, turned upright, scaled down to [`MAX_EDGE`] and stored as JPEG.
+//! The editor already does the same in the browser before sending, to spare
+//! the network; this runs on whatever arrives regardless, since not every
+//! client is that editor.
+//!
+//! Every upload is re-encoded, never stored as sent. What lands on disk is
+//! then pixels this encoder wrote and nothing else: no malformed segment for
+//! a later reader to trip on, no data smuggled after the image, and no Exif —
+//! which is where a phone keeps the GPS position of the kitchen.
 //!
 //! JPEG, always: `Recipe.jpg` is the first name `cooklang-find` looks for, so
 //! nothing older can hide it, and it is a format cook.md sync carries (it
@@ -17,16 +25,21 @@ use image::{
 use std::io::Cursor;
 use tokio::sync::Semaphore;
 
-/// Largest request body `PUT /api/recipe_image/{*path}` accepts. A
-/// full-resolution 48–50 MP phone JPEG is 15–25 MB.
-pub const MAX_UPLOAD_BYTES: usize = 40 * 1024 * 1024;
+/// Largest request body `PUT /api/recipe_image/{*path}` accepts.
+///
+/// The editor scales a photo down before sending it, so what arrives from it
+/// is a few hundred kilobytes. Two things arrive as they are: a JPEG that
+/// already fits [`MAX_EDGE`], and a picture the browser cannot decode — a
+/// HEIC photo outside Safari — which has to fit too, to be refused with the
+/// message that explains it rather than a bare `413`.
+pub const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024;
 
 /// Longest edge, in pixels, of a stored title picture.
 pub const MAX_EDGE: u32 = 2048;
 
 const JPEG_QUALITY: u8 = 85;
 
-/// Decoding a 50 MP photo holds a few hundred megabytes for a second or two.
+/// Decoding a large photo holds a few hundred megabytes for a second or two.
 /// One at a time keeps a small host — a Raspberry Pi, a phone under Termux —
 /// from running out of memory when several arrive together.
 static PROCESSING: Semaphore = Semaphore::const_new(1);
@@ -106,18 +119,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Vec<u8>, PrepareError> {
     // After the resize, which is cheaper on the smaller image: the bound is
     // square, so fitting then turning lands on the same size as the reverse.
     picture.apply_orientation(orientation);
-    let encoded = encode_jpeg(&picture.into_rgb8())?;
-
-    // A JPEG that needed nothing done would only lose quality to a second
-    // encode, and if it is already the smaller of the two it is kept as sent.
-    if format == ImageFormat::Jpeg
-        && orientation == Orientation::NoTransforms
-        && fits
-        && bytes.len() <= encoded.len()
-    {
-        return Ok(bytes.to_vec());
-    }
-    Ok(encoded)
+    encode_jpeg(&picture.into_rgb8())
 }
 
 /// Whether `bytes` open an ISO-BMFF `ftyp` box naming a HEIF or AVIF brand.
@@ -242,19 +244,33 @@ mod tests {
         }
     }
 
+    /// Even a small JPEG that needs nothing done is rebuilt from its pixels:
+    /// its Exif and anything riding after the image do not reach the disk.
     #[test]
-    fn a_small_well_compressed_jpeg_is_kept_as_sent() {
-        let input = jpeg(&gradient(64, 64), 40, None);
-        assert_eq!(prepare(&input).unwrap(), input);
+    fn every_upload_is_re_encoded() {
+        const SMUGGLED: &[u8] = b"<script>alert(1)</script>";
+        let mut input = jpeg(&gradient(64, 64), 40, Some(exif_orientation(1)));
+        input.extend_from_slice(SMUGGLED);
+
+        let out = prepare(&input).unwrap();
+        assert_ne!(out, input);
+        assert!(
+            !out.windows(SMUGGLED.len()).any(|w| w == SMUGGLED),
+            "trailing data survived"
+        );
+        assert!(
+            !out.windows(4).any(|w| w == b"Exif"),
+            "the Exif segment survived"
+        );
+        let out = decoded(&out);
+        assert_eq!((out.width(), out.height()), (64, 64));
     }
 
     #[test]
     fn the_exif_orientation_is_applied() {
         // 6 is "rotate 90° clockwise to display".
         let input = jpeg(&gradient(40, 20), 40, Some(exif_orientation(6)));
-        let out = prepare(&input).unwrap();
-        assert_ne!(out, input, "a turned picture must be re-encoded");
-        let out = decoded(&out);
+        let out = decoded(&prepare(&input).unwrap());
         assert_eq!((out.width(), out.height()), (20, 40));
     }
 
