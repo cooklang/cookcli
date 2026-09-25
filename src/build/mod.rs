@@ -74,7 +74,7 @@ pub struct WebBuildArgs {
     ///
     /// Accepts a BCP-47 tag like `de-DE`, or a bare language code like `de`
     /// that matches a supported region. Supported: en-US, de-DE, nl-NL,
-    /// fr-FR, es-ES, eu-ES, sv-SE.
+    /// fr-FR, es-ES, eu-ES, sv-SE, it-IT.
     #[arg(long, value_parser = parse_lang_arg)]
     pub lang: Option<LanguageIdentifier>,
 
@@ -121,7 +121,7 @@ pub struct WebBuildArgs {
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
     parse_supported_language(s).ok_or_else(|| {
         format!(
-            "unsupported language '{s}'. Supported: en-US, de-DE, nl-NL, fr-FR, es-ES, eu-ES, sv-SE"
+            "unsupported language '{s}'. Supported: en-US, de-DE, nl-NL, fr-FR, es-ES, eu-ES, sv-SE, it-IT"
         )
     })
 }
