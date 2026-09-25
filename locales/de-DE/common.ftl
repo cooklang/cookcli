@@ -70,6 +70,14 @@ picture-upload-failed = Hochladen fehlgeschlagen
 picture-remove-failed = Das Bild konnte nicht entfernt werden
 picture-too-large = Dieses Bild ist zu groß. Die Grenze liegt bei 10 MB.
 picture-heif = HEIC- und AVIF-Fotos können nicht gelesen werden. Laden Sie sie über den Browser des Telefons hoch, der sie in JPEG umwandelt, oder stellen Sie die iPhone-Kamera auf „Maximale Kompatibilität“ (Einstellungen > Kamera > Formate).
+# Sign-in (users are managed on the server with `cook server user`)
+sign-in = Anmelden
+sign-out = Abmelden
+sign-in-intro = Melden Sie sich an, um Rezepte hinzuzufügen, zu bearbeiten oder zu löschen und die Vorratskammer oder die Einkaufsliste zu ändern.
+sign-in-username = Benutzername
+sign-in-password = Passwort
+sign-in-failed = Falscher Benutzername oder falsches Passwort.
+signed-in-as = Angemeldet als
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Design umschalten
