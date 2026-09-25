@@ -82,8 +82,10 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "403",
-                "a cross-origin request tried to modify recipes. Start the server with \
-                 `--cors-origin <ORIGIN>` to allow that origin.",
+                "a browser request tried to modify recipes from an origin the server does not \
+                 trust: another site, or this server's web UI opened at a host name other than \
+                 `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` \
+                 to allow that origin.",
             ),
             note(
                 "404",

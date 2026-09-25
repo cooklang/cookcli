@@ -335,6 +335,10 @@ cook server
 # Allow access from other devices on your network
 cook server --host
 
+# Only if you open it by host name instead of IP address: name that origin,
+# or the web UI can read but not save
+cook server --host --cors-origin http://raspberrypi.local:9080
+
 # Use a different port
 cook server --port 8080
 
@@ -500,6 +504,20 @@ This is also how the test suite keeps itself away from your real session:
 `HOME` and `XDG_CONFIG_HOME` cannot do the job, because the Windows
 configuration directory is resolved through the Known Folder API and ignores
 both.
+
+### `COOK_CORS_ORIGIN`
+
+Set `COOK_CORS_ORIGIN` to name the origins `cook server` accepts browser
+requests from, separated by commas — the same values as `--cors-origin`, which
+overrides the variable:
+
+```bash
+COOK_CORS_ORIGIN=https://cook.example.com cook server --host
+```
+
+It exists for containers, where passing a flag means restating the image's
+whole command. An empty value means "unset". `--no-csrf-check` has no
+equivalent variable and has to be passed on the command line.
 
 ### Aisle Configuration (`aisle.conf`)
 

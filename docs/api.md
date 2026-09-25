@@ -21,7 +21,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
-- `403` — a cross-origin request tried to modify recipes. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
+- `403` — a browser request tried to modify recipes from an origin the server does not trust: another site, or this server's web UI opened at a host name other than `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `413` — the request body is over the size limit, or a title picture has more pixels than the server will decode.
 - `415` — a title picture in a format the server cannot read. The body adds a `code`; see `PUT /api/recipe_image/{*path}`.

@@ -87,15 +87,21 @@ fn write_fixture(dir: &TempDir) {
 /// several tests booting servers at once another one can claim it first. The
 /// server exits 1 on a bound port, so retry with a fresh one.
 async fn start_server(extra_args: &[&str]) -> ServerGuard {
+    start_server_with_env(extra_args, &[]).await
+}
+
+/// [`start_server`] with extra environment variables, for the settings a
+/// container names that way rather than on the command line.
+async fn start_server_with_env(extra_args: &[&str], env: &[(&str, &str)]) -> ServerGuard {
     for _ in 0..5 {
-        if let Some(server) = try_start_server(extra_args).await {
+        if let Some(server) = try_start_server(extra_args, env).await {
             return server;
         }
     }
     panic!("could not start cook server on a free port after 5 attempts");
 }
 
-async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
+async fn try_start_server(extra_args: &[&str], env: &[(&str, &str)]) -> Option<ServerGuard> {
     let dir = TempDir::new().expect("temp dir");
     write_fixture(&dir);
 
@@ -107,6 +113,9 @@ async fn try_start_server(extra_args: &[&str]) -> Option<ServerGuard> {
         .arg(port.to_string());
     for arg in extra_args {
         cmd.arg(arg);
+    }
+    for (name, value) in env {
+        cmd.env(name, value);
     }
     let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
@@ -463,5 +472,305 @@ async fn wildcard_mixed_with_explicit_origin_fails_to_start() {
     assert!(
         stderr.contains("cannot be combined"),
         "startup error must explain the conflict, got stderr: {stderr}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DNS rebinding
+//
+// A page served from `http://evil.test:{port}` can re-point `evil.test` at
+// this machine once it has loaded. From then on its requests carry
+// `Origin: http://evil.test:{port}` *and* `Host: evil.test:{port}`, so an
+// Origin that matches the Host proves nothing on its own. Only a Host that no
+// DNS answer can redirect — `localhost` or an IP address — counts as the
+// server's own address; any other name has to be listed with `--cors-origin`.
+//
+// These tests set `Host` by hand. reqwest keeps a caller's `Host` (hyper only
+// fills it in when it is missing), and `a_host_header_override_reaches_the_server`
+// pins that down: without it, the refusals below could come from an ordinary
+// Origin/Host mismatch and prove nothing about rebinding.
+// ---------------------------------------------------------------------------
+
+impl ServerGuard {
+    /// Whether the fixture directory holds a recipe named `name`.
+    fn recipe_exists(&self, name: &str) -> bool {
+        self.dir.path().join(format!("{name}.cook")).exists()
+    }
+}
+
+/// `POST /api/pantry/add` as a page on `origin` sends it to a server it
+/// reached as `host`.
+async fn post_pantry_add_as(server: &ServerGuard, host: &str, origin: &str) -> Response {
+    Client::new()
+        .post(server.url("/api/pantry/add"))
+        .json(&serde_json::json!({ "section": "Test", "name": "Test Item" }))
+        .header(reqwest::header::HOST, host)
+        .header(ORIGIN, origin)
+        .send()
+        .await
+        .expect("pantry add request")
+}
+
+/// Submits the web UI's new-recipe form, `POST /new`, with extra `headers`.
+///
+/// Redirects are not followed: a created recipe (303 to its editor) and a
+/// validation error (303 back to the form) would otherwise both end on a
+/// `200` page, while a refusal is a `403` either way.
+async fn post_new_recipe(server: &ServerGuard, name: &str, headers: &[(&str, &str)]) -> Response {
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("http client");
+    let mut req = client.post(server.url("/new")).form(&[("filename", name)]);
+    for (header, value) in headers {
+        req = req.header(*header, *value);
+    }
+    req.send().await.expect("new recipe request")
+}
+
+/// Asserts that `POST /new` created recipe `name` and sent the browser to its
+/// editor.
+fn assert_recipe_created(server: &ServerGuard, name: &str, resp: &Response) {
+    let status = resp.status();
+    assert_eq!(
+        status,
+        StatusCode::SEE_OTHER,
+        "{name}: the form post must be accepted and redirect, got {status}"
+    );
+    assert_eq!(
+        header(resp.headers(), "location").as_deref(),
+        Some(format!("/edit/{name}.cook").as_str()),
+        "{name}: the redirect must lead to the new recipe's editor, not back to the form"
+    );
+    assert!(server.recipe_exists(name), "{name}: {name}.cook must exist");
+}
+
+#[tokio::test]
+async fn a_host_header_override_reaches_the_server() {
+    // The server's own origin, sent to another Host. It is refused only if the
+    // server sees the Host set here: were it replaced with 127.0.0.1:{port},
+    // Origin and Host would match and the write would go through.
+    let server = start_server(&[]).await;
+    let resp = post_pantry_add_as(&server, "cook.test", &server.own_origin()).await;
+
+    let status = resp.status();
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the Host header a test sets must reach the server unchanged, got {status}"
+    );
+}
+
+#[tokio::test]
+async fn a_rebound_host_name_cannot_write() {
+    let server = start_server(&[]).await;
+    let host = format!("evil.test:{}", server.port);
+    let origin = format!("http://{host}");
+    let resp = post_pantry_add_as(&server, &host, &origin).await;
+
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "an Origin that matches a host *name* may come from a page that rebound the name to \
+         this server, so it must not pass as same-origin, got {status}: {body}"
+    );
+    // Someone who really opens the web UI at a host name gets the same
+    // refusal, so it has to tell them the exact flag.
+    assert!(
+        body.contains(&format!("--cors-origin {origin}")),
+        "refusal must name the flag that allows this origin, got: {body}"
+    );
+    assert!(
+        body.contains("--no-csrf-check"),
+        "refusal must still mention --no-csrf-check, got: {body}"
+    );
+}
+
+#[tokio::test]
+async fn localhost_is_trusted_as_the_servers_own_address() {
+    // Browsers resolve `localhost` themselves, so no DNS answer can point it
+    // anywhere else. 127.0.0.1 is `default_policy_same_origin_post_is_not_blocked`.
+    let server = start_server(&[]).await;
+    let host = format!("localhost:{}", server.port);
+    let resp = post_pantry_add_as(&server, &host, &format!("http://{host}")).await;
+
+    let status = resp.status();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the web UI opened at http://localhost must be able to write, got {status}"
+    );
+}
+
+#[tokio::test]
+async fn a_host_name_named_by_cors_origin_can_write() {
+    // How someone who opens the web UI at a host name — a NAS on the local
+    // network, a reverse proxy that passes Host through — keeps it working.
+    let server = start_server(&["--cors-origin", "http://cook.test"]).await;
+    let resp = post_pantry_add_as(&server, "cook.test", "http://cook.test").await;
+
+    let status = resp.status();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "a host name listed with --cors-origin must be able to write, got {status}"
+    );
+}
+
+#[tokio::test]
+async fn new_recipe_form_refuses_a_rebound_host_name() {
+    let server = start_server(&[]).await;
+    let host = format!("evil.test:{}", server.port);
+    let origin = format!("http://{host}");
+    let referer = format!("{origin}/new");
+
+    // With an Origin, the write guard refuses. With only a Referer — a browser
+    // that leaves Origin off a same-origin form post — the guard sees no
+    // browser and lets it through, so the form's own check has to refuse.
+    for (name, headers) in [
+        (
+            "ReboundOrigin",
+            [("host", host.as_str()), ("origin", origin.as_str())],
+        ),
+        (
+            "ReboundReferer",
+            [("host", host.as_str()), ("referer", referer.as_str())],
+        ),
+    ] {
+        let resp = post_new_recipe(&server, name, &headers).await;
+
+        let status = resp.status();
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{name}: a form post to a rebound host name must be refused, got {status}"
+        );
+        assert!(
+            !server.recipe_exists(name),
+            "{name}: a refused form post must not create the recipe"
+        );
+    }
+}
+
+#[tokio::test]
+async fn new_recipe_form_accepts_its_own_address() {
+    let server = start_server(&[]).await;
+    let origin = server.own_origin();
+    let referer = format!("{origin}/new");
+
+    for (name, headers) in [
+        ("OwnOrigin", [("origin", origin.as_str())]),
+        ("OwnReferer", [("referer", referer.as_str())]),
+    ] {
+        let resp = post_new_recipe(&server, name, &headers).await;
+        assert_recipe_created(&server, name, &resp);
+    }
+}
+
+#[tokio::test]
+async fn new_recipe_form_honours_cors_origin() {
+    // Behind a reverse proxy that rewrites Host, the browser's Origin never
+    // matches it. Naming the public origin already lets the API write; the
+    // form has to accept it too.
+    let server = start_server(&["--cors-origin", "http://app.test"]).await;
+
+    for (name, headers) in [
+        ("ListedOrigin", [("origin", "http://app.test")]),
+        ("ListedReferer", [("referer", "http://app.test/new")]),
+    ] {
+        let resp = post_new_recipe(&server, name, &headers).await;
+        assert_recipe_created(&server, name, &resp);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Origins from the environment
+//
+// `COOK_CORS_ORIGIN` exists for containers: the published image's command
+// already names the recipe directory and `--host`, so adding one flag means
+// restating all of it, while a compose file adds a variable in one line.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn cors_origin_can_come_from_the_environment() {
+    let server = start_server_with_env(&[], &[("COOK_CORS_ORIGIN", "http://app.test")]).await;
+
+    let allowed = post_pantry_add(&server, Some("http://app.test")).await;
+    assert_eq!(
+        allowed.status(),
+        StatusCode::OK,
+        "an origin named by COOK_CORS_ORIGIN must write as if it had been passed as a flag, got {}",
+        allowed.status()
+    );
+
+    let refused = post_pantry_add(&server, Some("http://evil.test")).await;
+    assert_eq!(
+        refused.status(),
+        StatusCode::FORBIDDEN,
+        "naming one origin in the environment must not let every origin write, got {}",
+        refused.status()
+    );
+}
+
+#[tokio::test]
+async fn several_origins_fit_in_the_environment_variable() {
+    let server = start_server_with_env(
+        &[],
+        &[("COOK_CORS_ORIGIN", "http://app.test, http://other.test")],
+    )
+    .await;
+
+    for origin in ["http://app.test", "http://other.test"] {
+        let resp = post_pantry_add(&server, Some(origin)).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "{origin} was listed in COOK_CORS_ORIGIN, got {}",
+            resp.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_cors_origin_flag_overrides_the_environment() {
+    let server = start_server_with_env(
+        &["--cors-origin", "http://flag.test"],
+        &[("COOK_CORS_ORIGIN", "http://env.test")],
+    )
+    .await;
+
+    let allowed = post_pantry_add(&server, Some("http://flag.test")).await;
+    assert_eq!(
+        allowed.status(),
+        StatusCode::OK,
+        "the flag's origin must be the one in force, got {}",
+        allowed.status()
+    );
+
+    let refused = post_pantry_add(&server, Some("http://env.test")).await;
+    assert_eq!(
+        refused.status(),
+        StatusCode::FORBIDDEN,
+        "a command line must replace the environment's origins, not add to them, got {}",
+        refused.status()
+    );
+}
+
+#[tokio::test]
+async fn an_empty_cors_origin_environment_variable_is_not_an_origin() {
+    // `COOK_CORS_ORIGIN=${UNDEFINED}` in a compose file. The server must start
+    // as if nothing were set: `start_server_with_env` only returns once it
+    // answers, so getting a guard back is half the assertion.
+    let server = start_server_with_env(&[], &[("COOK_CORS_ORIGIN", "")]).await;
+
+    let own_origin = server.own_origin();
+    let resp = post_pantry_add(&server, Some(&own_origin)).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "an empty variable must leave the default policy in place, got {}",
+        resp.status()
     );
 }
