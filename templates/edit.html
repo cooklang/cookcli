@@ -226,7 +226,7 @@ async function saveRecipe() {
             updateSaveStatus('saved');
         } else {
             updateSaveStatus('error');
-            const errorText = await response.text();
+            const errorText = await errorMessage(response);
             console.error('Save failed:', errorText);
             showToast(`Save failed: ${errorText || 'Unknown error'}`);
         }
@@ -261,6 +261,18 @@ function hideDeleteModal() {
     modal.classList.remove('flex');
 }
 
+// Most API errors are JSON, {"error": "..."} -- including the one a server
+// that requires signing in sends once the session has expired. Show just the
+// message rather than the raw body.
+async function errorMessage(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text).error || text;
+    } catch {
+        return text;
+    }
+}
+
 async function deleteRecipe() {
     try {
         const response = await fetch(`{{ prefix }}/api/recipes/${encodeURIComponent(recipePath)}`, {
@@ -271,7 +283,7 @@ async function deleteRecipe() {
             // Redirect to recipes list after successful deletion
             window.location.href = '{{ prefix }}/';
         } else {
-            const errorText = await response.text();
+            const errorText = await errorMessage(response);
             console.error('Delete failed:', errorText);
             hideDeleteModal();
             showToast(`Failed to delete recipe: ${errorText || 'Unknown error'}`);

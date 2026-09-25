@@ -142,6 +142,13 @@ Configuration search order:
 - API handlers in `src/server/handlers/`
 - Static files served from `static/` directory
 - Shopping list stored as tab-delimited files in `/tmp/`
+- Opt-in sign-in in `src/server/auth/`: a `users.toml` in the config dir (or
+  `--users-file` / `COOK_USERS_FILE`) turns it on. `auth::middleware` is the
+  one place deciding which requests need a user — every non-GET route except
+  an explicit allowlist, plus a few GETs (`/edit`, `/new`, `/api/ws/lsp`,
+  `/api/sync`). So a GET handler must never change anything. Templates get a
+  `Viewer` (`src/web/viewer.rs`) and hide editing controls when
+  `!viewer.can_edit()`
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)

@@ -28,6 +28,7 @@ pub fn render_index(
         static_mode: true,
         repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
+        viewer: Default::default(),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
@@ -52,6 +53,7 @@ pub fn render_directory(
         static_mode: true,
         repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
+        viewer: Default::default(),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
@@ -98,6 +100,7 @@ pub fn render_recipe(
         static_mode: true,
         repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
+        viewer: Default::default(),
     })?;
 
     match kind {

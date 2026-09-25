@@ -70,6 +70,14 @@ picture-upload-failed = Uppladdningen misslyckades
 picture-remove-failed = Det gick inte att ta bort bilden
 picture-too-large = Bilden är för stor. Gränsen är 10 MB.
 picture-heif = HEIC- och AVIF-foton kan inte läsas. Ladda upp från telefonens egen webbläsare, som konverterar dem till JPEG, eller ställ in iPhone-kameran på Mest kompatibelt (Inställningar > Kamera > Format).
+# Sign-in (users are managed on the server with `cook server user`)
+sign-in = Logga in
+sign-out = Logga ut
+sign-in-intro = Logga in för att lägga till, redigera eller radera recept och för att ändra skafferiet eller handlingslistan.
+sign-in-username = Användarnamn
+sign-in-password = Lösenord
+sign-in-failed = Fel användarnamn eller lösenord.
+signed-in-as = Inloggad som
 
 # Errors
 error-title = Något gick snett

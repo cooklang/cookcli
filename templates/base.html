@@ -19,6 +19,8 @@
         const theme = localStorage.getItem('theme')
             || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.classList.toggle('dark', theme === 'dark');
+        // False for a guest on a server that requires signing in to make changes.
+        window.__CAN_EDIT__ = {{ viewer.can_edit()|json|safe }};
     </script>
     <style>
         .viewport {
@@ -306,6 +308,16 @@
                                 <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
                             </svg>
                         </button>
+                        {% if !static_mode && viewer.auth_enabled() %}
+                        {% if viewer.is_signed_in() %}
+                        <form action="{{ prefix }}/logout" method="POST" class="hidden md:flex items-center gap-2 ml-2 print:hidden">
+                            <span class="text-sm text-muted" title="{{ tr.t("signed-in-as") }} {{ viewer.username() }}">{{ viewer.username() }}</span>
+                            <button type="submit" class="btn btn-sm">{{ tr.t("sign-out") }}</button>
+                        </form>
+                        {% else %}
+                        <a href="{{ prefix }}/login" data-login-link class="btn btn-sm hidden md:inline-flex ml-2 print:hidden">{{ tr.t("sign-in") }}</a>
+                        {% endif %}
+                        {% endif %}
                         <!-- Overflow menu for small screens -->
                         <div class="relative md:hidden ml-auto" id="more-menu-container">
                             <button onclick="document.getElementById('more-dropdown').classList.toggle('hidden')" class="icon-btn" aria-label="{{ tr.t("aria-more-options") }}">
@@ -334,6 +346,19 @@
                                 <a href="{{ prefix }}/preferences" class="menu-item">
                                     <span>⚙️</span> <span>Preferences</span>
                                 </a>
+                                {% endif %}
+                                {% if !static_mode && viewer.auth_enabled() %}
+                                {% if viewer.is_signed_in() %}
+                                <form action="{{ prefix }}/logout" method="POST">
+                                    <button type="submit" class="menu-item w-full" title="{{ tr.t("signed-in-as") }} {{ viewer.username() }}">
+                                        <span>🔓</span> <span>{{ tr.t("sign-out") }} ({{ viewer.username() }})</span>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <a href="{{ prefix }}/login" data-login-link class="menu-item">
+                                    <span>🔒</span> <span>{{ tr.t("sign-in") }}</span>
+                                </a>
+                                {% endif %}
                                 {% endif %}
                                 <button onclick="showShortcutsHelp(); document.getElementById('more-dropdown').classList.add('hidden');" class="menu-item">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -486,6 +511,15 @@
         window.__PREFIX__ = {{ prefix|json|safe }};
         window.__STATIC_MODE__ = {{ static_mode|json|safe }};
         window.__STRINGS__ = { close: {{ tr.t("aria-close")|json|safe }} };
+        // Bring the visitor back to this page after signing in.
+        document.querySelectorAll('[data-login-link]').forEach((link) => {
+            const prefix = window.__PREFIX__;
+            const path = location.pathname.startsWith(prefix)
+                ? location.pathname.slice(prefix.length)
+                : location.pathname;
+            if (path === '/login') return;
+            link.href = `${prefix}/login?next=${encodeURIComponent((path || '/') + location.search)}`;
+        });
     </script>
 
     <!-- Keyboard shortcuts -->

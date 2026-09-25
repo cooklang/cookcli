@@ -49,8 +49,13 @@ pub fn preamble() -> ApiPreamble {
         notes: vec![
             note(
                 "Authentication",
-                "None. Anyone who can reach the server can read and modify your recipes — \
-                 think twice before using `--host` on an untrusted network.",
+                "Off unless the server has a users file (`cook server user add <name>`). \
+                 Without one, anyone who can reach the server can read and modify your \
+                 recipes — think twice before using `--host` on an untrusted network. With \
+                 one, reads stay open, and every request that changes something needs the \
+                 session cookie that signing in sets: `curl -c jar -d username=<name> \
+                 --data-urlencode password=<password> <server>/login`, then pass `-b jar` \
+                 to later requests. `GET /api/ws/lsp` and `/api/sync/*` need it too.",
             ),
             note(
                 "CORS",
@@ -79,6 +84,11 @@ pub fn preamble() -> ApiPreamble {
                 "400",
                 "malformed input: an invalid path, a bad query parameter, or a recipe that \
                  failed to parse.",
+            ),
+            note(
+                "401",
+                "the server requires signing in to make changes, and the request carried no \
+                 valid session cookie.",
             ),
             note(
                 "403",
