@@ -75,9 +75,11 @@
                         </label>
                     </div>
                 </div>
+                {% if viewer.can_edit() %}
                 <button type="button" onclick="clearList()" class="btn">
                     {{ tr.t("shopping-clear-all") }}
                 </button>
+                {% endif %}
             </div>
         </div>
 
@@ -277,9 +279,7 @@ function renderSelectedRecipes() {
                         <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                         <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
-                    <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">
-                        {{ tr.t("shopping-remove") }}
-                    </button>
+                    ${removeButton(item.path)}
                 </div>
                 <ul class="mt-2 ml-4 space-y-1">${recipesHtml}</ul>
             </div>`;
@@ -307,13 +307,20 @@ function renderSelectedRecipes() {
                     <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                     <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
-                <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-danger hover:underline font-medium text-sm">
-                    {{ tr.t("shopping-remove") }}
-                </button>
+                ${removeButton(item.path)}
             </div>
             ${refsHtml}
         </div>`;
     }).join(''));
+}
+
+// Guests may look at the list but not change it, so they get no Remove
+// buttons and the ticks are read-only. The server refuses them regardless.
+function removeButton(path) {
+    if (!window.__CAN_EDIT__) return '';
+    return `<button type="button" data-action="remove-recipe" data-path="${escHtml(path)}" class="text-danger hover:underline font-medium text-sm">
+        {{ tr.t("shopping-remove") }}
+    </button>`;
 }
 
 // Event delegation for dynamically-rendered remove buttons: avoids inline
@@ -567,6 +574,7 @@ function displayShoppingList(data) {
                                 <input type="checkbox"
                                     id="${itemId}"
                                     class="list-checkbox accent-[var(--accent)] mr-3"
+                                    ${window.__CAN_EDIT__ ? '' : 'disabled'}
                                     data-action="toggle-item"
                                     data-ingredient-name="${escHtml(item.name)}">
                                 <label for="${itemId}" class="cursor-pointer flex-1">

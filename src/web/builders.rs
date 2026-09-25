@@ -8,6 +8,7 @@
 use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
+use crate::web::viewer::Viewer;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fluent_templates::Loader;
@@ -22,6 +23,7 @@ pub struct RecipesBuildInput<'a> {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    pub viewer: Viewer,
 }
 
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
@@ -34,6 +36,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         static_mode,
         repo_url,
         features,
+        viewer,
     } = input;
 
     let search_path = if let Some(p) = sub_path {
@@ -191,6 +194,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         static_mode,
         repo_url,
         features,
+        viewer,
     })
 }
 
@@ -260,6 +264,7 @@ pub struct RecipeBuildInput<'a> {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    pub viewer: Viewer,
 }
 
 /// Output of [`build_recipe_template`] — either a regular recipe or a menu.
@@ -296,6 +301,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         static_mode,
         repo_url,
         features,
+        viewer,
     } = input;
 
     // On the server `recipe_path` comes straight from the `/recipe/{*path}` URL.
@@ -332,6 +338,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             static_mode,
             repo_url,
             features,
+            viewer,
         )?;
         return Ok(RecipeBuildOutput::Menu(Box::new(template)));
     }
@@ -861,6 +868,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         static_mode,
         repo_url,
         features,
+        viewer,
     };
 
     Ok(RecipeBuildOutput::Recipe(Box::new(template)))
@@ -877,6 +885,7 @@ fn build_menu_template_inner(
     static_mode: bool,
     repo_url: Option<String>,
     features: FeatureFlags,
+    viewer: Viewer,
 ) -> Result<MenuTemplate> {
     let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
         .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
@@ -1143,6 +1152,7 @@ fn build_menu_template_inner(
         static_mode,
         repo_url,
         features,
+        viewer,
     })
 }
 

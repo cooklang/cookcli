@@ -7,7 +7,7 @@ Start the server with [`cook server`](server.md); every endpoint below is served
 ## Before you start
 
 - **Base URL:** `http://localhost:9080/api`
-- **Authentication:** None. Anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network.
+- **Authentication:** Off unless the server has a users file (`cook server user add <name>`). Without one, anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network. With one, reads stay open, and every request that changes something needs the session cookie that signing in sets: `curl -c jar -d username=<name> --data-urlencode password=<password> <server>/login`, then pass `-b jar` to later requests. `GET /api/ws/lsp` and `/api/sync/*` need it too.
 - **CORS:** `GET` is allowed from any origin. A cross-origin request that would modify recipes is refused with `403` unless the server was started with a matching `--cors-origin <ORIGIN>`. Requests with no `Origin` header — `curl` and other non-browser clients — are unaffected. `content-type` is always an allowed request header.
 - **Request size limit:** 1 MB, except a title picture upload (`PUT /api/recipe_image/{*path}`), which takes up to 10 MB.
 - **Content type:** JSON in and out, except where noted — raw recipe text is `text/plain`.
@@ -21,6 +21,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
+- `401` — the server requires signing in to make changes, and the request carried no valid session cookie.
 - `403` — a browser request tried to modify recipes from an origin the server does not trust: another site, or this server's web UI opened at a host name other than `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` to allow that origin.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `413` — the request body is over the size limit, or a title picture has more pixels than the server will decode.

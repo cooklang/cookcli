@@ -27,6 +27,11 @@ server = [
     "dep:futures-util",
     "dep:open",
     "dep:image",
+    "dep:argon2",
+    "dep:hmac",
+    "dep:sha2",
+    "dep:console",
+    "dep:toml_edit",
 ]
 # `cook import` - scrape a recipe from a website.
 import = ["dep:cooklang-import", "dep:reqwest"]
@@ -60,12 +65,16 @@ path = "src/main.rs"
 accept-language = "3"
 anstream = "1.0"
 anyhow = "1"
+# Password hashing for `cook server` sign-in (users.toml holds PHC strings).
+argon2 = { version = "0.5", features = ["std"], optional = true }
 askama = { version = "0.12", features = ["serde-json"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
+# No-echo password prompt for `cook server user add` / `hash-password`.
+console = { version = "0.16", default-features = false, features = ["std"], optional = true }
 base64 = { version = "0.23", optional = true }
 # bundled_units is deliberately NOT enabled: it carries the unit database, and with
 # it Converter::default() silently converts quantities to a "best" unit (e.g.
@@ -91,6 +100,8 @@ fluent-templates = "0.15"
 # re-encoded as JPEG. Only the codecs that path reads are enabled: the default
 # set adds a dozen formats, and `rayon`, for nothing the server uses.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
+# Signs `cook server` session cookies. 0.12 pairs with sha2 0.10 (digest 0.10).
+hmac = { version = "0.12", optional = true }
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
@@ -105,6 +116,7 @@ self_update = { version = "0.44", default-features = false, features = ["archive
 serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
+sha2 = { version = "0.10", optional = true }
 sys-locale = "0.3"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 tokio = { version = "1", features = ["full"] }
@@ -112,6 +124,8 @@ tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = { version = "0.7", optional = true }
 thiserror = { version = "2", optional = true }
 toml = "1.1.3"
+# Edits users.toml without losing the admin's comments.
+toml_edit = { version = "0.25", optional = true }
 tower = { version = "0.5", features = ["util"], optional = true }
 tower-http = { version = "0.7", features = ["fs", "trace", "cors", "normalize-path", "set-header"], optional = true }
 tower-lsp = { version = "0.20", optional = true }
@@ -136,6 +150,14 @@ tokio = { version = "1", features = ["full", "test-util"] }
 tokio-tungstenite = "0.29"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 regex = "1"
+
+# argon2 is unusably slow unoptimized (seconds per sign-in in a debug build,
+# and in every test that signs in), so optimize it even in dev builds.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
 
 [profile.release]
 strip = true

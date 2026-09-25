@@ -119,6 +119,7 @@
                             <!-- Action buttons and status indicator -->
                             <div class="flex items-start space-x-2 ml-4">
                                 <div class="item-status-dot in-stock mt-1"></div>
+                                {% if viewer.can_edit() %}
                                 <div class="pantry-actions flex items-center space-x-1">
                                     <button type="button" class="edit-btn icon-btn"
                                             title="{{ tr.t("pantry-edit-item") }}">
@@ -133,6 +134,7 @@
                                         </svg>
                                     </button>
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -149,9 +151,11 @@
             {{ tr.t("pantry-total-sections") }} {{ sections.len() }}
         </div>
         <div class="flex flex-wrap gap-2">
+            {% if viewer.can_edit() %}
             <button type="button" id="add-item-btn" class="btn btn-primary">
                 {{ tr.t("pantry-add-item") }}
             </button>
+            {% endif %}
             <a href="{{ prefix }}/preferences" class="btn">
                 {{ tr.t("pantry-edit-config") }}
             </a>

@@ -39,13 +39,14 @@ use axum::{
     Router,
 };
 use camino::Utf8PathBuf;
-use clap::Args;
+use clap::{Args, Subcommand};
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, set_header::SetResponseHeader};
 use tracing::{error, info};
 
+pub mod auth;
 mod cors;
 mod fs_atomic;
 mod handlers;
@@ -55,7 +56,11 @@ mod title_image;
 mod ui;
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct ServerArgs {
+    #[command(subcommand)]
+    command: Option<ServerCommand>,
+
     /// Root directory containing your recipe files
     ///
     /// The server will recursively scan this directory for .cook files
@@ -145,6 +150,31 @@ pub struct ServerArgs {
     /// --host on a network you do not control.
     #[arg(long, value_name = "N", default_value_t = lsp_bridge::DEFAULT_MAX_SESSIONS)]
     max_lsp_sessions: u16,
+
+    /// Users who may sign in to make changes
+    ///
+    /// When a users file exists, anyone can still browse, but creating,
+    /// editing or deleting recipes and changing the pantry or the shopping
+    /// list needs a signed-in user. Without one the server is open to anyone
+    /// who can reach it. Defaults to the COOK_USERS_FILE environment variable
+    /// when set, otherwise users.toml in the configuration directory. Manage
+    /// it with `cook server user`.
+    #[arg(long, value_name = "PATH", value_hint = clap::ValueHint::FilePath)]
+    users_file: Option<Utf8PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+enum ServerCommand {
+    /// Manage the users who can sign in to make changes
+    ///
+    /// Examples:
+    ///   cook server user add alice      # Prompt for alice's password
+    ///   cook server user passwd alice   # Change it
+    ///   cook server user remove alice
+    ///   cook server user list
+    User(auth::cli::UserArgs),
+    /// Print an argon2 hash of a password, for editing users.toml by hand
+    HashPassword,
 }
 
 impl ServerArgs {
@@ -153,8 +183,16 @@ impl ServerArgs {
     }
 }
 
+pub fn run(ctx: Context, mut args: ServerArgs) -> Result<()> {
+    match args.command.take() {
+        Some(ServerCommand::User(user_args)) => auth::cli::run_user(user_args),
+        Some(ServerCommand::HashPassword) => auth::cli::run_hash_password(),
+        None => serve(ctx, args),
+    }
+}
+
 #[tokio::main]
-pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
+async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
     let addr = match args.host {
         Some(Some(addr)) => addr,
         Some(None) => "::".parse()?,
@@ -170,6 +208,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         args.cors_allow_credentials,
     )?);
 
+    let listens_beyond_localhost = args.host.is_some();
     let state = build_state(ctx, args, Arc::clone(&cors))?;
 
     if state.url_prefix.is_empty() {
@@ -222,6 +261,30 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     }
 
     println!("Serving recipe files from: {:?}", state.base_path);
+    match &state.auth {
+        Some(auth) => {
+            let users = auth.users();
+            println!(
+                "Sign-in: on, {} user(s) in {}. Guests can browse but not make changes.",
+                users.len(),
+                auth.users_path()
+            );
+            if users.is_empty() {
+                println!("No users are listed, so nobody can make changes.");
+            }
+            if !state.csrf_check {
+                tracing::warn!(
+                    "--no-csrf-check with sign-in on: signed-in browsers are protected from \
+                     other sites only by their cookie's SameSite=Lax"
+                );
+            }
+        }
+        None if listens_beyond_localhost => println!(
+            "Sign-in: off. Anyone who can reach this server can change your recipes; \
+             add a user with `cook server user add <name>` to require sign-in."
+        ),
+        None => {}
+    }
 
     // Maximum request body size: 1MB (reasonable for recipe files)
     const MAX_BODY_SIZE: usize = 1024 * 1024;
@@ -240,7 +303,13 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("no-cache"),
             ),
-        );
+        )
+        // Inside the prefix nest, so it sees paths without the prefix; after
+        // every route, so it covers them all.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            auth::middleware::middleware,
+        ));
 
     let app = if state.url_prefix.is_empty() {
         inner
@@ -377,6 +446,10 @@ fn build_state(
         .path()
         .map(camino::Utf8Path::to_path_buf);
 
+    // Before anything is started, so a bad users file stops the server
+    // without leaving a watcher behind.
+    let auth = auth::setup(args.users_file.as_deref(), &absolute_path)?;
+
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
 
@@ -410,6 +483,7 @@ fn build_state(
         url_prefix,
         csrf_check: args.csrf_check,
         cors,
+        auth,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
@@ -466,6 +540,9 @@ pub struct AppState {
     /// The `--cors-origin` policy. Besides CORS, it decides which origins
     /// may modify recipes, for the write guard and the new-recipe form alike.
     pub cors: Arc<cors::CorsConfig>,
+    /// Sign-in, when a users file exists. `None` leaves the server open to
+    /// anyone who can reach it.
+    pub auth: Option<Arc<auth::Auth>>,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
     pub lsp_sessions: lsp_bridge::SessionLimit,
@@ -626,4 +703,41 @@ async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResp
                 .body(Body::from("404 Not Found"))
                 .unwrap()
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::args::{CliArgs, Command};
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn cli_definition_is_valid() {
+        CliArgs::command().debug_assert();
+    }
+
+    /// `cook server` takes an optional recipe directory *and* subcommands,
+    /// so check clap tells them apart.
+    #[test]
+    fn subcommands_and_recipe_directory_are_told_apart() {
+        let parse = |args: &[&str]| match CliArgs::try_parse_from(args).unwrap().command {
+            Command::Server(server) => server,
+            _ => panic!("not the server command"),
+        };
+
+        let serve = parse(&["cook", "server", "./recipes"]);
+        assert!(serve.command.is_none());
+        assert_eq!(
+            serve.base_path.as_deref().map(|p| p.as_str()),
+            Some("./recipes")
+        );
+
+        assert!(matches!(
+            parse(&["cook", "server", "user", "add", "alice"]).command,
+            Some(super::ServerCommand::User(_))
+        ));
+        assert!(matches!(
+            parse(&["cook", "server", "hash-password"]).command,
+            Some(super::ServerCommand::HashPassword)
+        ));
+    }
 }

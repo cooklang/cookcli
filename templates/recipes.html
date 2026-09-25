@@ -22,7 +22,7 @@
         <h1 class="text-display font-bold text-text">
             {{ current_name }}
         </h1>
-        {% if !static_mode %}
+        {% if !static_mode && viewer.can_edit() %}
         <a href="{{ new_recipe_url }}" class="btn btn-primary">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
