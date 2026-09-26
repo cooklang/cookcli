@@ -249,7 +249,8 @@ fn recipes() -> ApiSection {
                 "Parses the recipe and returns its ingredients, cookware, timers and steps. \
                  `grouped_ingredients` aggregates repeated ingredients and indexes back into \
                  `ingredients`. `inline_quantities` is also present alongside them at the top \
-                 level of `recipe`. The `image` field is a URL under `/api/static/` when the \
+                 level of `recipe`. The `image` field is a URL under `/api/static/` (after any `--url-prefix`, \
+                 each path segment percent-encoded) when the \
                  recipe has a title image, otherwise null. Frontmatter lands under \
                  `metadata.map` with the types it was written in, except `tags`, which is \
                  always an array of strings — `tags: breakfast, quick` is split on commas \
@@ -262,7 +263,7 @@ fn recipes() -> ApiSection {
             .response(
                 r#"
 {
-  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
   "scale": 2.0,
   "recipe": {
     "metadata": {
@@ -428,7 +429,7 @@ Mix the @flour{200%g} and @water{120%ml}.
                 r#"
 {
   "path": "Breakfast/Easy Pancakes.cook",
-  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
   "source": "file"
 }
 "#,
@@ -466,7 +467,7 @@ Mix the @flour{200%g} and @water{120%ml}.
                 r#"
 {
   "path": "Breakfast/Easy Pancakes.cook",
-  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
   "source": "file"
 }
 "#,

@@ -74,23 +74,10 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         // Extract tags, image, is_menu, and file timestamps if this is a recipe
         let (tags, image_path, is_menu, modified_at, created_at) =
             if let Some(ref recipe) = child.recipe {
-                let img_path = recipe.title_image().clone().and_then(|img| {
-                    if img.starts_with("http://") || img.starts_with("https://") {
-                        Some(img)
-                    } else {
-                        // Make path relative to base and accessible via /api/static
-                        let img_path = camino::Utf8Path::new(&img);
-                        if let Ok(relative) = img_path.strip_prefix(base_path) {
-                            Some(format!("{url_prefix}/api/static/{relative}"))
-                        } else if !img_path.is_absolute() {
-                            Some(format!("{url_prefix}/api/static/{img_path}"))
-                        } else {
-                            img_path
-                                .file_name()
-                                .map(|name| format!("{url_prefix}/api/static/{name}"))
-                        }
-                    }
-                });
+                let img_path = recipe
+                    .title_image()
+                    .clone()
+                    .and_then(|img| get_image_path(base_path, url_prefix, img));
 
                 let (modified_at, created_at) = recipe
                     .path()
@@ -900,22 +887,10 @@ fn build_menu_template_inner(
         std::collections::HashMap::new();
 
     // Get the image path if available
-    let image_path = entry.title_image().clone().and_then(|img_path| {
-        if img_path.starts_with("http://") || img_path.starts_with("https://") {
-            Some(img_path)
-        } else {
-            let img_path = camino::Utf8Path::new(&img_path);
-            if let Ok(relative) = img_path.strip_prefix(base_path) {
-                Some(format!("{url_prefix}/api/static/{relative}"))
-            } else if !img_path.is_absolute() {
-                Some(format!("{url_prefix}/api/static/{img_path}"))
-            } else {
-                img_path
-                    .file_name()
-                    .map(|name| format!("{url_prefix}/api/static/{name}"))
-            }
-        }
-    });
+    let image_path = entry
+        .title_image()
+        .clone()
+        .and_then(|img_path| get_image_path(base_path, url_prefix, img_path));
 
     let breadcrumbs: Vec<String> = path.split('/').map(|s| s.to_string()).collect();
 
@@ -1160,6 +1135,16 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
     Some(count)
 }
 
+/// The URL a recipe's title or step picture is served at.
+///
+/// An `http(s)` address from the metadata is passed through. A file becomes
+/// `{prefix}/api/static/` followed by its path from the recipe directory,
+/// **each segment percent-encoded**. The path is built from folder and file
+/// names someone else may have chosen — a shared or synced collection, a
+/// cloned repository — so it can hold anything a name can: `"` and `'`, which
+/// end an attribute; `#` and `?`, which cut the URL short; `%`, which the
+/// server would decode. Encoded, it is inert wherever it lands, and those
+/// pictures load at all (#548).
 pub(crate) fn get_image_path(
     base_path: &Utf8Path,
     prefix: &str,
@@ -1175,16 +1160,88 @@ pub(crate) fn get_image_path(
 
         // Try to strip the base_path prefix to get a relative path
         if let Ok(relative) = img_path.strip_prefix(base_path) {
-            let result = format!("{prefix}/api/static/{relative}");
+            let result = static_url(prefix, relative);
             tracing::debug!("Image path relative to base: {}", result);
             Some(result)
         } else if !img_path.is_absolute() {
-            Some(format!("{prefix}/api/static/{img_path}"))
+            Some(static_url(prefix, img_path))
         } else {
             img_path
                 .file_name()
-                .map(|name| format!("{prefix}/api/static/{name}"))
+                .map(|name| static_url(prefix, Utf8Path::new(name)))
         }
+    }
+}
+
+/// `{prefix}/api/static/` and `relative`, one percent-encoded segment per
+/// path component. Joined with `/` whatever the platform's separator is, so a
+/// Windows path makes a working URL too.
+fn static_url(prefix: &str, relative: &Utf8Path) -> String {
+    let segments: Vec<_> = relative
+        .components()
+        .map(|component| urlencoding::encode(component.as_str()))
+        .collect();
+    format!("{prefix}/api/static/{}", segments.join("/"))
+}
+
+#[cfg(test)]
+mod image_path_tests {
+    use super::get_image_path;
+    use camino::Utf8Path;
+
+    fn url(base: &str, prefix: &str, image: &str) -> Option<String> {
+        get_image_path(Utf8Path::new(base), prefix, image.to_string())
+    }
+
+    /// The folder name from #548: unencoded, its `"` ended the `src`
+    /// attribute cooking mode wrote and the rest became an event handler.
+    #[test]
+    fn a_quote_in_a_folder_name_cannot_leave_the_url() {
+        let image = "/recipes/x\" onerror=\"alert(1)\" y=\"/Pancakes.1.jpg";
+        let url = url("/recipes", "", image).unwrap();
+        assert_eq!(
+            url,
+            "/api/static/x%22%20onerror%3D%22alert%281%29%22%20y%3D%22/Pancakes.1.jpg"
+        );
+        assert!(!url.contains(['"', '\'', '<', '>', ' ']), "{url}");
+    }
+
+    #[test]
+    fn every_segment_is_encoded_and_slashes_are_kept() {
+        assert_eq!(
+            url("/recipes", "", "/recipes/Breakfast/Easy Pancakes.jpg").as_deref(),
+            Some("/api/static/Breakfast/Easy%20Pancakes.jpg")
+        );
+        // `#`, `?` and `%` used to cut the URL short or be decoded by the
+        // server, so these pictures never loaded.
+        assert_eq!(
+            url("/recipes", "/cook", "/recipes/50% #1?/Tart's.png").as_deref(),
+            Some("/cook/api/static/50%25%20%231%3F/Tart%27s.png")
+        );
+    }
+
+    #[test]
+    fn relative_paths_are_encoded_too() {
+        assert_eq!(
+            url("/recipes", "", "Sub Dir/a b.jpg").as_deref(),
+            Some("/api/static/Sub%20Dir/a%20b.jpg")
+        );
+    }
+
+    /// Unix only: without a drive letter the path is not absolute on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn a_picture_outside_the_directory_is_encoded_by_name() {
+        assert_eq!(
+            url("/recipes", "", "/elsewhere/a \"b\".jpg").as_deref(),
+            Some("/api/static/a%20%22b%22.jpg")
+        );
+    }
+
+    #[test]
+    fn web_addresses_are_passed_through() {
+        let address = "https://example.com/a b.jpg?x=1#y";
+        assert_eq!(url("/recipes", "", address).as_deref(), Some(address));
     }
 }
 
