@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.38.0](https://github.com/cooklang/cookcli/compare/v0.37.0...v0.38.0) (2026-09-26)
+
+
+### Features
+
+* **i18n:** add Italian translation ([61a3a18](https://github.com/cooklang/cookcli/commit/61a3a18ce6f5bfb4ad4feeb046b2f44187fa6cdb))
+* **i18n:** add Italian translation ([2493e79](https://github.com/cooklang/cookcli/commit/2493e792d5392ddc177d14e745c3e5a6697caf8c))
+* **server:** read --cors-origin from COOK_CORS_ORIGIN ([dc23f37](https://github.com/cooklang/cookcli/commit/dc23f37ac242164b1b3d3026da98456d184f51b4))
+* **web:** shrink title pictures in the browser, always re-encode on the server ([5d70e2e](https://github.com/cooklang/cookcli/commit/5d70e2e5d4f9b64133a1bdc98b72fde2b46bb887))
+
+
+### Bug Fixes
+
+* **server:** keep search and menu on one line on mobile ([7cc2c4a](https://github.com/cooklang/cookcli/commit/7cc2c4a03285bcd077664d27b090b2f34d479de9))
+* **server:** limit the recipe file endpoints to .cook and .menu files ([#550](https://github.com/cooklang/cookcli/issues/550)) ([6ff6f9c](https://github.com/cooklang/cookcli/commit/6ff6f9c011c998005719fc79f7991f126c7e3a06)), closes [#545](https://github.com/cooklang/cookcli/issues/545)
+* **server:** trust only localhost and IP addresses as the server's own origin ([d9eb064](https://github.com/cooklang/cookcli/commit/d9eb0640c08867f9a4f4369cbb17aa582079435d))
+* **web:** stop step picture paths escaping cooking mode's img src ([f4cf875](https://github.com/cooklang/cookcli/commit/f4cf8754822b010e1ca9ca0e2b2630cf95a1cdfd))
+* **web:** stop step picture paths escaping cooking mode's img src ([73ac842](https://github.com/cooklang/cookcli/commit/73ac8422b54484bc000dc03212402dcb619e14b6)), closes [#548](https://github.com/cooklang/cookcli/issues/548)
+
 ## [0.37.0](https://github.com/cooklang/cookcli/compare/v0.36.0...v0.37.0) (2026-09-24)
 
 
