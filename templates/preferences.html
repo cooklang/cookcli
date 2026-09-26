@@ -39,6 +39,10 @@
                         class="language-btn btn {% if tr.lang_string() == "sv-SE" %}btn-primary{% endif %}">
                     🇸🇪 Svenska
                 </button>
+                <button onclick="setLanguage('it-IT')" aria-pressed="{% if tr.lang_string() == "it-IT" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "it-IT" %}btn-primary{% endif %}">
+                    🇮🇹 Italiano
+                </button>
             </div>
             <p class="text-sm text-muted mt-3">Your language preference will be saved in a cookie.</p>
         </div>

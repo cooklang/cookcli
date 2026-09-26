@@ -17,9 +17,10 @@ pub const FR_FR: LanguageIdentifier = langid!("fr-FR");
 pub const ES_ES: LanguageIdentifier = langid!("es-ES");
 pub const EU_ES: LanguageIdentifier = langid!("eu-ES");
 pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
+pub const IT_IT: LanguageIdentifier = langid!("it-IT");
 
 pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] =
-    &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE];
+    &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT];
 
 /// Per-request feature visibility flags, read from cookies.
 #[derive(Clone, Copy, Debug)]
@@ -238,6 +239,14 @@ mod locale_tests {
     #[test]
     fn test_system_locale_bare_language_code() {
         assert_eq!(language_from_system_locale(Some("sv".into())), SV_SE);
+    }
+
+    #[test]
+    fn test_system_locale_italian() {
+        assert_eq!(
+            language_from_system_locale(Some("it_IT.UTF-8".into())),
+            IT_IT
+        );
     }
 
     #[test]

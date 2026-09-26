@@ -91,7 +91,7 @@ The feed title is the localized "All Recipes" heading (see `--lang`). Like `--si
   cook build web --lang fr-FR
   ```
 
-Supported languages: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`. Bare language codes work too (`--lang fr`).
+Supported languages: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`, `it-IT`. Bare language codes work too (`--lang fr`).
 
 Note that only the UI chrome (navigation, headings, labels) is translated — your recipe content is rendered as written.
 
