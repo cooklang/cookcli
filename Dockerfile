@@ -1,29 +1,51 @@
-FROM rust:bookworm AS builder
+# Cargo profile for the binary. `release` (fat LTO) is what gets published;
+# `docker-dev` (thin LTO, parallel codegen) rebuilds several times faster and is
+# meant for images built to try a change locally: `make docker-build-dev`.
+ARG CARGO_PROFILE=release
 
-# Install Node.js for Tailwind CSS and esbuild
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# --- Front-end assets ---
+# A stage of its own so the Rust builder needs no Node.js, and so Rust-only
+# edits don't rebuild the CSS and JS.
+FROM node:lts-bookworm-slim AS assets
 
 WORKDIR /usr/src/cookcli
 
-# Install npm dependencies first (cache layer)
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
-# Copy source
-COPY . .
-
-# Build CSS and JS assets
+# Only what Tailwind scans (the @source lines in static/css/input.css) and
+# esbuild bundles.
+COPY static/ static/
+COPY templates/ templates/
+COPY src/web/templates.rs src/web/templates.rs
 RUN npm run build-css && npm run build-js
 
-# Build Rust binary: server + lsp (the editor's /ws/lsp bridge spawns `cook lsp`),
-# but without self-update (useless in a container) or import (would pull in reqwest)
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/src/cookcli/target \
-    cargo build --release --no-default-features --features server,lsp \
-    && cp target/release/cook /usr/local/bin/cook
+# --- Rust dependencies ---
+# cargo-chef compiles the dependency graph from a recipe that only changes with
+# Cargo.toml/Cargo.lock, so the result is an ordinary image layer: it survives
+# in the registry/GHA layer cache, unlike a `--mount=type=cache` target dir.
+FROM rust:bookworm AS chef
+RUN cargo install cargo-chef --locked
+WORKDIR /usr/src/cookcli
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+ARG CARGO_PROFILE
+
+# Server + lsp (the editor's /ws/lsp bridge spawns `cook lsp`), but without
+# self-update (useless in a container) or import (would pull in reqwest).
+COPY --from=planner /usr/src/cookcli/recipe.json recipe.json
+RUN cargo chef cook --profile "$CARGO_PROFILE" --recipe-path recipe.json \
+    --no-default-features --features server,lsp
+
+COPY . .
+COPY --from=assets /usr/src/cookcli/static/css/output.css static/css/output.css
+COPY --from=assets /usr/src/cookcli/static/js/editor.bundle.js static/js/editor.bundle.js
+RUN cargo build --profile "$CARGO_PROFILE" --no-default-features --features server,lsp \
+    && cp "target/$CARGO_PROFILE/cook" /usr/local/bin/cook
 
 # --- Runtime stage ---
 FROM debian:bookworm-slim

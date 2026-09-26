@@ -141,3 +141,11 @@ regex = "1"
 strip = true
 lto = true
 codegen-units = 1
+
+# Faster builds of images meant for trying a change locally
+# (`make docker-build-dev`): thin LTO over parallel codegen units instead of
+# one fat LTO pass. Published images keep `release`.
+[profile.docker-dev]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
