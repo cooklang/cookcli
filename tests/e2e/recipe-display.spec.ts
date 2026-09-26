@@ -233,7 +233,7 @@ test.describe('Recipe Display images', () => {
     const targetStep = steps.nth(2);
     const imageStep = targetStep.locator('.image-step');
     await expect(imageStep).toBeVisible();
-    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Easy Pancakes.3.jpg');
+    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Easy%20Pancakes.3.jpg');
   });
 
   test('should not display image after the targeted cooking step when missing', async ({ page }) => {
@@ -254,6 +254,6 @@ test.describe('Recipe Display images respecting section', () => {
     const steps = page.locator('main ol li:has(.step-number)');
     const targetStep = steps.nth(2);
     const imageStep = targetStep.locator('.image-step');
-    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Chocolate Toast Delight.3.jpg');
+    await expect(imageStep).toHaveAttribute('src', '/api/static/Breakfast/Chocolate%20Toast%20Delight.3.jpg');
   });
 });

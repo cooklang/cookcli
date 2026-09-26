@@ -100,10 +100,15 @@
 
     // ─── Rendering ────────────────────────────────────────────────
 
+    // Safe in text and in quoted attribute values alike. The previous version
+    // went through `textContent` -> `innerHTML`, which only encodes `&`, `<`
+    // and `>`: a `"` in a value placed inside an attribute ended it (#548).
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
     function escapeHTML(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return String(str).replace(/[&<>"']/g, function(ch) {
+            return HTML_ESCAPES[ch];
+        });
     }
 
     function renderCard(card) {
@@ -133,9 +138,6 @@
         }
         else if (card.type === 'step') {
             div.classList.add('cooking-card-step');
-            const imageHTML = card.image
-                ? '<img class="cooking-step-image" src="' + escapeHTML(card.image) + '" alt="Step ' + card.number + '" />'
-                : '';
             let ingredientsHTML = '';
             if (card.ingredients.length > 0) {
                 ingredientsHTML = '<div class="cooking-step-ingredients">' +
@@ -146,9 +148,18 @@
                     }).join('') + '</div>';
             }
             div.innerHTML =
-                imageHTML +
                 '<div class="cooking-step-text"><span class="cooking-step-number">' + card.number + '</span>' + card.html + '</div>' +
                 ingredientsHTML;
+            if (card.image) {
+                // Built as an element, not markup: the path comes from folder
+                // and file names, and an attribute set this way is only ever
+                // a value (#548).
+                const img = document.createElement('img');
+                img.className = 'cooking-step-image';
+                img.setAttribute('src', card.image);
+                img.setAttribute('alt', 'Step ' + card.number);
+                div.insertBefore(img, div.firstChild);
+            }
         }
         else if (card.type === 'done') {
             div.classList.add('cooking-card-done');
