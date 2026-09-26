@@ -82,10 +82,10 @@ test.describe('Recipe editor title picture', () => {
     // Stored as JPEG whatever was sent.
     expect(fs.readFileSync(PICTURE_FILE).subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
 
-    // The recipe page picks it up. On Windows the server spells the folder
-    // separator `\`, which browsers read as `/`.
+    // The recipe page picks it up. Each path segment is percent-encoded and
+    // they are joined with `/` on every platform, Windows included (#548).
     const recipePage = await page.request.get('/recipe/E2E Picture Upload/Picture Test.cook');
-    expect(await recipePage.text()).toMatch(/\/api\/static\/E2E Picture Upload[\\/]Picture Test\.jpg/);
+    expect(await recipePage.text()).toContain('/api/static/E2E%20Picture%20Upload/Picture%20Test.jpg');
 
     await dialog.locator('#picture-remove').click();
     await expect(dialog.locator('#picture-confirm')).toBeVisible();
