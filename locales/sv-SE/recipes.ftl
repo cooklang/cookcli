@@ -51,3 +51,4 @@ sort-name = Namn
 sort-modified = Ändrad
 sort-created = Skapad
 sort-direction-toggle = Byt sorteringsriktning
+random-recipe = Slumpmässigt recept

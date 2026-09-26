@@ -189,6 +189,8 @@ pub struct RecipesTemplate {
     pub items: Vec<RecipeItem>,
     pub todays_menu: Option<TodaysMenu>,
     pub new_recipe_url: String,
+    /// `/random` link for the current folder; `None` hides the button.
+    pub random_recipe_url: Option<String>,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,

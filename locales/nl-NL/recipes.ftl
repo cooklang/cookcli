@@ -51,3 +51,4 @@ sort-name = Naam
 sort-modified = Gewijzigd
 sort-created = Aangemaakt
 sort-direction-toggle = Sorteervolgorde omdraaien
+random-recipe = Willekeurig recept

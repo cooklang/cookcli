@@ -51,3 +51,4 @@ sort-name = Izena
 sort-modified = Aldatua
 sort-created = Sortua
 sort-direction-toggle = Ordena aldatu
+random-recipe = Ausazko errezeta

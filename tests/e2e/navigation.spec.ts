@@ -214,3 +214,17 @@ test.describe('Feature flag nav visibility', () => {
     await expect(shoppingPill).toContainText(/Shopping/i);
   });
 });
+
+test.describe('Random recipe', () => {
+  test('opens a recipe from the current folder', async ({ page }) => {
+    await page.goto('/directory/Breakfast');
+    await page.waitForLoadState('domcontentloaded');
+
+    const dice = page.getByRole('link', { name: 'Random recipe' });
+    await expect(dice).toHaveAttribute('href', '/random/Breakfast');
+    await dice.click();
+
+    await expect(page).toHaveURL(/\/recipe\/Breakfast\/[^/]+$/);
+    await expect(page.locator('h1').first()).toBeVisible();
+  });
+});

@@ -690,6 +690,7 @@ dependencies = [
  "cooklang-reports",
  "cooklang-sync-client",
  "directories",
+ "fastrand",
  "flate2",
  "fluent",
  "fluent-templates",
