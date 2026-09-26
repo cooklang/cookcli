@@ -886,6 +886,16 @@ mod tests {
     }
 
     #[test]
+    fn nothing_is_the_servers_own_origin_without_a_host() {
+        // What `request_authority` gives a caller when the request carried no
+        // usable `Host`: no origin can match it, so only a listed one is
+        // trusted. The LSP websocket handler relies on this.
+        let config = CorsConfig::from_args(&origins(&["http://app.test"]), false).expect("valid");
+        assert!(!config.trusts("http://127.0.0.1:9080", ""));
+        assert!(config.trusts("http://app.test", ""));
+    }
+
+    #[test]
     fn a_refused_host_name_gets_the_origin_to_name() {
         assert_eq!(
             own_origin_by_name("http://evil.test:9080", "evil.test:9080").as_deref(),

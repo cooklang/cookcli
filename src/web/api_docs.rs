@@ -1456,15 +1456,21 @@ data: {"file":"checked"}
                 "Upgrades to a websocket (verified: a plain WebSocket handshake against this \
                  path returns `101 Switching Protocols`) that bridges to a `cook lsp` \
                  subprocess, providing diagnostics and completions to the built-in editor. \
-                 Messages are Language Server Protocol messages framed with `Content-Length` \
-                 headers exactly as LSP over stdio would be — see the LSP specification for the \
-                 format. Not a REST endpoint and not usable with a plain HTTP client. \
-                 Each open socket holds a subprocess, so no more than \
-                 `--max-lsp-sessions` of them (8 by default) run at once; a handshake beyond \
-                 that is refused with `503` and the usual JSON error body instead of being \
-                 upgraded, and succeeds once an earlier socket closes. \
-                 `--max-lsp-sessions 0` turns the endpoint off, which is worth doing when \
-                 serving `--host` on a network you do not control.",
+                 Each websocket text message is one bare JSON-RPC message; the bridge adds and \
+                 strips the `Content-Length` framing LSP uses over stdio. The language server's \
+                 workspace root is always the server's recipe directory: `initialize` has its \
+                 `rootUri`, `rootPath` and `workspaceFolders` replaced, and \
+                 `workspace/didChangeWorkspaceFolders` is dropped, as is any message that is \
+                 not a single JSON object. Browsers apply no CORS to websockets, so a \
+                 handshake is refused with `403` when its `Origin` is neither a `--cors-origin` \
+                 nor the server's own page reached by IP address or `localhost`. Clients that \
+                 send no `Origin` are unaffected, and `--no-csrf-check` turns the check off. \
+                 Each open socket holds a subprocess, so no more than `--max-lsp-sessions` of \
+                 them (8 by default) run at once; a handshake beyond that is refused with \
+                 `503` and the usual JSON error body instead of being upgraded, and succeeds \
+                 once an earlier socket closes. `--max-lsp-sessions 0` turns the endpoint off, \
+                 which is worth doing when serving `--host` on a network you do not control. \
+                 Not a REST endpoint and not usable with a plain HTTP client.",
             ),
         ],
     )
