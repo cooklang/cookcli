@@ -7,6 +7,15 @@ import { linter } from "@codemirror/lint";
 import { autocompletion, snippet } from "@codemirror/autocomplete";
 import { tags as t } from "@lezer/highlight";
 import { cooklang } from "./cooklang-mode.js";
+import {
+    initToolbar,
+    recipeActions,
+    wrapSelection,
+    prefixLines,
+    insertBlock,
+    findFrontmatter,
+    ensureFrontmatter
+} from "./toolbar.js";
 
 // Diagnostics support
 let currentDiagnostics = [];
@@ -207,5 +216,12 @@ window.CooklangEditor = {
   setContent,
   setDiagnostics,
   setCompletionResolver,
-  setCursorPositionCallback
+  setCursorPositionCallback,
+  initToolbar,
+  recipeActions,
+  wrapSelection,
+  prefixLines,
+  insertBlock,
+  findFrontmatter,
+  ensureFrontmatter
 };
