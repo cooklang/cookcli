@@ -22,20 +22,11 @@ pub(super) fn xml_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Percent-encode each `/`-separated path segment, preserving the separators.
-fn encode_path(relpath: &str) -> String {
-    relpath
-        .split('/')
-        .map(|seg| urlencoding::encode(seg).into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
 /// Build the `<loc>` text: trimmed base + "/" + encoded path, XML-escaped.
 /// The empty relpath yields `<base>/`.
 pub(super) fn build_loc(base: &str, relpath: &str) -> String {
     let base = base.trim_end_matches('/');
-    let loc = format!("{base}/{}", encode_path(relpath));
+    let loc = format!("{base}/{}", crate::util::encode_url_path(relpath));
     xml_escape(&loc)
 }
 
@@ -221,14 +212,6 @@ mod tests {
         assert_eq!(
             xml_escape("a & b < c > \"d\""),
             "a &amp; b &lt; c &gt; &quot;d&quot;"
-        );
-    }
-
-    #[test]
-    fn encodes_spaces_per_segment_preserving_slashes() {
-        assert_eq!(
-            encode_path("recipe/Root Vegetables/Mash Up.html"),
-            "recipe/Root%20Vegetables/Mash%20Up.html"
         );
     }
 

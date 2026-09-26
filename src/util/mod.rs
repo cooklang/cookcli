@@ -212,6 +212,16 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
 /// reference before looking it up.
 pub use cookcli_core::find::is_safe_relative_path;
 
+/// Percent-encode each `/`-separated path segment, preserving the separators,
+/// so a recipe path can go into a URL or a `Location` header as it is.
+pub fn encode_url_path(relpath: &str) -> String {
+    relpath
+        .split('/')
+        .map(|seg| urlencoding::encode(seg).into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Resolve a recipe name or path to a file, in CLI wording.
 ///
 /// The lookup itself lives in `cookcli-core`; this wrapper only translates the
@@ -223,6 +233,14 @@ pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn encodes_spaces_per_segment_preserving_slashes() {
+        assert_eq!(
+            encode_url_path("recipe/Root Vegetables/Mash Up.html"),
+            "recipe/Root%20Vegetables/Mash%20Up.html"
+        );
+    }
 
     /// Core hands over a lowercase line; this is the only thing the terminal
     /// needs done to it, and it must not corrupt a message that opens with a
