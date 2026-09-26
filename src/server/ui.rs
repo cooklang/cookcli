@@ -1,3 +1,4 @@
+use crate::server::handlers::common::{is_request_path, recipe_file, RecipeFile};
 use crate::server::AppState;
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
@@ -8,7 +9,6 @@ use axum::{
     routing::get,
     Form, Router,
 };
-use camino::Utf8PathBuf;
 use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
@@ -131,8 +131,10 @@ async fn edit_page(
 ) -> axum::response::Response {
     tracing::info!("Edit page requested for path: {}", path);
 
-    // Validate path to prevent directory traversal
-    if !crate::util::is_safe_relative_path(&path) {
+    // The same rules as the save and delete endpoints behind this page: inside
+    // the recipe directory, nothing hidden, and only a `.cook` or `.menu` file.
+    // Opening anything else here would show a file the page cannot save.
+    if !is_request_path(&path) {
         tracing::error!("Invalid path: {path}");
         return error_page(
             lang,
@@ -142,30 +144,14 @@ async fn edit_page(
         );
     }
 
-    let recipe_path = Utf8PathBuf::from(&path);
-
-    // Find the actual file
-    let entry = match cooklang_find::get_recipe(vec![&state.base_path], &recipe_path) {
-        Ok(entry) => entry,
-        Err(e) => {
+    let file_path = match recipe_file(&state.base_path, &path) {
+        Ok(RecipeFile::Existing(file_path)) => file_path,
+        _ => {
             tracing::error!("Recipe not found: {path}");
             return error_page(
                 lang,
                 &state.url_prefix,
-                format!("Recipe not found: {path}: {e}"),
-                features,
-            );
-        }
-    };
-
-    let file_path = match entry.path() {
-        Some(p) => p,
-        None => {
-            tracing::error!("Recipe has no file path: {path}");
-            return error_page(
-                lang,
-                &state.url_prefix,
-                format!("Recipe has no file path: {path}"),
+                format!("Recipe not found: {path}"),
                 features,
             );
         }

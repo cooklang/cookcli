@@ -335,8 +335,10 @@ fn recipes() -> ApiSection {
                 "/api/recipes/raw/{*path}",
                 "Read the unparsed Cooklang source",
                 "Returns the file's text verbatim with content type `text/plain`, including \
-                 YAML frontmatter. The `.cook` and `.menu` extensions are optional in the path — \
-                 the server tries the bare path first, then `.cook`, then `.menu`.",
+                 YAML frontmatter. Only `.cook` and `.menu` files are served. The extension is \
+                 optional in the path — without one the server tries `.cook`, then `.menu`. \
+                 A path with a component starting with `.` is refused with a 400, and any \
+                 other file answers 404.",
             )
             .params(vec![path_param(
                 "path",
@@ -359,8 +361,11 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
                 "/api/recipes/{*path}",
                 "Create or overwrite a recipe",
                 "The request body is the raw Cooklang source as `text/plain` — not JSON. \
-                 Writes are atomic (temp file plus rename). If the file does not exist yet, \
-                 it is created with a `.cook` extension — but the response's `path` echoes \
+                 Writes are atomic (temp file plus rename). Only `.cook` and `.menu` files \
+                 are written, with the same resolution as the raw endpoint: a path naming \
+                 any other file, such as `config/aisle.conf`, writes `config/aisle.conf.cook` \
+                 and leaves that file alone. If the file does not exist yet, it is created \
+                 with the extension the path gives, or `.cook` — but the response's `path` echoes \
                  the request path verbatim and does not report that resolved filename. The \
                  parent directory must already exist: writing into a directory that is not \
                  there returns a 500 whose message talks about permissions even when the \
@@ -395,9 +400,9 @@ Mix the @flour{200%g} and @water{120%ml}.
             )
             .params(vec![path_param(
                 "path",
-                "Recipe path relative to the recipe directory. The `.cook` extension is \
-                 optional — the same bare → `.cook` → `.menu` resolution as the raw endpoint \
-                 applies here too.",
+                "Recipe path relative to the recipe directory. The extension is optional, \
+                 and only a `.cook` or `.menu` file is ever removed — the same resolution as \
+                 the raw endpoint applies here too.",
             )])
             .response(
                 r#"

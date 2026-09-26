@@ -1,4 +1,4 @@
-mod common;
+pub(super) mod common;
 pub mod menus;
 pub mod pantry;
 pub mod recipe_image;

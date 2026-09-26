@@ -1,6 +1,6 @@
 use crate::{
     server::{
-        handlers::common::{check_path, normalize_tags},
+        handlers::common::{check_path, normalize_tags, recipe_file, RecipeFile},
         AppState,
     },
     util::PARSER,
@@ -132,28 +132,12 @@ pub async fn recipe_raw(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
-    check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Try .cook extension first, then .menu
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
-            tracing::error!("Recipe file not found: {path}");
-            return Err((
-                StatusCode::NOT_FOUND,
-                json_error(format!("Recipe file not found: {path}")),
-            ));
-        }
+    let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
+        tracing::error!("Recipe file not found: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe file not found: {path}")),
+        ));
     };
 
     tokio::fs::read_to_string(&file_path).await.map_err(|e| {
@@ -170,26 +154,8 @@ pub async fn recipe_save(
     State(state): State<Arc<AppState>>,
     body: String,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Determine actual file path (with extension)
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
-            // Default to .cook for new files
-            Utf8PathBuf::from(format!("{}.cook", recipe_path))
-        }
-    };
+    let (RecipeFile::Existing(file_path) | RecipeFile::Missing(file_path)) =
+        recipe_file(&state.base_path, &path)?;
 
     // Atomic write: write to temp file, then rename
     let temp_path = file_path.with_extension("tmp");
@@ -292,28 +258,12 @@ pub async fn recipe_delete(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Determine actual file path (with extension)
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
-            tracing::error!("Recipe file not found for deletion: {path}");
-            return Err((
-                StatusCode::NOT_FOUND,
-                json_error(format!("Recipe file not found: {path}")),
-            ));
-        }
+    let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
+        tracing::error!("Recipe file not found for deletion: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe file not found: {path}")),
+        ));
     };
 
     // Delete the file
