@@ -149,6 +149,10 @@ Configuration search order:
   `/api/sync`). So a GET handler must never change anything. Templates get a
   `Viewer` (`src/web/viewer.rs`) and hide editing controls when
   `!viewer.can_edit()`
+- Every handler that changes something takes `Extension<Viewer>` and, once
+  the change succeeded, calls `server::activity::record` — one stdout line
+  saying who did what. Quote request text with `activity::quoted` /
+  `activity::file` so it cannot forge a line.
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)

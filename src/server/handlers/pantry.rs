@@ -1,6 +1,6 @@
 use super::common::json_error;
 use axum::{
-    extract::{Json, Path, Query, State},
+    extract::{Extension, Json, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
 
-use crate::server::AppState;
+use crate::server::{activity, AppState};
+use crate::web::viewer::Viewer;
 
 /// Load and parse the pantry file asynchronously.
 async fn load_pantry(
@@ -74,6 +75,7 @@ pub struct ApiResponse {
 
 pub async fn add_item(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(item): Json<AddPantryItem>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let pantry_path = get_pantry_path(&state)?;
@@ -120,6 +122,15 @@ pub async fn add_item(
             )
         })?;
 
+    activity::record(
+        &viewer,
+        format_args!(
+            "added {} to the {} section of the pantry",
+            activity::quoted(&item.name),
+            activity::quoted(&item.section)
+        ),
+    );
+
     Ok(Json(ApiResponse {
         success: true,
         message: format!("Added {} to {}", item.name, item.section),
@@ -128,6 +139,7 @@ pub async fn add_item(
 
 pub async fn remove_item(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Path((section, name)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let pantry_path = get_pantry_path(&state)?;
@@ -165,6 +177,15 @@ pub async fn remove_item(
             )
         })?;
 
+    activity::record(
+        &viewer,
+        format_args!(
+            "removed {} from the {} section of the pantry",
+            activity::quoted(&name),
+            activity::quoted(&section)
+        ),
+    );
+
     Ok(Json(ApiResponse {
         success: true,
         message: format!("Removed {name} from {section}"),
@@ -173,6 +194,7 @@ pub async fn remove_item(
 
 pub async fn update_item(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Path((section, name)): Path<(String, String)>,
     Json(update): Json<UpdatePantryItem>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
@@ -243,6 +265,15 @@ pub async fn update_item(
                 json_error(format!("Failed to write pantry file: {e}")),
             )
         })?;
+
+    activity::record(
+        &viewer,
+        format_args!(
+            "updated {} in the {} section of the pantry",
+            activity::quoted(&name),
+            activity::quoted(&section)
+        ),
+    );
 
     Ok(Json(ApiResponse {
         success: true,

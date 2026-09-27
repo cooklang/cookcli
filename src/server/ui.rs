@@ -1,5 +1,5 @@
 use crate::server::handlers::common::{is_request_path, recipe_file, RecipeFile};
-use crate::server::AppState;
+use crate::server::{activity, AppState};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use crate::web::viewer::Viewer;
@@ -365,6 +365,7 @@ fn validate_same_origin(headers: &HeaderMap, host: &str, cors: &super::cors::Cor
 
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     headers: HeaderMap,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
@@ -520,6 +521,11 @@ async fn create_recipe(
             );
         }
     }
+
+    activity::record(
+        &viewer,
+        format_args!("created {}", activity::file(&state.base_path, &file_path)),
+    );
 
     // Redirect to editor
     axum::response::Redirect::to(&format!("{}/edit/{}.cook", state.url_prefix, recipe_path))

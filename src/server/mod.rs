@@ -46,6 +46,7 @@ use std::{net::IpAddr, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, set_header::SetResponseHeader};
 use tracing::{error, info};
 
+mod activity;
 pub mod auth;
 mod cors;
 mod fs_atomic;

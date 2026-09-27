@@ -107,7 +107,7 @@ impl Auth {
         .ok()
         .flatten();
         if let Some(user) = signed_out {
-            tracing::info!(user = ?user, "signed out");
+            crate::server::activity::record_as(&user, "signed out");
         }
     }
 

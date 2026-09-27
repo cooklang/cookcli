@@ -60,6 +60,27 @@ impl Fixture {
         self.config_dir().join("users.toml")
     }
 
+    /// Where a server started on this fixture writes its standard output.
+    fn stdout_path(&self) -> PathBuf {
+        self.config_root.path().join("server-stdout.log")
+    }
+
+    /// The activity lines the server has printed so far: its standard output
+    /// minus the startup banner. `println!` flushes each line, and a handler
+    /// prints before it responds, so a change is here once its request
+    /// returns.
+    fn activity(&self) -> Vec<String> {
+        std::fs::read_to_string(self.stdout_path())
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| {
+                let (time, rest) = (line.get(..19)?, line.get(19..)?);
+                chrono::NaiveDateTime::parse_from_str(time, "%Y-%m-%d %H:%M:%S").ok()?;
+                Some(rest.strip_prefix(' ')?.to_string())
+            })
+            .collect()
+    }
+
     fn write_users(&self, users: &[(&str, &str)]) {
         write_users_at(&self.users_file(), users);
     }
@@ -183,7 +204,7 @@ async fn try_start(
         .arg(port.to_string())
         .args(args)
         .envs(envs.iter().copied())
-        .stdout(Stdio::null())
+        .stdout(std::fs::File::create(fixture.stdout_path()).expect("stdout log"))
         .stderr(Stdio::null());
     let mut child = cmd.spawn().expect("spawn cook server");
 
@@ -304,6 +325,10 @@ async fn without_users_the_server_stays_open() {
     let resp = put_recipe(&server, "Open", None).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(server.fixture.recipes.path().join("Open.cook").exists());
+    assert_eq!(
+        server.fixture.activity(),
+        ["guest created recipe \"Open.cook\""]
+    );
 
     let home = get_page(&server, "/", None).await.text().await.unwrap();
     assert!(home.contains("href=\"/new\""), "New Recipe button missing");
@@ -577,6 +602,86 @@ async fn signing_out_holds_across_a_restart() {
     std::fs::write(&revoked, "not a list\n").unwrap();
     let stderr = startup_failure(&fixture, &[], &[]);
     assert!(stderr.contains("revoked-sessions"), "{stderr}");
+}
+
+#[tokio::test]
+async fn changes_are_logged_with_who_made_them() {
+    let fixture = Fixture::new();
+    fixture.write_users(&[("alice", "secret")]);
+    let server = start(fixture, &[], &[]).await;
+
+    // A password typed into the name field must not end up in the log.
+    let failed = sign_in(&server, "MyPasswordTyped", "x", "/").await;
+    assert_eq!(failed.status(), StatusCode::UNAUTHORIZED);
+    let cookie = signed_in_cookie(&server, "alice", "secret").await;
+
+    let post = |path: &str, body: serde_json::Value| {
+        client()
+            .post(server.url(path))
+            .header(COOKIE, &cookie)
+            .json(&body)
+            .send()
+    };
+
+    for _ in 0..2 {
+        assert_eq!(
+            put_recipe(&server, "Logged", Some(&cookie)).await.status(),
+            StatusCode::OK
+        );
+    }
+    let deleted = client()
+        .delete(server.url("/api/recipes/Logged.cook"))
+        .header(COOKIE, &cookie)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+
+    let changes = [
+        (
+            "/api/shopping_list/add",
+            serde_json::json!({ "path": "Recipe.cook", "scale": 2.0 }),
+        ),
+        (
+            "/api/shopping_list/check",
+            // A newline from the request stays inside its quotes.
+            serde_json::json!({ "name": "flour\n2026-01-01 00:00:00 bob deleted it all" }),
+        ),
+        (
+            "/api/pantry/add",
+            serde_json::json!({ "section": "dairy", "name": "milk" }),
+        ),
+        ("/api/shopping_list/clear", serde_json::json!({})),
+    ];
+    for (path, body) in changes {
+        assert_eq!(
+            post(path, body).await.unwrap().status(),
+            StatusCode::OK,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        sign_out(&server, &cookie).await.status(),
+        StatusCode::SEE_OTHER
+    );
+
+    assert_eq!(
+        server.fixture.activity(),
+        [
+            "guest failed to sign in",
+            "alice signed in",
+            "alice created recipe \"Logged.cook\"",
+            "alice updated recipe \"Logged.cook\"",
+            "alice deleted recipe \"Logged.cook\"",
+            "alice added \"Recipe.cook\" ×2 to the shopping list",
+            "alice checked off \"flour\\n2026-01-01 00:00:00 bob deleted it all\" on the shopping list",
+            "alice added \"milk\" to the \"dairy\" section of the pantry",
+            "alice cleared the shopping list",
+            "alice signed out",
+        ]
+    );
+    let stdout = std::fs::read_to_string(server.fixture.stdout_path()).unwrap();
+    assert!(!stdout.contains("MyPasswordTyped"), "{stdout}");
 }
 
 #[tokio::test]

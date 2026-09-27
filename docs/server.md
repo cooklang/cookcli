@@ -206,6 +206,35 @@ cookie is marked `Secure`.
 In a container, give the server a configuration directory it can write to;
 see [Sign-in in a container](../README.md#sign-in-in-a-container).
 
+## Activity log
+
+The server prints a line on standard output for every change made through it,
+saying when, who, and what — in the terminal, or in `docker logs`:
+
+```text
+2026-09-27 08:41:56 alice signed in
+2026-09-27 08:42:03 alice created recipe "Soups/Pea soup.cook"
+2026-09-27 08:42:40 alice updated recipe "Soups/Pea soup.cook"
+2026-09-27 08:43:12 alice added "Soups/Pea soup.cook" ×2 to the shopping list
+2026-09-27 08:43:30 alice checked off "flour" on the shopping list
+2026-09-27 08:44:05 alice removed "milk" from the "dairy" section of the pantry
+2026-09-27 08:45:51 alice deleted menu "Week.menu"
+2026-09-27 08:46:00 alice signed out
+2026-09-27 09:12:44 guest failed to sign in
+```
+
+It covers recipes and menus (created, updated, deleted, title picture set or
+removed), the shopping list, the pantry, linking the server to cook.md, and
+signing in and out. Changes are attributed to the signed-in user; without
+[sign-in](#signing-in-to-make-changes), and for a failed sign-in, to `guest`.
+A failed sign-in never shows the name that was typed, since that is sometimes
+the password. Names and paths are quoted, so a line break in one cannot pass
+for another line. Times are the server's local time. The container image has
+no time zone data, so it logs in UTC unless you mount the host's zone, e.g.
+`-v /etc/localtime:/etc/localtime:ro`.
+
+Changes made to the files directly, outside the server, are not listed.
+
 ## Web feeds
 
 The server publishes an Atom feed at `/atom.xml` and an RSS 2.0 feed at `/rss.xml`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.

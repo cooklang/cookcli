@@ -1,7 +1,7 @@
 //! `/login` and `/logout`.
 
 use super::session;
-use crate::server::AppState;
+use crate::server::{activity, AppState};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::{LoginTemplate, Tr};
 use crate::web::viewer::Viewer;
@@ -79,9 +79,8 @@ pub async fn login(
     let username = form.username.trim().to_string();
     if auth.check_password(&username, form.password).await {
         if let Some(value) = auth.issue_session(&username) {
-            // Debug-formatted, so a name full of control characters cannot
-            // forge log lines.
-            tracing::info!(user = ?username, "signed in");
+            // A name that has a hash is a valid one: letters, digits, `_.@-`.
+            activity::record_as(&username, "signed in");
             let secure = crate::server::ui::forwarded_https(&headers);
             let cookie = session::session_cookie(&value, &state.url_prefix, secure);
             return (
@@ -94,7 +93,7 @@ pub async fn login(
 
     // Without the name: people type their password into it by mistake, and
     // the log would keep it.
-    tracing::warn!("failed sign-in");
+    activity::record_as(activity::GUEST, "failed to sign in");
     (
         StatusCode::UNAUTHORIZED,
         login_template(&state, lang, features, next, username, true),
