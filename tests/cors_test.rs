@@ -438,6 +438,300 @@ async fn no_csrf_check_disables_the_write_guard() {
 }
 
 // ---------------------------------------------------------------------------
+// LSP websocket tests (real handshakes: browsers apply no CORS to WebSockets,
+// and the handshake is a GET the write guard lets through, so refusing the
+// upgrade is the only defence, and only a handshake can observe it)
+// ---------------------------------------------------------------------------
+
+mod lsp_socket {
+    use super::*;
+    use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest};
+
+    type Socket = tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >;
+
+    /// Performs a WebSocket handshake with `/api/ws/lsp`, adding `headers` to
+    /// the ones the protocol requires (a `host` given here replaces the
+    /// generated one; the connection still goes to 127.0.0.1). Returns the
+    /// status the server answered with, and the socket if it upgraded.
+    async fn handshake(
+        server: &ServerGuard,
+        headers: &[(&str, &str)],
+    ) -> (StatusCode, Option<Socket>) {
+        let mut request = format!("ws://127.0.0.1:{}/api/ws/lsp", server.port)
+            .into_client_request()
+            .expect("valid websocket request");
+        for (name, value) in headers {
+            request.headers_mut().insert(
+                HeaderName::from_bytes(name.as_bytes()).expect("valid header name"),
+                HeaderValue::from_str(value).expect("valid header value"),
+            );
+        }
+        match tokio_tungstenite::connect_async(request).await {
+            Ok((socket, response)) => (response.status(), Some(socket)),
+            Err(tungstenite::Error::Http(response)) => (response.status(), None),
+            Err(e) => panic!("websocket handshake failed: {e}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_cross_origin_page_is_refused_with_403() {
+        let server = start_server(&[]).await;
+        let (status, socket) = handshake(&server, &[("origin", "http://evil.test")]).await;
+
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "a page on another origin must not get a language server"
+        );
+        assert!(socket.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_servers_own_page_is_upgraded() {
+        // The editor's own connection, under both of the names a local server
+        // is normally reached by.
+        let server = start_server(&[]).await;
+        for host in [
+            format!("127.0.0.1:{}", server.port),
+            format!("localhost:{}", server.port),
+        ] {
+            let origin = format!("http://{host}");
+            let (status, _socket) =
+                handshake(&server, &[("host", &host), ("origin", &origin)]).await;
+            assert_eq!(
+                status,
+                StatusCode::SWITCHING_PROTOCOLS,
+                "Origin {origin} on Host {host} is the server's own editor and must connect"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_rebound_dns_name_is_refused_even_though_it_matches() {
+        // DNS rebinding: a hostile page at rebind.test re-resolves its own name
+        // to 127.0.0.1, so its Origin and the Host it sends agree exactly.
+        let server = start_server(&[]).await;
+        let host = format!("rebind.test:{}", server.port);
+        let origin = format!("http://{host}");
+        let (status, _socket) = handshake(&server, &[("host", &host), ("origin", &origin)]).await;
+
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "a same-origin pair under a DNS name must not be trusted without --cors-origin"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_client_without_origin_is_upgraded() {
+        // No browser, so nothing to protect it from: editors and scripts.
+        let server = start_server(&[]).await;
+        let (status, _socket) = handshake(&server, &[]).await;
+
+        assert_eq!(status, StatusCode::SWITCHING_PROTOCOLS);
+    }
+
+    #[tokio::test]
+    async fn a_listed_origin_is_upgraded_and_others_are_not() {
+        let server = start_server(&["--cors-origin", "http://app.test"]).await;
+
+        let (status, _socket) = handshake(&server, &[("origin", "http://app.test")]).await;
+        assert_eq!(
+            status,
+            StatusCode::SWITCHING_PROTOCOLS,
+            "a listed --cors-origin must be able to connect"
+        );
+
+        let (status, _socket) = handshake(&server, &[("origin", "http://evil.test")]).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn a_full_server_still_refuses_a_cross_origin_page_with_403() {
+        // The origin is checked before a session slot is claimed, so a page
+        // that may not connect is told that, rather than being told how many
+        // sessions are in use — and it cannot take slots from the editor by
+        // being refused over and over.
+        let server = start_server(&["--max-lsp-sessions", "1"]).await;
+
+        let own_origin = server.own_origin();
+        let (status, socket) = handshake(&server, &[("origin", &own_origin)]).await;
+        assert_eq!(status, StatusCode::SWITCHING_PROTOCOLS);
+        let _held = socket.expect("the only session slot is now taken");
+
+        let (status, _socket) = handshake(&server, &[("origin", "http://evil.test")]).await;
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "a full server must refuse a cross-origin page for being cross-origin, not for \
+             being full"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_origin_named_by_the_environment_is_upgraded() {
+        // A container names its origin with COOK_CORS_ORIGIN rather than a
+        // flag, and the editor there would lose its language server if the
+        // socket read a different policy than writes do.
+        let server = start_server_with_env(&[], &[("COOK_CORS_ORIGIN", "http://app.test")]).await;
+
+        let (status, _socket) = handshake(&server, &[("origin", "http://app.test")]).await;
+        assert_eq!(
+            status,
+            StatusCode::SWITCHING_PROTOCOLS,
+            "an origin from COOK_CORS_ORIGIN must be able to connect"
+        );
+
+        let (status, _socket) = handshake(&server, &[("origin", "http://evil.test")]).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn no_csrf_check_disables_the_origin_check() {
+        let server = start_server(&["--no-csrf-check"]).await;
+        let (status, _socket) = handshake(&server, &[("origin", "http://evil.test")]).await;
+
+        assert_eq!(status, StatusCode::SWITCHING_PROTOCOLS);
+    }
+
+    /// Whole conversations with the language server, which exists only in a
+    /// build with the `lsp` feature.
+    #[cfg(feature = "lsp")]
+    mod session {
+        use super::*;
+        use futures_util::{SinkExt, StreamExt};
+        use serde_json::{json, Value};
+        use tokio_tungstenite::tungstenite::Message;
+
+        async fn send(socket: &mut Socket, message: Value) {
+            socket
+                .send(Message::text(message.to_string()))
+                .await
+                .expect("send to the language server");
+        }
+
+        /// Reads messages until one satisfies `wanted`, skipping log messages
+        /// and anything else the language server sends in between.
+        async fn receive(socket: &mut Socket, wanted: impl Fn(&Value) -> bool) -> Value {
+            let read = async {
+                while let Some(frame) = socket.next().await {
+                    if let Message::Text(text) = frame.expect("read from the language server") {
+                        let message: Value =
+                            serde_json::from_str(text.as_str()).expect("messages are bare JSON");
+                        if wanted(&message) {
+                            return message;
+                        }
+                    }
+                }
+                panic!("the socket closed before the expected message arrived");
+            };
+            tokio::time::timeout(Duration::from_secs(30), read)
+                .await
+                .expect("the language server did not answer within 30s")
+        }
+
+        /// The response to request `id`, as opposed to a request from the
+        /// server.
+        fn is_response(message: &Value, id: u64) -> bool {
+            message["id"] == id && message.get("method").is_none()
+        }
+
+        #[tokio::test]
+        async fn the_workspace_root_is_the_base_path_whatever_the_client_names() {
+            // A client that names another directory as its root, then tries to
+            // move there, must still only be offered the server's own recipes.
+            // The probe document lives in that directory too, so the fallback
+            // to the document's parent (used when there is no root) is covered.
+            let server = start_server(&[]).await;
+            let elsewhere = TempDir::new().expect("temp dir");
+            std::fs::write(
+                elsewhere.path().join("Elsewhere.cook"),
+                "Boil @water{1%l}.\n",
+            )
+            .unwrap();
+            let elsewhere_uri = url::Url::from_file_path(elsewhere.path())
+                .expect("file URI")
+                .to_string();
+            let folder = json!([{ "uri": elsewhere_uri, "name": "elsewhere" }]);
+            let probe_uri = format!("{elsewhere_uri}/Probe.cook");
+
+            let (status, socket) = handshake(&server, &[]).await;
+            assert_eq!(status, StatusCode::SWITCHING_PROTOCOLS);
+            let mut socket = socket.expect("upgraded");
+
+            send(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                    "processId": null,
+                    "rootUri": elsewhere_uri,
+                    "rootPath": elsewhere.path().to_str(),
+                    "workspaceFolders": folder,
+                    "capabilities": {}
+                }}),
+            )
+            .await;
+            receive(&mut socket, |m| is_response(m, 1)).await;
+            send(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "method": "initialized", "params": {} }),
+            )
+            .await;
+            send(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "method": "workspace/didChangeWorkspaceFolders", "params": {
+                    "event": { "added": folder, "removed": [] }
+                }}),
+            )
+            .await;
+            send(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
+                    "textDocument": {
+                        "uri": probe_uri,
+                        "languageId": "cooklang",
+                        "version": 1,
+                        "text": "@./"
+                    }
+                }}),
+            )
+            .await;
+            // Diagnostics are published once the document is open, so
+            // completion cannot overtake it.
+            receive(&mut socket, |m| {
+                m["method"] == "textDocument/publishDiagnostics"
+            })
+            .await;
+            send(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": {
+                    "textDocument": { "uri": probe_uri },
+                    "position": { "line": 0, "character": 3 }
+                }}),
+            )
+            .await;
+            let response = receive(&mut socket, |m| is_response(m, 2)).await;
+
+            let labels: Vec<&str> = response["result"]["items"]
+                .as_array()
+                .unwrap_or_else(|| panic!("a completion list, got {response}"))
+                .iter()
+                .filter_map(|item| item["label"].as_str())
+                .collect();
+            assert!(
+                labels.contains(&"./Recipe"),
+                "the base path's recipes must be offered, got {labels:?}"
+            );
+            assert!(
+                !labels.iter().any(|label| label.contains("Elsewhere")),
+                "nothing outside the base path may be listed, got {labels:?}"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Startup validation tests
 // ---------------------------------------------------------------------------
 

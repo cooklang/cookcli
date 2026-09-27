@@ -121,16 +121,18 @@ pub struct ServerArgs {
     #[arg(long, default_value_t = false)]
     cors_allow_credentials: bool,
 
-    /// Disable same-origin enforcement on requests that modify recipes
+    /// Disable same-origin enforcement on writes and the editor's language server
     ///
     /// By default a browser request is rejected unless its Origin is the
     /// server's own address -- the Host it was sent to, when that is localhost
     /// or an IP address -- or is named by --cors-origin. Any other host name
     /// has to be named too, or a site could point a domain of its own at the
-    /// server (DNS rebinding) and pass as same-origin. This has nothing to do
-    /// with the cross-origin read policy the other --cors-* flags configure.
-    /// Use it only when a reverse proxy rewrites Host in a way that cannot be
-    /// expressed with --cors-origin. The former spelling --no-cors still works.
+    /// server (DNS rebinding) and pass as same-origin. The same rule decides
+    /// which browsers may open the recipe editor's language server. This has
+    /// nothing to do with the cross-origin read policy the other --cors-*
+    /// flags configure. Use it only when a reverse proxy rewrites Host in a way
+    /// that cannot be expressed with --cors-origin. The former spelling
+    /// --no-cors still works.
     #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
     csrf_check: bool,
 
@@ -459,12 +461,13 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
-    /// When true, browser requests that modify recipes must come from an
-    /// origin `cors` trusts: the server's own address, or a `--cors-origin`.
-    /// Cleared by `--no-csrf-check`.
+    /// When true, browser requests that modify recipes, and browsers opening
+    /// the LSP websocket, must come from an origin `cors` trusts: the server's
+    /// own address, or a `--cors-origin`. Cleared by `--no-csrf-check`.
     pub csrf_check: bool,
-    /// The `--cors-origin` policy. Besides CORS, it decides which origins
-    /// may modify recipes, for the write guard and the new-recipe form alike.
+    /// The `--cors-origin` policy. Besides CORS, it decides which origins may
+    /// modify recipes and open the LSP websocket, for the write guard, the
+    /// new-recipe form and the bridge alike.
     pub cors: Arc<cors::CorsConfig>,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
