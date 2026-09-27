@@ -575,7 +575,14 @@ async fn create_recipe(
 
     match file {
         Ok(mut f) => {
-            if let Err(e) = f.write_all(template.as_bytes()).await {
+            // A tokio `File` hands writes to a background task: without the
+            // flush, the redirect below can reach the browser, and the editor
+            // load the file, before anything is on disk.
+            let written = match f.write_all(template.as_bytes()).await {
+                Ok(()) => f.flush().await,
+                Err(e) => Err(e),
+            };
+            if let Err(e) = written {
                 tracing::error!("Failed to write recipe: {}", e);
                 return new_page_error(
                     &state.url_prefix,
