@@ -154,12 +154,17 @@
             </button>
         </div>
         {% endif %}
-        <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-inline") }}">
+        <!-- A menu gets one group here: Ingredient, Comment and Metadata. The
+             menu page drops cookware, timers and notes, and Day replaces
+             Section, so those only appear for recipes, in two groups. The
+             `if !is_menu` below spans the boundary between those two groups. -->
+        <div class="editor-toolbar-group" role="group" aria-label="{% if is_menu %}{{ tr.t("editor-toolbar-other") }}{% else %}{{ tr.t("editor-toolbar-inline") }}{% endif %}">
             <button type="button" class="btn btn-sm" data-action="ingredient"
                     title="{{ tr.t("editor-toolbar-ingredient-title") }}" aria-label="{{ tr.t("editor-toolbar-ingredient") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">@</span>
                 {{ tr.t("editor-toolbar-ingredient") }}
             </button>
+            {% if !is_menu %}
             <button type="button" class="btn btn-sm" data-action="cookware"
                     title="{{ tr.t("editor-toolbar-cookware-title") }}" aria-label="{{ tr.t("editor-toolbar-cookware") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">#</span>
@@ -170,13 +175,11 @@
                 <span class="editor-toolbar-glyph" aria-hidden="true">~</span>
                 {{ tr.t("editor-toolbar-timer") }}
             </button>
-            {% if !is_menu %}
             <button type="button" class="btn btn-sm" data-action="recipe-reference"
                     title="{{ tr.t("editor-toolbar-recipe-reference-title") }}" aria-label="{{ tr.t("editor-toolbar-recipe-reference") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">@./</span>
                 {{ tr.t("editor-toolbar-recipe-reference") }}
             </button>
-            {% endif %}
         </div>
         <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-block") }}">
             <button type="button" class="btn btn-sm" data-action="section" data-default="{{ tr.t("editor-toolbar-section-default") }}"
@@ -189,6 +192,7 @@
                 <span class="editor-toolbar-glyph" aria-hidden="true">&gt;</span>
                 {{ tr.t("editor-toolbar-note") }}
             </button>
+            {% endif %}
             <button type="button" class="btn btn-sm" data-action="comment"
                     title="{{ tr.t("editor-toolbar-comment-title") }}" aria-label="{{ tr.t("editor-toolbar-comment") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">--</span>

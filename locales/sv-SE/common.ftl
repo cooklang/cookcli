@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Kommentera bort de aktuella raderna (--), eller m
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Lägg till en metadatarad i frontmatter (---)
 editor-toolbar-menu = Menyelement
+editor-toolbar-other = Övriga element
 editor-toolbar-day = Dag
 editor-toolbar-day-title = Börja en ny dag (== Dag ==), daterad om ett datum är valt
 editor-toolbar-day-default = Dag

@@ -83,9 +83,23 @@ test.describe('Menu editor toolbar', () => {
 
   test('is in menu mode', async ({ page }) => {
     await expect(toolbar(page)).toHaveAttribute('data-mode', 'menu');
+    await expect(toolbar(page).getByRole('group')).toHaveCount(2);
     await expect(toolbar(page).getByRole('group', { name: 'Menu elements' })).toBeVisible();
-    await expect(button(page, 'Recipe reference')).toHaveCount(0);
+    await expect(toolbar(page).getByRole('group', { name: 'Other elements' })).toBeVisible();
+    // Only what the menu page renders: no cookware, timers or notes, and Day
+    // in place of Section. Recipe reference is Add recipe here.
+    await expect(toolbar(page).getByRole('button', { includeHidden: false })).toHaveText([
+      /Day/, /Meal/, /Add recipe/, /Ingredient/, /Comment/, /Metadata/,
+    ]);
     await expect(toolbar(page).locator('[tabindex="0"]')).toHaveCount(1);
+  });
+
+  test('fits on one row at laptop width', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const tops = await toolbar(page).locator('button:visible, input').evaluateAll(
+      controls => controls.map(control => Math.round(control.getBoundingClientRect().top))
+    );
+    expect(new Set(tops).size).toBe(1);
   });
 
   test('Day numbers the new day after the existing ones', async ({ page }) => {

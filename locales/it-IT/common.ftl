@@ -37,6 +37,7 @@ editor-placeholder = Scrivi qui la tua ricetta...
 
 # Editor toolbar
 editor-toolbar-menu = Elementi del menù
+editor-toolbar-other = Altri elementi
 editor-toolbar-day = Giorno
 editor-toolbar-day-title = Inizia un nuovo giorno (== Giorno ==), con la data se ne è scelta una
 editor-toolbar-day-default = Giorno

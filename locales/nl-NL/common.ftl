@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Zet de huidige regels in commentaar (--), of de s
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Voeg een metadataregel toe aan de frontmatter (---)
 editor-toolbar-menu = Menu-elementen
+editor-toolbar-other = Overige elementen
 editor-toolbar-day = Dag
 editor-toolbar-day-title = Begin een nieuwe dag (== Dag ==), met datum als er een gekozen is
 editor-toolbar-day-default = Dag

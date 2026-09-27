@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Comment out the current lines (--), or the select
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Add a metadata line to the frontmatter (---)
 editor-toolbar-menu = Menu elements
+editor-toolbar-other = Other elements
 editor-toolbar-day = Day
 editor-toolbar-day-title = Start a new day (== Day ==), dated when a date is picked
 editor-toolbar-day-default = Day

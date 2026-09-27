@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Commenter les lignes courantes (--), ou la sélec
 editor-toolbar-metadata = Métadonnées
 editor-toolbar-metadata-title = Ajouter une ligne de métadonnées dans l'en-tête (---)
 editor-toolbar-menu = Éléments de menu
+editor-toolbar-other = Autres éléments
 editor-toolbar-day = Jour
 editor-toolbar-day-title = Commencer un nouveau jour (== Jour ==), daté si une date est choisie
 editor-toolbar-day-default = Jour

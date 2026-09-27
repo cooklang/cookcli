@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Aktuelle Zeilen auskommentieren (--) oder die Aus
 editor-toolbar-metadata = Metadaten
 editor-toolbar-metadata-title = Metadatenzeile im Frontmatter hinzufügen (---)
 editor-toolbar-menu = Menüelemente
+editor-toolbar-other = Weitere Elemente
 editor-toolbar-day = Tag
 editor-toolbar-day-title = Einen neuen Tag beginnen (== Tag ==), mit Datum, wenn eines gewählt ist
 editor-toolbar-day-default = Tag

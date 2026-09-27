@@ -55,6 +55,7 @@ editor-toolbar-comment-title = Iruzkindu uneko lerroak (--), edo lerro bateko ha
 editor-toolbar-metadata = Metadatuak
 editor-toolbar-metadata-title = Gehitu metadatu-lerro bat goiburuan (---)
 editor-toolbar-menu = Menuaren elementuak
+editor-toolbar-other = Beste elementuak
 editor-toolbar-day = Eguna
 editor-toolbar-day-title = Hasi egun berri bat (== Eguna ==), data batekin hautatzen bada
 editor-toolbar-day-default = Eguna
