@@ -304,12 +304,12 @@ async fn add_menu_and_the_menu_api_report_identical_factors() {
 async fn html_menu_page_agrees_with_the_menu_api() {
     let server = start_server().await;
 
-    // Every reference link, paired with the badge following it (if any).
-    // The badge's classes are deliberately not pinned — this test is about
-    // the factors, and hard-coding the styling made a purely visual change
-    // to menu.html fail here.
+    // Every reference link with its `?scale=` (if any), paired with the badge
+    // following it (if any). The badge's classes are deliberately not pinned
+    // — this test is about the factors, and hard-coding the styling made a
+    // purely visual change to menu.html fail here.
     let re = regex::Regex::new(
-        r#"/recipe/(?:[^"?]*?)"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
+        r#"/recipe/(?:[^"?]*?)(?:\?scale=([0-9.]+))?"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
     )
     .unwrap();
 
@@ -326,12 +326,16 @@ async fn html_menu_page_agrees_with_the_menu_api() {
             .await
             .expect("menu page body");
 
-        let rendered: Vec<f64> = re
+        let factor = |m: Option<regex::Match>| m.map_or(1.0, |m| m.as_str().parse().unwrap());
+        let (linked, rendered): (Vec<f64>, Vec<f64>) = re
             .captures_iter(&html)
-            .map(|c| c.get(1).map_or(1.0, |m| m.as_str().parse().unwrap()))
-            .collect();
+            .map(|c| (factor(c.get(1)), factor(c.get(2))))
+            .unzip();
 
         assert_eq!(rendered, expected, "HTML menu page at scale {scale}");
+        // Each link opens the recipe at the factor its badge shows, and a x1
+        // reference links without a query string.
+        assert_eq!(linked, rendered, "recipe links at scale {scale}");
         assert_eq!(
             rendered,
             reference_scales(&server, &format!("?scale={scale}")).await,

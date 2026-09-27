@@ -371,11 +371,12 @@
         let newValue = parseFloat(scaleInput.value) + delta;
         if (!Number.isFinite(newValue)) newValue = min;
 
-        // Clamp to valid range
-        newValue = Math.max(min, Math.min(max, newValue));
-
         // Round to avoid floating point issues
         newValue = Math.round(newValue * 10) / 10;
+
+        // Clamp to valid range, after rounding: a recipe opened from a menu
+        // can have a minimum such as 0.25, which rounding would push to 0.3.
+        newValue = Math.max(min, Math.min(max, newValue));
 
         if (newValue !== parseFloat(scaleInput.value)) {
             scaleInput.value = newValue;

@@ -51,6 +51,27 @@ mod tr_tests {
 }
 
 #[cfg(test)]
+mod scale_factor_tests {
+    use super::filters::scale_factor;
+
+    #[test]
+    fn drops_trailing_zeros() {
+        assert_eq!(scale_factor(&2.0, 6).unwrap(), "2");
+        assert_eq!(scale_factor(&0.5, 6).unwrap(), "0.5");
+        assert_eq!(scale_factor(&1.25, 3).unwrap(), "1.25");
+    }
+
+    #[test]
+    fn rounds_to_the_given_places() {
+        assert_eq!(scale_factor(&(1.0 / 3.0), 3).unwrap(), "0.333");
+        assert_eq!(scale_factor(&(1.0 / 3.0), 6).unwrap(), "0.333333");
+        assert_eq!(scale_factor(&(2.0 / 3.0), 3).unwrap(), "0.667");
+        // Rounding up to a whole number leaves no decimal point behind.
+        assert_eq!(scale_factor(&4.9999999, 3).unwrap(), "5");
+    }
+}
+
+#[cfg(test)]
 mod is_web_url_tests {
     use super::filters::is_web_url;
 
@@ -129,6 +150,17 @@ mod filters {
         Ok(Url::parse(value)
             .map(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some())
             .unwrap_or(false))
+    }
+
+    /// A scale factor as short decimal text: rounded to `decimals` places,
+    /// without trailing zeros. `1/3` reads `0.333` at 3 places and `0.333333`
+    /// at 6; `2.0` reads `2`.
+    pub fn scale_factor(value: &f64, decimals: usize) -> Result<String> {
+        let text = format!("{value:.decimals$}");
+        if !text.contains('.') {
+            return Ok(text);
+        }
+        Ok(text.trim_end_matches('0').trim_end_matches('.').to_string())
     }
 
     /// Render Markdown-style `inline code` spans as `<code>` elements.
