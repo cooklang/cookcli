@@ -212,41 +212,11 @@ impl std::fmt::Display for UsersDocument {
 
 /// Replaces the users file with `contents`, creating its directory if needed.
 ///
-/// Written to a sibling and renamed into place, so a running server's reload
-/// never reads half a file. On Unix only the owner may read it: the hashes
-/// are an offline password-guessing target.
+/// Atomic, so a running server's reload never reads half a file, and on Unix
+/// readable by the owner only: the hashes are an offline password-guessing
+/// target.
 pub fn write_users_file(path: &Utf8Path, contents: &str) -> Result<()> {
-    use std::io::Write;
-
-    let dir = path
-        .parent()
-        .filter(|dir| !dir.as_str().is_empty())
-        .unwrap_or(Utf8Path::new("."));
-    std::fs::create_dir_all(dir).with_context(|| format!("could not create {dir}"))?;
-
-    let file_name = path.file_name().unwrap_or(USERS_FILE_NAME);
-    let staging = dir.join(format!(".{file_name}.{}.tmp", std::process::id()));
-
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let result = options
-        .open(&staging)
-        .and_then(|mut file| {
-            file.write_all(contents.as_bytes())?;
-            file.sync_all()
-        })
-        .and_then(|()| {
-            crate::server::fs_atomic::rename_replace(staging.as_std_path(), path.as_std_path())
-        });
-    if result.is_err() {
-        let _ = std::fs::remove_file(&staging);
-    }
-    result.with_context(|| format!("could not write {path}"))
+    super::write_private_file(path, contents)
 }
 
 #[cfg(test)]

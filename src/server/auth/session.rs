@@ -1,11 +1,13 @@
-//! Session cookies: `cook_session=<user>:<expiry>:<mac>`.
+//! Session cookies: `cook_session=<user>:<expiry>:<id>:<mac>`.
 //!
 //! Stateless on purpose: the server keeps no session table, so there is
 //! nothing to store, expire or lose on restart. The MAC is an HMAC-SHA256 over
-//! the user, the expiry and that user's current password hash, keyed by a
-//! secret kept in the configuration directory. Changing a password or removing
-//! a user therefore invalidates every cookie issued to them, and deleting the
-//! key file signs everyone out.
+//! the user, the expiry, a random session id and that user's current password
+//! hash, keyed by a secret kept in the configuration directory. Changing a
+//! password or removing a user therefore invalidates every cookie issued to
+//! them, and deleting the key file signs everyone out. The id tells one
+//! sign-in from another, so signing out can revoke just that session (see
+//! [`super::revoked`]).
 
 use anyhow::{Context as _, Result};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
@@ -27,10 +29,23 @@ pub const SECRET_FILE_NAME: &str = "auth-secret";
 
 /// Domain separator, so this MAC can never be mistaken for another use of
 /// the same key.
-const MAC_CONTEXT: &[u8] = b"cook-session-v1";
+const MAC_CONTEXT: &[u8] = b"cook-session-v2";
+
+/// Random bytes in a session id.
+const ID_BYTES: usize = 16;
 
 /// The key session cookies are signed with.
 pub struct SessionKey([u8; 32]);
+
+/// A genuine, unexpired session, borrowed from its cookie value.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Session<'v> {
+    pub user: &'v str,
+    /// Unix seconds.
+    pub expiry: u64,
+    /// Lowercase hex, unique to this sign-in.
+    pub id: &'v str,
+}
 
 /// Why the key file could not be used.
 #[derive(Debug)]
@@ -103,12 +118,13 @@ impl SessionKey {
         from_hex(text)?.try_into().ok().map(Self)
     }
 
-    fn mac(&self, user: &str, expiry: u64, password_hash: &str) -> HmacSha256 {
+    fn mac(&self, user: &str, expiry: u64, id: &str, password_hash: &str) -> HmacSha256 {
         let mut mac = HmacSha256::new_from_slice(&self.0).expect("HMAC accepts any key length");
         for part in [
             MAC_CONTEXT,
             user.as_bytes(),
             expiry.to_string().as_bytes(),
+            id.as_bytes(),
             password_hash.as_bytes(),
         ] {
             mac.update(part);
@@ -117,26 +133,31 @@ impl SessionKey {
         mac
     }
 
-    /// The cookie value for `user`, valid until `expiry` (Unix seconds).
+    /// The cookie value for a new session of `user`, valid until `expiry`
+    /// (Unix seconds).
     pub fn sign(&self, user: &str, expiry: u64, password_hash: &str) -> String {
+        let mut id = [0u8; ID_BYTES];
+        OsRng.fill_bytes(&mut id);
+        let id = to_hex(&id);
         let tag = self
-            .mac(user, expiry, password_hash)
+            .mac(user, expiry, &id, password_hash)
             .finalize()
             .into_bytes();
-        format!("{user}:{expiry}:{}", to_hex(&tag))
+        format!("{user}:{expiry}:{id}:{}", to_hex(&tag))
     }
 
-    /// The user a cookie value was issued to, if it is genuine, unexpired, and
-    /// `password_hash` still returns the hash it was signed with.
+    /// The session a cookie value stands for, if it is genuine, unexpired,
+    /// and `password_hash` still returns the hash it was signed with.
     pub fn verify<'v, 'h>(
         &self,
         value: &'v str,
         now: u64,
         password_hash: impl FnOnce(&str) -> Option<&'h str>,
-    ) -> Option<&'v str> {
+    ) -> Option<Session<'v>> {
         // Usernames cannot contain ':', so splitting from the right is exact.
-        let mut parts = value.rsplitn(3, ':');
+        let mut parts = value.rsplitn(4, ':');
         let tag = from_hex(parts.next()?)?;
+        let id = parts.next()?;
         let expiry_text = parts.next()?;
         let user = parts.next()?;
 
@@ -145,9 +166,15 @@ impl SessionKey {
         if expiry.to_string() != expiry_text || expiry <= now {
             return None;
         }
+        // The same for the id, which is also what the revocation list stores.
+        let canonical_id =
+            id.len() == 2 * ID_BYTES && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+        if !canonical_id {
+            return None;
+        }
         let hash = password_hash(user)?;
-        self.mac(user, expiry, hash).verify_slice(&tag).ok()?;
-        Some(user)
+        self.mac(user, expiry, id, hash).verify_slice(&tag).ok()?;
+        Some(Session { user, expiry, id })
     }
 }
 
@@ -234,11 +261,29 @@ mod tests {
         (user == "alice").then_some(HASH)
     }
 
+    fn user<'v>(key: &SessionKey, value: &'v str) -> Option<&'v str> {
+        key.verify(value, 1_000, lookup).map(|session| session.user)
+    }
+
     #[test]
     fn signed_cookie_verifies() {
         let key = SessionKey::random();
         let value = key.sign("alice", 2_000, HASH);
-        assert_eq!(key.verify(&value, 1_000, lookup), Some("alice"));
+        let session = key.verify(&value, 1_000, lookup).unwrap();
+        assert_eq!((session.user, session.expiry), ("alice", 2_000));
+        assert_eq!(session.id.len(), 2 * ID_BYTES);
+    }
+
+    #[test]
+    fn each_sign_in_is_a_different_session() {
+        let key = SessionKey::random();
+        let first = key.sign("alice", 2_000, HASH);
+        let second = key.sign("alice", 2_000, HASH);
+        assert_ne!(first, second);
+        assert_ne!(
+            key.verify(&first, 1_000, lookup).unwrap().id,
+            key.verify(&second, 1_000, lookup).unwrap().id
+        );
     }
 
     #[test]
@@ -246,6 +291,7 @@ mod tests {
         let key = SessionKey::random();
         let value = key.sign("alice", 2_000, HASH);
         assert_eq!(key.verify(&value, 2_000, lookup), None);
+        assert_eq!(key.verify(&value, 3_000, lookup), None);
     }
 
     #[test]
@@ -254,25 +300,38 @@ mod tests {
         let value = key.sign("alice", 2_000, HASH);
 
         let later = value.replacen(":2000:", ":9000:", 1);
-        assert_eq!(key.verify(&later, 1_000, lookup), None);
+        assert_eq!(user(&key, &later), None);
 
         let padded = value.replacen(":2000:", ":02000:", 1);
-        assert_eq!(key.verify(&padded, 1_000, lookup), None);
+        assert_eq!(user(&key, &padded), None);
+
+        let id = key.verify(&value, 1_000, lookup).unwrap().id.to_string();
+        let upper = value.replacen(&id, &id.to_uppercase(), 1);
+        assert_eq!(user(&key, &upper), None);
+        let other_id = value.replacen(&id, &"0".repeat(id.len()), 1);
+        assert_eq!(user(&key, &other_id), None);
 
         let mut flipped = value.clone();
         let last = flipped.pop().unwrap();
         flipped.push(if last == '0' { '1' } else { '0' });
-        assert_eq!(key.verify(&flipped, 1_000, lookup), None);
+        assert_eq!(user(&key, &flipped), None);
 
-        for garbage in ["", "alice", "alice:2000", "alice:x:00", ":2000:00"] {
-            assert_eq!(key.verify(garbage, 1_000, lookup), None, "{garbage}");
+        for garbage in [
+            "",
+            "alice",
+            "alice:2000",
+            "alice:2000:00",
+            "alice:x:00:00",
+            ":2000:00:00",
+        ] {
+            assert_eq!(user(&key, garbage), None, "{garbage}");
         }
     }
 
     #[test]
     fn rejects_other_key() {
         let value = SessionKey::random().sign("alice", 2_000, HASH);
-        assert_eq!(SessionKey::random().verify(&value, 1_000, lookup), None);
+        assert_eq!(user(&SessionKey::random(), &value), None);
     }
 
     #[test]
@@ -292,7 +351,7 @@ mod tests {
         let created = SessionKey::load_or_create(&path).unwrap();
         let loaded = SessionKey::load_or_create(&path).unwrap();
         let value = created.sign("alice", 2_000, HASH);
-        assert_eq!(loaded.verify(&value, 1_000, lookup), Some("alice"));
+        assert_eq!(user(&loaded, &value), Some("alice"));
     }
 
     #[test]

@@ -110,9 +110,9 @@ fn tiny_hash(password: &str) -> String {
         .to_string()
 }
 
-/// Kills the spawned server when the test ends, pass or panic.
+/// A running server and the fixture it serves.
 struct ServerGuard {
-    child: Child,
+    child: KillOnDrop,
     port: u16,
     prefix: String,
     fixture: Fixture,
@@ -122,12 +122,22 @@ impl ServerGuard {
     fn url(&self, path: &str) -> String {
         format!("http://127.0.0.1:{}{}{}", self.port, self.prefix, path)
     }
+
+    /// Stops the server and hands back its fixture, to start another on it.
+    fn stop(self) -> Fixture {
+        let ServerGuard { child, fixture, .. } = self;
+        drop(child);
+        fixture
+    }
 }
 
-impl Drop for ServerGuard {
+/// Kills the spawned server when the test ends, pass or panic.
+struct KillOnDrop(Child);
+
+impl Drop for KillOnDrop {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.0.kill();
+        let _ = self.0.wait();
     }
 }
 
@@ -187,7 +197,7 @@ async fn try_start(
         if let Ok(resp) = client().get(&probe).send().await {
             if resp.status().is_success() {
                 return Ok(ServerGuard {
-                    child,
+                    child: KillOnDrop(child),
                     port,
                     prefix,
                     fixture,
@@ -242,6 +252,15 @@ fn session_set_cookie(resp: &Response) -> Option<String> {
 fn session_cookie(resp: &Response) -> String {
     let set_cookie = session_set_cookie(resp).expect("session Set-Cookie");
     set_cookie.split(';').next().unwrap().to_string()
+}
+
+async fn sign_out(server: &ServerGuard, cookie: &str) -> Response {
+    client()
+        .post(server.url("/logout"))
+        .header(COOKIE, cookie)
+        .send()
+        .await
+        .expect("sign-out request")
 }
 
 async fn signed_in_cookie(server: &ServerGuard, user: &str, password: &str) -> String {
@@ -491,15 +510,73 @@ async fn signing_in_allows_changes_until_signing_out() {
         );
     }
 
-    // Signing out clears the cookie.
-    let out = client()
-        .post(server.url("/logout"))
-        .header(COOKIE, &cookie)
-        .send()
-        .await
-        .unwrap();
+    // A second sign-in of the same user, as from another browser.
+    let other_browser = signed_in_cookie(&server, "alice", "secret").await;
+
+    // Signing out clears the cookie, and the server forgets the session: a
+    // copy of the cookie kept elsewhere is a guest from then on.
+    let out = sign_out(&server, &cookie).await;
     assert_eq!(out.status(), StatusCode::SEE_OTHER);
     assert!(session_set_cookie(&out).unwrap().contains("Max-Age=0"));
+    assert_eq!(
+        put_recipe(&server, "After", Some(&cookie)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let edit = get_page(&server, "/edit/Recipe.cook", Some(&cookie)).await;
+    assert_eq!(edit.status(), StatusCode::SEE_OTHER);
+    assert!(location(&edit).starts_with("/login?next="));
+    assert!(!server.fixture.recipes.path().join("After.cook").exists());
+
+    // Only that session: alice's other browser, and bob, are still signed in.
+    for other in [&other_browser, &bob] {
+        assert_eq!(
+            put_recipe(&server, "Still", Some(other)).await.status(),
+            StatusCode::OK
+        );
+    }
+
+    // Signing out again, or with a forged cookie, is harmless.
+    for again in [cookie.as_str(), "cook_session=alice:99999999999:00:00"] {
+        assert_eq!(
+            sign_out(&server, again).await.status(),
+            StatusCode::SEE_OTHER
+        );
+    }
+}
+
+#[tokio::test]
+async fn signing_out_holds_across_a_restart() {
+    let fixture = Fixture::new();
+    fixture.write_users(&[("alice", "secret")]);
+    let server = start(fixture, &[], &[]).await;
+
+    let signed_out = signed_in_cookie(&server, "alice", "secret").await;
+    let kept = signed_in_cookie(&server, "alice", "secret").await;
+    assert_eq!(
+        sign_out(&server, &signed_out).await.status(),
+        StatusCode::SEE_OTHER
+    );
+    let revoked = server.fixture.config_dir().join("revoked-sessions");
+    assert!(revoked.exists(), "the sign-out is written down");
+
+    let server = start(server.stop(), &[], &[]).await;
+    assert_eq!(
+        put_recipe(&server, "Revoked", Some(&signed_out))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        put_recipe(&server, "Kept", Some(&kept)).await.status(),
+        StatusCode::OK
+    );
+
+    // A list the server cannot make sense of stops it rather than bringing
+    // the signed-out session back.
+    let fixture = server.stop();
+    std::fs::write(&revoked, "not a list\n").unwrap();
+    let stderr = startup_failure(&fixture, &[], &[]);
+    assert!(stderr.contains("revoked-sessions"), "{stderr}");
 }
 
 #[tokio::test]

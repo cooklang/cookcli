@@ -189,9 +189,14 @@ alice = "$argon2id$v=19$m=19456,t=2,p=1$…"
 Signing in sets a `cook_session` cookie that lasts 30 days. The server signs it
 with a key it keeps in `auth-secret`, next to `users.toml` in the
 configuration directory. Delete that file and restart to sign everyone out.
-Signing out clears the cookie in that browser only. If the configuration
-directory cannot be written, the server uses a temporary key, and everyone has
-to sign in again after a restart.
+
+Signing out ends that session on the server too, so a copy of the cookie left
+in another browser or a log stops working; the user's other sign-ins are not
+affected. The server records the session in `revoked-sessions`, beside
+`auth-secret`, until the cookie would have expired anyway. Deleting that file
+brings the signed-out sessions back, so delete `auth-secret` with it. If the
+configuration directory cannot be written, the server uses a temporary key,
+and everyone has to sign in again after a restart.
 
 Over plain HTTP, passwords and cookies cross the network in the clear. Before
 exposing the server beyond a network you trust, put it behind a reverse proxy

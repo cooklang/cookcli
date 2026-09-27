@@ -79,6 +79,8 @@ pub async fn login(
     let username = form.username.trim().to_string();
     if auth.check_password(&username, form.password).await {
         if let Some(value) = auth.issue_session(&username) {
+            // Debug-formatted, so a name full of control characters cannot
+            // forge log lines.
             tracing::info!(user = ?username, "signed in");
             let secure = crate::server::ui::forwarded_https(&headers);
             let cookie = session::session_cookie(&value, &state.url_prefix, secure);
@@ -90,9 +92,9 @@ pub async fn login(
         }
     }
 
-    // Debug-formatted, so a name full of control characters cannot forge log
-    // lines.
-    tracing::warn!(user = ?username, "failed sign-in");
+    // Without the name: people type their password into it by mistake, and
+    // the log would keep it.
+    tracing::warn!("failed sign-in");
     (
         StatusCode::UNAUTHORIZED,
         login_template(&state, lang, features, next, username, true),
@@ -100,7 +102,12 @@ pub async fn login(
         .into_response()
 }
 
+/// Signs out: revokes the session on the server, so a copy of the cookie
+/// left in another browser or a log stops working too, then clears it here.
 pub async fn logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if let Some(auth) = &state.auth {
+        auth.sign_out(&headers).await;
+    }
     let secure = crate::server::ui::forwarded_https(&headers);
     (
         [(

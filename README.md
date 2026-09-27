@@ -564,8 +564,8 @@ Configuration files:
 Set `COOK_CONFIG_DIR` to use a different global configuration directory. It
 replaces the platform default above for *everything* CookCLI keeps there —
 `aisle.conf`, `pantry.conf`, your CookCloud session, the sync database, and
-`cook server`'s users file and session key — so it gives you a self-contained
-CookCLI:
+`cook server`'s users file, session key and signed-out sessions — so it gives
+you a self-contained CookCLI:
 
 ```bash
 COOK_CONFIG_DIR=~/kitchen/cook-config cook shopping-list dinner.cook
