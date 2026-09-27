@@ -305,6 +305,20 @@ test.describe('Recipe reference in the recipe editor', () => {
   });
 });
 
+test('Edit on a menu opened from the listing gets the menu toolbar', async ({ page }) => {
+  await interceptSaves(page);
+  // The listing links menus without their extension.
+  await page.goto('/');
+  await page.locator('.recipe-card', { hasText: '2 Day Plan' }).click();
+  await expect(page).toHaveURL(/\/recipe\/2%20Day%20Plan$/);
+
+  await page.getByRole('link', { name: 'Edit' }).click();
+  await expect(page).toHaveURL(/\/edit\/2%20Day%20Plan\.menu$/);
+  await expect(page.locator('#editor-container .cm-editor')).toBeVisible();
+  await expect(toolbar(page)).toHaveAttribute('data-mode', 'menu');
+  await expect(button(page, 'Add recipe')).toBeVisible();
+});
+
 test.describe('New menu', () => {
   const name = `E2E Menu ${Date.now()}`;
 

@@ -149,6 +149,36 @@ async fn a_menu_is_created_with_a_first_day_and_meal() {
     assert!(page.contains(r#"data-action="add-recipe""#));
 }
 
+/// The listing links menus without their extension, so the menu page's Edit
+/// button asks for `/edit/Week`. The editor must still open the file as a
+/// menu, under its full name.
+#[tokio::test]
+async fn the_editor_redirects_a_bare_name_to_the_file() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join("Plans/Week 12.menu"),
+        "== Day 1 ==\n\nDinner: \\\n- @./Omelette{}\n",
+    )
+    .unwrap();
+
+    for (bare, full) in [
+        ("/edit/Plans/Week%2012", "/edit/Plans/Week%2012.menu"),
+        ("/edit/Omelette", "/edit/Omelette.cook"),
+    ] {
+        let resp = client().get(server.url(bare)).send().await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER, "{bare}");
+        assert_eq!(location(&resp), full, "{bare}");
+    }
+
+    // A full name is served as it is.
+    let resp = client()
+        .get(server.url("/edit/Plans/Week%2012.menu"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
 #[tokio::test]
 async fn a_recipe_is_still_the_default() {
     let server = start_server().await;

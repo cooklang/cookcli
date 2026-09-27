@@ -253,6 +253,23 @@ async fn edit_page(
         }
     };
 
+    // The listing links recipes and menus without their extension, and the
+    // Edit button keeps the path it was given, so `/edit/Week` can be a menu.
+    // Send the editor to the file's full name: the toolbar mode below, and the
+    // save, delete and picture calls the page makes, then all name the file.
+    let requested_extension = camino::Utf8Path::new(&path).extension();
+    if !matches!(requested_extension, Some("cook" | "menu")) {
+        if let Some(extension) = file_path.extension() {
+            // Encoded, since `Redirect` refuses a non-ASCII `Location`.
+            return axum::response::Redirect::to(&format!(
+                "{}/edit/{}",
+                state.url_prefix,
+                crate::util::encode_url_path(&format!("{path}.{extension}"))
+            ))
+            .into_response();
+        }
+    }
+
     // Read raw content
     let content = match tokio::fs::read_to_string(file_path).await {
         Ok(content) => content,
