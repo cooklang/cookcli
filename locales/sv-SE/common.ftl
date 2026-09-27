@@ -35,6 +35,26 @@ editor-saving = Sparar...
 editor-save-failed = Spara misslyckades
 editor-placeholder = Ange ditt recept här...
 
+# Editor toolbar
+editor-toolbar-label = Cooklang-formatering
+editor-toolbar-inline = Element i texten
+editor-toolbar-block = Radelement
+editor-toolbar-ingredient = Ingrediens
+editor-toolbar-ingredient-title = Infoga en ingrediens (@), eller gör markeringen till en ingrediens
+editor-toolbar-cookware = Köksredskap
+editor-toolbar-cookware-title = Infoga ett köksredskap (#), eller gör markeringen till ett köksredskap
+editor-toolbar-timer = Timer
+editor-toolbar-timer-title = Infoga en timer i minuter (~), eller namnge den efter markeringen
+editor-toolbar-section = Avsnitt
+editor-toolbar-section-title = Börja ett nytt avsnitt (== Avsnitt ==), namngivet efter markeringen
+editor-toolbar-section-default = Avsnitt
+editor-toolbar-note = Anteckning
+editor-toolbar-note-title = Gör de aktuella raderna till en anteckning (>), eller tillbaka till steg
+editor-toolbar-comment = Kommentar
+editor-toolbar-comment-title = Kommentera bort de aktuella raderna (--), eller markeringen inom en rad
+editor-toolbar-metadata = Metadata
+editor-toolbar-metadata-title = Lägg till en metadatarad i frontmatter (---)
+
 # LSP Status
 lsp-connected = LSP Ansluten
 lsp-disconnected = Frånkopplad

@@ -35,6 +35,26 @@ editor-saving = Opslaan...
 editor-save-failed = Opslaan mislukt
 editor-placeholder = Voer hier uw recept in...
 
+# Editor toolbar
+editor-toolbar-label = Cooklang-opmaak
+editor-toolbar-inline = Elementen in de tekst
+editor-toolbar-block = Regelelementen
+editor-toolbar-ingredient = Ingrediënt
+editor-toolbar-ingredient-title = Voeg een ingrediënt in (@), of maak van de selectie een ingrediënt
+editor-toolbar-cookware = Keukengerei
+editor-toolbar-cookware-title = Voeg keukengerei in (#), of maak van de selectie keukengerei
+editor-toolbar-timer = Timer
+editor-toolbar-timer-title = Voeg een timer in minuten in (~), of vernoem hem naar de selectie
+editor-toolbar-section = Sectie
+editor-toolbar-section-title = Begin een nieuwe sectie (== Sectie ==), vernoemd naar de selectie
+editor-toolbar-section-default = Sectie
+editor-toolbar-note = Notitie
+editor-toolbar-note-title = Maak van de huidige regels een notitie (>), of weer stappen
+editor-toolbar-comment = Opmerking
+editor-toolbar-comment-title = Zet de huidige regels in commentaar (--), of de selectie binnen een regel
+editor-toolbar-metadata = Metadata
+editor-toolbar-metadata-title = Voeg een metadataregel toe aan de frontmatter (---)
+
 # LSP Status
 lsp-connected = LSP verbonden
 lsp-disconnected = Niet verbonden
