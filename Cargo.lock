@@ -684,7 +684,7 @@ dependencies = [
  "clap_complete",
  "cookcli-core",
  "cooklang",
- "cooklang-find 0.7.1",
+ "cooklang-find 0.8.1",
  "cooklang-import",
  "cooklang-language-server",
  "cooklang-reports",
@@ -741,7 +741,7 @@ dependencies = [
  "camino",
  "chrono",
  "cooklang",
- "cooklang-find 0.7.1",
+ "cooklang-find 0.8.1",
  "cooklang-format",
  "cooklang-reports",
  "directories",
@@ -827,9 +827,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-find"
-version = "0.7.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019091174d1757878e490d894291507cbc04daa7d374220b8104ac0734363c5d"
+checksum = "de755007e96eb64d8924c74a88257c9863dd026d94cfcb5b3a28c030a6253fa7"
 dependencies = [
  "camino",
  "glob",

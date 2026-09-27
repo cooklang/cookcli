@@ -439,3 +439,33 @@ Add @pepper{}/black pepper.
         "the alias is not what a shopping list shows: {stdout}"
     );
 }
+
+#[test]
+fn test_shopping_list_directory_skips_hidden_files() {
+    // macOS writes AppleDouble `._<name>` companions next to files it touches
+    // on a non-HFS share. They end in `.cook` but are binary resource forks.
+    // https://github.com/cooklang/cookcli/issues/555
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let dinner = temp_dir.path().join("dinner");
+    fs::create_dir_all(&dinner).unwrap();
+    fs::write(dinner.join("soup.cook"), "Boil @leeks{2}.\n").unwrap();
+    fs::write(
+        dinner.join("._soup.cook"),
+        b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        @phantom{1}",
+    )
+    .unwrap();
+    fs::write(dinner.join(".draft.cook"), "Add @ghost{1}.\n").unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("shopping-list")
+        .arg("--plain")
+        .arg("--ignore-pantry")
+        .arg("dinner")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("leeks"))
+        .stdout(predicate::str::contains("phantom").not())
+        .stdout(predicate::str::contains("ghost").not());
+}

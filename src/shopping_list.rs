@@ -181,9 +181,13 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
         // Check if it's a directory
         if path.is_dir() {
-            // Find all .cook files in the directory
+            // Find all .cook files in the directory, skipping hidden ones such
+            // as macOS `._<name>.cook` AppleDouble companions (#555)
             for dir_entry in std::fs::read_dir(&path)? {
                 let dir_entry = dir_entry?;
+                if dir_entry.file_name().to_string_lossy().starts_with('.') {
+                    continue;
+                }
                 let file_path = dir_entry.path();
                 if let Some(ext) = file_path.extension() {
                     if ext == "cook" {
