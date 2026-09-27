@@ -54,6 +54,32 @@ editor-toolbar-comment = Opmerking
 editor-toolbar-comment-title = Zet de huidige regels in commentaar (--), of de selectie binnen een regel
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Voeg een metadataregel toe aan de frontmatter (---)
+editor-toolbar-menu = Menu-elementen
+editor-toolbar-day = Dag
+editor-toolbar-day-title = Begin een nieuwe dag (== Dag ==), met datum als er een gekozen is
+editor-toolbar-day-default = Dag
+editor-toolbar-day-date = Datum van de volgende dag
+editor-toolbar-day-date-title = Optionele datum voor de volgende dag, zoals in == Zaterdag (2026-03-07) ==
+editor-toolbar-meal = Maaltijd
+editor-toolbar-meal-title = Begin een maaltijd (Ontbijt: \) met een eerste opsommingsteken
+editor-toolbar-meal-breakfast = Ontbijt
+editor-toolbar-meal-lunch = Lunch
+editor-toolbar-meal-dinner = Diner
+editor-toolbar-meal-snacks = Tussendoortjes
+editor-toolbar-add-recipe = Recept toevoegen
+editor-toolbar-add-recipe-title = Voeg een recept toe aan de huidige maaltijd (- @./Recept{"{}"})
+editor-toolbar-recipe-reference = Receptverwijzing
+editor-toolbar-recipe-reference-title = Verwijs naar een ander recept (@./Recept{"{}"})
+
+# Recipe picker
+recipe-picker-title = Kies een recept
+recipe-picker-search = Recepten zoeken
+recipe-picker-results = Recepten
+recipe-picker-servings = Porties
+recipe-picker-servings-hint = Laat leeg om de porties van het recept te gebruiken.
+recipe-picker-insert = Invoegen
+recipe-picker-no-results = Geen recepten gevonden
+recipe-picker-load-failed = Kon de recepten niet laden
 
 # LSP Status
 lsp-connected = LSP verbonden
@@ -67,6 +93,13 @@ new-recipe-filename = Receptnaam
 new-recipe-placeholder = Avondeten/Italiaans/Pasta Carbonara
 new-recipe-hint = Formaat: map/receptnaam
 new-recipe-create = Recept Aanmaken
+
+# New Menu
+new-menu = Nieuw Menu
+new-menu-path = Menupad
+new-menu-placeholder = Planningen/Week 12
+new-menu-hint = Formaat: map/menunaam
+new-menu-create = Menu Aanmaken
 
 # Delete Recipe
 delete-recipe = Recept Verwijderen

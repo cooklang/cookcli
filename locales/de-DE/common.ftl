@@ -54,6 +54,32 @@ editor-toolbar-comment = Kommentar
 editor-toolbar-comment-title = Aktuelle Zeilen auskommentieren (--) oder die Auswahl innerhalb einer Zeile
 editor-toolbar-metadata = Metadaten
 editor-toolbar-metadata-title = Metadatenzeile im Frontmatter hinzufügen (---)
+editor-toolbar-menu = Menüelemente
+editor-toolbar-day = Tag
+editor-toolbar-day-title = Einen neuen Tag beginnen (== Tag ==), mit Datum, wenn eines gewählt ist
+editor-toolbar-day-default = Tag
+editor-toolbar-day-date = Datum des nächsten Tags
+editor-toolbar-day-date-title = Optionales Datum für den nächsten Tag, etwa == Samstag (2026-03-07) ==
+editor-toolbar-meal = Mahlzeit
+editor-toolbar-meal-title = Eine Mahlzeit beginnen (Frühstück: \), mit einem ersten Eintrag
+editor-toolbar-meal-breakfast = Frühstück
+editor-toolbar-meal-lunch = Mittagessen
+editor-toolbar-meal-dinner = Abendessen
+editor-toolbar-meal-snacks = Snacks
+editor-toolbar-add-recipe = Rezept hinzufügen
+editor-toolbar-add-recipe-title = Ein Rezept zur aktuellen Mahlzeit hinzufügen (- @./Rezept{"{}"})
+editor-toolbar-recipe-reference = Rezeptverweis
+editor-toolbar-recipe-reference-title = Auf ein anderes Rezept verweisen (@./Rezept{"{}"})
+
+# Recipe picker
+recipe-picker-title = Rezept auswählen
+recipe-picker-search = Rezepte suchen
+recipe-picker-results = Rezepte
+recipe-picker-servings = Portionen
+recipe-picker-servings-hint = Leer lassen, um die Portionen des Rezepts zu übernehmen.
+recipe-picker-insert = Einfügen
+recipe-picker-no-results = Keine Rezepte gefunden
+recipe-picker-load-failed = Rezepte konnten nicht geladen werden
 
 # LSP Status
 lsp-connected = LSP verbunden
@@ -67,6 +93,13 @@ new-recipe-filename = Rezeptname
 new-recipe-placeholder = Abendessen/Italienisch/Pasta Carbonara
 new-recipe-hint = Format: Ordner/Rezeptname
 new-recipe-create = Rezept erstellen
+
+# New Menu
+new-menu = Neues Menü
+new-menu-path = Menüpfad
+new-menu-placeholder = Planung/Woche 12
+new-menu-hint = Format: Ordner/Menüname
+new-menu-create = Menü erstellen
 
 # Delete Recipe
 delete-recipe = Rezept löschen
