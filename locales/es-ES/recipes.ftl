@@ -51,3 +51,4 @@ sort-name = Nombre
 sort-modified = Modificado
 sort-created = Creado
 sort-direction-toggle = Invertir orden
+random-recipe = Receta al azar

@@ -574,6 +574,11 @@ fn static_output_omits_dynamic_ui() {
         !index.contains("href=\"./preferences\""),
         "preferences nav link still present in static index"
     );
+    // The random pick is a server redirect, which a static site cannot do.
+    assert!(
+        !index.contains("id=\"random-recipe\""),
+        "random recipe button still present in static index"
+    );
 
     // The dynamic server search fetch should be gone; the static search.js
     // link should be in its place.

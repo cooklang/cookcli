@@ -166,6 +166,14 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         None => format!("{url_prefix}/new"),
     };
 
+    // The pick happens on the server (`/random`), so a static site has no
+    // button; neither does a folder with nothing but menus in it.
+    let random_recipe_url =
+        (!static_mode && !cook_recipe_paths(&tree).is_empty()).then(|| match sub_path {
+            Some(p) => format!("{url_prefix}/random/{}", crate::util::encode_url_path(p)),
+            None => format!("{url_prefix}/random"),
+        });
+
     Ok(RecipesTemplate {
         active: "recipes".to_string(),
         current_name,
@@ -173,6 +181,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         items,
         todays_menu,
         new_recipe_url,
+        random_recipe_url,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
@@ -1119,6 +1128,24 @@ fn build_menu_template_inner(
         repo_url,
         features,
     })
+}
+
+/// Paths of every `.cook` recipe in `tree` and below it, menus left out.
+pub fn cook_recipe_paths(tree: &cooklang_find::RecipeTree) -> Vec<&Utf8Path> {
+    let mut paths = Vec::new();
+    let mut stack = vec![tree];
+    while let Some(node) = stack.pop() {
+        if let Some(path) = node
+            .recipe
+            .as_ref()
+            .filter(|recipe| !recipe.is_menu())
+            .and_then(|recipe| recipe.path())
+        {
+            paths.push(path.as_path());
+        }
+        stack.extend(node.children.values());
+    }
+    paths
 }
 
 fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {

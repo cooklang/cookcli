@@ -35,6 +35,8 @@ pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
         .route("/directory/{*path}", get(recipes_directory))
+        .route("/random", get(random_recipe_page))
+        .route("/random/{*path}", get(random_recipe_directory))
         .route("/recipe/{*path}", get(recipe_page))
         .route("/edit/{*path}", get(edit_page))
         .route("/new", get(new_page).post(create_recipe))
@@ -85,6 +87,79 @@ async fn recipes_handler(
             error_page(lang, &state.url_prefix, &e, features)
         }
     }
+}
+
+async fn random_recipe_page(
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+) -> axum::response::Response {
+    random_recipe_handler(&state, None, lang, features)
+}
+
+async fn random_recipe_directory(
+    Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+) -> axum::response::Response {
+    random_recipe_handler(&state, Some(&path), lang, features)
+}
+
+/// Redirect to a `.cook` recipe picked at random from a folder and everything
+/// below it, so "what should I cook?" can be narrowed to `Mains/` or `Desserts/`.
+fn random_recipe_handler(
+    state: &AppState,
+    path: Option<&str>,
+    lang: LanguageIdentifier,
+    features: FeatureFlags,
+) -> axum::response::Response {
+    let prefix = &state.url_prefix;
+    let dir = match path {
+        Some(p) if !crate::util::is_safe_relative_path(p) => {
+            let page = error_page(lang, prefix, format!("Invalid path: {p}"), features);
+            return (StatusCode::BAD_REQUEST, page).into_response();
+        }
+        Some(p) => state.base_path.join(p),
+        None => state.base_path.clone(),
+    };
+    let tree = match cooklang_find::build_tree(&dir) {
+        Ok(tree) => tree,
+        Err(e) => {
+            let page = error_page(
+                lang,
+                prefix,
+                format!("Failed to list recipes: {e}"),
+                features,
+            );
+            return (StatusCode::NOT_FOUND, page).into_response();
+        }
+    };
+    let recipes = crate::web::builders::cook_recipe_paths(&tree);
+    if recipes.is_empty() {
+        let page = error_page(lang, prefix, "No recipes in this folder", features);
+        return (StatusCode::NOT_FOUND, page).into_response();
+    }
+
+    let picked = recipes[fastrand::usize(..recipes.len())];
+    // `build_tree` joins what it finds onto `dir`, which starts with the base.
+    let Ok(relative) = picked.strip_prefix(&state.base_path) else {
+        tracing::error!("Random recipe {picked} is outside {}", state.base_path);
+        let page = error_page(lang, prefix, "Failed to pick a recipe", features);
+        return (StatusCode::INTERNAL_SERVER_ERROR, page).into_response();
+    };
+    let url_path = relative
+        .with_extension("")
+        .components()
+        .map(|c| c.as_str())
+        .collect::<Vec<_>>()
+        .join("/");
+    // Encoded, since `Redirect` refuses a non-ASCII `Location`.
+    axum::response::Redirect::to(&format!(
+        "{prefix}/recipe/{}",
+        crate::util::encode_url_path(&url_path)
+    ))
+    .into_response()
 }
 
 #[derive(Deserialize)]
