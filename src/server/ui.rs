@@ -276,9 +276,12 @@ async fn edit_page(
         .replace(".cook", "")
         .replace(".menu", "");
 
+    let is_menu = path.ends_with(".menu");
+
     let template = crate::web::templates::EditTemplate {
         active: "recipes".to_string(),
         recipe_name,
+        is_menu,
         recipe_path: path,
         content,
         base_path: state.base_path.to_string(),
@@ -295,10 +298,57 @@ async fn edit_page(
     template.into_response()
 }
 
+/// What the new-file form creates: a `.cook` recipe or a `.menu` meal plan.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NewKind {
+    Recipe,
+    Menu,
+}
+
+impl NewKind {
+    /// No kind and `recipe` are a recipe, `menu` is a menu; anything else is
+    /// not a kind of file this form makes.
+    fn parse(kind: Option<&str>) -> Option<Self> {
+        match kind {
+            None | Some("recipe") => Some(Self::Recipe),
+            Some("menu") => Some(Self::Menu),
+            Some(_) => None,
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Recipe => "cook",
+            Self::Menu => "menu",
+        }
+    }
+
+    /// The word error messages use for the file.
+    fn noun(self) -> &'static str {
+        match self {
+            Self::Recipe => "recipe",
+            Self::Menu => "menu",
+        }
+    }
+
+    /// What a new file starts with, titled `name`.
+    fn starter(self, name: &str) -> String {
+        match self {
+            Self::Recipe => format!("---\ntitle: {name}\n---\n\n"),
+            // One day and one meal. The ` \` keeps the bullet below it in the
+            // same meal: the menu page only groups lines that end with one.
+            Self::Menu => format!(
+                "---\ntitle: {name}\nservings: 2\n---\n\n== Day 1 ==\n\nBreakfast: \\\n- \n"
+            ),
+        }
+    }
+}
+
 #[derive(Deserialize, Default)]
 struct NewPageQuery {
     error: Option<String>,
     filename: Option<String>,
+    kind: Option<String>,
 }
 
 async fn new_page(
@@ -313,6 +363,7 @@ async fn new_page(
         tr: Tr::new(lang),
         error: query.error,
         filename: query.filename,
+        is_menu: NewKind::parse(query.kind.as_deref()) == Some(NewKind::Menu),
         prefix: state.url_prefix.clone(),
         static_mode: false,
         repo_url: None,
@@ -324,14 +375,25 @@ async fn new_page(
 #[derive(Deserialize)]
 struct NewRecipeForm {
     filename: String,
+    kind: Option<String>,
 }
 
-/// Helper to build redirect URL with error message
-fn new_page_error(prefix: &str, error: &str, filename: &str) -> axum::response::Response {
+/// Helper to build redirect URL with error message, back to the form for the
+/// same kind of file
+fn new_page_error(
+    prefix: &str,
+    kind: NewKind,
+    error: &str,
+    filename: &str,
+) -> axum::response::Response {
     let encoded_error = urlencoding::encode(error);
     let encoded_filename = urlencoding::encode(filename);
+    let kind = match kind {
+        NewKind::Recipe => "",
+        NewKind::Menu => "&kind=menu",
+    };
     axum::response::Redirect::to(&format!(
-        "{prefix}/new?error={}&filename={}",
+        "{prefix}/new?error={}&filename={}{kind}",
         encoded_error, encoded_filename
     ))
     .into_response()
@@ -377,13 +439,19 @@ async fn create_recipe(
         return (StatusCode::FORBIDDEN, "Invalid request origin").into_response();
     }
 
+    let Some(kind) = NewKind::parse(form.kind.as_deref()) else {
+        return (StatusCode::BAD_REQUEST, "Unknown kind of file").into_response();
+    };
+    let noun = kind.noun();
+
     let original_filename = form.filename.clone();
 
     // Validate input before sanitization
     if form.filename.trim().is_empty() {
         return new_page_error(
             &state.url_prefix,
-            "Recipe name cannot be empty",
+            kind,
+            &format!("{} name cannot be empty", capitalize(noun)),
             &original_filename,
         );
     }
@@ -406,12 +474,15 @@ async fn create_recipe(
     if recipe_path.is_empty() {
         return new_page_error(
             &state.url_prefix,
-            "Recipe name cannot be empty",
+            kind,
+            &format!("{} name cannot be empty", capitalize(noun)),
             &original_filename,
         );
     }
 
-    let file_path = state.base_path.join(format!("{}.cook", recipe_path));
+    let file_path = state
+        .base_path
+        .join(format!("{recipe_path}.{}", kind.extension()));
 
     // Security: Validate path structure before any filesystem operations
     // Check that the constructed path, when normalized, stays within base_path
@@ -422,6 +493,7 @@ async fn create_recipe(
             _ => {
                 return new_page_error(
                     &state.url_prefix,
+                    kind,
                     "Internal error: invalid base path",
                     &original_filename,
                 );
@@ -433,7 +505,12 @@ async fn create_recipe(
     let normalized_path = file_path.as_str().replace("\\", "/");
     if normalized_path.contains("/../") || normalized_path.ends_with("/..") {
         tracing::warn!("Path traversal attempt detected in: {}", recipe_path);
-        return new_page_error(&state.url_prefix, "Invalid recipe path", &original_filename);
+        return new_page_error(
+            &state.url_prefix,
+            kind,
+            &format!("Invalid {noun} path"),
+            &original_filename,
+        );
     }
 
     // For the file path, we check the parent directory
@@ -442,7 +519,7 @@ async fn create_recipe(
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
-                return new_page_error(&state.url_prefix, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
+                return new_page_error(&state.url_prefix, kind, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
             }
         }
 
@@ -460,7 +537,8 @@ async fn create_recipe(
                     let _ = tokio::fs::remove_dir_all(parent).await;
                     return new_page_error(
                         &state.url_prefix,
-                        "Invalid recipe path",
+                        kind,
+                        &format!("Invalid {noun} path"),
                         &original_filename,
                     );
                 }
@@ -468,7 +546,8 @@ async fn create_recipe(
             _ => {
                 return new_page_error(
                     &state.url_prefix,
-                    "Invalid recipe path",
+                    kind,
+                    &format!("Invalid {noun} path"),
                     &original_filename,
                 );
             }
@@ -482,8 +561,8 @@ async fn create_recipe(
         .unwrap_or(&recipe_path)
         .replace(['-', '_'], " ");
 
-    // Create recipe with YAML frontmatter
-    let template = format!("---\ntitle: {}\n---\n\n", recipe_name);
+    // Start the file with YAML frontmatter
+    let template = kind.starter(&recipe_name);
 
     // Use OpenOptions with create_new to atomically check existence and create
     // This prevents TOCTOU race conditions
@@ -500,7 +579,8 @@ async fn create_recipe(
                 tracing::error!("Failed to write recipe: {}", e);
                 return new_page_error(
                     &state.url_prefix,
-                    "Failed to write recipe file",
+                    kind,
+                    &format!("Failed to write {noun} file"),
                     &original_filename,
                 );
             }
@@ -508,7 +588,8 @@ async fn create_recipe(
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             return new_page_error(
                 &state.url_prefix,
-                "A recipe with this name already exists",
+                kind,
+                &format!("A {noun} with this name already exists"),
                 &original_filename,
             );
         }
@@ -516,7 +597,8 @@ async fn create_recipe(
             tracing::error!("Failed to create recipe file: {}", e);
             return new_page_error(
                 &state.url_prefix,
-                "Failed to create recipe file",
+                kind,
+                &format!("Failed to create {noun} file"),
                 &original_filename,
             );
         }
@@ -528,8 +610,22 @@ async fn create_recipe(
     );
 
     // Redirect to editor
-    axum::response::Redirect::to(&format!("{}/edit/{}.cook", state.url_prefix, recipe_path))
-        .into_response()
+    axum::response::Redirect::to(&format!(
+        "{}/edit/{}.{}",
+        state.url_prefix,
+        recipe_path,
+        kind.extension()
+    ))
+    .into_response()
+}
+
+/// `recipe` -> `Recipe`, for an error message that opens with the noun.
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 async fn shopping_list_page(

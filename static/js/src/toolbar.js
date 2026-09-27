@@ -203,12 +203,235 @@ export const recipeActions = {
   metadata: view => ensureFrontmatter(view)
 };
 
+// Menu files. A meal is a `Meal:` header followed by `- ` bullets, and the
+// menu page only keeps them together when every line but the last ends with
+// ` \` (a blank line starts a new paragraph, so a new group).
+const CONTINUED = /\\\s*$/;
+const BULLET = /^\s*-(?!-)/;
+const EMPTY_BULLET = /^\s*-\s*(\\\s*)?$/;
+
+function isMealLine(text) {
+  if (BULLET.test(text)) return true;
+  const bare = text.replace(CONTINUED, "").trim();
+  return bare.endsWith(":") && !bare.startsWith("--") && !bare.startsWith("=");
+}
+
+// Number of sections (`== Day ==` lines) after the frontmatter.
+export function countSections(state) {
+  const frontmatter = findFrontmatter(state);
+  let count = 0;
+  for (let n = frontmatter ? frontmatter.closeLine + 1 : 1; n <= state.doc.lines; n++) {
+    if (/^\s*=/.test(state.doc.line(n).text)) count++;
+  }
+  return count;
+}
+
+// `2026-03-07` -> `Saturday (2026-03-07)`, the weekday in `locale`. The date
+// in brackets is what the menu page reads to find today's menu.
+export function datedDayName(value, locale) {
+  const date = new Date(`${value}T00:00:00Z`);
+  let weekday;
+  try {
+    weekday = date.toLocaleDateString(locale || undefined, { weekday: "long", timeZone: "UTC" });
+  } catch {
+    weekday = date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" });
+  }
+  return `${weekday.charAt(0).toLocaleUpperCase()}${weekday.slice(1)} (${value})`;
+}
+
+function nextDate(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+// The number in the menu's `servings` frontmatter, or "" when there is none.
+export function menuServings(state) {
+  const frontmatter = findFrontmatter(state);
+  if (!frontmatter) return "";
+  const body = state.sliceDoc(frontmatter.bodyFrom, frontmatter.bodyTo);
+  const match = body.match(/^servings\s*:\s*["']?(\d+(?:[.,]\d+)?)/m);
+  return match ? match[1].replace(",", ".") : "";
+}
+
+// Add `item` to the menu as a bullet of the meal around the cursor:
+// - on an empty bullet (`- `), fill it in;
+// - on a blank line right after a meal, add to that meal;
+// - on any other line, add a bullet below it.
+// The line above the new bullet gets the ` \` that joins them when it is a
+// meal header or bullet without one; the new bullet gets one when it lands
+// between two lines of the same meal.
+export function insertMenuItem(view, item) {
+  const { state } = view;
+  const { doc } = state;
+  const lineBefore = n => (n > 1 ? doc.line(n - 1) : null);
+  const lineAfter = n => (n < doc.lines ? doc.line(n + 1) : null);
+
+  let line = doc.lineAt(state.selection.main.head);
+  if (line.text.trim() === "") {
+    const above = lineBefore(line.number);
+    if (!above || !isMealLine(above.text)) {
+      insertBlock(view, `- ${item}`);
+      return;
+    }
+    line = above;
+  }
+
+  // ` \` at the end of `line`, replacing any trailing spaces.
+  const joinLine = target => ({ from: target.from + target.text.trimEnd().length, to: target.to, insert: " \\" });
+  const needsJoin = target => target && isMealLine(target.text) && !CONTINUED.test(target.text);
+
+  const bullet = `- ${item}`;
+  const changes = [];
+  // The cursor lands right after the item: `offset` characters past where the
+  // last change starts.
+  let offset;
+  if (EMPTY_BULLET.test(line.text)) {
+    const above = lineBefore(line.number);
+    if (needsJoin(above)) changes.push(joinLine(above));
+    const tail = CONTINUED.test(line.text) ? " \\" : "";
+    changes.push({ from: line.from, to: line.to, insert: bullet + tail });
+    offset = bullet.length;
+  } else {
+    const below = lineAfter(line.number);
+    // Already joined to the line below: the new bullet sits in between, so
+    // it carries the join on.
+    const tail = CONTINUED.test(line.text) && below && below.text.trim() !== "" ? " \\" : "";
+    const change = needsJoin(line) ? joinLine(line) : { from: line.to, to: line.to, insert: "" };
+    change.insert += "\n" + bullet + tail;
+    changes.push(change);
+    offset = change.insert.length - tail.length;
+  }
+
+  const changeSet = state.changes(changes);
+  const last = changes[changes.length - 1];
+  const cursor = changeSet.mapPos(last.from, -1) + offset;
+  dispatch(view, { changes: changeSet, selection: EditorSelection.cursor(cursor) });
+}
+
+// Replace the selection with `text`, putting the cursor `cursorFromEnd`
+// characters before its end.
+function insertInline(view, text, cursorFromEnd = 0) {
+  const { state } = view;
+  dispatch(view, state.changeByRange(range => ({
+    changes: { from: range.from, to: range.to, insert: text },
+    range: EditorSelection.cursor(range.from + text.length - cursorFromEnd)
+  })));
+}
+
+// Toolbar actions for menu files.
+export const menuActions = {
+  // `== Day N ==`, or `== Saturday (2026-03-07) ==` when the date field next
+  // to the button holds a date. The date then moves on a day, ready for the
+  // next one.
+  day: (view, button) => {
+    const dateInput = button?.closest('[role="toolbar"]')?.querySelector("[data-day-date]");
+    let name;
+    if (dateInput?.value) {
+      name = datedDayName(dateInput.value, document.documentElement.lang);
+      dateInput.value = nextDate(dateInput.value);
+    } else {
+      name = `${button?.dataset.default || "Day"} ${countSections(view.state) + 1}`;
+    }
+    insertBlock(view, `== ${name} ==`, { select: [3, 3 + name.length] });
+  },
+  meal: (view, item) => {
+    const name = item?.dataset.meal || "Meal";
+    insertBlock(view, `${name}: \\\n- `);
+  }
+};
+
+// Actions that go through the recipe picker (see picker.js).
+export function pickerActions(picker) {
+  return {
+    // A sub-recipe inside a step: `@./Path/Name{}`, cursor in the braces.
+    "recipe-reference": async view => {
+      const choice = await picker.open();
+      if (choice) insertInline(view, `@${choice.reference}{}`, 1);
+    },
+    // A menu entry: `- @./Path/Name{N%servings}`, or `{}` for the recipe's
+    // own servings.
+    "add-recipe": async view => {
+      const choice = await picker.open({ servings: menuServings(view.state) });
+      if (!choice) return;
+      const amount = choice.servings ? `${choice.servings}%servings` : "";
+      insertMenuItem(view, `@${choice.reference}{${amount}}`);
+    }
+  };
+}
+
+// A button with `aria-haspopup="menu"` and the `role="menu"` it controls:
+// the ARIA menu button pattern. Picking an item runs its `data-action`
+// through the toolbar's click handler, then closes the menu.
+function initMenuButton(button) {
+  const menu = document.getElementById(button.getAttribute("aria-controls"));
+  if (!menu) return;
+  const menuItems = () => [...menu.querySelectorAll('[role="menuitem"]')];
+
+  function open(focusIndex = 0) {
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    const list = menuItems();
+    list[(focusIndex + list.length) % list.length]?.focus();
+  }
+
+  function close(refocus) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    if (refocus) button.focus();
+  }
+
+  button.addEventListener("click", () => (menu.hidden ? open() : close(true)));
+  button.addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      open(event.key === "ArrowDown" ? 0 : -1);
+    }
+  });
+
+  menu.addEventListener("keydown", event => {
+    const list = menuItems();
+    const index = list.indexOf(event.target);
+    let next;
+    switch (event.key) {
+      case "ArrowDown": next = list[(index + 1) % list.length]; break;
+      case "ArrowUp": next = list[(index - 1 + list.length) % list.length]; break;
+      case "Home": next = list[0]; break;
+      case "End": next = list[list.length - 1]; break;
+      case "Escape":
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+        return;
+      case "Tab":
+        close(false);
+        return;
+      default: return;
+    }
+    event.preventDefault();
+    next.focus();
+  });
+
+  // Runs before the toolbar's own click handler, which then runs the action
+  // and hands focus to the editor.
+  menu.addEventListener("click", event => {
+    if (event.target.closest('[role="menuitem"]')) close(true);
+  });
+
+  document.addEventListener("click", event => {
+    if (!menu.hidden && !menu.contains(event.target) && !button.contains(event.target)) close(false);
+  });
+}
+
 // Wire a `role="toolbar"` element to an editor view: clicks on `[data-action]`
 // run the matching entry of `actions`, and the ARIA toolbar keyboard pattern
 // (one tab stop, arrow keys / Home / End between items) applies to every
-// button, select and input inside it.
+// button, select and input inside it, except the items of a popup menu, which
+// have their own keyboard handling.
 export function initToolbar(root, view, actions = recipeActions) {
-  const items = () => [...root.querySelectorAll("button, select, input")].filter(el => !el.disabled);
+  const items = () => [...root.querySelectorAll("button, select, input")]
+    .filter(el => !el.disabled && !el.closest('[role="menu"]'));
 
   function setCurrent(item) {
     for (const el of items()) el.tabIndex = el === item ? 0 : -1;
@@ -217,12 +440,14 @@ export function initToolbar(root, view, actions = recipeActions) {
   const initial = items();
   if (initial.length) setCurrent(initial[0]);
 
+  for (const button of root.querySelectorAll('[aria-haspopup="menu"]')) initMenuButton(button);
+
   root.addEventListener("click", event => {
     const button = event.target.closest("[data-action]");
     if (!button || !root.contains(button) || button.tagName === "SELECT") return;
     const action = actions[button.dataset.action];
     if (!action) return;
-    setCurrent(button);
+    if (items().includes(button)) setCurrent(button);
     action(view, button);
   });
 

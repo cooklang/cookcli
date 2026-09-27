@@ -14,8 +14,12 @@ import {
     prefixLines,
     insertBlock,
     findFrontmatter,
-    ensureFrontmatter
+    ensureFrontmatter,
+    menuActions,
+    pickerActions,
+    insertMenuItem
 } from "./toolbar.js";
+import { initRecipePicker } from "./picker.js";
 
 // Diagnostics support
 let currentDiagnostics = [];
@@ -223,5 +227,9 @@ window.CooklangEditor = {
   prefixLines,
   insertBlock,
   findFrontmatter,
-  ensureFrontmatter
+  ensureFrontmatter,
+  menuActions,
+  pickerActions,
+  insertMenuItem,
+  initRecipePicker
 };

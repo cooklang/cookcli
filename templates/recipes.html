@@ -18,11 +18,11 @@
     </nav>
     {% endif %}
 
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
         <h1 class="text-display font-bold text-text">
             {{ current_name }}
         </h1>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             {% if let Some(random_url) = random_recipe_url %}
             <a href="{{ random_url }}" id="random-recipe" class="icon-btn" aria-label="{{ tr.t("random-recipe") }}" title="{{ tr.t("random-recipe") }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -36,6 +36,13 @@
             </a>
             {% endif %}
             {% if !static_mode && viewer.can_edit() %}
+            <a href="{{ new_menu_url }}" id="new-menu" class="btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="5" width="16" height="15" rx="2" stroke-width="2"></rect>
+                    <path stroke-linecap="round" stroke-width="2" d="M8 3v4m8-4v4M4 10h16"></path>
+                </svg>
+                {{ tr.t("new-menu") }}
+            </a>
             <a href="{{ new_recipe_url }}" class="btn btn-primary">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>

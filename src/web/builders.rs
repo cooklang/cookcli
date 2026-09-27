@@ -168,6 +168,13 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         Some(p) => format!("{url_prefix}/new?filename={}%2F", urlencoding::encode(p)),
         None => format!("{url_prefix}/new"),
     };
+    let new_menu_url = match sub_path {
+        Some(p) => format!(
+            "{url_prefix}/new?kind=menu&filename={}%2F",
+            urlencoding::encode(p)
+        ),
+        None => format!("{url_prefix}/new?kind=menu"),
+    };
 
     // The pick happens on the server (`/random`), so a static site has no
     // button; neither does a folder with nothing but menus in it.
@@ -184,6 +191,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         items,
         todays_menu,
         new_recipe_url,
+        new_menu_url,
         random_recipe_url,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),

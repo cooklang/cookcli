@@ -192,6 +192,7 @@ pub struct RecipesTemplate {
     pub items: Vec<RecipeItem>,
     pub todays_menu: Option<TodaysMenu>,
     pub new_recipe_url: String,
+    pub new_menu_url: String,
     /// `/random` link for the current folder; `None` hides the button.
     pub random_recipe_url: Option<String>,
     pub tr: Tr,
@@ -587,6 +588,8 @@ pub struct PantryTemplate {
 pub struct EditTemplate {
     pub active: String,
     pub recipe_name: String,
+    /// A `.menu` file: the toolbar gets the Day, Meal and Add recipe helpers.
+    pub is_menu: bool,
     pub recipe_path: String,
     pub content: String,
     pub base_path: String,
@@ -613,6 +616,8 @@ pub struct NewTemplate {
     pub tr: Tr,
     pub error: Option<String>,
     pub filename: Option<String>,
+    /// The form creates a `.menu` file rather than a `.cook` recipe.
+    pub is_menu: bool,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,

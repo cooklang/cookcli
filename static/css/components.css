@@ -715,6 +715,111 @@
         color: var(--accent-text);
     }
 
+    /* Optional date for the next Day, beside its button. */
+    .editor-toolbar-date {
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-ui);
+    }
+
+    .editor-toolbar-menu { position: relative; }
+
+    /* Popup of a toolbar menu button (the meals). */
+    .editor-toolbar-popup {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 40;
+        min-width: 100%;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-overlay);
+    }
+
+    .editor-toolbar-popup[hidden] { display: none; }
+
+    .editor-toolbar-popup [role="menuitem"] {
+        height: 32px;
+        padding: 0 12px;
+        text-align: left;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    .editor-toolbar-popup [role="menuitem"]:hover,
+    .editor-toolbar-popup [role="menuitem"]:focus {
+        background: var(--surface-sunk);
+        outline: none;
+    }
+
+    /* ---------- Recipe picker ---------- */
+    .picker-search,
+    .picker-servings {
+        height: 40px;
+        padding: 0 12px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+    }
+
+    .picker-search { width: 100%; }
+    .picker-servings { width: 7rem; }
+
+    .picker-search:focus,
+    .picker-servings:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    .picker-results {
+        margin-top: 8px;
+        max-height: 18rem;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+    }
+
+    .picker-results:empty { display: none; }
+
+    .picker-option {
+        display: flex;
+        flex-direction: column;
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .picker-option:last-child { border-bottom: 0; }
+    .picker-option:hover { background: var(--surface-sunk); }
+
+    .picker-option[aria-selected="true"] {
+        background: var(--accent-soft);
+        box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .picker-option-name { color: var(--text); font-weight: 500; }
+
+    .picker-option-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: var(--text-ui);
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
     /* ---------- Coarse pointers ---------- */
     /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
     @media (pointer: coarse) {

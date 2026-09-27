@@ -119,7 +119,7 @@ test.describe('Editor toolbar', () => {
     await expect(bar).toHaveAttribute('data-mode', 'recipe');
 
     const buttons = bar.getByRole('button');
-    await expect(buttons).toHaveCount(7);
+    await expect(buttons).toHaveCount(8);
     for (const button of await buttons.all()) {
       await expect(button).toHaveAttribute('aria-label', /.+/);
       await expect(button).toHaveAttribute('title', /.+/);
