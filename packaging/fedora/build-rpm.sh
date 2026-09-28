@@ -40,17 +40,8 @@ if [[ -n $provided ]]; then
     [[ -f $provided ]] || { echo "no such file: $provided" >&2; exit 1; }
     cp "$provided" "$topdir/SOURCES/$source_name"
 else
-    # git archive, so nothing untracked (node_modules/, target/) leaks in; the
-    # two generated assets are then copied on top, like the release workflow.
-    git archive --format=tar --prefix="cookcli-$version/" HEAD | tar -x -C "$work/src"
-    for asset in static/css/output.css static/js/editor.bundle.js; do
-        if [[ ! -f $asset ]]; then
-            echo "missing $asset — run: npm install && npm run build-css && npm run build-js" >&2
-            exit 1
-        fi
-        install -D "$asset" "$work/src/cookcli-$version/$asset"
-    done
-    tar -czf "$topdir/SOURCES/$source_name" -C "$work/src" "cookcli-$version"
+    # The same script builds the tarball attached to GitHub releases.
+    "$repo/packaging/source-tarball.sh" "$topdir/SOURCES" >/dev/null
 fi
 srcdir="$work/src/cookcli-$version"
 if [[ ! -d $srcdir ]]; then

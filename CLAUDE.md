@@ -501,11 +501,18 @@ Key settings:
 
 ### CI/CD Integration
 
-GitHub Actions workflow (`ui-tests.yml`):
-- Runs on push/PR to main branch
-- Matrix testing across OS and browsers
-- Artifact upload for test results
-- Parallel job execution
+The `UI Tests` job of `.github/workflows/test.yml`:
+- Runs on push/PR to main branch, alongside the Rust test jobs
+- Chromium only, against the pre-built debug binary
+- Uploads the Playwright report, plus videos when a test fails
+
+Changes under `.github/` are checked by `workflow-lint.yml` (actionlint and
+zizmor). To run the same checks locally:
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
+docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/zizmorcore/zizmor:1.30.1 --min-severity=low .github/workflows
+```
 
 ## Writing New Tests
 

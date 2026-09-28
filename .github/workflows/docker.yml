@@ -1,0 +1,65 @@
+# Builds the Docker image for pull requests that could break it, and checks it
+# serves the seed recipes. Without this a broken Dockerfile only shows up in
+# the release workflow, after the version is already tagged.
+name: Docker
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-entrypoint.sh
+      - Cargo.toml
+      - Cargo.lock
+      - crates/*/Cargo.toml
+      - package.json
+      - package-lock.json
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and smoke-test image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # docker-dev (thin LTO) rather than the published fat-LTO profile: same
+      # Dockerfile, a fraction of the build time. The layer cache the release
+      # workflow writes for linux/amd64 is read, never written, from here.
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: CARGO_PROFILE=docker-dev
+          load: true
+          tags: cookcli:ci
+          cache-from: type=gha,scope=linux/amd64
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          docker run --rm cookcli:ci cook --version
+          docker run -d --name cookcli -p 9080:9080 cookcli:ci
+          for _ in $(seq 30); do
+            if curl -fsS -o /dev/null http://localhost:9080/; then
+              echo "server answers on :9080"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs cookcli
+          exit 1
