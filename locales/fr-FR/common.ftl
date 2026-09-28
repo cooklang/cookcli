@@ -133,6 +133,10 @@ sign-in-password = Mot de passe
 sign-in-failed = Nom d'utilisateur ou mot de passe incorrect.
 signed-in-as = Connecté en tant que
 
+# Errors
+error-title = Une erreur s'est produite
+error-back-home = Retour aux recettes
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Changer de thème
 aria-keyboard-shortcuts = Raccourcis clavier

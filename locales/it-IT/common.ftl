@@ -36,6 +36,24 @@ editor-save-failed = Salvataggio non riuscito
 editor-placeholder = Scrivi qui la tua ricetta...
 
 # Editor toolbar
+editor-toolbar-label = Formattazione Cooklang
+editor-toolbar-inline = Elementi in linea
+editor-toolbar-block = Elementi di riga
+editor-toolbar-ingredient = Ingrediente
+editor-toolbar-ingredient-title = Inserisci un ingrediente (@), o trasforma la selezione in un ingrediente
+editor-toolbar-cookware = Utensile
+editor-toolbar-cookware-title = Inserisci un utensile (#), o trasforma la selezione in un utensile
+editor-toolbar-timer = Timer
+editor-toolbar-timer-title = Inserisci un timer (~) in minuti, o dagli il nome della selezione
+editor-toolbar-section = Sezione
+editor-toolbar-section-title = Inizia una nuova sezione (== Sezione ==), con il nome della selezione
+editor-toolbar-section-default = Sezione
+editor-toolbar-note = Nota
+editor-toolbar-note-title = Trasforma le righe correnti in una nota (>), o di nuovo in passaggi
+editor-toolbar-comment = Commento
+editor-toolbar-comment-title = Commenta le righe correnti (--), o la selezione all'interno di una riga
+editor-toolbar-metadata = Metadati
+editor-toolbar-metadata-title = Aggiungi una riga di metadati all'intestazione (---)
 editor-toolbar-menu = Elementi del menù
 editor-toolbar-other = Altri elementi
 editor-toolbar-day = Giorno
