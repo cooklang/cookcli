@@ -173,6 +173,18 @@ sudo dnf install ./cookcli-<version>-1.fcXX.x86_64.rpm
 The package installs the `cook` binary and shell completions. To build the RPM
 yourself (or to set up a COPR repository), see [packaging/fedora](packaging/fedora).
 
+### Debian / Ubuntu
+
+Every [release](https://github.com/cooklang/CookCLI/releases) ships `.deb`
+packages for amd64 and arm64. They install on Debian 12+ and Ubuntu 22.04+:
+
+```bash
+sudo apt install ./cookcli_<version>-1_amd64.deb
+```
+
+The package installs the `cook` binary and shell completions. To build it
+yourself, see [packaging/debian](packaging/debian).
+
 ### Install with Cargo
 
 If you have Rust installed:

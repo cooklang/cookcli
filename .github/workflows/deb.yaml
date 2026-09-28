@@ -1,0 +1,122 @@
+# Build .deb packages on demand (and for packaging-related PRs), so the Debian
+# packaging can be exercised without cutting a release, then install them on
+# every distribution they are meant for. The release workflow runs the same
+# script for every GitHub release and attaches the packages there.
+name: Deb
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packaging/debian/**
+      - .github/workflows/deb.yaml
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 5
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deb:
+    name: Build .deb (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    # The oldest glibc among the supported distributions (Ubuntu 22.04), so
+    # the package also installs on Debian 12+ and newer Ubuntu releases.
+    container: ubuntu:22.04
+    steps:
+      - name: Setup | Install tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential dpkg-dev curl ca-certificates
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup | Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      # Ubuntu's own rustc is too old for this crate, and unlike rpmbuild,
+      # dpkg-deb does not check build dependencies, so rustup is fine here.
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+
+      - name: Build | .deb
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build-css
+          npm run build-js
+          ./packaging/debian/build-deb.sh
+
+      - name: Upload | .deb
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cook-deb-${{ matrix.arch }}
+          if-no-files-found: error
+          path: dist/deb/*.deb
+
+  # A package that builds is not one that installs: this is where a Depends:
+  # naming a library some release lacks would show up.
+  install:
+    name: Install on ${{ matrix.image }} (${{ matrix.arch }})
+    needs: deb
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:bookworm', 'debian:trixie', 'ubuntu:22.04', 'ubuntu:24.04']
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    container: ${{ matrix.image }}
+    steps:
+      - name: Setup | .deb
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cook-deb-${{ matrix.arch }}
+          path: deb
+
+      - name: Test | Install and run
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y ./deb/cookcli_*.deb
+          cook --version
+          ls -l /usr/share/bash-completion/completions/cook \
+            /usr/share/zsh/vendor-completions/_cook \
+            /usr/share/fish/vendor_completions.d/cook.fish
+          # Built without self-update: apt owns the binary.
+          if cook update --help >/dev/null 2>&1; then
+            echo "cook update should not exist in the packaged build" >&2
+            exit 1
+          fi
+        env:
+          DEBIAN_FRONTEND: noninteractive
