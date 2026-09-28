@@ -132,6 +132,11 @@ sign-in-username = Gebruikersnaam
 sign-in-password = Wachtwoord
 sign-in-failed = Onjuiste gebruikersnaam of wachtwoord.
 signed-in-as = Ingelogd als
+role-forbidden = Je account mag dit niet. Vraag wie deze server beheert om een andere rol.
+
+# Errors
+error-title = Er is iets misgegaan
+error-back-home = Terug naar recepten
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Thema wisselen

@@ -132,6 +132,11 @@ sign-in-username = Nombre de usuario
 sign-in-password = Contraseña
 sign-in-failed = Nombre de usuario o contraseña incorrectos.
 signed-in-as = Sesión iniciada como
+role-forbidden = Tu cuenta no puede hacer esto. Pide otro rol a quien administra este servidor.
+
+# Errors
+error-title = Algo salió mal
+error-back-home = Volver a las recetas
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Cambiar tema

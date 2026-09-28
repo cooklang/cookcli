@@ -2,8 +2,9 @@
 //!
 //! With no users file the server is open, as it always was. Once a users file
 //! exists (see [`users`]), anyone can still browse, but every request that
-//! changes something needs a signed-in user: recipes, the pantry, the
-//! shopping list, the cook.md sync binding, and the editor's language server.
+//! changes something needs a signed-in user whose role allows it: the
+//! shopping list and the pantry, recipes and the editor's language server, and
+//! — for admins only — the cook.md sync binding.
 //! [`middleware::middleware`] enforces that for every route in one place.
 //!
 //! Users are managed on the server only, with `cook server user …`; the
@@ -76,6 +77,9 @@ impl Auth {
 
     /// Who sent this request: a signed-in user if it carries a valid session
     /// cookie that was not signed out, a guest otherwise.
+    ///
+    /// The role comes from the current users file, not the cookie, so a
+    /// changed role applies to the very next request.
     pub fn viewer(&self, headers: &HeaderMap) -> Viewer {
         let users = self.users();
         session::read_cookie(headers)
@@ -84,7 +88,8 @@ impl Auth {
                     .verify(value, session::now(), |name| users.hash(name))
             })
             .filter(|session| !self.revoked.contains(session.id))
-            .map_or_else(Viewer::guest, |session| Viewer::signed_in(session.user))
+            .and_then(|session| Some((users.role(session.user)?, session.user)))
+            .map_or_else(Viewer::guest, |(role, user)| Viewer::signed_in(user, role))
     }
 
     /// Ends the session this request's cookie stands for, so no copy of the

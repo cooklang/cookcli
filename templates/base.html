@@ -19,8 +19,8 @@
         const theme = localStorage.getItem('theme')
             || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.classList.toggle('dark', theme === 'dark');
-        // False for a guest on a server that requires signing in to make changes.
-        window.__CAN_EDIT__ = {{ viewer.can_edit()|json|safe }};
+        // False for a guest, or a role below shopper, on a server that requires signing in.
+        window.__CAN_EDIT_LISTS__ = {{ viewer.can_edit_lists()|json|safe }};
     </script>
     <style>
         .viewport {

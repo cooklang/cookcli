@@ -1,6 +1,6 @@
 //! `cook server user …` and `cook server hash-password`.
 
-use super::users::{self, UsersDocument};
+use super::users::{self, Role, UsersDocument};
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
@@ -29,18 +29,36 @@ enum UserAction {
     Add {
         /// Name to sign in with: letters, digits, and _ . @ -
         name: String,
+
+        /// What they may do once signed in
+        ///
+        /// reader: read only; shopper: also the shopping list and pantry;
+        /// editor: also recipes and menus; admin: also cook.md sync.
+        #[arg(long, default_value = "admin", value_parser = role_parser())]
+        role: Role,
     },
     /// Change a user's password, signing them out everywhere
     Passwd {
         /// User whose password to change
         name: String,
     },
+    /// Change what a user may do, without signing them out
+    ///
+    /// A running server applies the new role to their next request.
+    Role {
+        /// User whose role to change
+        name: String,
+
+        /// Their new role; see `user add --help`
+        #[arg(value_parser = role_parser())]
+        role: Role,
+    },
     /// Remove a user, signing them out everywhere
     Remove {
         /// User to remove
         name: String,
     },
-    /// List the users who can sign in
+    /// List the users who can sign in, with their roles
     List,
 }
 
@@ -60,11 +78,13 @@ pub fn run_user(args: UserArgs) -> Result<()> {
             if existing.is_none() {
                 eprintln!("No users file at {path}: sign-in is off.");
             }
-            for name in doc.names() {
-                println!("{name}");
+            let users = doc.users()?;
+            let width = users.roles().map(|(name, _)| name.len()).max();
+            for (name, role) in users.roles() {
+                println!("{name:<width$}  {role}", width = width.unwrap_or_default());
             }
         }
-        UserAction::Add { name } => {
+        UserAction::Add { name, role } => {
             users::validate_username(&name)?;
             if doc.contains(&name) {
                 bail!(
@@ -73,9 +93,9 @@ pub fn run_user(args: UserArgs) -> Result<()> {
                 );
             }
             let hash = super::hash_password(&read_new_password()?)?;
-            doc.set(&name, &hash);
+            doc.add(&name, &hash, role);
             users::write_users_file(path, &doc.to_string())?;
-            println!("Added {name} to {path}");
+            println!("Added {name} to {path} as {role}");
             if existing.is_none() {
                 println!("Restart cook server to turn sign-in on.");
             }
@@ -85,9 +105,17 @@ pub fn run_user(args: UserArgs) -> Result<()> {
                 bail!("there is no user {name} in {path}");
             }
             let hash = super::hash_password(&read_new_password()?)?;
-            doc.set(&name, &hash);
+            doc.set_password(&name, &hash);
             users::write_users_file(path, &doc.to_string())?;
             println!("Changed the password of {name} in {path}");
+        }
+        UserAction::Role { name, role } => {
+            if !doc.contains(&name) {
+                bail!("there is no user {name} in {path}");
+            }
+            doc.set_role(&name, role)?;
+            users::write_users_file(path, &doc.to_string())?;
+            println!("{name} is now {role} in {path}");
         }
         UserAction::Remove { name } => {
             if !doc.remove(&name) {
@@ -104,6 +132,13 @@ pub fn run_user(args: UserArgs) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Parses a role, listing the choices in `--help` and shell completions.
+fn role_parser() -> impl clap::builder::TypedValueParser<Value = Role> {
+    use clap::builder::TypedValueParser as _;
+    clap::builder::PossibleValuesParser::new(Role::ALL.map(Role::as_str))
+        .map(|name| name.parse::<Role>().expect("only listed roles get here"))
 }
 
 /// Prints the hash of a password, for editing the users file by hand.

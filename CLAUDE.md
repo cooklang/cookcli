@@ -143,12 +143,16 @@ Configuration search order:
 - Static files served from `static/` directory
 - Shopping list stored as tab-delimited files in `/tmp/`
 - Opt-in sign-in in `src/server/auth/`: a `users.toml` in the config dir (or
-  `--users-file` / `COOK_USERS_FILE`) turns it on. `auth::middleware` is the
-  one place deciding which requests need a user — every non-GET route except
-  an explicit allowlist, plus a few GETs (`/edit`, `/new`, `/api/ws/lsp`,
-  `/api/sync`). So a GET handler must never change anything. Templates get a
-  `Viewer` (`src/web/viewer.rs`) and hide editing controls when
-  `!viewer.can_edit()`
+  `--users-file` / `COOK_USERS_FILE`) turns it on. Each user has a role
+  (`reader` < `shopper` < `editor` < `admin`; a bare hash is `admin`).
+  `auth::middleware::required_capability` is the one place deciding which
+  `Capability` a request needs — every non-GET route except an explicit
+  allowlist, plus a few GETs (`/edit`, `/new`, `/api/ws/lsp`, `/api/sync`).
+  A write route not listed in its `WRITES` table needs `Administer`, so list
+  a new one there at the capability it deserves. A GET handler must never
+  change anything. Guests get `401`, signed-in users whose role falls short
+  `403`. Templates get a `Viewer` (`src/web/viewer.rs`) and hide controls
+  with `viewer.can_edit_lists()` / `can_edit_recipes()` / `can_admin()`
 - Every handler that changes something takes `Extension<Viewer>` and, once
   the change succeeded, calls `server::activity::record` — one stdout line
   saying who did what. Quote request text with `activity::quoted` /

@@ -14,7 +14,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
 
-fn error_page(
+pub(crate) fn error_page(
     lang: LanguageIdentifier,
     prefix: &str,
     msg: impl std::fmt::Display,
@@ -728,8 +728,8 @@ async fn preferences_page(
     Extension(viewer): Extension<Viewer>,
 ) -> impl IntoResponse {
     // The sync section names the linked cook.md account and can link or
-    // unlink one, so guests do not get it at all.
-    let sync_enabled = cfg!(feature = "sync") && viewer.can_edit();
+    // unlink one, so only admins get it.
+    let sync_enabled = cfg!(feature = "sync") && viewer.can_admin();
     #[cfg(feature = "sync")]
     let (sync_logged_in, sync_email, sync_syncing) = if sync_enabled {
         let (logged_in, email, syncing, _reason) = state.sync_status().await;

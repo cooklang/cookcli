@@ -14,7 +14,7 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use reqwest::header::{COOKIE, LOCATION, SET_COOKIE};
+use reqwest::header::{ACCEPT_LANGUAGE, COOKIE, LOCATION, SET_COOKIE};
 use reqwest::{redirect, Client, Response, StatusCode};
 use std::io::Write;
 use std::net::TcpListener;
@@ -83,6 +83,18 @@ impl Fixture {
 
     fn write_users(&self, users: &[(&str, &str)]) {
         write_users_at(&self.users_file(), users);
+    }
+
+    /// Writes users as `(name, password, role)`.
+    fn write_roles(&self, users: &[(&str, &str, &str)]) {
+        let mut text = String::from("[users]\n");
+        for (name, password, role) in users {
+            text.push_str(&format!(
+                "\"{name}\" = {{ hash = \"{}\", role = \"{role}\" }}\n",
+                tiny_hash(password)
+            ));
+        }
+        std::fs::write(self.users_file(), text).unwrap();
     }
 
     /// A `cook` command isolated to this fixture's configuration directory.
@@ -453,7 +465,7 @@ async fn guests_can_browse_but_not_change_anything() {
         !recipe_page.contains("href=\"/edit/"),
         "Edit shown to a guest"
     );
-    assert!(recipe_page.contains("window.__CAN_EDIT__ = false"));
+    assert!(recipe_page.contains("window.__CAN_EDIT_LISTS__ = false"));
 }
 
 #[tokio::test]
@@ -684,6 +696,195 @@ async fn changes_are_logged_with_who_made_them() {
     assert!(!stdout.contains("MyPasswordTyped"), "{stdout}");
 }
 
+// --- Roles -------------------------------------------------------------------
+
+/// Whether a signed-in user's request was turned away for their role. Anything
+/// else — success, or a handler's own complaint about an empty body — means
+/// the middleware let it through.
+fn refused_for_role(status: StatusCode) -> bool {
+    assert_ne!(status, StatusCode::UNAUTHORIZED, "the session should hold");
+    status == StatusCode::FORBIDDEN
+}
+
+#[tokio::test]
+async fn each_role_can_do_only_what_it_allows() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[
+        ("rita", "pw", "reader"),
+        ("sam", "pw", "shopper"),
+        ("eddie", "pw", "editor"),
+        ("ada", "pw", "admin"),
+    ]);
+    let server = start(fixture, &[], &[]).await;
+    let http = client();
+    let recipe = server.fixture.recipes.path().join("Recipe.cook");
+
+    // (user, lists, recipes, admin)
+    for (user, lists, recipes, admin) in [
+        ("rita", false, false, false),
+        ("sam", true, false, false),
+        ("eddie", true, true, false),
+        ("ada", true, true, true),
+    ] {
+        let cookie = signed_in_cookie(&server, user, "pw").await;
+        let post = |path: &str, body: serde_json::Value| {
+            http.post(server.url(path))
+                .header(COOKIE, &cookie)
+                .json(&body)
+                .send()
+        };
+
+        // The shopping list and the pantry.
+        let add = post(
+            "/api/shopping_list/add",
+            serde_json::json!({ "path": "Recipe.cook", "scale": 1.0 }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(refused_for_role(add.status()), !lists, "{user} list add");
+        if !lists {
+            let body: serde_json::Value = add.json().await.unwrap();
+            assert_eq!(body["error"], "Your role does not allow this change");
+        }
+        for path in ["/api/shopping_list/clear", "/api/pantry/add"] {
+            let resp = post(path, serde_json::json!({})).await.unwrap();
+            assert_eq!(refused_for_role(resp.status()), !lists, "{user} {path}");
+        }
+
+        // Recipes, and the editor pages.
+        std::fs::write(&recipe, "Mix @flour{100%g}.\n").unwrap();
+        let save = put_recipe(&server, "Recipe.cook", Some(&cookie)).await;
+        assert_eq!(refused_for_role(save.status()), !recipes, "{user} save");
+        let saved = std::fs::read_to_string(&recipe).unwrap();
+        assert_eq!(saved.contains("water"), recipes, "{user}: {saved}");
+
+        let edit = get_page(&server, "/edit/Recipe.cook", Some(&cookie)).await;
+        if recipes {
+            assert_eq!(edit.status(), StatusCode::OK, "{user} edit page");
+            // Whoever may edit gets the language server's completions.
+            let page = edit.text().await.unwrap();
+            assert!(page.contains("id=\"lsp-status\""), "{user}");
+        } else {
+            // Not a redirect to sign in, which would loop.
+            assert_eq!(edit.status(), StatusCode::FORBIDDEN, "{user} edit page");
+            let page = edit.text().await.unwrap();
+            assert!(page.contains("Ask whoever runs this server"), "{user}");
+            assert!(page.contains(user), "{user} still shown as signed in");
+        }
+        let new = get_page(&server, "/new", Some(&cookie)).await;
+        assert_eq!(refused_for_role(new.status()), !recipes, "{user} /new");
+
+        // The editor's language server.
+        let lsp = get_page(&server, "/api/ws/lsp", Some(&cookie)).await;
+        assert_eq!(refused_for_role(lsp.status()), !recipes, "{user} lsp");
+
+        // Sync.
+        #[cfg(feature = "sync")]
+        {
+            let status = get_page(&server, "/api/sync/status", Some(&cookie)).await;
+            assert_eq!(refused_for_role(status.status()), !admin, "{user} sync");
+            let logout = post("/api/sync/logout", serde_json::json!({}))
+                .await
+                .unwrap();
+            assert_eq!(
+                refused_for_role(logout.status()),
+                !admin,
+                "{user} sync logout"
+            );
+            let preferences = get_page(&server, "/preferences", Some(&cookie))
+                .await
+                .text()
+                .await
+                .unwrap();
+            assert_eq!(preferences.contains("id=\"sync-section\""), admin, "{user}");
+        }
+        #[cfg(not(feature = "sync"))]
+        let _ = admin;
+
+        // Pages show exactly the controls the role can use.
+        let page = get_page(&server, "/recipe/Recipe.cook", Some(&cookie))
+            .await
+            .text()
+            .await
+            .unwrap();
+        assert_eq!(page.contains("href=\"/edit/"), recipes, "{user} Edit");
+        assert_eq!(
+            page.contains("onclick=\"addToShoppingList("),
+            lists,
+            "{user} add to list"
+        );
+        assert!(page.contains(&format!("window.__CAN_EDIT_LISTS__ = {lists}")));
+        let home = get_page(&server, "/", Some(&cookie))
+            .await
+            .text()
+            .await
+            .unwrap();
+        assert_eq!(home.contains("href=\"/new\""), recipes, "{user} New Recipe");
+    }
+}
+
+#[tokio::test]
+async fn a_changed_role_applies_without_signing_in_again() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[("bob", "pw", "editor")]);
+    let server = start(fixture, &[], &[]).await;
+    let bob = signed_in_cookie(&server, "bob", "pw").await;
+    assert!(put_recipe(&server, "Recipe.cook", Some(&bob))
+        .await
+        .status()
+        .is_success());
+
+    assert_success(
+        &server
+            .fixture
+            .run(&["server", "user", "role", "bob", "reader"], ""),
+    );
+    eventually("bob can no longer edit", || async {
+        put_recipe(&server, "Recipe.cook", Some(&bob))
+            .await
+            .status()
+            == StatusCode::FORBIDDEN
+    })
+    .await;
+
+    assert_success(
+        &server
+            .fixture
+            .run(&["server", "user", "role", "bob", "editor"], ""),
+    );
+    eventually("bob can edit again", || async {
+        put_recipe(&server, "Recipe.cook", Some(&bob))
+            .await
+            .status()
+            .is_success()
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn a_refused_page_is_translated_throughout() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[("bob", "pw", "reader")]);
+    let server = start(fixture, &[], &[]).await;
+    let bob = signed_in_cookie(&server, "bob", "pw").await;
+
+    let resp = client()
+        .get(server.url("/new"))
+        .header(COOKIE, &bob)
+        .header(ACCEPT_LANGUAGE, "fr-FR")
+        .send()
+        .await
+        .expect("page request");
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    let page = resp.text().await.unwrap();
+    // The title, the message and the way back, not just the message.
+    assert!(page.contains("Une erreur s"), "{page}");
+    assert!(page.contains("Votre compte ne permet pas"), "{page}");
+    assert!(page.contains("Retour aux recettes"), "{page}");
+    assert!(!page.contains("Something went wrong"), "{page}");
+    assert!(!page.contains("Back to recipes"), "{page}");
+}
+
 #[tokio::test]
 async fn sign_in_only_redirects_within_the_server() {
     let fixture = Fixture::new();
@@ -764,6 +965,14 @@ fn refuses_a_users_file_it_cannot_use() {
 }
 
 #[test]
+fn refuses_a_users_file_with_an_unknown_role() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[("alice", "secret", "chef")]);
+    let stderr = startup_failure(&fixture, &[], &[]);
+    assert!(stderr.contains("unknown role \"chef\""), "{stderr}");
+}
+
+#[test]
 fn refuses_a_users_file_the_server_would_publish() {
     let fixture = Fixture::new();
     let inside = fixture.recipes.path().join("users.toml");
@@ -816,7 +1025,7 @@ fn user_commands_edit_the_users_file() {
     assert_success(&fixture.run(&["server", "user", "remove", "alice"], ""));
     let list = fixture.run(&["server", "user", "list"], "");
     assert_success(&list);
-    assert_eq!(String::from_utf8_lossy(&list.stdout).trim(), "bob");
+    assert_eq!(String::from_utf8_lossy(&list.stdout).trim(), "bob  admin");
 
     let text = std::fs::read_to_string(fixture.users_file()).unwrap();
     assert!(text.starts_with("# kitchen crew"), "{text}");
@@ -839,7 +1048,63 @@ fn user_commands_honour_the_users_file_flag() {
     assert!(!fixture.users_file().exists());
 
     let list = fixture.run(&["server", "user", "--users-file", path, "list"], "");
-    assert_eq!(String::from_utf8_lossy(&list.stdout).trim(), "alice");
+    assert_eq!(String::from_utf8_lossy(&list.stdout).trim(), "alice  admin");
+}
+
+#[test]
+fn user_commands_manage_roles() {
+    let fixture = Fixture::new();
+    let stdout = |output: &Output| String::from_utf8_lossy(&output.stdout).into_owned();
+
+    // Without --role, a user is an admin, as every user was before roles.
+    let alice = fixture.run(&["server", "user", "add", "alice"], "a\n");
+    assert_success(&alice);
+    assert!(stdout(&alice).contains("as admin"), "{}", stdout(&alice));
+    assert_success(&fixture.run(
+        &["server", "user", "add", "bob", "--role", "shopper"],
+        "b\n",
+    ));
+
+    let unknown = fixture.run(&["server", "user", "add", "carol", "--role", "chef"], "c\n");
+    assert!(!unknown.status.success());
+    let stderr = String::from_utf8_lossy(&unknown.stderr);
+    assert!(
+        stderr.contains("reader, shopper, editor, admin"),
+        "{stderr}"
+    );
+
+    let text = std::fs::read_to_string(fixture.users_file()).unwrap();
+    assert!(
+        text.lines()
+            .any(|line| line.starts_with("alice = \"$argon2id$")),
+        "an admin should stay a bare hash: {text}"
+    );
+
+    let list = fixture.run(&["server", "user", "list"], "");
+    assert_eq!(stdout(&list), "alice  admin\nbob    shopper\n");
+
+    // A new role keeps the password, and a new password keeps the role.
+    let before = std::fs::read_to_string(fixture.users_file()).unwrap();
+    let changed = fixture.run(&["server", "user", "role", "bob", "editor"], "");
+    assert_success(&changed);
+    assert!(stdout(&changed).contains("bob is now editor"));
+    let after = std::fs::read_to_string(fixture.users_file()).unwrap();
+    let hash_of = |text: &str| {
+        text.lines()
+            .find(|line| line.starts_with("bob"))
+            .and_then(|line| line.split('"').nth(1))
+            .map(str::to_owned)
+    };
+    assert_eq!(hash_of(&before), hash_of(&after));
+
+    assert_success(&fixture.run(&["server", "user", "passwd", "bob"], "new\n"));
+    let list = fixture.run(&["server", "user", "list"], "");
+    assert_eq!(stdout(&list), "alice  admin\nbob    editor\n");
+
+    let missing = fixture.run(&["server", "user", "role", "nobody", "reader"], "");
+    assert!(!missing.status.success());
+    let bad = fixture.run(&["server", "user", "role", "bob", "boss"], "");
+    assert!(!bad.status.success());
 }
 
 #[tokio::test]

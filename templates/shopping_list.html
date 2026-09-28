@@ -75,7 +75,7 @@
                         </label>
                     </div>
                 </div>
-                {% if viewer.can_edit() %}
+                {% if viewer.can_edit_lists() %}
                 <button type="button" onclick="clearList()" class="btn">
                     {{ tr.t("shopping-clear-all") }}
                 </button>
@@ -317,7 +317,7 @@ function renderSelectedRecipes() {
 // Guests may look at the list but not change it, so they get no Remove
 // buttons and the ticks are read-only. The server refuses them regardless.
 function removeButton(path) {
-    if (!window.__CAN_EDIT__) return '';
+    if (!window.__CAN_EDIT_LISTS__) return '';
     return `<button type="button" data-action="remove-recipe" data-path="${escHtml(path)}" class="text-danger hover:underline font-medium text-sm">
         {{ tr.t("shopping-remove") }}
     </button>`;
@@ -574,7 +574,7 @@ function displayShoppingList(data) {
                                 <input type="checkbox"
                                     id="${itemId}"
                                     class="list-checkbox accent-[var(--accent)] mr-3"
-                                    ${window.__CAN_EDIT__ ? '' : 'disabled'}
+                                    ${window.__CAN_EDIT_LISTS__ ? '' : 'disabled'}
                                     data-action="toggle-item"
                                     data-ingredient-name="${escHtml(item.name)}">
                                 <label for="${itemId}" class="cursor-pointer flex-1">
