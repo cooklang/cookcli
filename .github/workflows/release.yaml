@@ -11,23 +11,27 @@ env:
   RUSTUP_MAX_RETRIES: 5
   MACOSX_DEPLOYMENT_TARGET: 10.7
 
+# Read-only by default. Each job below asks for the write access it uses, so
+# the build jobs — which run npm and cargo build scripts from dependencies —
+# never hold a token that can edit the release, push images or publish crates.
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  id-token: write
+  contents: read
 
 jobs:
   # Update release PR
   release_please:
     name: Release Please
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.repository == 'cooklang/cookcli'
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -93,20 +97,24 @@ jobs:
             name: cook-x86_64-unknown-freebsd.tar.gz
 
     runs-on: ${{ matrix.os }}
+    # Notarization alone may wait up to 30 min.
+    timeout-minutes: 90
     continue-on-error: true
     env:
       RUSTFLAGS: ${{ matrix.rustflags || '' }}
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build CSS
         run: npm run build-css
@@ -115,17 +123,19 @@ jobs:
         run: npm run build-js
 
       - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: stable
           target: ${{ matrix.target }}
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Setup | Install cross [Linux]
         if: matrix.os == 'ubuntu-latest'
-        uses: taiki-e/install-action@cross
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        with:
+          tool: cross
 
       - name: Build | Build [Cargo]
         if: matrix.os != 'ubuntu-latest'
@@ -244,7 +254,7 @@ jobs:
           cd -
 
       - name: Release | Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
@@ -259,6 +269,7 @@ jobs:
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # As for github_build: upload_artifacts is what flips the release out of
     # draft, so a job it needs failing hard would strand the release as a draft
     # with no binaries attached. A missing source tarball is worth a red job in
@@ -267,17 +278,18 @@ jobs:
     continue-on-error: true
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.release_please.outputs.tag_name }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build CSS
         run: npm run build-css
@@ -315,7 +327,7 @@ jobs:
       # Named to match the `cook-*` pattern that upload_artifacts downloads,
       # checksums and attaches to the release.
       - name: Release | Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cook-source.tar.gz
           path: cook-*-source.tar.gz
@@ -328,6 +340,7 @@ jobs:
     needs: [release_please, source_tarball]
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -356,15 +369,16 @@ jobs:
         run: dnf install -y rpm-build gcc git tar xz curl rust cargo
 
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.release_please.outputs.tag_name }}
 
       # A named download extracts the artifact's contents straight into
       # `path`, so the tarball lands in source/, not in a directory named
       # after the artifact.
       - name: Setup | Source tarball
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cook-source.tar.gz
           path: source
@@ -375,7 +389,7 @@ jobs:
       # Named to match the `cook*` pattern that upload_artifacts downloads,
       # checksums and attaches to the release.
       - name: Release | Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cook-rpm-fedora-${{ matrix.fedora }}-${{ matrix.arch }}
           if-no-files-found: error
@@ -386,9 +400,12 @@ jobs:
     name: Add Build Artifacts to Release
     needs: [release_please, github_build, source_tarball, rpm_build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - name: Setup | Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: cook-*
 
@@ -442,12 +459,13 @@ jobs:
         run: for file in cook*/cook*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
       - name: Setup | Publish Release
-        run: gh release edit ${{ needs.release_please.outputs.tag_name }} --draft=false --repo=cooklang/cookcli
+        run: gh release edit "$TAG" --draft=false --repo=cooklang/cookcli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release_please.outputs.tag_name }}
 
       - name: Build | Add Artifacts to Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: cook*/cook*
           tag_name: ${{ needs.release_please.outputs.tag_name }}
@@ -458,17 +476,24 @@ jobs:
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # crates.io trusted publishing exchanges this job's OIDC token.
+      id-token: write
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build CSS
         run: npm run build-css
@@ -477,12 +502,12 @@ jobs:
         run: npm run build-js
 
       - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: stable
       
       - name: Authenticate to crates.io
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
         id: auth
 
       # The chain is cooklang-format -> cookcli-core -> cookcli: crates.io
@@ -569,6 +594,10 @@ jobs:
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -578,13 +607,15 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -597,7 +628,7 @@ jobs:
           TAG: ${{ needs.release_please.outputs.tag_name }}
 
       - name: Build and push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -610,9 +641,12 @@ jobs:
     name: Create multi-arch manifest
     needs: [release_please, docker_publish]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
     steps:
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

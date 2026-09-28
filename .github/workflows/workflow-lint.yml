@@ -1,0 +1,72 @@
+# Lints the workflows themselves: actionlint for mistakes (bad expressions,
+# unknown inputs, shellcheck on `run:` scripts), zizmor for security issues
+# (unpinned actions, broad token permissions, template injection, persisted
+# checkout credentials).
+name: Workflow lint
+
+on:
+  pull_request:
+    paths:
+      - .github/**
+  push:
+    branches: [ main ]
+    paths:
+      - .github/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A release tarball checked against its published checksum, rather than
+      # the upstream `curl | bash` installer. shellcheck ships with the runner.
+      - name: Install actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/$archive"
+          echo "$SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+
+      - name: Run actionlint
+        run: '"$RUNNER_TEMP/actionlint" -color'
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        with:
+          tool: zizmor@1.30.1
+
+      # Informational findings are left out: they are hints, not problems
+      # (one suggests `gh release upload` over action-gh-release). The token
+      # (read-only here) turns on the online audits, such as actions with
+      # known vulnerabilities and pins to commits outside the action's repo.
+      - name: Run zizmor
+        run: zizmor --format=github --min-severity=low .github/workflows
+        env:
+          GH_TOKEN: ${{ github.token }}

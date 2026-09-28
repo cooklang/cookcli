@@ -35,7 +35,9 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
-    container: fedora:latest
+    # Deliberately the moving tag: this job exists to catch the current Fedora
+    # breaking the spec, which a pinned digest would hide.
+    container: fedora:latest # zizmor: ignore[unpinned-images]
     steps:
       # actions/checkout needs git, so the tools come first. Rust comes from
       # the distribution rather than rustup: that is the toolchain the spec's
@@ -45,7 +47,9 @@ jobs:
         run: dnf install -y rpm-build gcc git tar xz curl npm rust cargo
 
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The container runs as root while the checkout is owned by the runner
       # user, which git rejects as "dubious ownership" — and `git archive`
@@ -60,7 +64,7 @@ jobs:
       - name: Build | RPM
         run: |
           set -euo pipefail
-          npm install
+          npm ci
           npm run build-css
           npm run build-js
 
@@ -75,7 +79,7 @@ jobs:
           ./packaging/fedora/build-rpm.sh "cook-$version-source.tar.gz"
 
       - name: Upload | RPMs
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cook-rpm-${{ matrix.arch }}
           if-no-files-found: error
