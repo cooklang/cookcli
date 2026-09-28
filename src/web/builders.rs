@@ -264,6 +264,9 @@ pub struct RecipeBuildInput<'a> {
     pub recipe_path: &'a str,
     pub aisle_path: Option<&'a Utf8PathBuf>,
     pub scale: f64,
+    /// `?servings=`: wins over `scale` on a recipe that declares servings,
+    /// ignored everywhere else (menus, recipes without servings).
+    pub servings: Option<f64>,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
     pub repo_url: Option<String>,
@@ -293,6 +296,45 @@ fn timer_duration_seconds(quantity: &cooklang::quantity::Quantity) -> Option<i64
     Some((n.value() * multiplier).round() as i64)
 }
 
+/// Fewest servings a recipe page scales to: half a serving.
+pub const MIN_SERVINGS: f64 = 0.5;
+
+/// The factor a recipe page applies, and its servings stepper.
+///
+/// A recipe that declares a whole, non-zero number of `servings` gets the
+/// stepper, which counts servings: `?servings=` sets them (at least
+/// [`MIN_SERVINGS`], no upper bound) and wins over `?scale=`; without it the
+/// multiplier from `?scale=` still applies, shown as the servings it gives, so
+/// existing `?scale=` links keep their meaning. Anything else — no `servings`,
+/// text such as `4-6`, a fraction (cooklang only reads `u32`), or `0` — keeps
+/// the plain multiplier and returns no stepper.
+fn resolve_servings(
+    recipe: &cooklang::Recipe,
+    servings: Option<f64>,
+    scale: f64,
+) -> (f64, Option<ServingsScale>) {
+    let Some(base) = recipe
+        .metadata
+        .servings()
+        .and_then(|s| s.as_number())
+        .filter(|&n| n > 0)
+    else {
+        return (scale, None);
+    };
+    let base_f = f64::from(base);
+    let (scale, chosen) = match servings.filter(|s| s.is_finite() && *s > 0.0) {
+        Some(s) => {
+            let s = s.max(MIN_SERVINGS);
+            (s / base_f, s)
+        }
+        None => (scale, base_f * scale),
+    };
+    // Rounded for display only (`0.1 * 6` is 0.6000000000000001); the factor
+    // above is the exact one.
+    let chosen = (chosen * 100.0).round() / 100.0;
+    (scale, Some(ServingsScale { base, chosen }))
+}
+
 /// Build a [`RecipeTemplate`] or [`MenuTemplate`] for the given recipe path.
 pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildOutput> {
     let RecipeBuildInput {
@@ -301,6 +343,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         recipe_path,
         aisle_path,
         scale,
+        servings,
         lang,
         static_mode,
         repo_url,
@@ -347,8 +390,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         return Ok(RecipeBuildOutput::Menu(Box::new(template)));
     }
 
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
+    let mut recipe = crate::util::parse_unscaled_recipe_from_entry(&entry)
         .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {e}"))?;
+    let (scale, servings) = resolve_servings(&recipe, servings, scale);
+    recipe.scale(scale, crate::util::PARSER.converter());
 
     // Load aisle config for cooking mode ingredient sorting
     let aisle_content = if let Some(path) = aisle_path {
@@ -817,7 +862,13 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         }
 
         Some(RecipeMetadata {
-            servings: get_field("servings"),
+            // The stepper's value rather than the metadata: `scale` rounds
+            // `servings` to a whole number, so half of a 4-serving recipe
+            // would read 1.
+            servings: servings
+                .as_ref()
+                .map(|s| s.chosen.to_string())
+                .or_else(|| get_field("servings")),
             time: get_field("time"),
             difficulty: get_field("difficulty"),
             course: get_field("course"),
@@ -862,6 +913,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         recipe_path: recipe_path.to_string(),
         breadcrumbs,
         scale,
+        servings,
         tags,
         ingredients,
         cookware,
@@ -1379,5 +1431,128 @@ mod natural_sort_tests {
         });
         let order: Vec<_> = items.iter().map(|i| i.name).collect();
         assert_eq!(order, vec!["breakfast", "Soups", "Apple pie", "zucchini"]);
+    }
+}
+
+#[cfg(test)]
+mod servings_tests {
+    use super::*;
+    use askama::Template;
+
+    const SERVES_FOUR: &str = "---\nservings: 4\n---\n\nAdd @flour{200%g}.\n";
+    const NO_SERVINGS: &str = "Add @flour{200%g}.\n";
+
+    /// The recipe page for `recipe`, as `/recipe/Soup?scale=..&servings=..`.
+    fn page(recipe: &str, scale: f64, servings: Option<f64>) -> Box<RecipeTemplate> {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        std::fs::write(base.join("Soup.cook"), recipe).unwrap();
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Soup",
+            aisle_path: None,
+            scale,
+            servings,
+            lang: "en-US".parse().unwrap(),
+            static_mode: false,
+            repo_url: None,
+            features: FeatureFlags::default(),
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        match output {
+            RecipeBuildOutput::Recipe(template) => template,
+            RecipeBuildOutput::Menu(_) => panic!("Soup.cook is not a menu"),
+        }
+    }
+
+    fn stepper(template: &RecipeTemplate) -> Option<(u32, f64)> {
+        template.servings.as_ref().map(|s| (s.base, s.chosen))
+    }
+
+    #[test]
+    fn a_recipe_with_servings_starts_at_its_own_servings() {
+        let template = page(SERVES_FOUR, 1.0, None);
+        assert_eq!(stepper(&template), Some((4, 4.0)));
+        assert_eq!(template.scale, 1.0);
+
+        let html = template.render().unwrap();
+        assert!(html.contains(r#"id="servings""#), "{html}");
+        assert!(html.contains(r#"value="4""#));
+        assert!(html.contains(r#"data-base-servings="4""#));
+        assert!(!html.contains(r#"id="scale""#));
+        assert!(html.contains("👥 4 servings"));
+    }
+
+    #[test]
+    fn servings_set_the_factor() {
+        let template = page(SERVES_FOUR, 1.0, Some(6.0));
+        assert_eq!(template.scale, 1.5);
+        assert_eq!(stepper(&template), Some((4, 6.0)));
+
+        let html = template.render().unwrap();
+        assert!(html.contains("300"), "200 g x 1.5: {html}");
+        assert!(html.contains("👥 6 servings"));
+        assert!(html.contains("6 servings</div>"), "print header");
+    }
+
+    #[test]
+    fn half_a_serving_is_the_floor_and_there_is_no_ceiling() {
+        let half = page(SERVES_FOUR, 1.0, Some(0.5));
+        assert_eq!(half.scale, 0.125);
+        // `scale` rounds the metadata to a whole serving; the pill must not.
+        assert!(half.render().unwrap().contains("👥 0.5 servings"));
+
+        assert_eq!(page(SERVES_FOUR, 1.0, Some(0.25)).scale, 0.125);
+        assert_eq!(page(SERVES_FOUR, 1.0, Some(1000.0)).scale, 250.0);
+    }
+
+    #[test]
+    fn servings_win_over_scale() {
+        assert_eq!(page(SERVES_FOUR, 3.0, Some(2.0)).scale, 0.5);
+    }
+
+    /// Menu links and bookmarks carry `?scale=`: same factor, shown as servings.
+    #[test]
+    fn scale_links_keep_their_factor() {
+        let template = page(SERVES_FOUR, 1.5, None);
+        assert_eq!(template.scale, 1.5);
+        assert_eq!(stepper(&template), Some((4, 6.0)));
+
+        let odd = page("---\nservings: 6\n---\n\nAdd @flour{200%g}.\n", 0.1, None);
+        assert_eq!(odd.scale, 0.1);
+        assert_eq!(stepper(&odd), Some((6, 0.6)), "rounded for display");
+    }
+
+    #[test]
+    fn unusable_servings_fall_back_to_scale() {
+        for servings in [0.0, -2.0, f64::NAN, f64::INFINITY] {
+            let template = page(SERVES_FOUR, 2.0, Some(servings));
+            assert_eq!(template.scale, 2.0, "?servings={servings}");
+            assert_eq!(stepper(&template), Some((4, 8.0)));
+        }
+    }
+
+    #[test]
+    fn a_recipe_without_servings_keeps_the_multiplier() {
+        let template = page(NO_SERVINGS, 2.0, Some(6.0));
+        assert_eq!(template.scale, 2.0, "?servings= is ignored");
+        assert!(template.servings.is_none());
+
+        let html = template.render().unwrap();
+        assert!(html.contains(r#"id="scale""#));
+        assert!(html.contains(r#"max="200""#));
+        assert!(!html.contains(r#"id="servings""#));
+    }
+
+    #[test]
+    fn servings_that_are_not_a_whole_number_keep_the_multiplier() {
+        for servings in ["4-6", "1.5", "0"] {
+            let recipe = format!("---\nservings: {servings}\n---\n\nAdd @flour{{200%g}}.\n");
+            let template = page(&recipe, 2.0, Some(6.0));
+            assert_eq!(template.scale, 2.0, "servings: {servings}");
+            assert!(template.servings.is_none(), "servings: {servings}");
+        }
     }
 }

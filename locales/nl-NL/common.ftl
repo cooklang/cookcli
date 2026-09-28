@@ -141,4 +141,6 @@ aria-preferences = Voorkeuren
 aria-dismiss = Sluiten
 aria-decrease-scale = Schaal verkleinen
 aria-increase-scale = Schaal vergroten
+aria-decrease-servings = Porties verminderen
+aria-increase-servings = Porties vermeerderen
 aria-close = Sluiten

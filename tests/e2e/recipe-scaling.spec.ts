@@ -1,236 +1,212 @@
-import { test, expect } from '@playwright/test';
-import { TestHelpers, RecipePage } from '../fixtures/test-helpers';
+import { test, expect, type Page } from '@playwright/test';
+import { TestHelpers } from '../fixtures/test-helpers';
+
+// A recipe without `servings` keeps the plain multiplier.
+const NO_SERVINGS = '/recipe/Breakfast/Chocolate%20Toast%20Delight';
+// `servings: 6`, and `@mozzarella cheese{100%grams}`.
+const SERVES_SIX = '/recipe/Neapolitan%20Pizza';
 
 test.describe('Recipe Scaling', () => {
   let helpers: TestHelpers;
-  let recipePage: RecipePage;
 
   test.beforeEach(async ({ page }) => {
     helpers = new TestHelpers(page);
-    recipePage = new RecipePage(page, helpers);
-    await helpers.navigateTo('/');
-
-    // Navigate to first actual recipe (not directory or menu)
-    const recipes = page.locator('a[href^="/recipe/"][href$=".cook"]');
-    const count = await recipes.count();
-    if (count > 0) {
-      await recipes.first().click();
-      await page.waitForLoadState('networkidle');
-    }
+    await helpers.navigateTo(NO_SERVINGS);
   });
 
   test('should display scale input', async ({ page }) => {
     const scaleInput = page.locator('#scale');
-    const isVisible = await scaleInput.count() > 0;
-
-    if (isVisible) {
-      await expect(scaleInput).toBeVisible();
-      await expect(scaleInput).toHaveValue('1');
-    } else {
-      // No recipe loaded or no scaling available
-      expect(page.url()).toMatch(/\/$|directory/);
-    }
+    await expect(scaleInput).toBeVisible();
+    await expect(scaleInput).toHaveValue('1');
+    await expect(page.locator('#servings')).toHaveCount(0);
   });
 
   test('should scale recipe by changing input', async ({ page }) => {
-    const scaleInput = page.locator('#scale');
+    await helpers.scaleRecipe(2);
 
-    if (await scaleInput.count() > 0) {
-      // Scale recipe to 2x
-      await helpers.scaleRecipe(2);
-
-      // Check that scale input shows new value
-      await expect(scaleInput).toHaveValue('2');
-
-      // URL will update after navigation/reload, not immediately from input change
-      if (page.url().includes('scale=')) {
-        expect(page.url()).toContain('scale=2');
-      }
-    } else {
-      expect(true).toBe(true);
-    }
+    await expect(page.locator('#scale')).toHaveValue('2');
+    expect(page.url()).toContain('scale=2');
   });
 
   test('should scale recipe via URL parameter', async ({ page }) => {
-    if (page.url().includes('/recipe/')) {
-      // Navigate directly with scale parameter
-      const currentUrl = page.url().split('?')[0];
-      await page.goto(currentUrl + '?scale=3');
-      await page.waitForLoadState('networkidle');
+    await page.goto(NO_SERVINGS + '?scale=3');
+    await page.waitForLoadState('networkidle');
 
-      // Check scale input reflects URL parameter
-      const scaleInput = page.locator('#scale');
-      if (await scaleInput.count() > 0) {
-        await expect(scaleInput).toHaveValue('3');
-      }
-    } else {
-      expect(true).toBe(true);
-    }
+    await expect(page.locator('#scale')).toHaveValue('3');
+  });
+
+  test('should ignore a servings parameter', async ({ page }) => {
+    await page.goto(NO_SERVINGS + '?scale=2&servings=6');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('#scale')).toHaveValue('2');
   });
 
   test('should handle decimal scaling', async ({ page }) => {
     const scaleInput = page.locator('#scale');
 
-    if (await scaleInput.count() > 0) {
-      // Scale to 0.5 (half)
-      await helpers.scaleRecipe(0.5);
-      await expect(scaleInput).toHaveValue('0.5');
+    await helpers.scaleRecipe(0.5);
+    await expect(scaleInput).toHaveValue('0.5');
 
-      // Scale to 1.5
-      await helpers.scaleRecipe(1.5);
-      await expect(scaleInput).toHaveValue('1.5');
-    } else {
-      expect(true).toBe(true);
-    }
+    await helpers.scaleRecipe(1.5);
+    await expect(scaleInput).toHaveValue('1.5');
   });
 
   test('should reset scaling to 1', async ({ page }) => {
     const scaleInput = page.locator('#scale');
 
-    if (await scaleInput.count() > 0) {
-      // Scale up first
-      await helpers.scaleRecipe(2);
-      await expect(scaleInput).toHaveValue('2');
+    await helpers.scaleRecipe(2);
+    await expect(scaleInput).toHaveValue('2');
 
-      // Reset to 1
-      await helpers.scaleRecipe(1);
-      await expect(scaleInput).toHaveValue('1');
-    } else {
-      expect(true).toBe(true);
-    }
-  });
-
-  test('should maintain scaling when adding to shopping list', async ({ page }) => {
-    const scaleInput = page.locator('#scale');
-
-    if (await scaleInput.count() > 0) {
-      // Scale recipe to 2x
-      await helpers.scaleRecipe(2);
-
-      // Add to shopping list
-      const addButton = page.getByRole('button', { name: /Add to Shopping List/i });
-
-      if (await addButton.count() > 0) {
-        await addButton.click();
-        await page.waitForTimeout(500);
-
-        // Navigate to shopping list
-        await helpers.goToShoppingList();
-
-        // Verify scaled ingredients are in shopping list
-        const shoppingListItems = await page.locator('li').count();
-        expect(shoppingListItems).toBeGreaterThan(0);
-      } else {
-        expect(true).toBe(true);
-      }
-    } else {
-      expect(true).toBe(true);
-    }
-  });
-
-  test('should show servings adjustment if available', async ({ page }) => {
-    const scaleInput = page.locator('#scale');
-
-    if (await scaleInput.count() > 0) {
-      // Check if servings information exists
-      const servingsElement = page.locator('text=/serving|portion/i');
-
-      if (await servingsElement.count() > 0) {
-        const originalServings = await servingsElement.textContent();
-
-        // Scale recipe
-        await helpers.scaleRecipe(2);
-
-        // Check if servings updated
-        const scaledServings = await servingsElement.textContent();
-
-        // Servings might be updated or might show "2x" indicator
-        expect(scaledServings).toBeTruthy();
-      } else {
-        // No servings info
-        expect(true).toBe(true);
-      }
-    } else {
-      expect(true).toBe(true);
-    }
+    await helpers.scaleRecipe(1);
+    await expect(scaleInput).toHaveValue('1');
   });
 
   test('should validate scale input', async ({ page }) => {
     const scaleInput = page.locator('#scale');
+    await expect(scaleInput).toHaveAttribute('max', '200');
 
-    if (await scaleInput.count() > 0) {
-      // Input has min="0.5" max="200" attributes
+    // Below min: clamped to 0.5
+    await helpers.scaleRecipe(0.1);
+    await expect(scaleInput).toHaveValue('0.5');
 
-      // Try value below min
-      await scaleInput.fill('0.1');
-      await scaleInput.dispatchEvent('change');
-      await page.waitForTimeout(500);
-
-      // Browser might allow but server should handle
-      const value = await scaleInput.inputValue();
-      expect(Number(value)).toBeGreaterThan(0);
-
-      // Try valid value
-      await scaleInput.fill('2');
-      await scaleInput.dispatchEvent('change');
-      await page.waitForTimeout(500);
-
-      const validValue = await scaleInput.inputValue();
-      expect(Number(validValue)).toBe(2);
-    } else {
-      expect(true).toBe(true);
-    }
+    await helpers.scaleRecipe(2);
+    await expect(scaleInput).toHaveValue('2');
   });
 
   test('should preserve scaling on page refresh', async ({ page }) => {
-    // Navigate with scale parameter first
-    if (page.url().includes('/recipe/')) {
-      const currentUrl = page.url().split('?')[0];
-      await page.goto(currentUrl + '?scale=2');
-      await page.waitForLoadState('networkidle');
+    await page.goto(NO_SERVINGS + '?scale=2');
+    await page.waitForLoadState('networkidle');
 
-      const scaleInput = page.locator('#scale');
-      if (await scaleInput.count() > 0) {
-        await expect(scaleInput).toHaveValue('2');
+    const scaleInput = page.locator('#scale');
+    await expect(scaleInput).toHaveValue('2');
 
-        // Refresh page
-        await page.reload();
-        await page.waitForLoadState('networkidle');
+    await page.reload();
+    await page.waitForLoadState('networkidle');
 
-        // Check scaling is preserved
-        expect(page.url()).toContain('scale=2');
-        await expect(scaleInput).toHaveValue('2');
-      }
-    } else {
-      expect(true).toBe(true);
-    }
+    expect(page.url()).toContain('scale=2');
+    await expect(scaleInput).toHaveValue('2');
+  });
+
+  test('should send the scale when adding to shopping list', async ({ page }) => {
+    await helpers.scaleRecipe(2);
+
+    let payload: { scale?: number } = {};
+    await page.route('**/api/shopping_list/add', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, body: '{}' });
+    });
+    await page.getByRole('button', { name: /Add to Shopping List/i }).click();
+
+    await expect.poll(() => payload.scale).toBe(2);
   });
 
   // Regression coverage for goToScale()'s guard against non-numeric input
   // and for building the scale URL from a JS string constant instead of an
   // HTML-escaped template literal (issue: recipe names with & or ' broke).
   test('should not navigate when the scale input is cleared', async ({ page }) => {
-    await page.goto('/recipe/Neapolitan%20Pizza');
-    await page.waitForLoadState('networkidle');
-
     const scaleInput = page.locator('#scale');
     await scaleInput.fill('');
     await scaleInput.press('Tab');
     await page.waitForTimeout(300);
 
     expect(page.url()).not.toContain('scale=');
-    expect(page.url()).toContain('/recipe/Neapolitan');
+    expect(page.url()).toContain('/recipe/Breakfast/Chocolate');
     await expect(scaleInput).toHaveValue('1');
   });
 
   test('should navigate to a safely encoded scale URL from the stepper button', async ({ page }) => {
-    await page.goto('/recipe/Neapolitan%20Pizza');
-    await page.waitForLoadState('networkidle');
-
-    const increaseButton = page.getByRole('button', { name: 'Increase scale' });
-    await increaseButton.click();
+    await page.getByRole('button', { name: 'Increase scale' }).click();
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toMatch(/\?scale=1\.5$/);
+  });
+});
+
+test.describe('Recipe Scaling by servings', () => {
+  let helpers: TestHelpers;
+
+  test.beforeEach(async ({ page }) => {
+    helpers = new TestHelpers(page);
+    await helpers.navigateTo(SERVES_SIX);
+  });
+
+  const mozzarella = (page: Page) => page.locator('.ingredient-row', { hasText: 'mozzarella' });
+
+  test('should start at the recipe servings', async ({ page }) => {
+    const servingsInput = page.locator('#servings');
+    await expect(servingsInput).toBeVisible();
+    await expect(servingsInput).toHaveValue('6');
+    await expect(servingsInput).not.toHaveAttribute('max');
+    await expect(page.locator('#scale')).toHaveCount(0);
+    await expect(page.locator('.metadata-servings')).toContainText('6');
+    await expect(mozzarella(page).first()).toContainText('100');
+  });
+
+  test('should scale quantities to the chosen servings', async ({ page }) => {
+    await helpers.setServings(3);
+
+    expect(page.url()).toMatch(/\?servings=3$/);
+    await expect(page.locator('#servings')).toHaveValue('3');
+    await expect(page.locator('.metadata-servings')).toContainText('3');
+    await expect(mozzarella(page).first()).toContainText('50');
+  });
+
+  test('should accept half a serving and clamp below it', async ({ page }) => {
+    await helpers.setServings(0.5);
+    await expect(page.locator('#servings')).toHaveValue('0.5');
+    await expect(page.locator('.metadata-servings')).toContainText('0.5');
+
+    await helpers.setServings(0.1);
+    await expect(page.locator('#servings')).toHaveValue('0.5');
+  });
+
+  test('should have no upper limit', async ({ page }) => {
+    await helpers.setServings(600);
+
+    expect(page.url()).toMatch(/\?servings=600$/);
+    await expect(page.locator('#servings')).toHaveValue('600');
+    await expect(mozzarella(page).first()).toContainText('10');
+  });
+
+  test('should step by half a serving from the buttons', async ({ page }) => {
+    await page.getByRole('button', { name: 'Increase servings' }).click();
+    await page.waitForLoadState('networkidle');
+    expect(page.url()).toMatch(/\?servings=6\.5$/);
+
+    await page.getByRole('button', { name: 'Decrease servings' }).click();
+    await page.waitForLoadState('networkidle');
+    expect(page.url()).toMatch(/\?servings=6$/);
+  });
+
+  test('should show a scale link as servings', async ({ page }) => {
+    await page.goto(SERVES_SIX + '?scale=0.5');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('#servings')).toHaveValue('3');
+    await expect(mozzarella(page).first()).toContainText('50');
+  });
+
+  test('should put the recipe servings back when cleared', async ({ page }) => {
+    const servingsInput = page.locator('#servings');
+    await servingsInput.fill('');
+    await servingsInput.press('Tab');
+    await page.waitForTimeout(300);
+
+    expect(page.url()).not.toContain('servings=');
+    await expect(servingsInput).toHaveValue('6');
+  });
+
+  test('should send the factor when adding to shopping list', async ({ page }) => {
+    await helpers.setServings(3);
+
+    let payload: { scale?: number } = {};
+    await page.route('**/api/shopping_list/add', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, body: '{}' });
+    });
+    await page.getByRole('button', { name: /Add to Shopping List/i }).click();
+
+    await expect.poll(() => payload.scale).toBe(0.5);
   });
 });

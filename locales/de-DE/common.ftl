@@ -141,4 +141,6 @@ aria-preferences = Einstellungen
 aria-dismiss = Schließen
 aria-decrease-scale = Skalierung verringern
 aria-increase-scale = Skalierung erhöhen
+aria-decrease-servings = Portionen verringern
+aria-increase-servings = Portionen erhöhen
 aria-close = Schließen

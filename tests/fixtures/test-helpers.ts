@@ -52,6 +52,21 @@ export class TestHelpers {
   }
 
   /**
+   * Scale a recipe that declares servings to a number of servings
+   */
+  async setServings(servings: number) {
+    const servingsInput = this.page.locator('#servings');
+    await Promise.all([
+      this.page.waitForEvent('framenavigated'),
+      servingsInput.evaluate((input: HTMLInputElement, val: string) => {
+        input.value = val;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }, servings.toString()),
+    ]);
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
    * Add ingredients to shopping list
    */
   async addToShoppingList() {

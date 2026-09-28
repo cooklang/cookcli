@@ -21,6 +21,7 @@ fn build(dir: &Utf8Path, recipe_name: &str) -> RecipeTemplate {
         recipe_path: recipe_name,
         aisle_path: None,
         scale: 1.0,
+        servings: None,
         lang: EN_US,
         static_mode: false,
         repo_url: None,

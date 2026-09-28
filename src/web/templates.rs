@@ -236,6 +236,14 @@ pub struct RecipesTemplate {
     pub viewer: Viewer,
 }
 
+/// The servings stepper of a recipe that declares a number of servings.
+pub struct ServingsScale {
+    /// The recipe's own `servings`.
+    pub base: u32,
+    /// The servings the page is scaled to.
+    pub chosen: f64,
+}
+
 #[derive(Template)]
 #[template(path = "recipe.html")]
 pub struct RecipeTemplate {
@@ -243,7 +251,11 @@ pub struct RecipeTemplate {
     pub recipe: RecipeData,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the quantities were scaled by.
     pub scale: f64,
+    /// Set when the recipe declares servings: the stepper then counts
+    /// servings instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub tags: Vec<String>,
     pub ingredients: Vec<IngredientData>,
     pub cookware: Vec<CookwareData>,

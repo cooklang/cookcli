@@ -37,11 +37,35 @@
                 {{ recipe.name }}
             </h1>
             {% if scale != 1.0 %}
+            {% match servings %}
+            {% when Some with (servings) %}
+            <div class="hidden print:block text-lg font-normal text-muted">{{ servings.chosen }} {{ tr.t("recipe-servings-label") }}</div>
+            {% when None %}
             <div class="hidden print:block text-lg font-normal text-muted">{{ tr.t("recipe-scale-label") }}: {{ scale }}x</div>
+            {% endmatch %}
             {% endif %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 {% if !static_mode %}
                 <div class="flex items-center">
+                    {% match servings %}
+                    {% when Some with (servings) %}
+                    {# The recipe declares servings: count servings, from half a
+                       serving up, with no upper bound. A menu's `?scale=` can
+                       still land below half a serving or between steps, so
+                       the field takes that the way the scale field does. #}
+                    <label for="servings" class="text-sm font-medium text-muted mr-2">{{ tr.t("label-servings") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-servings") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="servings"
+                               value="{{ servings.chosen }}"
+                               min="{% if servings.chosen < 0.5 %}{{ servings.chosen }}{% else %}0.5{% endif %}"
+                               step="any"
+                               data-base-servings="{{ servings.base }}"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-servings") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% when None %}
                     <label for="scale" class="text-sm font-medium text-muted mr-2">{{ tr.t("recipe-scale-label") }}:</label>
                     <div class="stepper">
                         <button type="button" aria-label="{{ tr.t("aria-decrease-scale") }}" onclick="adjustScale(-0.5)">&minus;</button>
@@ -57,6 +81,7 @@
                                onchange="goToScale(this.value)">
                         <button type="button" aria-label="{{ tr.t("aria-increase-scale") }}" onclick="adjustScale(0.5)">+</button>
                     </div>
+                    {% endmatch %}
                 </div>
                 {% if viewer.can_edit() %}
                 <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
@@ -371,7 +396,12 @@
 {% if !static_mode %}
 <script>
 async function addToShoppingList(event, recipePath) {
-    const scale = document.getElementById('scale').value;
+    // The servings stepper holds servings; the list wants the factor.
+    const scaleInput = document.getElementById(SCALE_PARAM);
+    let scale = parseFloat(scaleInput.value);
+    if (scaleInput.dataset.baseServings) {
+        scale /= parseFloat(scaleInput.dataset.baseServings);
+    }
     // Hide any previous error
     const existingError = document.getElementById('recipe-error-banner');
     if (existingError) existingError.remove();
@@ -380,7 +410,7 @@ async function addToShoppingList(event, recipePath) {
     const refCheckboxes = document.querySelectorAll('.ref-checkbox');
     let payload = {
         path: recipePath,
-        scale: parseFloat(scale)
+        scale: scale
     };
     if (refCheckboxes.length > 0) {
         payload.included_references = Array.from(refCheckboxes)
@@ -459,23 +489,34 @@ const SCALE_SCROLL_KEY = 'recipe-scale-scroll';
 // \uXXXX, so it survives the <script> context (Askama's HTML escaping
 // would not be decoded here the way it is inside an attribute).
 const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+// A recipe that declares servings has a servings stepper and `?servings=`
+// URLs; any other has the multiplier and `?scale=`. The stepper input's id
+// is the query parameter's name.
+{% match servings %}
+{% when Some with (servings) %}
+const SCALE_PARAM = 'servings';
+const DEFAULT_SCALE = {{ servings.chosen }};
+{% when None %}
+const SCALE_PARAM = 'scale';
 const DEFAULT_SCALE = {{ scale }};
+{% endmatch %}
 
 function goToScale(value) {
-    const input = document.getElementById('scale');
+    const input = document.getElementById(SCALE_PARAM);
     const n = parseFloat(value);
     if (!Number.isFinite(n)) {
-        // Cleared or non-numeric: put the current scale back, do not navigate.
+        // Cleared or non-numeric: put the current value back, do not navigate.
         input.value = DEFAULT_SCALE;
         return;
     }
     const min = parseFloat(input.min) || 0.5;
-    const max = parseFloat(input.max) || 200;
+    // The servings stepper has no max.
+    const max = input.max === '' ? Infinity : parseFloat(input.max);
     const clamped = Math.min(max, Math.max(min, n));
     try {
         sessionStorage.setItem(SCALE_SCROLL_KEY, window.location.pathname + '|' + window.scrollY);
     } catch (e) { /* private mode / storage disabled */ }
-    window.location.href = RECIPE_URL + '?scale=' + encodeURIComponent(clamped);
+    window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
 }
 
 // Only ever set immediately before a scale navigation, cleared as soon as it

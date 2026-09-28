@@ -145,4 +145,6 @@ aria-preferences = Preferences
 aria-dismiss = Dismiss
 aria-decrease-scale = Decrease scale
 aria-increase-scale = Increase scale
+aria-decrease-servings = Decrease servings
+aria-increase-servings = Increase servings
 aria-close = Close

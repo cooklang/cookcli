@@ -14,31 +14,36 @@ test.describe('Recipes opened from a menu', () => {
 
     await pancakes.click();
     await expect(page).toHaveURL(/\/recipe\/Breakfast\/Easy%20Pancakes\?scale=5$/);
-    await expect(page.locator('#scale')).toHaveValue('5');
+    // Easy Pancakes declares its servings, so x5 shows as 10 servings.
+    await expect(page.locator('#servings')).toHaveValue('10');
   });
 
   test('keep a factor below the stepper steps', async ({ page }) => {
-    // The whole menu at x0.25 makes `@./lamb-chops{}` x0.25.
-    await page.goto('/recipe/2 Day Plan.menu?scale=0.25');
+    // The whole menu at x0.1 makes `@./lamb-chops{}` x0.1: 0.4 of its 4
+    // servings, below the stepper's half a serving.
+    await page.goto('/recipe/2 Day Plan.menu?scale=0.1');
     await page.getByRole('link', { name: 'lamb-chops' }).first().click();
-    await expect(page).toHaveURL(/\/recipe\/lamb-chops\?scale=0\.25$/);
+    await expect(page).toHaveURL(/\/recipe\/lamb-chops\?scale=0\.1$/);
 
-    const scale = page.locator('#scale');
-    await expect(scale).toHaveValue('0.25');
-    expect(await scale.evaluate((input: HTMLInputElement) => input.checkValidity())).toBe(true);
+    const servings = page.locator('#servings');
+    await expect(servings).toHaveValue('0.4');
+    expect(await servings.evaluate((input: HTMLInputElement) => input.checkValidity())).toBe(true);
 
-    // − stops at the scale the page was opened at, rather than jumping up to 0.5.
+    // − stops at the servings the page was opened at, rather than jumping up to 0.5.
     await page.getByRole('button', { name: /decrease/i }).click();
-    await expect(scale).toHaveValue('0.25');
-    await expect(page).toHaveURL(/\?scale=0\.25$/);
+    await expect(servings).toHaveValue('0.4');
+    await expect(page).toHaveURL(/\?scale=0\.1$/);
 
     // + goes to the first step.
     await page.getByRole('button', { name: /increase/i }).click();
-    await expect(page).toHaveURL(/\?scale=0\.5$/);
+    await expect(page).toHaveURL(/\?servings=0\.5$/);
   });
 });
 
 test.describe('Recipe scale steps', () => {
+  // No `servings`, so the stepper is the plain multiplier.
+  const RECIPE = '/recipe/Breakfast/Chocolate%20Toast%20Delight';
+
   // A scale between steps, such as 1.667 from a menu, moves to the nearest
   // multiple of 0.5 in that direction; one on a step moves by the full step.
   const cases: Array<[string, string, RegExp | string, string]> = [
@@ -50,7 +55,7 @@ test.describe('Recipe scale steps', () => {
 
   for (const [name, from, button, to] of cases) {
     test(name, async ({ page }) => {
-      await page.goto(`/recipe/lamb-chops?scale=${from}`);
+      await page.goto(`${RECIPE}?scale=${from}`);
       await page.getByRole('button', { name: button }).click();
       await expect(page).toHaveURL(new RegExp(`\\?scale=${to.replace('.', '\\.')}$`));
       await expect(page.locator('#scale')).toHaveValue(to);
@@ -58,8 +63,18 @@ test.describe('Recipe scale steps', () => {
   }
 
   test('] from between steps keeps to the grid', async ({ page }) => {
-    await page.goto('/recipe/lamb-chops?scale=1.667');
+    await page.goto(`${RECIPE}?scale=1.667`);
     await page.locator('body').press(']');
     await expect(page).toHaveURL(/\?scale=2\.5$/);
+  });
+
+  // The same grid on a recipe that declares servings: lamb-chops serves 4.
+  test('servings between steps move onto the grid', async ({ page }) => {
+    // x1.667 of 4 servings is 6.67.
+    await page.goto('/recipe/lamb-chops?scale=1.667');
+    await expect(page.locator('#servings')).toHaveValue('6.67');
+    await page.getByRole('button', { name: /increase/i }).click();
+    await expect(page).toHaveURL(/\?servings=7$/);
+    await expect(page.locator('#servings')).toHaveValue('7');
   });
 });

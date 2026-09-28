@@ -181,6 +181,7 @@ fn random_recipe_handler(
 #[derive(Deserialize)]
 struct RecipeQuery {
     scale: Option<f64>,
+    servings: Option<f64>,
 }
 
 async fn recipe_page(
@@ -199,6 +200,7 @@ async fn recipe_page(
         recipe_path: &path,
         aisle_path: state.aisle_path.as_ref(),
         scale,
+        servings: query.servings,
         lang: lang.clone(),
         static_mode: false,
         repo_url: None,

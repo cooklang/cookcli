@@ -367,11 +367,13 @@
     // moves by exactly `delta`; one between steps, such as 1.667 from a menu,
     // stops at the nearest step in that direction: + gives 2, − gives 1.5.
     function adjustScale(delta) {
-        const scaleInput = document.getElementById('scale');
+        // A recipe that declares servings has a servings stepper instead.
+        const scaleInput = document.getElementById('scale') || document.getElementById('servings');
         if (!scaleInput) return;
 
         const min = parseFloat(scaleInput.min) || 0.5;
-        const max = parseFloat(scaleInput.max) || 200;
+        // The servings stepper has no max.
+        const max = scaleInput.max === '' ? Infinity : parseFloat(scaleInput.max);
 
         let newValue = parseFloat(scaleInput.value) + delta;
         if (!Number.isFinite(newValue)) newValue = min;
