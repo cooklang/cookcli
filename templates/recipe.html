@@ -48,9 +48,12 @@
                         <input type="number"
                                id="scale"
                                value="{{ scale }}"
-                               min="0.5"
+                               {#- A menu can open a recipe at any factor, such as 0.333 for one
+                                   serving of three: the field takes it rather than showing it as
+                                   invalid, and − stops there rather than jumping up to 0.5. #}
+                               min="{% if scale < 0.5 %}{{ scale }}{% else %}0.5{% endif %}"
                                max="200"
-                               step="0.5"
+                               step="any"
                                onchange="goToScale(this.value)">
                         <button type="button" aria-label="{{ tr.t("aria-increase-scale") }}" onclick="adjustScale(0.5)">+</button>
                     </div>

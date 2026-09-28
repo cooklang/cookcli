@@ -539,6 +539,40 @@ fn build_writes_menu_pages_without_dotmenu_suffix() {
     );
 }
 
+/// On the server, a menu links each recipe at the menu's factor
+/// (`?scale=5`). A static page cannot scale from a query string, so the
+/// export keeps plain `.html` links and only shows the factor.
+#[test]
+fn static_menu_links_carry_no_scale() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // `@./Breakfast/Easy Pancakes{10%servings}` of a 2-serving recipe.
+    let menu = std::fs::read_to_string(out.join("menu/2 Day Plan.html")).unwrap();
+    assert!(menu.contains("(×5)"), "the factor is still shown");
+    assert!(
+        menu.contains("/recipe/Breakfast/Easy Pancakes.html\""),
+        "the link is the plain static page"
+    );
+    assert!(
+        !menu.contains("?scale="),
+        "no query string in a static export"
+    );
+}
+
 #[test]
 fn static_output_omits_dynamic_ui() {
     let tmp = TempDir::new().unwrap();
