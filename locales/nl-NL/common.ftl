@@ -138,6 +138,10 @@ role-forbidden = Je account mag dit niet. Vraag wie deze server beheert om een a
 error-title = Er is iets misgegaan
 error-back-home = Terug naar recepten
 
+# Errors
+error-title = Er is iets misgegaan
+error-back-home = Terug naar recepten
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Thema wisselen
 aria-keyboard-shortcuts = Sneltoetsen

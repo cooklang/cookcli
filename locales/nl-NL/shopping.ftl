@@ -26,6 +26,7 @@ shopping-failed-to-generate = Boodschappenlijst kon niet worden gegenereerd
 shopping-failed-to-add = Toevoegen aan boodschappenlijst mislukt
 shopping-error = Fout
 shopping-print = Afdrukken
+shopping-include-in-list = Opnemen in boodschappenlijst
 shopping-copy = Kopiëren
 shopping-copied = Gekopieerd!
 shopping-copy-failed = Kopiëren mislukt

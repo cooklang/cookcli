@@ -138,6 +138,10 @@ role-forbidden = Votre compte ne permet pas de faire cela. Demandez un autre rô
 error-title = Une erreur s'est produite
 error-back-home = Retour aux recettes
 
+# Errors
+error-title = Une erreur s'est produite
+error-back-home = Retour aux recettes
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Changer de thème
 aria-keyboard-shortcuts = Raccourcis clavier

@@ -138,6 +138,10 @@ role-forbidden = Tu cuenta no puede hacer esto. Pide otro rol a quien administra
 error-title = Algo salió mal
 error-back-home = Volver a las recetas
 
+# Errors
+error-title = Algo salió mal
+error-back-home = Volver a las recetas
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Cambiar tema
 aria-keyboard-shortcuts = Atajos de teclado

@@ -138,6 +138,10 @@ role-forbidden = Zure kontuak ezin du hau egin. Eskatu beste rol bat zerbitzari 
 error-title = Zerbait gaizki joan da
 error-back-home = Itzuli errezetetara
 
+# Errors
+error-title = Zerbait gaizki joan da
+error-back-home = Itzuli errezetetara
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Gaia aldatu
 aria-keyboard-shortcuts = Teklatu-lasterbideak
