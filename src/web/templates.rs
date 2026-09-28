@@ -561,7 +561,11 @@ pub struct MenuTemplate {
     pub name: String,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the menu was scaled by.
     pub scale: f64,
+    /// Set when the menu declares servings: the stepper then counts servings
+    /// instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
     pub image_path: Option<String>,
@@ -825,6 +829,9 @@ pub enum MenuSectionItem {
     RecipeReference {
         name: String,
         scale: Option<f64>,
+        /// `scale` as servings of the referenced recipe, when it declares
+        /// them: its link then carries `?servings=` instead of `?scale=`.
+        servings: Option<f64>,
     },
     Ingredient {
         name: String,

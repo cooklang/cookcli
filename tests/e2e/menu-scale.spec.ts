@@ -2,19 +2,56 @@ import { test, expect } from '@playwright/test';
 
 // A menu links each recipe at the factor it shows next to the link (#560).
 
+test.describe('Menu servings', () => {
+  test('a menu that declares servings counts servings', async ({ page }) => {
+    // `2 Day Plan` serves 2.
+    await page.goto('/recipe/2 Day Plan.menu');
+    const servings = page.locator('#servings');
+    await expect(servings).toHaveValue('2');
+    await expect(page.locator('#scale')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Increase servings' }).click();
+    await expect(page).toHaveURL(/\?servings=2\.5$/);
+    await expect(servings).toHaveValue('2.5');
+  });
+
+  test('the menu servings scale the recipe links', async ({ page }) => {
+    // 4 servings of a 2-serving menu: Easy Pancakes{10%servings} gives 20.
+    await page.goto('/recipe/2 Day Plan.menu?servings=4');
+    await expect(page.getByRole('link', { name: 'Breakfast › Easy Pancakes' }).first())
+      .toHaveAttribute('href', /\?servings=20$/);
+    // lamb-chops{} is x2 of its 4 servings.
+    await expect(page.getByRole('link', { name: 'lamb-chops' }).first())
+      .toHaveAttribute('href', /\?servings=8$/);
+  });
+
+  test('add to shopping list sends the menu factor', async ({ page }) => {
+    await page.goto('/recipe/2 Day Plan.menu?servings=4');
+
+    let payload: { scale?: number } = {};
+    await page.route('**/api/shopping_list/add_menu', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, body: '{}' });
+    });
+    await page.getByRole('button', { name: /Add All to Shopping List/i }).click();
+
+    await expect.poll(() => payload.scale).toBe(2);
+  });
+});
+
 test.describe('Recipes opened from a menu', () => {
   test('open at the scale the menu asks for', async ({ page }) => {
     await page.goto('/recipe/2 Day Plan.menu');
-    // `@./Breakfast/Easy Pancakes{10%servings}` of a 2-serving recipe.
+    // `@./Breakfast/Easy Pancakes{10%servings}` of a 2-serving recipe: the
+    // recipe declares servings, so the link carries them rather than x5.
     const pancakes = page.getByRole('link', { name: 'Breakfast › Easy Pancakes' }).first();
-    await expect(pancakes).toHaveAttribute('href', /\/recipe\/Breakfast\/Easy Pancakes\?scale=5$/);
+    await expect(pancakes).toHaveAttribute('href', /\/recipe\/Breakfast\/Easy Pancakes\?servings=10$/);
     // `@./lamb-chops{}` is x1: no query string.
     await expect(page.getByRole('link', { name: 'lamb-chops' }).first())
       .toHaveAttribute('href', /\/recipe\/lamb-chops$/);
 
     await pancakes.click();
-    await expect(page).toHaveURL(/\/recipe\/Breakfast\/Easy%20Pancakes\?scale=5$/);
-    // Easy Pancakes declares its servings, so x5 shows as 10 servings.
+    await expect(page).toHaveURL(/\/recipe\/Breakfast\/Easy%20Pancakes\?servings=10$/);
     await expect(page.locator('#servings')).toHaveValue('10');
   });
 
@@ -23,7 +60,7 @@ test.describe('Recipes opened from a menu', () => {
     // servings, below the stepper's half a serving.
     await page.goto('/recipe/2 Day Plan.menu?scale=0.1');
     await page.getByRole('link', { name: 'lamb-chops' }).first().click();
-    await expect(page).toHaveURL(/\/recipe\/lamb-chops\?scale=0\.1$/);
+    await expect(page).toHaveURL(/\/recipe\/lamb-chops\?servings=0\.4$/);
 
     const servings = page.locator('#servings');
     await expect(servings).toHaveValue('0.4');
@@ -32,7 +69,7 @@ test.describe('Recipes opened from a menu', () => {
     // − stops at the servings the page was opened at, rather than jumping up to 0.5.
     await page.getByRole('button', { name: /decrease/i }).click();
     await expect(servings).toHaveValue('0.4');
-    await expect(page).toHaveURL(/\?scale=0\.1$/);
+    await expect(page).toHaveURL(/\?servings=0\.4$/);
 
     // + goes to the first step.
     await page.getByRole('button', { name: /increase/i }).click();

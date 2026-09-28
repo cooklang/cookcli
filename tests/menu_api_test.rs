@@ -304,12 +304,13 @@ async fn add_menu_and_the_menu_api_report_identical_factors() {
 async fn html_menu_page_agrees_with_the_menu_api() {
     let server = start_server().await;
 
-    // Every reference link with its `?scale=` (if any), paired with the badge
-    // following it (if any). The badge's classes are deliberately not pinned
-    // — this test is about the factors, and hard-coding the styling made a
-    // purely visual change to menu.html fail here.
+    // Every reference link with its `?scale=` or `?servings=` (if any), paired
+    // with the badge following it (if any). The badge's classes are
+    // deliberately not pinned — this test is about the factors, and
+    // hard-coding the styling made a purely visual change to menu.html fail
+    // here.
     let re = regex::Regex::new(
-        r#"/recipe/(?:[^"?]*?)(?:\?scale=([0-9.]+))?"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
+        r#"/recipe/([^"?]*?)(?:\?(scale|servings)=([0-9.]+))?"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
     )
     .unwrap();
 
@@ -329,7 +330,24 @@ async fn html_menu_page_agrees_with_the_menu_api() {
         let factor = |m: Option<regex::Match>| m.map_or(1.0, |m| m.as_str().parse().unwrap());
         let (linked, rendered): (Vec<f64>, Vec<f64>) = re
             .captures_iter(&html)
-            .map(|c| (factor(c.get(1)), factor(c.get(2))))
+            .map(|c| {
+                let recipe = &c[1];
+                let value = factor(c.get(3));
+                // A recipe that declares servings is linked by its servings,
+                // any other by its factor.
+                let linked = match c.get(2).map(|m| m.as_str()) {
+                    Some("servings") => {
+                        assert_eq!(recipe, "Servings Recipe", "only it declares servings");
+                        value / 2.0
+                    }
+                    Some(_) => {
+                        assert_ne!(recipe, "Servings Recipe", "linked by its servings");
+                        value
+                    }
+                    None => 1.0,
+                };
+                (linked, factor(c.get(4)))
+            })
             .unzip();
 
         assert_eq!(rendered, expected, "HTML menu page at scale {scale}");
