@@ -403,6 +403,11 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     container: ubuntu:22.04
+    # Container steps otherwise run under `sh`, which is dash here and has no
+    # `pipefail`.
+    defaults:
+      run:
+        shell: bash
     # As for github_build: upload_artifacts is what flips the release out of
     # draft, so a failed package build must not strand the release.
     continue-on-error: true

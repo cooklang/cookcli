@@ -19,6 +19,12 @@ env:
 permissions:
   contents: read
 
+# Steps in a `container:` job run under `sh`, which is dash on Debian and
+# Ubuntu and has no `pipefail`.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
