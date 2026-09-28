@@ -520,14 +520,14 @@
         color: var(--text-muted);
     }
 
-    /* The servings a scaled recipe was written for: accent-tinted so it is
-       noticed, and a link back to them. */
-    .metadata-original-servings {
+    /* What a scaled recipe was written for (its servings, or x1): accent-
+       tinted so it is noticed, and a link back to the original. */
+    .metadata-original {
         background: var(--accent-soft);
         border-color: transparent;
         color: var(--accent-ink);
     }
-    .metadata-original-servings:hover {
+    .metadata-original:hover {
         text-decoration: underline;
     }
 

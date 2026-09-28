@@ -25,6 +25,8 @@ recipe-written-for =
        *[other] Written for { $count } servings
     }
 recipe-written-for-hint = Quantities are scaled from the original recipe. Cooking times, pan sizes and seasoning may need adjusting. Select to go back to the original servings.
+recipe-scaled-from-original = ×{ $factor } of the original recipe
+recipe-scaled-from-original-hint = Quantities are scaled from the original recipe. Cooking times, pan sizes and seasoning may need adjusting. Select to go back to the original recipe.
 recipe-print = Print Recipe
 recipe-added = Added!
 recipe-main-section = Main

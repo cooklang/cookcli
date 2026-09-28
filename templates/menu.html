@@ -118,10 +118,17 @@
                 {% match servings.original_servings() %}
                 {% when Some with (count) %}
                 <a href="{{ prefix }}/recipe/{{ recipe_path }}"
-                   class="metadata-pill metadata-original-servings"
+                   class="metadata-pill metadata-original metadata-original-servings"
                    title="{{ tr.t("recipe-written-for-hint") }}">📖 {{ tr.tn("recipe-written-for", count) }}</a>
                 {% when None %}
                 {% endmatch %}
+                {% endif %}
+                {#- Scaled by the multiplier (no servings to count): the same
+                    reminder, as a factor of the original. #}
+                {% if servings.is_none() && scale != 1.0 %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
                 {% endif %}
 
                 {% match metadata.time %}
@@ -167,6 +174,13 @@
             </div>
 
             {% when None %}
+            {% if scale != 1.0 %}
+            <div id="metadata-container" class="flex flex-wrap gap-3">
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+            </div>
+            {% endif %}
             {% endmatch %}
         </div>
     </div>

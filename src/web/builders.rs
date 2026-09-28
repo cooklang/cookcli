@@ -1533,6 +1533,28 @@ mod servings_tests {
         assert!(!html.contains("metadata-original-servings"), "no servings");
     }
 
+    /// Without servings to count, a scaled recipe gives the same reminder as
+    /// a factor of the original, whether or not it has any metadata.
+    #[test]
+    fn a_recipe_scaled_by_the_multiplier_says_so() {
+        let html = page(NO_SERVINGS, 1.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original"), "unscaled");
+
+        // No metadata at all: the badge gets a row of its own.
+        let html = page(NO_SERVINGS, 1.5, None).render().unwrap();
+        assert!(html.contains("📖 ×1.5 of the original recipe"), "{html}");
+        assert!(html.contains(r#"<a href="/recipe/Soup""#));
+
+        let titled = "---\ntitle: Soup\n---\n\nAdd @flour{200%g}.\n";
+        let html = page(titled, 0.333333, None).render().unwrap();
+        assert_eq!(html.matches("📖 ×0.333 of the original recipe").count(), 1);
+
+        // A recipe with servings says what it was written for instead.
+        let html = page(SERVES_FOUR, 1.5, None).render().unwrap();
+        assert!(!html.contains("metadata-original-scale"));
+        assert!(html.contains("metadata-original-servings"));
+    }
+
     /// The half-a-serving floor is the stepper's; a menu can link below it.
     #[test]
     fn servings_below_the_stepper_floor_are_taken_as_is() {
@@ -1661,6 +1683,7 @@ mod servings_tests {
         assert_eq!(template.scale, 2.0, "?servings= is ignored");
         assert!(template.servings.is_none());
         assert!(html.contains(r#"id="scale""#));
+        assert!(html.contains("📖 ×2 of the original recipe"));
     }
 
     /// A recipe that declares servings is linked by its servings, as its page

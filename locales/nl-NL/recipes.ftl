@@ -25,6 +25,8 @@ recipe-written-for =
        *[other] Geschreven voor { $count } porties
     }
 recipe-written-for-hint = De hoeveelheden zijn omgerekend vanuit het originele recept. Bereidingstijden, vormgroottes en kruiden moeten mogelijk worden aangepast. Selecteer om terug te gaan naar de oorspronkelijke porties.
+recipe-scaled-from-original = ×{ $factor } van het originele recept
+recipe-scaled-from-original-hint = De hoeveelheden zijn omgerekend vanuit het originele recept. Bereidingstijden, vormgroottes en kruiden moeten mogelijk worden aangepast. Selecteer om terug te gaan naar het originele recept.
 recipe-print = Recept afdrukken
 recipe-added = Toegevoegd!
 recipe-main-section = Hoofdgedeelte

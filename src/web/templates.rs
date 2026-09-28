@@ -32,6 +32,17 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
+    /// Translate a message that shows a scale factor, passed as `$factor` in
+    /// the short form the menu badges use: `1.5`, `0.333`.
+    pub fn tf(&self, key: &str, factor: &f64) -> String {
+        let factor = filters::scale_factor(factor).unwrap_or_else(|_| factor.to_string());
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("factor"),
+            fluent::FluentValue::from(factor),
+        )]);
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }

@@ -25,6 +25,8 @@ recipe-written-for =
        *[other] Escrita para { $count } porciones
     }
 recipe-written-for-hint = Las cantidades se han recalculado a partir de la receta original. Los tiempos de cocción, el tamaño de los moldes y el condimento pueden necesitar ajustes. Selecciona para volver a las porciones originales.
+recipe-scaled-from-original = ×{ $factor } de la receta original
+recipe-scaled-from-original-hint = Las cantidades se han recalculado a partir de la receta original. Los tiempos de cocción, el tamaño de los moldes y el condimento pueden necesitar ajustes. Selecciona para volver a la receta original.
 recipe-print = Imprimir receta
 recipe-added = ¡Agregado!
 recipe-main-section = Principal

@@ -25,6 +25,8 @@ recipe-written-for =
        *[other] Skrivet för { $count } portioner
     }
 recipe-written-for-hint = Mängderna är omräknade från originalreceptet. Tillagningstider, formstorlekar och kryddning kan behöva justeras. Välj för att gå tillbaka till de ursprungliga portionerna.
+recipe-scaled-from-original = ×{ $factor } av originalreceptet
+recipe-scaled-from-original-hint = Mängderna är omräknade från originalreceptet. Tillagningstider, formstorlekar och kryddning kan behöva justeras. Välj för att gå tillbaka till originalreceptet.
 recipe-print = Skruv ut recept
 recipe-added = Tillagd!
 recipe-main-section = Huvud

@@ -62,6 +62,21 @@ test.describe('Recipe Scaling', () => {
     await expect(scaleInput).toHaveValue('1');
   });
 
+  test('should say a scaled recipe is a multiple of the original', async ({ page }) => {
+    const original = page.locator('.metadata-original-scale');
+    await expect(original).toHaveCount(0);
+
+    await helpers.scaleRecipe(2);
+    await expect(original).toHaveText(/×2 of the original recipe/);
+
+    // It links back to the original recipe.
+    await original.click();
+    await page.waitForLoadState('networkidle');
+    expect(page.url()).not.toContain('?');
+    await expect(page.locator('#scale')).toHaveValue('1');
+    await expect(original).toHaveCount(0);
+  });
+
   test('should validate scale input', async ({ page }) => {
     const scaleInput = page.locator('#scale');
     await expect(scaleInput).toHaveAttribute('max', '200');

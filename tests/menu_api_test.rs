@@ -330,6 +330,9 @@ async fn html_menu_page_agrees_with_the_menu_api() {
         let factor = |m: Option<regex::Match>| m.map_or(1.0, |m| m.as_str().parse().unwrap());
         let (linked, rendered): (Vec<f64>, Vec<f64>) = re
             .captures_iter(&html)
+            // A scaled menu also links to itself, unscaled, from its
+            // "x2 of the original" badge; that is not a reference.
+            .filter(|c| &c[1] != "Plan.menu")
             .map(|c| {
                 let recipe = &c[1];
                 let value = factor(c.get(3));
