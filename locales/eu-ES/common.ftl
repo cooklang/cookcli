@@ -150,4 +150,6 @@ aria-preferences = Hobespenak
 aria-dismiss = Itxi
 aria-decrease-scale = Eskala txikitu
 aria-increase-scale = Eskala handitu
+aria-decrease-servings = Anoak gutxitu
+aria-increase-servings = Anoak gehitu
 aria-close = Itxi

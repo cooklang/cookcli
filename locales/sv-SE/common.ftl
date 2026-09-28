@@ -146,4 +146,6 @@ aria-preferences = Inställningar
 aria-dismiss = Stäng
 aria-decrease-scale = Minska skala
 aria-increase-scale = Öka skala
+aria-decrease-servings = Minska portioner
+aria-increase-servings = Öka portioner
 aria-close = Stäng

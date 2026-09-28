@@ -41,6 +41,23 @@
             {% if !static_mode %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 <div class="flex items-center">
+                    {% match servings %}
+                    {% when Some with (servings) %}
+                    {# The menu declares servings: count servings, as the recipe
+                       page does. #}
+                    <label for="servings" class="text-sm font-medium text-muted mr-2">{{ tr.t("label-servings") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-servings") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="servings"
+                               value="{{ servings.chosen }}"
+                               min="{% if servings.chosen < 0.5 %}{{ servings.chosen }}{% else %}0.5{% endif %}"
+                               step="any"
+                               data-base-servings="{{ servings.base }}"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-servings") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% when None %}
                     <label for="scale" class="text-sm font-medium text-muted mr-2">{{ tr.t("recipe-scale-label") }}:</label>
                     <div class="stepper">
                         <button type="button" aria-label="{{ tr.t("aria-decrease-scale") }}" onclick="adjustScale(-0.5)">&minus;</button>
@@ -53,6 +70,7 @@
                                onchange="goToScale(this.value)">
                         <button type="button" aria-label="{{ tr.t("aria-increase-scale") }}" onclick="adjustScale(0.5)">+</button>
                     </div>
+                    {% endmatch %}
                 </div>
                 {% if viewer.can_edit_recipes() %}
                 <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
@@ -95,6 +113,25 @@
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} {{ tr.t("recipe-servings-label") }}</span>
                 {% when None %}
                 {% endmatch %}
+                {#- Scaled away from the servings it was written for: say so, since
+                    times, pan sizes and seasoning do not always follow the
+                    quantities. Links back to the original servings. #}
+                {% if let Some(servings) = servings %}
+                {% match servings.original_servings() %}
+                {% when Some with (count) %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-servings"
+                   title="{{ tr.t("recipe-written-for-hint") }}">📖 {{ tr.tn("recipe-written-for", count) }}</a>
+                {% when None %}
+                {% endmatch %}
+                {% endif %}
+                {#- Scaled by the multiplier (no servings to count): the same
+                    reminder, as a factor of the original. #}
+                {% if servings.is_none() && scale != 1.0 %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+                {% endif %}
 
                 {% match metadata.time %}
                 {% when Some with (time) %}
@@ -139,6 +176,13 @@
             </div>
 
             {% when None %}
+            {% if scale != 1.0 %}
+            <div id="metadata-container" class="flex flex-wrap gap-3">
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+            </div>
+            {% endif %}
             {% endmatch %}
         </div>
     </div>
@@ -173,9 +217,9 @@
                             <!-- Single non-text item -->
                             <div class="pl-6 flex items-baseline gap-x-2">
                                 {% match line[0] %}
-                                {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
+                                {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
                                     <span class="inline-flex items-center gap-1">
-                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
                                            class="text-info font-medium hover:underline">
                                             {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                         </a>
@@ -213,9 +257,9 @@
                             {% when crate::web::templates::MenuSectionItem::Text with (text) %}
                                 <span class="text-text">{{ text }}</span>
 
-                            {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
+                            {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
                                 <span class="inline-flex items-center gap-1">
-                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
                                        class="text-info font-medium hover:underline">
                                         {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                     </a>
@@ -271,20 +315,31 @@ function escHtml(s) {
 // |json puts the path in a JS string literal with <, >, & escaped as
 // \uXXXX, so it survives the <script> context.
 const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+// A menu that declares servings has a servings stepper and `?servings=`
+// URLs; any other has the multiplier and `?scale=`. The stepper input's id
+// is the query parameter's name.
+{% match servings %}
+{% when Some with (servings) %}
+const SCALE_PARAM = 'servings';
+const DEFAULT_SCALE = {{ servings.chosen }};
+{% when None %}
+const SCALE_PARAM = 'scale';
 const DEFAULT_SCALE = {{ scale }};
+{% endmatch %}
 
 function goToScale(value) {
-    const input = document.getElementById('scale');
+    const input = document.getElementById(SCALE_PARAM);
     const n = parseFloat(value);
     if (!Number.isFinite(n)) {
-        // Cleared or non-numeric: put the current scale back, do not navigate.
+        // Cleared or non-numeric: put the current value back, do not navigate.
         input.value = DEFAULT_SCALE;
         return;
     }
     const min = parseFloat(input.min) || 0.5;
-    const max = parseFloat(input.max) || 200;
+    // The servings stepper has no max.
+    const max = input.max === '' ? Infinity : parseFloat(input.max);
     const clamped = Math.min(max, Math.max(min, n));
-    window.location.href = RECIPE_URL + '?scale=' + encodeURIComponent(clamped);
+    window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
 }
 
 async function addToShoppingList(event, recipePath) {
@@ -293,7 +348,12 @@ async function addToShoppingList(event, recipePath) {
     const originalText = button.innerHTML;
 
     try {
-        const scale = document.getElementById('scale')?.value || 1;
+        // The servings stepper holds servings; the list wants the factor.
+        const scaleInput = document.getElementById(SCALE_PARAM);
+        let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
+        if (scaleInput && scaleInput.dataset.baseServings) {
+            scale /= parseFloat(scaleInput.dataset.baseServings);
+        }
         const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
             method: 'POST',
             headers: {
@@ -301,7 +361,7 @@ async function addToShoppingList(event, recipePath) {
             },
             body: JSON.stringify({
                 path: recipePath,
-                scale: parseFloat(scale)
+                scale: scale
             })
         });
 

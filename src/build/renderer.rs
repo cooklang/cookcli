@@ -96,6 +96,7 @@ pub fn render_recipe(
         recipe_path: trimmed,
         aisle_path,
         scale: 1.0,
+        servings: None,
         lang: lang.clone(),
         static_mode: true,
         repo_url: repo_url.map(String::from),

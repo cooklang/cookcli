@@ -46,6 +46,14 @@ use tracing::warn;
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
+    let mut recipe = parse_unscaled_recipe_from_entry(entry)?;
+    recipe.scale(scaling_factor, PARSER.converter());
+    Ok(Arc::new(recipe))
+}
+
+/// Parse a Recipe from a RecipeEntry without scaling it, for callers that
+/// work out the factor from the recipe itself (its `servings`) first.
+pub fn parse_unscaled_recipe_from_entry(entry: &RecipeEntry) -> Result<Recipe> {
     let content = entry.content().context("Failed to read recipe content")?;
     let parsed = PARSER.parse(&content);
 
@@ -77,11 +85,8 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
         ));
     }
 
-    let (mut recipe, _warnings) = parsed.into_result().expect("already checked for errors");
-
-    // Scale the recipe
-    recipe.scale(scaling_factor, PARSER.converter());
-    Ok(Arc::new(recipe))
+    let (recipe, _warnings) = parsed.into_result().expect("already checked for errors");
+    Ok(recipe)
 }
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>

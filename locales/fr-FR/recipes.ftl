@@ -19,6 +19,14 @@ recipe-add-to-shopping = Ajouter à la liste de courses
 recipe-add-all-to-shopping = Tout ajouter à la liste de courses
 recipe-scale-label = Échelle
 recipe-servings-label = portions
+recipe-written-for =
+    { $count ->
+        [one] Prévue pour { $count } portion
+       *[other] Prévue pour { $count } portions
+    }
+recipe-written-for-hint = Les quantités sont recalculées à partir de la recette d'origine. Les temps de cuisson, la taille des moules et l'assaisonnement peuvent demander un ajustement. Sélectionner pour revenir aux portions d'origine.
+recipe-scaled-from-original = ×{ $factor } de la recette d'origine
+recipe-scaled-from-original-hint = Les quantités sont recalculées à partir de la recette d'origine. Les temps de cuisson, la taille des moules et l'assaisonnement peuvent demander un ajustement. Sélectionner pour revenir à la recette d'origine.
 recipe-print = Imprimer la recette
 recipe-added = Ajouté !
 recipe-main-section = Principal

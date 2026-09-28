@@ -32,6 +32,17 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
+    /// Translate a message that shows a scale factor, passed as `$factor` in
+    /// the short form the menu badges use: `1.5`, `0.333`.
+    pub fn tf(&self, key: &str, factor: &f64) -> String {
+        let factor = filters::scale_factor(factor).unwrap_or_else(|_| factor.to_string());
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("factor"),
+            fluent::FluentValue::from(factor),
+        )]);
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
@@ -236,6 +247,23 @@ pub struct RecipesTemplate {
     pub viewer: Viewer,
 }
 
+/// The servings stepper of a recipe that declares a number of servings.
+pub struct ServingsScale {
+    /// The recipe's own `servings`.
+    pub base: u32,
+    /// The servings the page is scaled to.
+    pub chosen: f64,
+}
+
+impl ServingsScale {
+    /// The servings the recipe was written for, when the page is scaled away
+    /// from them: times, pan sizes and seasoning do not always scale with the
+    /// quantities, so the page says what the author wrote it for.
+    pub fn original_servings(&self) -> Option<usize> {
+        (self.chosen != f64::from(self.base)).then_some(self.base as usize)
+    }
+}
+
 #[derive(Template)]
 #[template(path = "recipe.html")]
 pub struct RecipeTemplate {
@@ -243,7 +271,11 @@ pub struct RecipeTemplate {
     pub recipe: RecipeData,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the quantities were scaled by.
     pub scale: f64,
+    /// Set when the recipe declares servings: the stepper then counts
+    /// servings instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub tags: Vec<String>,
     pub ingredients: Vec<IngredientData>,
     pub cookware: Vec<CookwareData>,
@@ -549,7 +581,11 @@ pub struct MenuTemplate {
     pub name: String,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the menu was scaled by.
     pub scale: f64,
+    /// Set when the menu declares servings: the stepper then counts servings
+    /// instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
     pub image_path: Option<String>,
@@ -813,6 +849,9 @@ pub enum MenuSectionItem {
     RecipeReference {
         name: String,
         scale: Option<f64>,
+        /// `scale` as servings of the referenced recipe, when it declares
+        /// them: its link then carries `?servings=` instead of `?scale=`.
+        servings: Option<f64>,
     },
     Ingredient {
         name: String,

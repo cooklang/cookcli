@@ -520,6 +520,17 @@
         color: var(--text-muted);
     }
 
+    /* What a scaled recipe was written for (its servings, or x1): accent-
+       tinted so it is noticed, and a link back to the original. */
+    .metadata-original {
+        background: var(--accent-soft);
+        border-color: transparent;
+        color: var(--accent-ink);
+    }
+    .metadata-original:hover {
+        text-decoration: underline;
+    }
+
     .metadata-pill svg {
         width: 1rem;
         height: 1rem;

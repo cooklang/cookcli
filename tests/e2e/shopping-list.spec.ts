@@ -218,11 +218,11 @@ test.describe('Shopping List', () => {
     await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
     await page.waitForLoadState('networkidle');
 
-    // Check if scale input exists
-    const scaleInput = page.locator('#scale');
-    if (await scaleInput.count() > 0) {
-      // Scale recipe
-      await helpers.scaleRecipe(2);
+    // Easy Pancakes declares servings, so it has a servings stepper
+    const servingsInput = page.locator('#servings');
+    if (await servingsInput.count() > 0) {
+      // Double the recipe's 2 servings
+      await helpers.setServings(4);
 
       // Add to shopping list
       const addButton = page.getByRole('button', { name: /Add to Shopping List/i });

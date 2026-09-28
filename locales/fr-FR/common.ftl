@@ -150,4 +150,6 @@ aria-preferences = Préférences
 aria-dismiss = Fermer
 aria-decrease-scale = Réduire l'échelle
 aria-increase-scale = Augmenter l'échelle
+aria-decrease-servings = Réduire les portions
+aria-increase-servings = Augmenter les portions
 aria-close = Fermer

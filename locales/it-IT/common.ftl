@@ -146,4 +146,6 @@ aria-preferences = Preferenze
 aria-dismiss = Ignora
 aria-decrease-scale = Riduci scala
 aria-increase-scale = Aumenta scala
+aria-decrease-servings = Riduci porzioni
+aria-increase-servings = Aumenta porzioni
 aria-close = Chiudi
