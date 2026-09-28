@@ -18,6 +18,10 @@ env:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rpm:
     name: Build RPM (${{ matrix.arch }})
@@ -30,6 +34,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     container: fedora:latest
     steps:
       # actions/checkout needs git, so the tools come first. Rust comes from
