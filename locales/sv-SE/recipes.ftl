@@ -19,6 +19,12 @@ recipe-add-to-shopping = Lägg till handlingslistan
 recipe-add-all-to-shopping = Lägg allt till handlingslistan
 recipe-scale-label = Skala
 recipe-servings-label = portioner
+recipe-written-for =
+    { $count ->
+        [one] Skrivet för { $count } portion
+       *[other] Skrivet för { $count } portioner
+    }
+recipe-written-for-hint = Mängderna är omräknade från originalreceptet. Tillagningstider, formstorlekar och kryddning kan behöva justeras. Välj för att gå tillbaka till de ursprungliga portionerna.
 recipe-print = Skruv ut recept
 recipe-added = Tillagd!
 recipe-main-section = Huvud

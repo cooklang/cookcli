@@ -111,6 +111,18 @@
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} {{ tr.t("recipe-servings-label") }}</span>
                 {% when None %}
                 {% endmatch %}
+                {#- Scaled away from the servings it was written for: say so, since
+                    times, pan sizes and seasoning do not always follow the
+                    quantities. Links back to the original servings. #}
+                {% if let Some(servings) = servings %}
+                {% match servings.original_servings() %}
+                {% when Some with (count) %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original-servings"
+                   title="{{ tr.t("recipe-written-for-hint") }}">📖 {{ tr.tn("recipe-written-for", count) }}</a>
+                {% when None %}
+                {% endmatch %}
+                {% endif %}
 
                 {% match metadata.time %}
                 {% when Some with (time) %}

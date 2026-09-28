@@ -244,6 +244,15 @@ pub struct ServingsScale {
     pub chosen: f64,
 }
 
+impl ServingsScale {
+    /// The servings the recipe was written for, when the page is scaled away
+    /// from them: times, pan sizes and seasoning do not always scale with the
+    /// quantities, so the page says what the author wrote it for.
+    pub fn original_servings(&self) -> Option<usize> {
+        (self.chosen != f64::from(self.base)).then_some(self.base as usize)
+    }
+}
+
 #[derive(Template)]
 #[template(path = "recipe.html")]
 pub struct RecipeTemplate {

@@ -19,6 +19,12 @@ recipe-add-to-shopping = Toevoegen aan boodschappenlijst
 recipe-add-all-to-shopping = Alles toevoegen aan boodschappenlijst
 recipe-scale-label = Schaal
 recipe-servings-label = porties
+recipe-written-for =
+    { $count ->
+        [one] Geschreven voor { $count } portie
+       *[other] Geschreven voor { $count } porties
+    }
+recipe-written-for-hint = De hoeveelheden zijn omgerekend vanuit het originele recept. Bereidingstijden, vormgroottes en kruiden moeten mogelijk worden aangepast. Selecteer om terug te gaan naar de oorspronkelijke porties.
 recipe-print = Recept afdrukken
 recipe-added = Toegevoegd!
 recipe-main-section = Hoofdgedeelte

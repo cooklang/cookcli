@@ -1513,6 +1513,26 @@ mod servings_tests {
         assert_eq!(page(SERVES_FOUR, 1.0, Some(1000.0)).scale, 250.0);
     }
 
+    /// Scaled away from its own servings, the page says what the recipe was
+    /// written for, since times and pan sizes do not always scale, and links
+    /// back to it.
+    #[test]
+    fn a_scaled_recipe_says_what_it_was_written_for() {
+        let html = page(SERVES_FOUR, 1.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original-servings"), "unscaled");
+
+        let html = page(SERVES_FOUR, 1.0, Some(6.0)).render().unwrap();
+        assert!(html.contains("📖 Written for 4 servings"), "{html}");
+        assert!(html.contains(r#"<a href="/recipe/Soup""#));
+
+        let one = "---\nservings: 1\n---\n\nAdd @flour{200%g}.\n";
+        let html = page(one, 2.0, None).render().unwrap();
+        assert!(html.contains("📖 Written for 1 serving<"));
+
+        let html = page(NO_SERVINGS, 2.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original-servings"), "no servings");
+    }
+
     /// The half-a-serving floor is the stepper's; a menu can link below it.
     #[test]
     fn servings_below_the_stepper_floor_are_taken_as_is() {
@@ -1627,9 +1647,12 @@ mod servings_tests {
         assert!(html.contains(r#"id="servings""#));
         assert!(!html.contains(r#"id="scale""#));
 
+        assert!(!html.contains("metadata-original-servings"));
+
         let (template, html) = menu_html("servings: 2\n", 1.0, Some(4.0));
         assert_eq!(template.scale, 2.0);
         assert!(html.contains("👥 4 servings"));
+        assert!(html.contains("📖 Written for 2 servings"));
     }
 
     #[test]

@@ -152,6 +152,21 @@ test.describe('Recipe Scaling by servings', () => {
     await expect(mozzarella(page).first()).toContainText('50');
   });
 
+  test('should say what a scaled recipe was written for', async ({ page }) => {
+    const original = page.locator('.metadata-original-servings');
+    await expect(original).toHaveCount(0);
+
+    await helpers.setServings(3);
+    await expect(original).toHaveText(/Written for 6 servings/);
+
+    // It links back to the recipe's own servings.
+    await original.click();
+    await page.waitForLoadState('networkidle');
+    expect(page.url()).not.toContain('?');
+    await expect(page.locator('#servings')).toHaveValue('6');
+    await expect(original).toHaveCount(0);
+  });
+
   test('should accept half a serving and clamp below it', async ({ page }) => {
     await helpers.setServings(0.5);
     await expect(page.locator('#servings')).toHaveValue('0.5');

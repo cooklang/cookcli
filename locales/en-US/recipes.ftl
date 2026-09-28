@@ -19,6 +19,12 @@ recipe-add-to-shopping = Add to Shopping List
 recipe-add-all-to-shopping = Add All to Shopping List
 recipe-scale-label = Scale
 recipe-servings-label = servings
+recipe-written-for =
+    { $count ->
+        [one] Written for { $count } serving
+       *[other] Written for { $count } servings
+    }
+recipe-written-for-hint = Quantities are scaled from the original recipe. Cooking times, pan sizes and seasoning may need adjusting. Select to go back to the original servings.
 recipe-print = Print Recipe
 recipe-added = Added!
 recipe-main-section = Main

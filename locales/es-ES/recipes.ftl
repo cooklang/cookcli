@@ -19,6 +19,12 @@ recipe-add-to-shopping = Agregar a la lista de compras
 recipe-add-all-to-shopping = Agregar todo a la lista de compras
 recipe-scale-label = Escala
 recipe-servings-label = porciones
+recipe-written-for =
+    { $count ->
+        [one] Escrita para { $count } porción
+       *[other] Escrita para { $count } porciones
+    }
+recipe-written-for-hint = Las cantidades se han recalculado a partir de la receta original. Los tiempos de cocción, el tamaño de los moldes y el condimento pueden necesitar ajustes. Selecciona para volver a las porciones originales.
 recipe-print = Imprimir receta
 recipe-added = ¡Agregado!
 recipe-main-section = Principal
