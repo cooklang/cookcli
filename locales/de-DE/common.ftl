@@ -138,10 +138,6 @@ role-forbidden = Dein Konto darf das nicht. Bitte die Person, die diesen Server 
 error-title = Etwas ist schiefgelaufen
 error-back-home = Zurück zu den Rezepten
 
-# Errors
-error-title = Etwas ist schiefgelaufen
-error-back-home = Zurück zu den Rezepten
-
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Design umschalten
 aria-keyboard-shortcuts = Tastenkürzel
