@@ -34,6 +34,7 @@ pub(crate) mod i18n;
 pub mod language;
 pub mod menus;
 pub mod templates;
+pub mod viewer;
 
 /// API reference content for the `/api-docs` page. Server-only.
 #[cfg(feature = "server")]

@@ -1,3 +1,5 @@
+use crate::server::activity;
+use crate::web::viewer::Viewer;
 use crate::{
     server::{
         handlers::common::{check_path, normalize_tags, recipe_file, RecipeFile},
@@ -6,7 +8,7 @@ use crate::{
     util::PARSER,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -152,10 +154,13 @@ pub async fn recipe_raw(
 pub async fn recipe_save(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     body: String,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let (RecipeFile::Existing(file_path) | RecipeFile::Missing(file_path)) =
-        recipe_file(&state.base_path, &path)?;
+    let (file_path, created) = match recipe_file(&state.base_path, &path)? {
+        RecipeFile::Existing(file_path) => (file_path, false),
+        RecipeFile::Missing(file_path) => (file_path, true),
+    };
 
     // Atomic write: write to temp file, then rename
     let temp_path = file_path.with_extension("tmp");
@@ -202,7 +207,14 @@ pub async fn recipe_save(
             )
         })?;
 
-    tracing::info!("Saved recipe: {}", file_path);
+    activity::record(
+        &viewer,
+        format_args!(
+            "{} {}",
+            if created { "created" } else { "updated" },
+            activity::file(&state.base_path, &file_path)
+        ),
+    );
 
     Ok(Json(serde_json::json!({
         "status": "success",
@@ -257,6 +269,7 @@ pub async fn search(
 pub async fn recipe_delete(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
         tracing::error!("Recipe file not found for deletion: {path}");
@@ -275,7 +288,10 @@ pub async fn recipe_delete(
         )
     })?;
 
-    tracing::info!("Deleted recipe: {}", file_path);
+    activity::record(
+        &viewer,
+        format_args!("deleted {}", activity::file(&state.base_path, &file_path)),
+    );
 
     Ok(Json(serde_json::json!({
         "status": "success",

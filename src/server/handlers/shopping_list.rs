@@ -1,9 +1,14 @@
 use crate::server::handlers::common::check_path;
-use crate::server::AppState;
+use crate::server::{activity, AppState};
 use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
+use crate::web::viewer::Viewer;
 use anyhow::Context as _;
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    Json,
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
     extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingListStore,
@@ -224,6 +229,7 @@ pub struct AddItemRequest {
 
 pub async fn add_to_shopping_list(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(payload): Json<AddItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     // Nothing is read here, but the path is persisted and resolved later —
@@ -233,6 +239,11 @@ pub async fn add_to_shopping_list(
     check_path(&payload.path)?;
 
     let store = ShoppingListStore::new(&state.base_path);
+    let added = format!(
+        "added {}{} to the shopping list",
+        activity::quoted(&payload.path),
+        scaled(payload.scale)
+    );
     // `name` is derived from `path` on load — any client-supplied display
     // name would be silently discarded, so it's not accepted here.
     let item = StoredEntry {
@@ -250,8 +261,18 @@ pub async fn add_to_shopping_list(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
+}
+
+/// ` ×2` after what was added at another scale than 1, nothing otherwise.
+fn scaled(scale: f64) -> String {
+    if scale == 1.0 {
+        String::new()
+    } else {
+        format!(" ×{scale}")
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -261,6 +282,7 @@ pub struct RemoveItemRequest {
 
 pub async fn remove_from_shopping_list(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(payload): Json<RemoveItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
@@ -271,6 +293,13 @@ pub async fn remove_from_shopping_list(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(
+        &viewer,
+        format_args!(
+            "removed {} from the shopping list",
+            activity::quoted(&payload.path)
+        ),
+    );
 
     // Compact the checked log now that one recipe is gone: stale checks
     // (ingredients no longer referenced by any remaining recipe) can drop.
@@ -294,6 +323,7 @@ pub async fn remove_from_shopping_list(
 
 pub async fn clear_shopping_list(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     // Acquire the checked-log lock so a concurrent check/uncheck can't
     // recreate `.shopping-checked` between our remove_file and the caller's
@@ -307,6 +337,7 @@ pub async fn clear_shopping_list(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(&viewer, "cleared the shopping list");
 
     Ok(StatusCode::OK)
 }
@@ -320,6 +351,7 @@ pub struct CheckItemRequest {
 
 pub async fn check_shopping_item(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let _guard = state.checked_log_lock.lock().await;
@@ -331,11 +363,19 @@ pub async fn check_shopping_item(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(
+        &viewer,
+        format_args!(
+            "checked off {} on the shopping list",
+            activity::quoted(&payload.name)
+        ),
+    );
     Ok(StatusCode::OK)
 }
 
 pub async fn uncheck_shopping_item(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let _guard = state.checked_log_lock.lock().await;
@@ -347,6 +387,13 @@ pub async fn uncheck_shopping_item(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(
+        &viewer,
+        format_args!(
+            "unchecked {} on the shopping list",
+            activity::quoted(&payload.name)
+        ),
+    );
     Ok(StatusCode::OK)
 }
 
@@ -366,6 +413,7 @@ pub async fn get_checked_items(
 
 pub async fn compact_checked(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
@@ -383,6 +431,10 @@ pub async fn compact_checked(
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    activity::record(
+        &viewer,
+        "dropped the shopping list's checks for items no longer on it",
+    );
     Ok(StatusCode::OK)
 }
 
@@ -465,6 +517,7 @@ pub struct AddMenuRequest {
 /// plan entry with recipes nested inside.
 pub async fn add_menu_to_shopping_list(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     Json(payload): Json<AddMenuRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     check_path(&payload.path)?;
@@ -563,6 +616,11 @@ pub async fn add_menu_to_shopping_list(
         }
     }
 
+    let added = format!(
+        "added menu {}{} to the shopping list",
+        activity::quoted(&payload.path),
+        scaled(menu_scale)
+    );
     store
         .add_menu(payload.path, menu_scale, recipes)
         .map_err(|e| {
@@ -572,6 +630,7 @@ pub async fn add_menu_to_shopping_list(
                 Json(serde_json::json!({ "error": e.to_string() })),
             )
         })?;
+    activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
 }

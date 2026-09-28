@@ -95,8 +95,11 @@
             );
         }
 
+        // A guest on a server that requires signing in cannot change anything.
+        const canEdit = !staticMode && window.__CAN_EDIT__ !== false;
+
         const recipeRows = [row('Start cooking mode', k('c'))];
-        if (!staticMode) {
+        if (canEdit) {
             recipeRows.push(
                 row('Edit recipe', k('e')),
                 row('Add to shopping list', k('a'))
@@ -110,7 +113,7 @@
             );
         }
 
-        const shoppingSection = staticMode ? '' : `
+        const shoppingSection = !canEdit ? '' : `
             <div>
                 <h3 class="font-semibold text-text mb-3">Shopping List</h3>
                 <div class="space-y-2">
@@ -389,6 +392,7 @@
     function handleShoppingListShortcuts(event, key) {
         switch (key) {
             case 'c':
+                if (window.__CAN_EDIT__ === false) return;
                 event.preventDefault();
                 // Clear the list (if the function exists)
                 if (typeof clearList === 'function') {

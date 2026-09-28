@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
 use crate::web::language::FeatureFlags;
+use crate::web::viewer::Viewer;
 
 /// Helper struct for translations in templates
 #[derive(Clone, Debug, Serialize)]
@@ -172,6 +173,8 @@ pub struct ErrorTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 pub struct TodaysMenu {
@@ -196,6 +199,8 @@ pub struct RecipesTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[derive(Template)]
@@ -216,6 +221,8 @@ pub struct RecipeTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 impl RecipeTemplate {
@@ -518,6 +525,8 @@ pub struct MenuTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -530,6 +539,8 @@ pub struct ShoppingListTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -550,6 +561,8 @@ pub struct PreferencesTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -564,6 +577,8 @@ pub struct PantryTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -586,6 +601,8 @@ pub struct EditTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -600,6 +617,26 @@ pub struct NewTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "login.html")]
+pub struct LoginTemplate {
+    pub active: String,
+    /// Where to go after signing in, relative to the URL prefix.
+    pub next: String,
+    /// Echoed back after a failed attempt so it need not be retyped.
+    pub username: String,
+    pub failed: bool,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -848,6 +885,8 @@ pub struct ApiDocsTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 /// Askama's axum integration lived in the `askama_axum` crate, which was
@@ -887,6 +926,7 @@ impl_into_response!(
     EditTemplate,
     NewTemplate,
     ApiDocsTemplate,
+    LoginTemplate,
 );
 
 /// The two large templates are handed around boxed, and `Box<T>` is not

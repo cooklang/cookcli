@@ -25,6 +25,7 @@ fn build(dir: &Utf8Path, recipe_name: &str) -> RecipeTemplate {
         static_mode: false,
         repo_url: None,
         features: FeatureFlags::default(),
+        viewer: Default::default(),
     })
     .expect("failed to build recipe template");
 

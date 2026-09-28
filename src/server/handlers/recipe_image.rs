@@ -7,15 +7,17 @@
 //! every recipe in a folder named `image/` the way `/recipes/raw/` already
 //! claims one named `raw/`.
 
+use crate::server::activity;
 use crate::server::{
     fs_atomic,
     handlers::common::{check_path, json_error},
     title_image::{self, PrepareError},
     AppState,
 };
+use crate::web::viewer::Viewer;
 use axum::{
     body::Bytes,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     Json,
 };
@@ -44,6 +46,7 @@ pub async fn recipe_image_get(
 pub async fn recipe_image_put(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let recipe = recipe_file(&find_recipe(&state, &path)?, &path)?;
@@ -66,7 +69,13 @@ pub async fn recipe_image_put(
     {
         remove_if_present(&recipe.with_extension(ext)).await?;
     }
-    tracing::info!("Saved title picture: {target}");
+    activity::record(
+        &viewer,
+        format_args!(
+            "set the picture of {}",
+            activity::file(&state.base_path, &recipe)
+        ),
+    );
 
     picture_state(&state, &path)
 }
@@ -78,6 +87,7 @@ pub async fn recipe_image_put(
 pub async fn recipe_image_delete(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let recipe = recipe_file(&find_recipe(&state, &path)?, &path)?;
 
@@ -91,7 +101,13 @@ pub async fn recipe_image_delete(
             json_error(format!("{path} has no title picture file")),
         ));
     }
-    tracing::info!("Removed title picture of {recipe}");
+    activity::record(
+        &viewer,
+        format_args!(
+            "removed the picture of {}",
+            activity::file(&state.base_path, &recipe)
+        ),
+    );
 
     picture_state(&state, &path)
 }
