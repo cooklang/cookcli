@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }, LSP_DEBOUNCE_MS);
         }
-    });
+    }, { menu: {{ is_menu }} });
 
     const recipePicker = window.CooklangEditor.initRecipePicker(document.getElementById('recipe-picker'), {
         prefix: {{ prefix|json|safe }},

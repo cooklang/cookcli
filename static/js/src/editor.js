@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
@@ -17,7 +17,8 @@ import {
     ensureFrontmatter,
     menuActions,
     pickerActions,
-    insertMenuItem
+    insertMenuItem,
+    continueMeal
 } from "./toolbar.js";
 import { initRecipePicker } from "./picker.js";
 
@@ -142,7 +143,10 @@ export function setCursorPositionCallback(callback) {
 }
 
 // Initialize editor
-export function initEditor(container, initialContent, onChange) {
+// `menu`: the file is a `.menu`, where Enter continues the current meal (see
+// `continueMeal`). Ahead of the default Enter, but behind autocompletion,
+// which takes Enter while its list is open.
+export function initEditor(container, initialContent, onChange, { menu = false } = {}) {
   const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged && onChange) {
       onChange(update.state.doc.toString());
@@ -178,6 +182,7 @@ export function initEditor(container, initialContent, onChange) {
         ...historyKeymap,
         ...searchKeymap
       ]),
+      menu ? Prec.high(keymap.of([{ key: "Enter", run: continueMeal }])) : [],
       updateListener,
       EditorView.lineWrapping
     ]

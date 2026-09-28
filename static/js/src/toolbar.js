@@ -309,6 +309,52 @@ export function insertMenuItem(view, item) {
   dispatch(view, { changes: changeSet, selection: EditorSelection.cursor(cursor) });
 }
 
+// Enter in a menu, at the end of a meal header or bullet: continue the meal,
+// the way a list continues in a Markdown editor. The line gets the ` \` that
+// keeps the next one in the same meal, and the next line starts with `- `.
+// On an empty bullet, Enter ends the meal instead: the bullet and the ` \`
+// leading to it go, and a blank line separates what comes next. Anywhere
+// else it is a plain Enter. Returns whether it handled the key.
+export function continueMeal(view) {
+  const { state } = view;
+  const range = state.selection.main;
+  if (state.selection.ranges.length > 1 || !range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const content = line.text.replace(CONTINUED, "").trimEnd();
+  if (range.head < line.from + content.length || !isMealLine(line.text)) return false;
+
+  const above = line.number > 1 ? state.doc.line(line.number - 1) : null;
+  const below = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
+
+  if (EMPTY_BULLET.test(line.text)) {
+    const changes = [{ from: line.from, to: line.to, insert: "\n" }];
+    if (above && isMealLine(above.text) && CONTINUED.test(above.text)) {
+      changes.push({ from: above.from + above.text.replace(CONTINUED, "").trimEnd().length, to: above.to });
+    }
+    const changeSet = state.changes(changes);
+    view.dispatch({
+      changes: changeSet,
+      selection: EditorSelection.cursor(changeSet.mapPos(line.from, -1) + 1),
+      scrollIntoView: true,
+      userEvent: "input"
+    });
+    return true;
+  }
+
+  // Already joined to a non-blank line below: the new bullet sits in between,
+  // so it carries the join on.
+  const tail = CONTINUED.test(line.text) && below && below.text.trim() !== "" ? "\\" : "";
+  const from = line.from + content.length;
+  const insert = " \\\n- ";
+  view.dispatch({
+    changes: { from, to: line.to, insert: insert + tail },
+    selection: EditorSelection.cursor(from + insert.length),
+    scrollIntoView: true,
+    userEvent: "input"
+  });
+  return true;
+}
+
 // Replace the selection with `text`, putting the cursor `cursorFromEnd`
 // characters before its end.
 function insertInline(view, text, cursorFromEnd = 0) {

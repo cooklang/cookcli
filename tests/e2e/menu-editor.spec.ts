@@ -171,6 +171,37 @@ test.describe('Menu editor toolbar', () => {
     ['leaves a comment line alone', '-- leftovers|', '-- leftovers\n- @./Risotto{}|'],
   ];
 
+  // Enter continues the meal, like a list in a Markdown editor.
+  const enters: Array<[string, string, string]> = [
+    ['after a meal header', 'Dinner:|', 'Dinner: \\\n- |'],
+    ['after a joined meal header', 'Dinner: \\|', 'Dinner: \\\n- |'],
+    ['after the last bullet', 'Dinner: \\\n- @soup{}|', 'Dinner: \\\n- @soup{} \\\n- |'],
+    ['between two bullets', 'Dinner: \\\n- @soup{}| \\\n- @bread{}', 'Dinner: \\\n- @soup{} \\\n- |\\\n- @bread{}'],
+    ['on an empty bullet, ending the meal', 'Dinner: \\\n- @soup{} \\\n- |', 'Dinner: \\\n- @soup{}\n\n|'],
+    ['in the middle of a line, as a plain Enter', 'Din|ner:', 'Din\n|ner:'],
+    ['after a day, as a plain Enter', '== Day 1 ==|', '== Day 1 ==\n|'],
+    ['after a comment, as a plain Enter', '-- leftovers|', '-- leftovers\n|'],
+  ];
+
+  for (const [name, before, after] of enters) {
+    test(`Enter ${name}`, async ({ page }) => {
+      await setDoc(page, before);
+      await page.locator('.cm-content').focus();
+      await page.keyboard.press('Enter');
+      expect(await readDoc(page)).toBe(after);
+    });
+  }
+
+  test('a bullet typed after a recipe stays a meal item of its own', async ({ page }) => {
+    await setDoc(page, 'Petit-déjeuner: \\\n- @./Dessert/Baklava{2%servings}|');
+    await page.locator('.cm-content').focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('@coffee{}');
+    expect(await readDoc(page)).toBe(
+      'Petit-déjeuner: \\\n- @./Dessert/Baklava{2%servings} \\\n- @coffee{}|'
+    );
+  });
+
   for (const [name, before, after] of items) {
     test(`Add recipe ${name}`, async ({ page }) => {
       await setDoc(page, before);
@@ -309,6 +340,13 @@ test.describe('Recipe reference in the recipe editor', () => {
     await searchPicker(page, 'dough', 'Pizza Dough');
     await page.keyboard.press('Enter');
     expect(await readDoc(page)).toBe('Make @./Shared/Pizza Dough{|} first');
+  });
+
+  test('Enter is a plain Enter in a recipe', async ({ page }) => {
+    await setDoc(page, 'Dinner:|');
+    await page.locator('.cm-content').focus();
+    await page.keyboard.press('Enter');
+    expect(await readDoc(page)).toBe('Dinner:\n|');
   });
 
   test('never offers the recipe being edited', async ({ page }) => {
