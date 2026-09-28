@@ -11,10 +11,17 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
 
+# A new push to a pull request makes the run for the previous one moot; on
+# main every commit still gets its own run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v7.0.1
@@ -52,20 +59,12 @@ jobs:
     - name: Run clippy
       run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-    - name: Build
-      run: cargo build --verbose
-
+    # Includes tests/snapshot_test.rs. No `--release` build: the release
+    # profile's fat LTO took longer than everything else in this job put
+    # together, on every OS, and the release workflow builds that profile
+    # for every target when a release is cut.
     - name: Run tests
       run: cargo test --workspace --verbose
-
-    - name: Run snapshot tests
-      run: cargo test --test snapshot_test
-
-    - name: Build release
-      run: cargo build --release --verbose
-
-    - name: Build without default features
-      run: cargo build --release --no-default-features --verbose
 
     - name: Run tests without default features
       run: cargo test --no-default-features --verbose
@@ -80,7 +79,6 @@ jobs:
   ui-tests:
     name: UI Tests
     runs-on: ubuntu-latest
-    needs: [test]
     timeout-minutes: 30
 
     steps:
@@ -139,11 +137,12 @@ jobs:
         path: test-results/
         retention-days: 7
 
-  # Run on other platforms after all Ubuntu tests pass
+  # Alongside the Ubuntu jobs rather than after them: the Windows job alone is
+  # the longest, so chaining it behind the others only added their time.
   test-other-os:
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: [ui-tests]
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -177,11 +176,5 @@ jobs:
     - name: Build JS
       run: npm run build-js
 
-    - name: Build
-      run: cargo build --verbose
-
     - name: Run tests
       run: cargo test --workspace --verbose
-
-    - name: Build release
-      run: cargo build --release --verbose
