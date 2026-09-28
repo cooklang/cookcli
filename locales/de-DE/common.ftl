@@ -134,6 +134,10 @@ sign-in-failed = Falscher Benutzername oder falsches Passwort.
 signed-in-as = Angemeldet als
 role-forbidden = Dein Konto darf das nicht. Bitte die Person, die diesen Server betreibt, um eine andere Rolle.
 
+# Errors
+error-title = Etwas ist schiefgelaufen
+error-back-home = Zurück zu den Rezepten
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Design umschalten
 aria-keyboard-shortcuts = Tastenkürzel

@@ -134,6 +134,10 @@ sign-in-failed = Erabiltzaile-izena edo pasahitza okerra da.
 signed-in-as = Saioa hasita:
 role-forbidden = Zure kontuak ezin du hau egin. Eskatu beste rol bat zerbitzari hau kudeatzen duenari.
 
+# Errors
+error-title = Zerbait gaizki joan da
+error-back-home = Itzuli errezetetara
+
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Gaia aldatu
 aria-keyboard-shortcuts = Teklatu-lasterbideak

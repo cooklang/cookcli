@@ -124,8 +124,8 @@ Once the server has users:
   shopping list, need a signed-in user whose [role](#roles) allows it. Guests
   see a **Sign in** link at the top of every page instead of the controls
   that change things.
-- The editor's language server (`/api/ws/lsp`) and the CookCloud sync
-  controls are for admins only.
+- The editor's language server (`/api/ws/lsp`) is for those who may edit
+  recipes, and the CookCloud sync controls for admins only.
 - An API request that would change something, sent without a session, gets
   `401`; sent by a user whose role does not allow it, `403`.
   [The API reference](api.md) shows how a script signs in.
@@ -138,7 +138,7 @@ the browser.
 Each user has a role, which decides what they can change once signed in. Each
 role can do everything the ones above it can:
 
-| Role | Shopping list & pantry | Recipes & menus (create, edit, delete, title picture) | CookCloud sync, editor's language server |
+| Role | Shopping list & pantry | Recipes & menus (create, edit, delete, title picture) | CookCloud sync |
 |------|:---:|:---:|:---:|
 | `reader` | | | |
 | `shopper` | ✅ | | |
@@ -147,8 +147,7 @@ role can do everything the ones above it can:
 
 Everyone, signed in or not, can read. A user added without `--role` is an
 `admin`, which is what every user was before roles existed. Pages leave out
-the controls a user's role cannot use; an editor still edits recipes, without
-the language server's completions and diagnostics.
+the controls a user's role cannot use.
 
 ```bash
 cook server user add grandma --role reader

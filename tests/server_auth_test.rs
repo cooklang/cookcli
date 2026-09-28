@@ -14,7 +14,7 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use reqwest::header::{COOKIE, LOCATION, SET_COOKIE};
+use reqwest::header::{ACCEPT_LANGUAGE, COOKIE, LOCATION, SET_COOKIE};
 use reqwest::{redirect, Client, Response, StatusCode};
 use std::io::Write;
 use std::net::TcpListener;
@@ -761,9 +761,9 @@ async fn each_role_can_do_only_what_it_allows() {
         let edit = get_page(&server, "/edit/Recipe.cook", Some(&cookie)).await;
         if recipes {
             assert_eq!(edit.status(), StatusCode::OK, "{user} edit page");
-            // Only an admin's editor connects to the language server.
+            // Whoever may edit gets the language server's completions.
             let page = edit.text().await.unwrap();
-            assert_eq!(page.contains("id=\"lsp-status\""), admin, "{user}");
+            assert!(page.contains("id=\"lsp-status\""), "{user}");
         } else {
             // Not a redirect to sign in, which would loop.
             assert_eq!(edit.status(), StatusCode::FORBIDDEN, "{user} edit page");
@@ -774,9 +774,11 @@ async fn each_role_can_do_only_what_it_allows() {
         let new = get_page(&server, "/new", Some(&cookie)).await;
         assert_eq!(refused_for_role(new.status()), !recipes, "{user} /new");
 
-        // Sync and the language server.
+        // The editor's language server.
         let lsp = get_page(&server, "/api/ws/lsp", Some(&cookie)).await;
-        assert_eq!(refused_for_role(lsp.status()), !admin, "{user} lsp");
+        assert_eq!(refused_for_role(lsp.status()), !recipes, "{user} lsp");
+
+        // Sync.
         #[cfg(feature = "sync")]
         {
             let status = get_page(&server, "/api/sync/status", Some(&cookie)).await;
@@ -796,6 +798,8 @@ async fn each_role_can_do_only_what_it_allows() {
                 .unwrap();
             assert_eq!(preferences.contains("id=\"sync-section\""), admin, "{user}");
         }
+        #[cfg(not(feature = "sync"))]
+        let _ = admin;
 
         // Pages show exactly the controls the role can use.
         let page = get_page(&server, "/recipe/Recipe.cook", Some(&cookie))
@@ -855,6 +859,30 @@ async fn a_changed_role_applies_without_signing_in_again() {
             .is_success()
     })
     .await;
+}
+
+#[tokio::test]
+async fn a_refused_page_is_translated_throughout() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[("bob", "pw", "reader")]);
+    let server = start(fixture, &[], &[]).await;
+    let bob = signed_in_cookie(&server, "bob", "pw").await;
+
+    let resp = client()
+        .get(server.url("/new"))
+        .header(COOKIE, &bob)
+        .header(ACCEPT_LANGUAGE, "fr-FR")
+        .send()
+        .await
+        .expect("page request");
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    let page = resp.text().await.unwrap();
+    // The title, the message and the way back, not just the message.
+    assert!(page.contains("Une erreur s"), "{page}");
+    assert!(page.contains("Votre compte ne permet pas"), "{page}");
+    assert!(page.contains("Retour aux recettes"), "{page}");
+    assert!(!page.contains("Something went wrong"), "{page}");
+    assert!(!page.contains("Back to recipes"), "{page}");
 }
 
 #[tokio::test]

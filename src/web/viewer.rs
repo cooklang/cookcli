@@ -18,10 +18,11 @@ pub enum Role {
     Reader,
     /// Also changes the shopping list and the pantry.
     Shopper,
-    /// Also creates, edits and deletes recipes and menus.
+    /// Also creates, edits and deletes recipes and menus, in the editor and
+    /// its language server.
     Editor,
-    /// Also links cook.md sync and uses the editor's language server. What a
-    /// user without a role in the users file is.
+    /// Also links cook.md sync. What a user without a role in the users file
+    /// is.
     Admin,
 }
 
@@ -71,9 +72,9 @@ pub enum Capability {
     /// Change the shopping list or the pantry.
     EditLists,
     /// Create, edit or delete recipes, menus and title pictures, and open the
-    /// editor.
+    /// editor and its language server.
     EditRecipes,
-    /// Link or unlink cook.md sync, and run the editor's language server.
+    /// Link or unlink cook.md sync.
     Administer,
 }
 
@@ -143,8 +144,7 @@ impl Viewer {
         self.can(Capability::EditRecipes)
     }
 
-    /// Whether the page should offer the cook.md sync controls and connect
-    /// the editor to the language server.
+    /// Whether the page should offer the cook.md sync controls.
     pub fn can_admin(&self) -> bool {
         self.can(Capability::Administer)
     }

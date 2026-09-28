@@ -25,13 +25,13 @@ const OPEN_WRITES: &[&str] = &[
     "/logout",
 ];
 
-/// Reads that still need a capability: the editor pages, the editor's
-/// language server, and the cook.md sync controls, whose status reveals the
-/// linked account and a pending device-login code.
+/// Reads that still need a capability: the editor pages and their language
+/// server, and the cook.md sync controls, whose status reveals the linked
+/// account and a pending device-login code.
 const PROTECTED_READS: &[(&str, Capability)] = &[
     ("/new", Capability::EditRecipes),
     ("/edit", Capability::EditRecipes),
-    ("/api/ws/lsp", Capability::Administer),
+    ("/api/ws/lsp", Capability::EditRecipes),
     ("/api/sync", Capability::Administer),
 ];
 
@@ -253,7 +253,7 @@ mod tests {
         for (path, capability) in [
             ("/new", EditRecipes),
             ("/edit/Soup.cook", EditRecipes),
-            ("/api/ws/lsp", Administer),
+            ("/api/ws/lsp", EditRecipes),
             ("/api/sync/status", Administer),
         ] {
             assert_eq!(needs(Method::GET, path), Some(capability), "{path}");

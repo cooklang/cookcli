@@ -3,8 +3,8 @@
 //! With no users file the server is open, as it always was. Once a users file
 //! exists (see [`users`]), anyone can still browse, but every request that
 //! changes something needs a signed-in user whose role allows it: the
-//! shopping list and the pantry, recipes, and — for admins only — the cook.md
-//! sync binding and the editor's language server.
+//! shopping list and the pantry, recipes and the editor's language server, and
+//! — for admins only — the cook.md sync binding.
 //! [`middleware::middleware`] enforces that for every route in one place.
 //!
 //! Users are managed on the server only, with `cook server user …`; the

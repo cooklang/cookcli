@@ -33,8 +33,7 @@ enum UserAction {
         /// What they may do once signed in
         ///
         /// reader: read only; shopper: also the shopping list and pantry;
-        /// editor: also recipes and menus; admin: also cook.md sync and the
-        /// editor's language server.
+        /// editor: also recipes and menus; admin: also cook.md sync.
         #[arg(long, default_value = "admin", value_parser = role_parser())]
         role: Role,
     },
