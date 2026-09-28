@@ -54,6 +54,33 @@ editor-toolbar-comment = Iruzkina
 editor-toolbar-comment-title = Iruzkindu uneko lerroak (--), edo lerro bateko hautapena
 editor-toolbar-metadata = Metadatuak
 editor-toolbar-metadata-title = Gehitu metadatu-lerro bat goiburuan (---)
+editor-toolbar-menu = Menuaren elementuak
+editor-toolbar-other = Beste elementuak
+editor-toolbar-day = Eguna
+editor-toolbar-day-title = Hasi egun berri bat (== Eguna ==), data batekin hautatzen bada
+editor-toolbar-day-default = Eguna
+editor-toolbar-day-date = Hurrengo egunaren data
+editor-toolbar-day-date-title = Hurrengo egunaren aukerako data, adibidez == Larunbata (2026-03-07) ==
+editor-toolbar-meal = Otordua
+editor-toolbar-meal-title = Hasi otordu bat (Gosaria: \) lehen buleta batekin
+editor-toolbar-meal-breakfast = Gosaria
+editor-toolbar-meal-lunch = Bazkaria
+editor-toolbar-meal-dinner = Afaria
+editor-toolbar-meal-snacks = Mokadutxoak
+editor-toolbar-add-recipe = Gehitu errezeta
+editor-toolbar-add-recipe-title = Gehitu errezeta bat uneko otorduari (- @./Errezeta{"{}"})
+editor-toolbar-recipe-reference = Errezeta-erreferentzia
+editor-toolbar-recipe-reference-title = Egin erreferentzia beste errezeta bati (@./Errezeta{"{}"})
+
+# Recipe picker
+recipe-picker-title = Aukeratu errezeta bat
+recipe-picker-search = Bilatu errezetak
+recipe-picker-results = Errezetak
+recipe-picker-servings = Anoak
+recipe-picker-servings-hint = Utzi hutsik errezetaren anoak erabiltzeko.
+recipe-picker-insert = Txertatu
+recipe-picker-no-results = Ez da errezetarik aurkitu
+recipe-picker-load-failed = Ezin izan dira errezetak kargatu
 
 # LSP Status
 lsp-connected = LSP konektatuta
@@ -67,6 +94,13 @@ new-recipe-filename = Errezetaren izena
 new-recipe-placeholder = Afaria/Italiarra/Pasta Carbonara
 new-recipe-hint = Formatoa: direktorioa/errezeta-izena
 new-recipe-create = Sortu errezeta
+
+# New Menu
+new-menu = Menu berria
+new-menu-path = Menuaren bidea
+new-menu-placeholder = Planak/Astea 12
+new-menu-hint = Formatoa: direktorioa/menu-izena
+new-menu-create = Sortu menua
 
 # Delete Recipe
 delete-recipe = Ezabatu errezeta

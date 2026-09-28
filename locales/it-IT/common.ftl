@@ -35,6 +35,35 @@ editor-saving = Salvataggio...
 editor-save-failed = Salvataggio non riuscito
 editor-placeholder = Scrivi qui la tua ricetta...
 
+# Editor toolbar
+editor-toolbar-menu = Elementi del menù
+editor-toolbar-other = Altri elementi
+editor-toolbar-day = Giorno
+editor-toolbar-day-title = Inizia un nuovo giorno (== Giorno ==), con la data se ne è scelta una
+editor-toolbar-day-default = Giorno
+editor-toolbar-day-date = Data del prossimo giorno
+editor-toolbar-day-date-title = Data facoltativa del prossimo giorno, come in == Sabato (2026-03-07) ==
+editor-toolbar-meal = Pasto
+editor-toolbar-meal-title = Inizia un pasto (Colazione: \) con un primo punto elenco
+editor-toolbar-meal-breakfast = Colazione
+editor-toolbar-meal-lunch = Pranzo
+editor-toolbar-meal-dinner = Cena
+editor-toolbar-meal-snacks = Spuntini
+editor-toolbar-add-recipe = Aggiungi ricetta
+editor-toolbar-add-recipe-title = Aggiungi una ricetta al pasto corrente (- @./Ricetta{"{}"})
+editor-toolbar-recipe-reference = Riferimento a ricetta
+editor-toolbar-recipe-reference-title = Fai riferimento a un'altra ricetta (@./Ricetta{"{}"})
+
+# Recipe picker
+recipe-picker-title = Scegli una ricetta
+recipe-picker-search = Cerca ricette
+recipe-picker-results = Ricette
+recipe-picker-servings = Porzioni
+recipe-picker-servings-hint = Lascia vuoto per usare le porzioni della ricetta.
+recipe-picker-insert = Inserisci
+recipe-picker-no-results = Nessuna ricetta trovata
+recipe-picker-load-failed = Impossibile caricare le ricette
+
 # LSP Status
 lsp-connected = LSP connesso
 lsp-disconnected = Disconnesso
@@ -47,6 +76,13 @@ new-recipe-filename = Nome della ricetta
 new-recipe-placeholder = Cena/Italiana/Pasta alla carbonara
 new-recipe-hint = Usa il formato cartella/nome-ricetta
 new-recipe-create = Crea ricetta
+
+# New Menu
+new-menu = Nuovo menù
+new-menu-path = Percorso del menù
+new-menu-placeholder = Piani/Settimana 12
+new-menu-hint = Usa il formato cartella/nome-menù
+new-menu-create = Crea menù
 
 # Delete Recipe
 delete-recipe = Elimina ricetta

@@ -54,6 +54,33 @@ editor-toolbar-comment = Commentaire
 editor-toolbar-comment-title = Commenter les lignes courantes (--), ou la sélection dans une ligne
 editor-toolbar-metadata = Métadonnées
 editor-toolbar-metadata-title = Ajouter une ligne de métadonnées dans l'en-tête (---)
+editor-toolbar-menu = Éléments de menu
+editor-toolbar-other = Autres éléments
+editor-toolbar-day = Jour
+editor-toolbar-day-title = Commencer un nouveau jour (== Jour ==), daté si une date est choisie
+editor-toolbar-day-default = Jour
+editor-toolbar-day-date = Date du prochain jour
+editor-toolbar-day-date-title = Date facultative du prochain jour, comme dans == Samedi (2026-03-07) ==
+editor-toolbar-meal = Repas
+editor-toolbar-meal-title = Commencer un repas (Petit-déjeuner : \) avec une première puce
+editor-toolbar-meal-breakfast = Petit-déjeuner
+editor-toolbar-meal-lunch = Déjeuner
+editor-toolbar-meal-dinner = Dîner
+editor-toolbar-meal-snacks = Collations
+editor-toolbar-add-recipe = Ajouter une recette
+editor-toolbar-add-recipe-title = Ajouter une recette au repas en cours (- @./Recette{"{}"})
+editor-toolbar-recipe-reference = Référence de recette
+editor-toolbar-recipe-reference-title = Faire référence à une autre recette (@./Recette{"{}"})
+
+# Recipe picker
+recipe-picker-title = Choisir une recette
+recipe-picker-search = Rechercher des recettes
+recipe-picker-results = Recettes
+recipe-picker-servings = Portions
+recipe-picker-servings-hint = Laisser vide pour garder les portions de la recette.
+recipe-picker-insert = Insérer
+recipe-picker-no-results = Aucune recette trouvée
+recipe-picker-load-failed = Impossible de charger les recettes
 
 # LSP Status
 lsp-connected = LSP connecté
@@ -67,6 +94,13 @@ new-recipe-filename = Nom de la recette
 new-recipe-placeholder = Diner/Italien/Pates Carbonara
 new-recipe-hint = Format: dossier/nom-recette
 new-recipe-create = Creer la Recette
+
+# New Menu
+new-menu = Nouveau Menu
+new-menu-path = Chemin du menu
+new-menu-placeholder = Plannings/Semaine 12
+new-menu-hint = Format : dossier/nom-du-menu
+new-menu-create = Créer le Menu
 
 # Delete Recipe
 delete-recipe = Supprimer la Recette

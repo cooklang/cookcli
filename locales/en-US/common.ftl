@@ -54,6 +54,33 @@ editor-toolbar-comment = Comment
 editor-toolbar-comment-title = Comment out the current lines (--), or the selection within a line
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Add a metadata line to the frontmatter (---)
+editor-toolbar-menu = Menu elements
+editor-toolbar-other = Other elements
+editor-toolbar-day = Day
+editor-toolbar-day-title = Start a new day (== Day ==), dated when a date is picked
+editor-toolbar-day-default = Day
+editor-toolbar-day-date = Date of the next day
+editor-toolbar-day-date-title = Optional date for the next day, as in == Saturday (2026-03-07) ==
+editor-toolbar-meal = Meal
+editor-toolbar-meal-title = Start a meal (Breakfast: \) with a first bullet
+editor-toolbar-meal-breakfast = Breakfast
+editor-toolbar-meal-lunch = Lunch
+editor-toolbar-meal-dinner = Dinner
+editor-toolbar-meal-snacks = Snacks
+editor-toolbar-add-recipe = Add recipe
+editor-toolbar-add-recipe-title = Add a recipe to the current meal (- @./Recipe{"{}"})
+editor-toolbar-recipe-reference = Recipe reference
+editor-toolbar-recipe-reference-title = Reference another recipe (@./Recipe{"{}"})
+
+# Recipe picker
+recipe-picker-title = Choose a recipe
+recipe-picker-search = Search recipes
+recipe-picker-results = Recipes
+recipe-picker-servings = Servings
+recipe-picker-servings-hint = Leave empty to use the recipe's own servings.
+recipe-picker-insert = Insert
+recipe-picker-no-results = No recipes found
+recipe-picker-load-failed = Could not load the recipes
 
 # LSP Status
 lsp-connected = LSP Connected
@@ -67,6 +94,13 @@ new-recipe-filename = Recipe name
 new-recipe-placeholder = Dinner/Italian/Pasta Carbonara
 new-recipe-hint = Use folder/recipe-name format
 new-recipe-create = Create Recipe
+
+# New Menu
+new-menu = New Menu
+new-menu-path = Menu path
+new-menu-placeholder = Plans/Week 12
+new-menu-hint = Use folder/menu-name format
+new-menu-create = Create Menu
 
 # Delete Recipe
 delete-recipe = Delete Recipe

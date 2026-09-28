@@ -97,14 +97,74 @@
         </div>
     </div>
 
+    <!-- Recipe picker: behind Add recipe (menus) and Recipe reference (recipes) -->
+    <div id="recipe-picker" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50"
+         data-no-results="{{ tr.t("recipe-picker-no-results") }}" data-load-failed="{{ tr.t("recipe-picker-load-failed") }}">
+        <div class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-lg mx-4" role="dialog" aria-modal="true" aria-labelledby="recipe-picker-heading">
+            <h2 id="recipe-picker-heading" class="text-title font-bold text-text mb-4">{{ tr.t("recipe-picker-title") }}</h2>
+            <input id="recipe-picker-search" type="search" class="picker-search" autocomplete="off" spellcheck="false"
+                   role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="recipe-picker-results"
+                   aria-label="{{ tr.t("recipe-picker-search") }}" placeholder="{{ tr.t("recipe-picker-search") }}">
+            <ul id="recipe-picker-results" class="picker-results" role="listbox" aria-label="{{ tr.t("recipe-picker-results") }}"></ul>
+            <p id="recipe-picker-status" class="text-sm text-muted mt-2 empty:mt-0" aria-live="polite"></p>
+            <div id="recipe-picker-servings" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4">
+                <label for="recipe-picker-servings-input" class="text-sm font-medium text-muted">{{ tr.t("recipe-picker-servings") }}</label>
+                <input id="recipe-picker-servings-input" type="number" min="0" step="any" inputmode="decimal" class="picker-servings"
+                       aria-describedby="recipe-picker-servings-hint">
+                <p id="recipe-picker-servings-hint" class="w-full text-xs text-faint">{{ tr.t("recipe-picker-servings-hint") }}</p>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" id="recipe-picker-cancel" class="btn">{{ tr.t("action-cancel") }}</button>
+                <button type="button" id="recipe-picker-insert" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{{ tr.t("recipe-picker-insert") }}</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Cooklang toolbar: each button inserts the markup or wraps the selection -->
-    <div id="editor-toolbar" class="editor-toolbar" role="toolbar" aria-label="{{ tr.t("editor-toolbar-label") }}" data-mode="recipe">
-        <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-inline") }}">
+    <div id="editor-toolbar" class="editor-toolbar" role="toolbar" aria-label="{{ tr.t("editor-toolbar-label") }}" data-mode="{% if is_menu %}menu{% else %}recipe{% endif %}">
+        {% if is_menu %}
+        <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-menu") }}">
+            <button type="button" class="btn btn-sm" data-action="day" data-default="{{ tr.t("editor-toolbar-day-default") }}"
+                    title="{{ tr.t("editor-toolbar-day-title") }}" aria-label="{{ tr.t("editor-toolbar-day") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">==</span>
+                {{ tr.t("editor-toolbar-day") }}
+            </button>
+            <input type="date" class="editor-toolbar-date" data-day-date
+                   title="{{ tr.t("editor-toolbar-day-date-title") }}" aria-label="{{ tr.t("editor-toolbar-day-date") }}">
+            <div class="editor-toolbar-menu">
+                <button type="button" id="meal-button" class="btn btn-sm" aria-haspopup="menu" aria-expanded="false" aria-controls="meal-menu"
+                        title="{{ tr.t("editor-toolbar-meal-title") }}" aria-label="{{ tr.t("editor-toolbar-meal") }}">
+                    <span class="editor-toolbar-glyph" aria-hidden="true">:</span>
+                    {{ tr.t("editor-toolbar-meal") }}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div id="meal-menu" class="editor-toolbar-popup" role="menu" aria-labelledby="meal-button" hidden>
+                    <button type="button" role="menuitem" tabindex="-1" data-action="meal" data-meal="{{ tr.t("editor-toolbar-meal-breakfast") }}">{{ tr.t("editor-toolbar-meal-breakfast") }}</button>
+                    <button type="button" role="menuitem" tabindex="-1" data-action="meal" data-meal="{{ tr.t("editor-toolbar-meal-lunch") }}">{{ tr.t("editor-toolbar-meal-lunch") }}</button>
+                    <button type="button" role="menuitem" tabindex="-1" data-action="meal" data-meal="{{ tr.t("editor-toolbar-meal-dinner") }}">{{ tr.t("editor-toolbar-meal-dinner") }}</button>
+                    <button type="button" role="menuitem" tabindex="-1" data-action="meal" data-meal="{{ tr.t("editor-toolbar-meal-snacks") }}">{{ tr.t("editor-toolbar-meal-snacks") }}</button>
+                </div>
+            </div>
+            <button type="button" class="btn btn-sm" data-action="add-recipe"
+                    title="{{ tr.t("editor-toolbar-add-recipe-title") }}" aria-label="{{ tr.t("editor-toolbar-add-recipe") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">-&nbsp;@</span>
+                {{ tr.t("editor-toolbar-add-recipe") }}
+            </button>
+        </div>
+        {% endif %}
+        <!-- A menu gets one group here: Ingredient, Comment and Metadata. The
+             menu page drops cookware, timers and notes, and Day replaces
+             Section, so those only appear for recipes, in two groups. The
+             `if !is_menu` below spans the boundary between those two groups. -->
+        <div class="editor-toolbar-group" role="group" aria-label="{% if is_menu %}{{ tr.t("editor-toolbar-other") }}{% else %}{{ tr.t("editor-toolbar-inline") }}{% endif %}">
             <button type="button" class="btn btn-sm" data-action="ingredient"
                     title="{{ tr.t("editor-toolbar-ingredient-title") }}" aria-label="{{ tr.t("editor-toolbar-ingredient") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">@</span>
                 {{ tr.t("editor-toolbar-ingredient") }}
             </button>
+            {% if !is_menu %}
             <button type="button" class="btn btn-sm" data-action="cookware"
                     title="{{ tr.t("editor-toolbar-cookware-title") }}" aria-label="{{ tr.t("editor-toolbar-cookware") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">#</span>
@@ -114,6 +174,11 @@
                     title="{{ tr.t("editor-toolbar-timer-title") }}" aria-label="{{ tr.t("editor-toolbar-timer") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">~</span>
                 {{ tr.t("editor-toolbar-timer") }}
+            </button>
+            <button type="button" class="btn btn-sm" data-action="recipe-reference"
+                    title="{{ tr.t("editor-toolbar-recipe-reference-title") }}" aria-label="{{ tr.t("editor-toolbar-recipe-reference") }}">
+                <span class="editor-toolbar-glyph" aria-hidden="true">@./</span>
+                {{ tr.t("editor-toolbar-recipe-reference") }}
             </button>
         </div>
         <div class="editor-toolbar-group" role="group" aria-label="{{ tr.t("editor-toolbar-block") }}">
@@ -127,6 +192,7 @@
                 <span class="editor-toolbar-glyph" aria-hidden="true">&gt;</span>
                 {{ tr.t("editor-toolbar-note") }}
             </button>
+            {% endif %}
             <button type="button" class="btn btn-sm" data-action="comment"
                     title="{{ tr.t("editor-toolbar-comment-title") }}" aria-label="{{ tr.t("editor-toolbar-comment") }}">
                 <span class="editor-toolbar-glyph" aria-hidden="true">--</span>
@@ -198,9 +264,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }, LSP_DEBOUNCE_MS);
         }
-    });
+    }, { menu: {{ is_menu }} });
 
-    window.CooklangEditor.initToolbar(document.getElementById('editor-toolbar'), editorView);
+    const recipePicker = window.CooklangEditor.initRecipePicker(document.getElementById('recipe-picker'), {
+        prefix: {{ prefix|json|safe }},
+        exclude: recipePath
+    });
+    window.CooklangEditor.initToolbar(document.getElementById('editor-toolbar'), editorView, {
+        ...window.CooklangEditor.recipeActions,
+        ...window.CooklangEditor.menuActions,
+        ...window.CooklangEditor.pickerActions(recipePicker)
+    });
 
     // Set up cursor position tracking (must be after editor init)
     window.CooklangEditor.setCursorPositionCallback((line, col) => {

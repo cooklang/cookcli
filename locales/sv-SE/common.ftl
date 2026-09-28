@@ -54,6 +54,33 @@ editor-toolbar-comment = Kommentar
 editor-toolbar-comment-title = Kommentera bort de aktuella raderna (--), eller markeringen inom en rad
 editor-toolbar-metadata = Metadata
 editor-toolbar-metadata-title = Lägg till en metadatarad i frontmatter (---)
+editor-toolbar-menu = Menyelement
+editor-toolbar-other = Övriga element
+editor-toolbar-day = Dag
+editor-toolbar-day-title = Börja en ny dag (== Dag ==), daterad om ett datum är valt
+editor-toolbar-day-default = Dag
+editor-toolbar-day-date = Datum för nästa dag
+editor-toolbar-day-date-title = Valfritt datum för nästa dag, som i == Lördag (2026-03-07) ==
+editor-toolbar-meal = Måltid
+editor-toolbar-meal-title = Börja en måltid (Frukost: \) med en första punkt
+editor-toolbar-meal-breakfast = Frukost
+editor-toolbar-meal-lunch = Lunch
+editor-toolbar-meal-dinner = Middag
+editor-toolbar-meal-snacks = Mellanmål
+editor-toolbar-add-recipe = Lägg till recept
+editor-toolbar-add-recipe-title = Lägg till ett recept i den aktuella måltiden (- @./Recept{"{}"})
+editor-toolbar-recipe-reference = Receptreferens
+editor-toolbar-recipe-reference-title = Referera till ett annat recept (@./Recept{"{}"})
+
+# Recipe picker
+recipe-picker-title = Välj ett recept
+recipe-picker-search = Sök recept
+recipe-picker-results = Recept
+recipe-picker-servings = Portioner
+recipe-picker-servings-hint = Lämna tomt för att använda receptets egna portioner.
+recipe-picker-insert = Infoga
+recipe-picker-no-results = Inga recept hittades
+recipe-picker-load-failed = Kunde inte läsa in recepten
 
 # LSP Status
 lsp-connected = LSP Ansluten
@@ -67,6 +94,13 @@ new-recipe-filename = Recept namn
 new-recipe-placeholder = Middag/Italienskt/Pasta Carbonara
 new-recipe-hint = Använd mapp/recept-namn format
 new-recipe-create = Skapa Recept
+
+# New Menu
+new-menu = Ny Meny
+new-menu-path = Meny sökväg
+new-menu-placeholder = Planer/Vecka 12
+new-menu-hint = Använd mapp/meny-namn format
+new-menu-create = Skapa Meny
 
 # Delete Recipe
 delete-recipe = Radera Recept

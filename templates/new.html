@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}{{ tr.t("new-recipe") }} - Cook{% endblock %}
+{% block title %}{% if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %} - Cook{% endblock %}
 
 {% block content %}
 <div class="max-w-xl mx-auto">
-    <h1 class="text-display font-bold text-text mb-8">{{ tr.t("new-recipe") }}</h1>
+    <h1 class="text-display font-bold text-text mb-8">{% if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %}</h1>
 
     {% if let Some(err) = error %}
     <div class="mb-6 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
@@ -18,9 +18,10 @@
     {% endif %}
 
     <form action="{{ prefix }}/new" method="POST" class="space-y-6">
+        <input type="hidden" name="kind" value="{% if is_menu %}menu{% else %}recipe{% endif %}">
         <div>
             <label for="filename" class="block text-sm font-medium text-muted mb-2">
-                {{ tr.t("new-recipe-path") }}
+                {% if is_menu %}{{ tr.t("new-menu-path") }}{% else %}{{ tr.t("new-recipe-path") }}{% endif %}
             </label>
             <div class="flex items-center gap-2">
                 <input
@@ -29,13 +30,13 @@
                     name="filename"
                     required
                     pattern="[a-zA-Z0-9_/ -]+"
-                    placeholder="{{ tr.t("new-recipe-placeholder") }}"
+                    placeholder="{% if is_menu %}{{ tr.t("new-menu-placeholder") }}{% else %}{{ tr.t("new-recipe-placeholder") }}{% endif %}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
                     class="flex-1 px-4 py-3 border {% if error.is_some() %}border-danger{% else %}border-line{% endif %} rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]"
                 >
-                <span class="text-faint">.cook</span>
+                <span class="text-faint">{% if is_menu %}.menu{% else %}.cook{% endif %}</span>
             </div>
-            <p class="mt-2 text-sm text-faint">{{ tr.t("new-recipe-hint") }}</p>
+            <p class="mt-2 text-sm text-faint">{% if is_menu %}{{ tr.t("new-menu-hint") }}{% else %}{{ tr.t("new-recipe-hint") }}{% endif %}</p>
         </div>
 
         <div class="flex gap-4">
@@ -43,7 +44,7 @@
                 {{ tr.t("action-cancel") }}
             </a>
             <button type="submit" class="btn btn-primary">
-                {{ tr.t("new-recipe-create") }}
+                {% if is_menu %}{{ tr.t("new-menu-create") }}{% else %}{{ tr.t("new-recipe-create") }}{% endif %}
             </button>
         </div>
     </form>
