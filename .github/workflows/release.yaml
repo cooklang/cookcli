@@ -298,29 +298,19 @@ jobs:
         run: npm run build-js
 
       - name: Build | Source tarball
+        # packaging/source-tarball.sh also checks the assets made it in, and
+        # is what build-rpm.sh uses, so the RPM workflow tests this path.
         run: |
           set -euo pipefail
-          version="${TAG#v}"
-          prefix="cookcli-$version"
+          tarball=$(./packaging/source-tarball.sh .)
 
-          # `git archive` rather than a plain `tar .`, so nothing untracked
-          # (node_modules/, target/) can leak in; the two generated assets are
-          # then copied on top.
-          mkdir -p dist
-          git archive --format=tar --prefix="$prefix/" HEAD | tar -x -C dist
-          cp static/css/output.css "dist/$prefix/static/css/output.css"
-          cp static/js/editor.bundle.js "dist/$prefix/static/js/editor.bundle.js"
-          tar -czf "cook-$version-source.tar.gz" -C dist "$prefix"
-
-          # The whole point of this artifact is those two files, and a tarball
-          # missing them fails only much later, in someone else's build. The
-          # listing goes to a file rather than into `grep -q`, which would exit
-          # early, SIGPIPE the tar, and trip `pipefail` on a healthy tarball.
-          tar -tzf "cook-$version-source.tar.gz" > dist/contents.txt
-          for asset in static/css/output.css static/js/editor.bundle.js; do
-            grep -qx "$prefix/$asset" dist/contents.txt \
-              || { echo "source tarball is missing $asset" >&2; exit 1; }
-          done
+          # The script names the tarball after Cargo.toml's version. On a
+          # release-please tag the two agree; if they ever do not, stop rather
+          # than attach an asset named after another version.
+          if [ "$(basename "$tarball")" != "cook-${TAG#v}-source.tar.gz" ]; then
+            echo "tag $TAG does not match $(basename "$tarball")" >&2
+            exit 1
+          fi
         env:
           TAG: ${{ needs.release_please.outputs.tag_name }}
 
@@ -621,21 +611,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-        env:
-          TAG: ${{ needs.release_please.outputs.tag_name }}
-
+      # Pushed by digest only: the per-platform images need no tag of their
+      # own. The old `build-0`/`build-1` tags were overwritten each release
+      # and sat in the public registry next to the real versions.
       - name: Build and push
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          push: true
-          tags: ghcr.io/cooklang/cookcli:build-${{ strategy.job-index }}
+          outputs: type=image,name=ghcr.io/cooklang/cookcli,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      # Not `cook-*`: upload_artifacts attaches everything named that way to
+      # the release.
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-digest-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   docker_merge:
     name: Create multi-arch manifest
@@ -652,18 +656,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Setup | Digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: docker-digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+
+      # One file per platform image, named after its digest.
+      - name: Create and push manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          images=()
+          for digest in *; do
+            images+=("ghcr.io/cooklang/cookcli@sha256:$digest")
+          done
+          docker buildx imagetools create \
+            -t "ghcr.io/cooklang/cookcli:${TAG#v}" \
+            -t ghcr.io/cooklang/cookcli:latest \
+            "${images[@]}"
+          docker buildx imagetools inspect "ghcr.io/cooklang/cookcli:${TAG#v}"
         env:
           TAG: ${{ needs.release_please.outputs.tag_name }}
-
-      - name: Create and push manifest
-        run: |
-          docker buildx imagetools create \
-            -t ghcr.io/cooklang/cookcli:${{ steps.version.outputs.version }} \
-            -t ghcr.io/cooklang/cookcli:latest \
-            ghcr.io/cooklang/cookcli:build-0 \
-            ghcr.io/cooklang/cookcli:build-1
 
 

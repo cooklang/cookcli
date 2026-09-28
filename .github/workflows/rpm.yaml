@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - packaging/fedora/**
+      - packaging/**
       - .github/workflows/rpm.yaml
 
 env:
@@ -58,25 +58,16 @@ jobs:
       - name: Setup | Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      # The same source drop the release workflow attaches: `git archive` plus
-      # the two npm-generated web assets, so no Node.js is needed inside the
-      # RPM build itself.
+      # Without an argument build-rpm.sh makes its own source tarball with
+      # packaging/source-tarball.sh — the script behind the release asset —
+      # so only the web assets are needed from npm, not Node.js in the build.
       - name: Build | RPM
         run: |
           set -euo pipefail
           npm ci
           npm run build-css
           npm run build-js
-
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
-          prefix="cookcli-$version"
-          mkdir -p dist
-          git archive --format=tar --prefix="$prefix/" HEAD | tar -x -C dist
-          install -D static/css/output.css "dist/$prefix/static/css/output.css"
-          install -D static/js/editor.bundle.js "dist/$prefix/static/js/editor.bundle.js"
-          tar -czf "cook-$version-source.tar.gz" -C dist "$prefix"
-
-          ./packaging/fedora/build-rpm.sh "cook-$version-source.tar.gz"
+          ./packaging/fedora/build-rpm.sh
 
       - name: Upload | RPMs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
