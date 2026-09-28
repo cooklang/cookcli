@@ -3,9 +3,12 @@
 //! ```toml
 //! [users]
 //! alice = "$argon2id$v=19$m=19456,t=2,p=1$…"
+//! bob = { hash = "$argon2id$…", role = "editor" }
 //! ```
 //!
-//! Each value is an argon2 PHC string, written by `cook server user add`.
+//! Each value is an argon2 PHC string, written by `cook server user add`,
+//! or a table pairing one with a [`Role`]. A bare hash is an admin, which is
+//! what every user was before roles existed.
 //! [`Users`] is the validated, read-only view the server checks passwords
 //! against; [`UsersDocument`] is the editable one the `user` commands rewrite,
 //! built on `toml_edit` so an admin's comments survive every change.
@@ -16,6 +19,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+
+pub use crate::web::viewer::Role;
 
 /// Environment variable naming the users file, for containers that cannot
 /// easily add a flag to the image's command. `--users-file` wins over it.
@@ -106,27 +111,78 @@ fn validate_hash(name: &str, phc: &str) -> Result<()> {
 #[serde(deny_unknown_fields)]
 struct UsersFile {
     #[serde(default)]
-    users: BTreeMap<String, String>,
+    users: BTreeMap<String, toml::Value>,
 }
 
-/// The users who may sign in, each with their password hash.
+/// The table form of an entry, `bob = { hash = "…", role = "editor" }`.
+///
+/// Unknown keys are refused, so a typo'd `role` does not quietly leave the
+/// user an admin.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EntryTable {
+    hash: String,
+    role: Option<String>,
+}
+
+/// One user's line in the users file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Entry {
+    hash: String,
+    role: Role,
+}
+
+impl Entry {
+    /// Reads either form of an entry: a bare hash, which is an admin as every
+    /// user was before roles existed, or a table with a hash and a role.
+    fn parse(name: &str, value: toml::Value) -> Result<Self> {
+        let (hash, role) = match value {
+            toml::Value::String(hash) => (hash, None),
+            value @ toml::Value::Table(_) => {
+                let table: EntryTable = value
+                    .try_into()
+                    .with_context(|| format!("invalid entry for {name:?}"))?;
+                (table.hash, table.role)
+            }
+            _ => bail!(
+                "the entry for {name:?} must be a password hash, or a table with a `hash` \
+                 and a `role`"
+            ),
+        };
+        let role = match role {
+            Some(role) => role
+                .parse()
+                .map_err(|err| anyhow::anyhow!("{name:?} has an {err}"))?,
+            None => Role::Admin,
+        };
+        validate_hash(name, &hash)?;
+        Ok(Self { hash, role })
+    }
+}
+
+/// The users who may sign in, each with their password hash and role.
 ///
 /// An empty list is valid: sign-in stays on and nobody can make changes,
 /// which leaves the site read-only.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Users {
-    hashes: BTreeMap<String, String>,
+    entries: BTreeMap<String, Entry>,
 }
 
 impl Users {
     /// Parses and validates the users file's contents.
+    ///
+    /// Anything it does not understand, down to an unknown role, is an error:
+    /// the server refuses to start rather than guess what someone meant.
     pub fn parse(text: &str) -> Result<Self> {
         let file: UsersFile = toml::from_str(text)?;
-        for (name, phc) in &file.users {
-            validate_username(name)?;
-            validate_hash(name, phc)?;
+        let mut entries = BTreeMap::new();
+        for (name, value) in file.users {
+            validate_username(&name)?;
+            let entry = Entry::parse(&name, value)?;
+            entries.insert(name, entry);
         }
-        Ok(Self { hashes: file.users })
+        Ok(Self { entries })
     }
 
     /// Reads and validates the users file at `path`.
@@ -138,15 +194,27 @@ impl Users {
 
     /// The password hash of `name`, if that user exists.
     pub fn hash(&self, name: &str) -> Option<&str> {
-        self.hashes.get(name).map(String::as_str)
+        self.entries.get(name).map(|entry| entry.hash.as_str())
+    }
+
+    /// The role of `name`, if that user exists.
+    pub fn role(&self, name: &str) -> Option<Role> {
+        self.entries.get(name).map(|entry| entry.role)
+    }
+
+    /// Every user and their role, by name.
+    pub fn roles(&self) -> impl Iterator<Item = (&str, Role)> {
+        self.entries
+            .iter()
+            .map(|(name, entry)| (name.as_str(), entry.role))
     }
 
     pub fn len(&self) -> usize {
-        self.hashes.len()
+        self.entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.hashes.is_empty()
+        self.entries.is_empty()
     }
 }
 
@@ -168,25 +236,62 @@ impl UsersDocument {
     }
 
     pub fn names(&self) -> Vec<String> {
-        self.users()
+        self.users_table()
             .map(|table| table.iter().map(|(name, _)| name.to_string()).collect())
             .unwrap_or_default()
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.users().is_some_and(|table| table.contains_key(name))
+        self.users_table()
+            .is_some_and(|table| table.contains_key(name))
     }
 
-    /// Adds `name`, or replaces their hash if they exist.
-    pub fn set(&mut self, name: &str, phc: &str) {
-        let users = self.doc.entry("users").or_insert_with(|| {
-            let mut table = toml_edit::Table::new();
-            table.set_implicit(false);
-            toml_edit::Item::Table(table)
-        });
-        if let Some(table) = users.as_table_like_mut() {
-            table.insert(name, toml_edit::value(phc));
+    /// The users as the server would read them.
+    pub fn users(&self) -> Result<Users> {
+        Users::parse(&self.doc.to_string())
+    }
+
+    /// Adds `name` with `role`, replacing them if they exist.
+    ///
+    /// An admin is written as a bare hash, which every version of the server
+    /// reads; anyone else as `{ hash = "…", role = "…" }`, which a server
+    /// from before roles refuses rather than make them an admin.
+    pub fn add(&mut self, name: &str, phc: &str, role: Role) {
+        let value = if role == Role::Admin {
+            toml_edit::Value::from(phc)
+        } else {
+            let mut table = toml_edit::InlineTable::new();
+            table.insert("hash", phc.into());
+            table.insert("role", role.as_str().into());
+            table.into()
+        };
+        self.replace(name, value);
+    }
+
+    /// Changes the password hash of `name`, who must exist, keeping their
+    /// role.
+    pub fn set_password(&mut self, name: &str, phc: &str) {
+        match self.entry_table_mut(name) {
+            Some(table) => {
+                table.insert("hash", toml_edit::value(phc));
+            }
+            None => self.replace(name, phc.into()),
         }
+    }
+
+    /// Gives `name`, who must exist, `role`, keeping their password.
+    pub fn set_role(&mut self, name: &str, role: Role) -> Result<()> {
+        if let Some(table) = self.entry_table_mut(name) {
+            table.insert("role", toml_edit::value(role.as_str()));
+            return Ok(());
+        }
+        let hash = self
+            .users()?
+            .hash(name)
+            .with_context(|| format!("there is no user {name}"))?
+            .to_owned();
+        self.add(name, &hash, role);
+        Ok(())
     }
 
     /// Removes `name`, returning whether they were there.
@@ -197,10 +302,45 @@ impl UsersDocument {
             .is_some_and(|table| table.remove(name).is_some())
     }
 
-    fn users(&self) -> Option<&dyn toml_edit::TableLike> {
+    fn users_table(&self) -> Option<&dyn toml_edit::TableLike> {
         self.doc
             .get("users")
             .and_then(toml_edit::Item::as_table_like)
+    }
+
+    fn users_table_mut(&mut self) -> Option<&mut dyn toml_edit::TableLike> {
+        self.doc
+            .entry("users")
+            .or_insert_with(|| {
+                let mut table = toml_edit::Table::new();
+                table.set_implicit(false);
+                toml_edit::Item::Table(table)
+            })
+            .as_table_like_mut()
+    }
+
+    /// The entry of `name` when it is written as a table, inline or not.
+    fn entry_table_mut(&mut self, name: &str) -> Option<&mut dyn toml_edit::TableLike> {
+        self.users_table_mut()?.get_mut(name)?.as_table_like_mut()
+    }
+
+    /// Sets the entry of `name` to `value`, keeping any comment beside the
+    /// value it replaces.
+    fn replace(&mut self, name: &str, mut value: toml_edit::Value) {
+        let Some(table) = self.users_table_mut() else {
+            return;
+        };
+        match table.get_mut(name) {
+            Some(item) => {
+                if let Some(old) = item.as_value() {
+                    *value.decor_mut() = old.decor().clone();
+                }
+                *item = toml_edit::Item::Value(value);
+            }
+            None => {
+                table.insert(name, toml_edit::Item::Value(value));
+            }
+        }
     }
 }
 
@@ -294,7 +434,7 @@ mod tests {
         let mut doc = UsersDocument::parse(&original).unwrap();
         assert_eq!(doc.names(), ["alice"]);
 
-        doc.set("bob", HASH);
+        doc.add("bob", HASH, Role::Admin);
         assert!(doc.contains("bob"));
         let text = doc.to_string();
         assert!(text.contains("# Kitchen crew"), "{text}");
@@ -310,10 +450,112 @@ mod tests {
     fn document_starts_from_nothing() {
         let mut doc = UsersDocument::parse("").unwrap();
         assert!(doc.names().is_empty());
-        doc.set("me@home", HASH);
+        doc.add("me@home", HASH, Role::Admin);
         let text = doc.to_string();
         assert!(text.contains("[users]"), "{text}");
         assert_eq!(Users::parse(&text).unwrap().hash("me@home"), Some(HASH));
+    }
+
+    #[test]
+    fn a_bare_hash_is_an_admin_and_a_table_names_the_role() {
+        let users = Users::parse(&format!(
+            "[users]\n\
+             alice = \"{HASH}\"\n\
+             bob = {{ hash = \"{HASH}\", role = \"editor\" }}\n\
+             carol = {{ hash = \"{HASH}\" }}\n\
+             [users.dave]\nhash = \"{HASH}\"\nrole = \"reader\"\n"
+        ))
+        .unwrap();
+        assert_eq!(users.role("alice"), Some(Role::Admin));
+        assert_eq!(users.role("bob"), Some(Role::Editor));
+        assert_eq!(users.hash("bob"), Some(HASH));
+        assert_eq!(users.role("carol"), Some(Role::Admin));
+        assert_eq!(users.role("dave"), Some(Role::Reader));
+        assert_eq!(users.role("erin"), None);
+        assert_eq!(
+            users.roles().collect::<Vec<_>>(),
+            [
+                ("alice", Role::Admin),
+                ("bob", Role::Editor),
+                ("carol", Role::Admin),
+                ("dave", Role::Reader),
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_entries_it_does_not_understand() {
+        let parse = |entry: String| Users::parse(&format!("[users]\nbob = {entry}\n"));
+
+        // An unknown role fails closed, naming the user and the choices.
+        let err = parse(format!("{{ hash = \"{HASH}\", role = \"chef\" }}")).unwrap_err();
+        let message = format!("{err:#}");
+        assert!(message.contains("bob"), "{message}");
+        assert!(message.contains("chef"), "{message}");
+        assert!(
+            message.contains("reader, shopper, editor, admin"),
+            "{message}"
+        );
+        // Role names are exact.
+        assert!(parse(format!("{{ hash = \"{HASH}\", role = \"Editor\" }}")).is_err());
+        // A typo'd key is not ignored, which would leave bob an admin.
+        assert!(parse(format!("{{ hash = \"{HASH}\", rol = \"reader\" }}")).is_err());
+        // A table still needs a real hash.
+        assert!(parse("{ role = \"reader\" }".to_string()).is_err());
+        assert!(parse("{ hash = \"hunter2\", role = \"reader\" }".to_string()).is_err());
+        // Neither a string nor a table.
+        assert!(parse("42".to_string()).is_err());
+    }
+
+    #[test]
+    fn document_writes_roles_as_the_server_reads_them() {
+        let mut doc = UsersDocument::parse("").unwrap();
+        doc.add("alice", HASH, Role::Admin);
+        doc.add("bob", HASH, Role::Shopper);
+        let text = doc.to_string();
+        // An admin stays a bare hash, which older servers read too.
+        assert!(text.contains(&format!("alice = \"{HASH}\"")), "{text}");
+        let users = doc.users().unwrap();
+        assert_eq!(users.role("alice"), Some(Role::Admin));
+        assert_eq!(users.role("bob"), Some(Role::Shopper));
+    }
+
+    #[test]
+    fn document_changes_a_role_and_keeps_the_rest() {
+        const OTHER: &str = "$argon2id$v=19$m=64,t=1,p=1$b3RoZXJzYWx0$AAAAAAAAAAAAAAAAAAAAAA";
+        let original = format!(
+            "[users]\n\
+             # the chef\n\
+             alice = \"{HASH}\" # owner\n\
+             [users.dave]\nhash = \"{HASH}\"\nrole = \"reader\"\n"
+        );
+        let mut doc = UsersDocument::parse(&original).unwrap();
+
+        // A bare hash becomes a table, keeping its comments and password.
+        doc.set_role("alice", Role::Reader).unwrap();
+        let text = doc.to_string();
+        assert!(text.contains("# the chef"), "{text}");
+        assert!(text.contains("# owner"), "{text}");
+        let users = doc.users().unwrap();
+        assert_eq!(users.role("alice"), Some(Role::Reader));
+        assert_eq!(users.hash("alice"), Some(HASH));
+
+        // A new password keeps the role, in either form.
+        doc.set_password("alice", OTHER);
+        doc.set_password("dave", OTHER);
+        let users = doc.users().unwrap();
+        assert_eq!(users.hash("alice"), Some(OTHER));
+        assert_eq!(users.role("alice"), Some(Role::Reader));
+        assert_eq!(users.hash("dave"), Some(OTHER));
+        assert_eq!(users.role("dave"), Some(Role::Reader));
+
+        // A table entry keeps its form.
+        doc.set_role("dave", Role::Admin).unwrap();
+        let text = doc.to_string();
+        assert!(text.contains("[users.dave]"), "{text}");
+        assert_eq!(doc.users().unwrap().role("dave"), Some(Role::Admin));
+
+        assert!(doc.set_role("erin", Role::Editor).is_err());
     }
 
     #[test]

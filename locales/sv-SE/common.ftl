@@ -132,6 +132,7 @@ sign-in-username = Användarnamn
 sign-in-password = Lösenord
 sign-in-failed = Fel användarnamn eller lösenord.
 signed-in-as = Inloggad som
+role-forbidden = Ditt konto kan inte göra detta. Be den som driver servern om en annan roll.
 
 # Errors
 error-title = Något gick snett

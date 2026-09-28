@@ -92,7 +92,9 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "403",
-                "a browser request tried to modify recipes from an origin the server does not \
+                "the signed-in user's role does not allow this request (`Your role does not \
+                 allow this change`); signing in again as the same user will not help. Also: a \
+                 browser request tried to modify recipes from an origin the server does not \
                  trust: another site, or this server's web UI opened at a host name other than \
                  `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` \
                  to allow that origin.",

@@ -132,6 +132,7 @@ sign-in-username = Benutzername
 sign-in-password = Passwort
 sign-in-failed = Falscher Benutzername oder falsches Passwort.
 signed-in-as = Angemeldet als
+role-forbidden = Dein Konto darf das nicht. Bitte die Person, die diesen Server betreibt, um eine andere Rolle.
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Design umschalten

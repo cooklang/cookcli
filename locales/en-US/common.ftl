@@ -132,6 +132,7 @@ sign-in-username = Username
 sign-in-password = Password
 sign-in-failed = Wrong username or password.
 signed-in-as = Signed in as
+role-forbidden = Your account can't do this. Ask whoever runs this server for a different role.
 
 # Errors
 error-title = Something went wrong

@@ -132,6 +132,7 @@ sign-in-username = Nom d'utilisateur
 sign-in-password = Mot de passe
 sign-in-failed = Nom d'utilisateur ou mot de passe incorrect.
 signed-in-as = Connecté en tant que
+role-forbidden = Votre compte ne permet pas de faire cela. Demandez un autre rôle à la personne qui gère ce serveur.
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Changer de thème

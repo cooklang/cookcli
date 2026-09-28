@@ -121,24 +121,50 @@ Once the server has users:
 - Anyone can still browse recipes and menus, search, and look at the shopping
   list and the pantry.
 - Creating, editing and deleting recipes, and changing the pantry or the
-  shopping list, need a signed-in user. Guests see a **Sign in** link at the
-  top of every page instead of the controls that change things.
+  shopping list, need a signed-in user whose [role](#roles) allows it. Guests
+  see a **Sign in** link at the top of every page instead of the controls
+  that change things.
 - The editor's language server (`/api/ws/lsp`) and the CookCloud sync
-  controls are for signed-in users only.
+  controls are for admins only.
 - An API request that would change something, sent without a session, gets
-  `401`. [The API reference](api.md) shows how a script signs in.
+  `401`; sent by a user whose role does not allow it, `403`.
+  [The API reference](api.md) shows how a script signs in.
 
 Users live on the server only: nobody can sign up or change a password from
 the browser.
+
+### Roles
+
+Each user has a role, which decides what they can change once signed in. Each
+role can do everything the ones above it can:
+
+| Role | Shopping list & pantry | Recipes & menus (create, edit, delete, title picture) | CookCloud sync, editor's language server |
+|------|:---:|:---:|:---:|
+| `reader` | | | |
+| `shopper` | ✅ | | |
+| `editor` | ✅ | ✅ | |
+| `admin` | ✅ | ✅ | ✅ |
+
+Everyone, signed in or not, can read. A user added without `--role` is an
+`admin`, which is what every user was before roles existed. Pages leave out
+the controls a user's role cannot use; an editor still edits recipes, without
+the language server's completions and diagnostics.
+
+```bash
+cook server user add grandma --role reader
+cook server user add kid --role shopper
+cook server user role kid editor   # applies at once, without signing them out
+```
 
 ### Managing users
 
 | Command | What it does |
 |---------|--------------|
-| `cook server user add <name>` | Add a user, asking for their password. Creates the users file if needed. |
+| `cook server user add <name> [--role <role>]` | Add a user, asking for their password. Creates the users file if needed. The role defaults to `admin`. |
 | `cook server user passwd <name>` | Change a user's password. |
+| `cook server user role <name> <role>` | Change a user's [role](#roles). |
 | `cook server user remove <name>` | Remove a user. |
-| `cook server user list` | List the users. |
+| `cook server user list` | List the users and their roles. |
 | `cook server hash-password` | Print a password hash, for editing the users file by hand. |
 
 A username may use letters, digits and `_ . @ -`. The password prompt does not
@@ -154,8 +180,9 @@ printf '%s\n' "$PASSWORD" | cook server user add alice
 directory. Pass `--users-file` after the subcommand when you need it.
 
 A running server picks up changes to the users file on its own. A new user can
-sign in right away, and removing a user or changing their password signs them
-out everywhere. The one exception is the first user: sign-in turns on when the
+sign in right away, a new role applies to the user's next request, and
+removing a user or changing their password signs them out everywhere. The one
+exception is the first user: sign-in turns on when the
 server *starts* with a users file, so restart it once after creating one.
 
 ### The users file
@@ -169,16 +196,21 @@ file and keep any comments in it.
 ```toml
 # Who may change recipes on this server.
 [users]
-alice = "$argon2id$v=19$m=19456,t=2,p=1$…"
+alice = "$argon2id$v=19$m=19456,t=2,p=1$…"                  # admin
+bob = { hash = "$argon2id$v=19$m=19456,t=2,p=1$…", role = "editor" }
 ```
+
+A bare hash is an admin; a table pairs a hash with a role. `user add` writes an
+admin as a bare hash, so a server from before roles still reads the file. It
+refuses one with any other role rather than make that user an admin.
 
 - Sign-in is on whenever this file exists when the server starts. Delete it
   and restart to open the server to everyone again.
 - An empty `[users]` table keeps sign-in on with nobody able to sign in, which
   makes the site read-only.
 - The server will not start with a users file it cannot use — one it cannot
-  read, a malformed entry, a file named with `--users-file` that does not
-  exist — rather than fall back to letting everyone in. While it runs, an edit
+  read, a malformed entry, an unknown role, a file named with `--users-file`
+  that does not exist — rather than fall back to letting everyone in. While it runs, an edit
   that breaks the file is ignored: the server logs an error and keeps the
   users it had.
 - The server refuses a users file inside the recipe directory, because it

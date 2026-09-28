@@ -132,6 +132,7 @@ sign-in-username = Erabiltzaile-izena
 sign-in-password = Pasahitza
 sign-in-failed = Erabiltzaile-izena edo pasahitza okerra da.
 signed-in-as = Saioa hasita:
+role-forbidden = Zure kontuak ezin du hau egin. Eskatu beste rol bat zerbitzari hau kudeatzen duenari.
 
 # Icon button labels (aria-label / title)
 aria-toggle-theme = Gaia aldatu

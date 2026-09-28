@@ -212,10 +212,12 @@
     <!-- Status bar -->
     <div id="status-bar" class="mt-2 px-4 py-2 bg-sunk rounded-[var(--radius-control)] flex items-center justify-between text-sm">
         <div class="flex items-center gap-2">
+            {% if viewer.can_admin() %}
             <span id="lsp-status" class="flex items-center gap-1">
                 <span id="lsp-indicator" class="w-2 h-2 rounded-full bg-inactive"></span>
                 <span id="lsp-text">Disconnected</span>
             </span>
+            {% endif %}
         </div>
         <div id="cursor-position" class="text-muted">
             Line 1, Col 1
@@ -853,8 +855,12 @@ function updateLspStatus(status) {
     }
 }
 
-// Connect to LSP after editor is initialized
-setTimeout(connectLsp, LSP_INITIAL_CONNECT_DELAY_MS);
+// Connect to LSP after editor is initialized. The server keeps the language
+// server to admins, so anyone else edits without it rather than retrying a
+// refused socket forever.
+if ({{ viewer.can_admin()|json|safe }}) {
+    setTimeout(connectLsp, LSP_INITIAL_CONNECT_DELAY_MS);
+}
 
 // Set up completion resolver
 window.CooklangEditor.setCompletionResolver(async (line, character) => {

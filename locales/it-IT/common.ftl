@@ -114,6 +114,7 @@ sign-in-username = Nome utente
 sign-in-password = Password
 sign-in-failed = Nome utente o password errati.
 signed-in-as = Accesso effettuato come
+role-forbidden = Il tuo account non può farlo. Chiedi un altro ruolo a chi gestisce questo server.
 
 # Errors
 error-title = Si è verificato un errore
