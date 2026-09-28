@@ -360,7 +360,12 @@
         }
     }
 
-    // Adjust recipe scale
+    // Steps land on multiples of this, whatever the scale started at.
+    const SCALE_GRID = 0.5;
+
+    // Adjust recipe scale by `delta`, onto the 0.5 grid. A scale on the grid
+    // moves by exactly `delta`; one between steps, such as 1.667 from a menu,
+    // stops at the nearest step in that direction: + gives 2, − gives 1.5.
     function adjustScale(delta) {
         const scaleInput = document.getElementById('scale');
         if (!scaleInput) return;
@@ -371,11 +376,13 @@
         let newValue = parseFloat(scaleInput.value) + delta;
         if (!Number.isFinite(newValue)) newValue = min;
 
-        // Round to avoid floating point issues
-        newValue = Math.round(newValue * 10) / 10;
+        // Round back toward where the step started. The epsilon keeps a value
+        // already on the grid (up to floating point noise) where it is.
+        const steps = newValue / SCALE_GRID;
+        newValue = (delta > 0 ? Math.floor(steps + 1e-9) : Math.ceil(steps - 1e-9)) * SCALE_GRID;
 
-        // Clamp to valid range, after rounding: a recipe opened from a menu
-        // can have a minimum such as 0.25, which rounding would push to 0.3.
+        // Clamp to valid range, after snapping: a recipe opened from a menu
+        // can have a minimum such as 0.25, below the first step.
         newValue = Math.max(min, Math.min(max, newValue));
 
         if (newValue !== parseFloat(scaleInput.value)) {

@@ -56,18 +56,18 @@ mod scale_factor_tests {
 
     #[test]
     fn drops_trailing_zeros() {
-        assert_eq!(scale_factor(&2.0, 6).unwrap(), "2");
-        assert_eq!(scale_factor(&0.5, 6).unwrap(), "0.5");
-        assert_eq!(scale_factor(&1.25, 3).unwrap(), "1.25");
+        assert_eq!(scale_factor(&2.0).unwrap(), "2");
+        assert_eq!(scale_factor(&0.5).unwrap(), "0.5");
+        assert_eq!(scale_factor(&1.25).unwrap(), "1.25");
     }
 
     #[test]
-    fn rounds_to_the_given_places() {
-        assert_eq!(scale_factor(&(1.0 / 3.0), 3).unwrap(), "0.333");
-        assert_eq!(scale_factor(&(1.0 / 3.0), 6).unwrap(), "0.333333");
-        assert_eq!(scale_factor(&(2.0 / 3.0), 3).unwrap(), "0.667");
+    fn rounds_to_three_places() {
+        assert_eq!(scale_factor(&(1.0 / 3.0)).unwrap(), "0.333");
+        assert_eq!(scale_factor(&(2.0 / 3.0)).unwrap(), "0.667");
+        assert_eq!(scale_factor(&(5.0 / 3.0)).unwrap(), "1.667");
         // Rounding up to a whole number leaves no decimal point behind.
-        assert_eq!(scale_factor(&4.9999999, 3).unwrap(), "5");
+        assert_eq!(scale_factor(&4.9999999).unwrap(), "5");
     }
 }
 
@@ -152,11 +152,11 @@ mod filters {
             .unwrap_or(false))
     }
 
-    /// A scale factor as short decimal text: rounded to `decimals` places,
-    /// without trailing zeros. `1/3` reads `0.333` at 3 places and `0.333333`
-    /// at 6; `2.0` reads `2`.
-    pub fn scale_factor(value: &f64, decimals: usize) -> Result<String> {
-        let text = format!("{value:.decimals$}");
+    /// A scale factor as short decimal text, for a menu's badges and recipe
+    /// links alike: rounded to 3 places, without trailing zeros. `1/3` reads
+    /// `0.333`, `2.0` reads `2`.
+    pub fn scale_factor(value: &f64) -> Result<String> {
+        let text = format!("{value:.3}");
         if !text.contains('.') {
             return Ok(text);
         }

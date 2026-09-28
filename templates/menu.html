@@ -173,13 +173,13 @@
                                 {% match line[0] %}
                                 {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                     <span class="inline-flex items-center gap-1">
-                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor(6) }}{% endif %}{% endif %}"
+                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
                                            class="text-info font-medium hover:underline">
                                             {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                         </a>
                                         {% match scale %}
                                         {% when Some with (s) %}
-                                            <span class="text-sm text-faint">(×{{ s|scale_factor(3) }})</span>
+                                            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
                                         {% when None %}
                                         {% endmatch %}
                                     </span>
@@ -213,13 +213,13 @@
 
                             {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
                                 <span class="inline-flex items-center gap-1">
-                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor(6) }}{% endif %}{% endif %}"
+                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
                                        class="text-info font-medium hover:underline">
                                         {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
                                     </a>
                                     {% match scale %}
                                     {% when Some with (s) %}
-                                        <span class="text-sm text-faint">(×{{ s|scale_factor(3) }})</span>
+                                        <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
                                     {% when None %}
                                     {% endmatch %}
                                 </span>

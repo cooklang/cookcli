@@ -31,5 +31,35 @@ test.describe('Recipes opened from a menu', () => {
     await page.getByRole('button', { name: /decrease/i }).click();
     await expect(scale).toHaveValue('0.25');
     await expect(page).toHaveURL(/\?scale=0\.25$/);
+
+    // + goes to the first step.
+    await page.getByRole('button', { name: /increase/i }).click();
+    await expect(page).toHaveURL(/\?scale=0\.5$/);
+  });
+});
+
+test.describe('Recipe scale steps', () => {
+  // A scale between steps, such as 1.667 from a menu, moves to the nearest
+  // multiple of 0.5 in that direction; one on a step moves by the full step.
+  const cases: Array<[string, string, RegExp | string, string]> = [
+    ['+ from between steps', '1.667', /increase/i, '2'],
+    ['− from between steps', '1.667', /decrease/i, '1.5'],
+    ['+ from a step', '1.5', /increase/i, '2'],
+    ['− from a step', '1.5', /decrease/i, '1'],
+  ];
+
+  for (const [name, from, button, to] of cases) {
+    test(name, async ({ page }) => {
+      await page.goto(`/recipe/lamb-chops?scale=${from}`);
+      await page.getByRole('button', { name: button }).click();
+      await expect(page).toHaveURL(new RegExp(`\\?scale=${to.replace('.', '\\.')}$`));
+      await expect(page.locator('#scale')).toHaveValue(to);
+    });
+  }
+
+  test('] from between steps keeps to the grid', async ({ page }) => {
+    await page.goto('/recipe/lamb-chops?scale=1.667');
+    await page.locator('body').press(']');
+    await expect(page).toHaveURL(/\?scale=2\.5$/);
   });
 });
