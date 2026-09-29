@@ -59,11 +59,14 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "CORS",
-                "`GET` is allowed from any origin. A cross-origin request that would modify \
-                 recipes is refused with `403` unless the server was started with a matching \
-                 `--cors-origin <ORIGIN>`. Requests with no `Origin` header — `curl` and other \
-                 non-browser clients — are unaffected. `content-type` is always an allowed \
-                 request header.",
+                "Off unless the server was started with `--cors-origin`: no other origin can \
+                 read its answers. `--cors-origin '*'` lets any origin `GET`; a cross-origin \
+                 request that would modify recipes is still refused with `403` unless it comes \
+                 from an origin named explicitly. Requests with no `Origin` header — `curl` and \
+                 other non-browser clients — are unaffected. `content-type` is always an \
+                 allowed request header. Every request, from a browser or not, has to be sent \
+                 to `localhost`, an IP address, or the host of a `--cors-origin`; any other \
+                 `Host` is refused with `403`.",
             ),
             note(
                 "Request size limit",
@@ -93,11 +96,11 @@ pub fn preamble() -> ApiPreamble {
             note(
                 "403",
                 "the signed-in user's role does not allow this request (`Your role does not \
-                 allow this change`); signing in again as the same user will not help. Also: a \
-                 browser request tried to modify recipes from an origin the server does not \
-                 trust: another site, or this server's web UI opened at a host name other than \
-                 `localhost` or an IP address. Start the server with `--cors-origin <ORIGIN>` \
-                 to allow that origin.",
+                 allow this change`); signing in again as the same user will not help. Also: \
+                 the request was sent to a host name other than `localhost` or an IP address, \
+                 or a browser request tried to modify recipes from an origin the server does \
+                 not trust (another site). Start the server with `--cors-origin <ORIGIN>` to \
+                 allow that origin and its host.",
             ),
             note(
                 "404",

@@ -11,8 +11,8 @@ services:
       # - ./config:/config
     # Opening the web UI at http://localhost:9080, or at this host's address on
     # the network, needs nothing more. Reaching it by host name — nas.local, or
-    # a reverse proxy's domain — means naming that origin, or its pages can
-    # read but not save. Separate several with commas.
+    # a reverse proxy's domain — means naming that origin, or the server
+    # refuses to answer it. Separate several with commas.
     #
     # To require sign-in before anyone can change recipes, uncomment
     # COOK_CONFIG_DIR and the ./config volume, run `mkdir config`, then add

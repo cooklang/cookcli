@@ -348,7 +348,7 @@ cook server
 cook server --host
 
 # Only if you open it by host name instead of IP address: name that origin,
-# or the web UI can read but not save
+# or the server refuses to answer it
 cook server --host --cors-origin http://raspberrypi.local:9080
 
 # Use a different port
@@ -594,8 +594,8 @@ both.
 ### `COOK_CORS_ORIGIN`
 
 Set `COOK_CORS_ORIGIN` to name the origins `cook server` accepts browser
-requests from, separated by commas — the same values as `--cors-origin`, which
-overrides the variable:
+requests from, and so the host names it answers at, separated by commas — the
+same values as `--cors-origin`, which overrides the variable:
 
 ```bash
 COOK_CORS_ORIGIN=https://cook.example.com cook server --host

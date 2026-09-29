@@ -28,9 +28,9 @@ cook server hash-password
 | `--host [<ADDRESS>]` | Allow connections from external hosts (default: localhost only). Optionally bind to a specific address. |
 | `-p, --port <PORT>` | Port number (default: 9080) |
 | `--open` | Automatically open the web interface in your default browser |
-| `--cors-origin <ORIGIN>` | Origin allowed to make cross-origin browser requests. Repeatable. `*` for any origin (default). |
+| `--cors-origin <ORIGIN>` | Origin allowed to make cross-origin browser requests, and whose host the server answers at. Repeatable. `*` lets any origin read. Default: none, same-origin only. |
 | `--cors-allow-credentials` | Allow cross-origin requests to carry cookies and credentials. Requires an explicit `--cors-origin`. |
-| `--no-csrf-check` | Disable same-origin enforcement on requests that modify recipes and on the editor's language server connection. |
+| `--no-csrf-check` | Disable same-origin enforcement: the `Host` check, requests that modify recipes and the editor's language server connection. |
 | `--max-lsp-sessions <N>` | Language server sessions to run at once (default: 8). `0` disables the editor's language server. |
 | `--users-file <PATH>` | Users who may sign in to make changes. Defaults to `COOK_USERS_FILE`, then `users.toml` in the configuration directory. See [Signing in to make changes](#signing-in-to-make-changes). |
 
@@ -38,7 +38,7 @@ cook server hash-password
 
 | Variable | Description |
 |----------|-------------|
-| `COOK_CORS_ORIGIN` | Origins allowed to make cross-origin browser requests, separated by commas. Same values as `--cors-origin`, which overrides it. For containers, where passing a flag means restating the image's whole command. An empty value means "unset". |
+| `COOK_CORS_ORIGIN` | Origins allowed to make cross-origin browser requests, and whose hosts the server answers at, separated by commas. Same values as `--cors-origin`, which overrides it. For containers, where passing a flag means restating the image's whole command. An empty value means "unset". |
 | `COOK_CONFIG_DIR` | Global configuration directory, holding `aisle.conf`, `pantry.conf`, the cook.md session and the sync database. See [the README](../README.md#cook_config_dir). |
 
 No other option can be set this way. `--no-csrf-check` in particular has to be passed on the command line.
@@ -60,13 +60,16 @@ cook server --port 8080 --open
 cook server --host
 
 # Only for devices that open the web UI by host name instead: name that origin,
-# or its pages can read but not save
+# or the server refuses to answer them
 cook server --host --cors-origin http://nas.local:9080
+
+# Let any website read the recipes (but not change them), as 0.37.0 and earlier did
+cook server --cors-origin '*'
 
 # Let a frontend at localhost:3000 use the full API, including writes
 cook server --cors-origin http://localhost:3000
 
-# Behind a reverse proxy, name the public origin so the UI can still write
+# Behind a reverse proxy that passes Host through, name the public origin
 cook server --cors-origin https://cook.example.com
 
 # Require sign-in before anyone can change recipes
@@ -78,11 +81,11 @@ cook server --host
 
 - By default, only accepts connections from localhost
 - Use `--host` on trusted networks only — recipes become accessible to anyone on the network, and without [users](#signing-in-to-make-changes) anyone there can change them
-- Cross-origin browser requests can read (`GET`) from any origin by default, but one that would modify recipes is refused with `403`. Naming origins with `--cors-origin` lets those origins write too, so a page you have not listed cannot change your recipes. Requests with no `Origin` header — `curl`, scripts, anything that is not a browser — are unaffected. See [the API reference](api.md).
-- Behind a reverse proxy that rewrites `Host`, pass `--cors-origin` with the public origin (for example `--cors-origin https://cook.example.com`). The same-origin check reads the real `Host` header and ignores `X-Forwarded-Host`, which any client can set freely.
-- Without more flags, the web UI can only modify recipes when it is opened at `localhost` or an IP address, such as `http://127.0.0.1:9080` or `http://192.168.1.20:9080`. Opened at any other host name — `http://nas.local:9080`, or a reverse proxy's `https://cook.example.com` even when the proxy passes `Host` through — its writes are refused until that origin is named with `--cors-origin`. Otherwise any website could point a domain of its own at your server (DNS rebinding) and pass for the web UI. The `403` and the server's log name the exact flag to add; only add origins you recognise.
+- By default the server sends no CORS headers, so a page on another site cannot read anything from it, even though your browser can reach it. `--cors-origin '*'` lets any origin read (`GET`), as 0.37.0 and earlier did by default, while still refusing a cross-origin request that would modify recipes with `403`. Naming origins with `--cors-origin` lets those origins read and write, so a page you have not listed cannot change your recipes. See [the API reference](api.md).
+- The server only answers requests sent to `localhost`, an IP address, such as `http://127.0.0.1:9080` or `http://192.168.1.20:9080`, or the host of a `--cors-origin`. Opened at any other host name — `http://nas.local:9080`, or a reverse proxy's `https://cook.example.com` that passes `Host` through — every request is refused with `403` until that origin is named with `--cors-origin`. Otherwise any website could point a domain of its own at your server (DNS rebinding) and read it, or pass for the web UI and change it. This applies to `curl` and other clients too: the `Host` is all the server can go by. The `403` and the server's log name the exact flag to add; only add origins you recognise.
+- Behind a reverse proxy that rewrites `Host` to an IP address, such as `proxy_pass http://127.0.0.1:9080`, the check passes on its own, but writes from the web UI still need the public origin named (for example `--cors-origin https://cook.example.com`). The checks read the real `Host` header and ignore `X-Forwarded-Host`, which any client can set freely.
 - The recipe editor talks to its language server over a websocket, which browsers exempt from CORS, so the server checks that connection's `Origin` itself, by the same rule: only its own page at `localhost` or an IP address, or a `--cors-origin`, may open it. Under any other host name the editor's completions and diagnostics stop until you name that origin. Whatever a client asks for, the language server only ever sees the directory being served.
-- `--no-csrf-check` turns that same-origin enforcement off entirely, for the API, the web UI's new-recipe form and the editor's language server. Its former spelling, `--no-cors`, still works.
+- `--no-csrf-check` turns that same-origin enforcement off entirely: the `Host` check, the API, the web UI's new-recipe form and the editor's language server. Its former spelling, `--no-cors`, still works.
 - The built-in editor gets its diagnostics and completions from a `cook lsp` subprocess, one per open edit tab, and the endpoint that starts them has no authentication unless [sign-in](#signing-in-to-make-changes) is on. `--max-lsp-sessions` caps how many run at once (8 by default) so that a client which is not that editor cannot spawn them without bound; beyond the cap the websocket handshake is refused with `503` and the editor retries. Under `--host`, consider `--max-lsp-sessions 0`, which serves the recipes but never starts a subprocess for a remote client.
 - The web interface supports recipe browsing, scaling, search, editing, and shopping list management
 - A recipe or menu that declares a whole number of `servings` is scaled by servings: the stepper starts at its own servings and goes from half a serving up, with no upper limit (`/recipe/Pizza?servings=3`). Any other keeps the multiplier (`?scale=1.5`, from 0.5 to 200). `?scale=` links still work on both and, on a recipe with servings, show as the servings they give. A menu links each recipe it references by servings when that recipe declares them (`?servings=4`), and by its factor otherwise (`?scale=2`)
@@ -105,7 +108,7 @@ services:
       COOK_CORS_ORIGIN: https://cook.example.com
 ```
 
-Name the origin the browser shows, so `https://` when the proxy terminates TLS, and separate several with commas. A container that calls the API from another container sends no `Origin` header and needs none of this.
+Name the origin the browser shows, so `https://` when the proxy terminates TLS, and separate several with commas. A container that calls the API from another container by its service name, `http://cookcli:9080`, needs that name too — `COOK_CORS_ORIGIN: https://cook.example.com,http://cookcli:9080` — but nothing else: it sends no `Origin` header.
 
 ## Signing in to make changes
 

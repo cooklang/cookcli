@@ -10,8 +10,8 @@
 //! - The **write guard** exists precisely because headers cannot express its
 //!   rule: `POST` is a CORS-safelisted method, so a browser never consults
 //!   `Access-Control-Allow-Methods` before sending one — `allow_methods([GET])`
-//!   does nothing to stop a cross-origin `POST`. Under the wildcard-origin
-//!   default, `AllowOrigin::any()` also answers every preflight, including a
+//!   does nothing to stop a cross-origin `POST`. Under a wildcard origin
+//!   (`--cors-origin '*'`), `AllowOrigin::any()` also answers every preflight, including a
 //!   `POST` preflight, with `Access-Control-Allow-Origin: *`. So a test that
 //!   sends a `POST` preflight and asserts that header is absent would fail
 //!   against *correct* code — it proves nothing about whether the write itself
@@ -221,14 +221,36 @@ async fn get_with_origin(server: &ServerGuard, path: &str, origin: &str) -> Resp
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn default_policy_preflight_get_is_wide_open() {
+async fn default_policy_sends_no_cors_headers() {
+    // Without --cors-origin no other origin may read anything: a preflight
+    // gets no Access-Control-Allow-Origin, and neither does a simple GET,
+    // which a browser sends without asking first.
     let server = start_server(&[]).await;
+    let headers = preflight(&server, "http://evil.test", "GET").await;
+    assert_eq!(
+        header(&headers, "access-control-allow-origin"),
+        None,
+        "the default policy must not answer a preflight, got headers: {headers:?}"
+    );
+
+    let resp = get_with_origin(&server, "/api/recipes", "http://evil.test").await;
+    assert_eq!(
+        header(resp.headers(), "access-control-allow-origin"),
+        None,
+        "the default policy must not let another origin read a response, got headers: {:?}",
+        resp.headers()
+    );
+}
+
+#[tokio::test]
+async fn wildcard_policy_preflight_get_is_wide_open() {
+    let server = start_server(&["--cors-origin", "*"]).await;
     let headers = preflight(&server, "http://evil.test", "GET").await;
 
     assert_eq!(
         header(&headers, "access-control-allow-origin").as_deref(),
         Some("*"),
-        "default policy must allow any origin for GET, got headers: {headers:?}"
+        "--cors-origin '*' must allow any origin for GET, got headers: {headers:?}"
     );
     let methods = header(&headers, "access-control-allow-methods");
     assert!(
@@ -238,8 +260,8 @@ async fn default_policy_preflight_get_is_wide_open() {
 }
 
 #[tokio::test]
-async fn default_policy_preflight_put_is_not_in_allowed_methods() {
-    let server = start_server(&[]).await;
+async fn wildcard_policy_preflight_put_is_not_in_allowed_methods() {
+    let server = start_server(&["--cors-origin", "*"]).await;
     let headers = preflight(&server, "http://evil.test", "PUT").await;
 
     // Deliberately not asserting anything about access-control-allow-origin
@@ -311,21 +333,25 @@ async fn cors_allow_credentials_is_advertised_for_listed_origins() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn default_policy_cross_origin_post_is_refused_with_403() {
-    let server = start_server(&[]).await;
-    let resp = post_pantry_add(&server, Some("http://evil.test")).await;
+async fn cross_origin_post_is_refused_with_403() {
+    // A form post is a simple request: the browser sends it whatever the CORS
+    // headers say, so only the guard stops it, with or without a wildcard.
+    for args in [&[][..], &["--cors-origin", "*"][..]] {
+        let server = start_server(args).await;
+        let resp = post_pantry_add(&server, Some("http://evil.test")).await;
 
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-    assert_eq!(
-        status,
-        StatusCode::FORBIDDEN,
-        "cross-origin POST under the wildcard default must be refused, got {status}: {body}"
-    );
-    assert!(
-        body.contains("--cors-origin"),
-        "refusal body must tell the operator how to fix it, got: {body}"
-    );
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{args:?}: cross-origin POST must be refused, got {status}: {body}"
+        );
+        assert!(
+            body.contains("--cors-origin"),
+            "{args:?}: refusal body must tell the operator how to fix it, got: {body}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -391,15 +417,21 @@ async fn default_policy_post_without_origin_is_not_blocked() {
 }
 
 #[tokio::test]
-async fn default_policy_cross_origin_get_is_allowed() {
-    let server = start_server(&[]).await;
+async fn wildcard_policy_cross_origin_get_is_readable() {
+    let server = start_server(&["--cors-origin", "*"]).await;
     let resp = get_with_origin(&server, "/api/menus", "http://evil.test").await;
 
     assert_eq!(
         resp.status(),
         StatusCode::OK,
-        "reads must stay open to any origin under the default policy, got {}",
+        "reads must stay open to any origin under --cors-origin '*', got {}",
         resp.status()
+    );
+    assert_eq!(
+        header(resp.headers(), "access-control-allow-origin").as_deref(),
+        Some("*"),
+        "a browser must be let read the answer, got headers: {:?}",
+        resp.headers()
     );
 }
 
@@ -778,6 +810,8 @@ async fn wildcard_mixed_with_explicit_origin_fails_to_start() {
 // Origin that matches the Host proves nothing on its own. Only a Host that no
 // DNS answer can redirect — `localhost` or an IP address — counts as the
 // server's own address; any other name has to be listed with `--cors-origin`.
+// The page's reads carry no `Origin` at all, so a request sent to a name that
+// is not listed is refused whatever it is.
 //
 // These tests set `Host` by hand. reqwest keeps a caller's `Host` (hyper only
 // fills it in when it is missing), and `a_host_header_override_reaches_the_server`
@@ -880,6 +914,99 @@ async fn a_rebound_host_name_cannot_write() {
         body.contains("--no-csrf-check"),
         "refusal must still mention --no-csrf-check, got: {body}"
     );
+}
+
+/// `GET path`, sent to a server reached as `host`, with no `Origin` — what a
+/// browser sends for a same-origin read, which is what a rebinding page's
+/// reads are.
+async fn get_as(server: &ServerGuard, host: &str, path: &str) -> Response {
+    Client::new()
+        .get(server.url(path))
+        .header(reqwest::header::HOST, host)
+        .send()
+        .await
+        .expect("GET request")
+}
+
+#[tokio::test]
+async fn a_rebound_host_name_cannot_read() {
+    // The rebinding page is same-origin with the server as far as the browser
+    // is concerned, so no CORS header would stop it reading. Only the Host
+    // gives it away.
+    let server = start_server(&[]).await;
+    let host = format!("evil.test:{}", server.port);
+
+    for path in [
+        "/",
+        "/api/recipes",
+        "/api/recipes/raw/Recipe",
+        "/api/static/Recipe.cook",
+        "/preferences",
+        "/static/css/output.css",
+    ] {
+        let resp = get_as(&server, &host, path).await;
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{path}: a request sent to a host name must not be answered, got {status}: {body}"
+        );
+        assert!(
+            body.contains(&format!("--cors-origin http://{host}")),
+            "{path}: refusal must name the flag that allows this host, got: {body}"
+        );
+        assert!(
+            !body.contains("Recipe.cook") && !body.contains("flour"),
+            "{path}: refusal must not leak what it refused, got: {body}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_host_name_named_by_cors_origin_can_read() {
+    // What the refusal above tells a legitimate user to do. The scheme is not
+    // compared, so an https origin in front of a proxy passing Host through
+    // admits the plain Host too.
+    for (flag, host) in [
+        ("http://cook.test", "cook.test"),
+        ("https://cook.test", "cook.test"),
+        ("http://cookcli:9080", "cookcli:9080"),
+    ] {
+        let server = start_server(&["--cors-origin", flag]).await;
+        let resp = get_as(&server, host, "/api/recipes").await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "--cors-origin {flag} must admit Host {host}, got {}",
+            resp.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn localhost_and_ip_addresses_can_read() {
+    let server = start_server(&[]).await;
+    for host in [
+        format!("localhost:{}", server.port),
+        format!("127.0.0.1:{}", server.port),
+        format!("[::1]:{}", server.port),
+    ] {
+        let resp = get_as(&server, &host, "/api/recipes").await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "Host {host} must be answered, got {}",
+            resp.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn no_csrf_check_disables_the_host_check() {
+    let server = start_server(&["--no-csrf-check"]).await;
+    let resp = get_as(&server, "evil.test", "/api/recipes").await;
+    assert_eq!(resp.status(), StatusCode::OK);
 }
 
 #[tokio::test]

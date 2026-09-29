@@ -78,7 +78,7 @@ pub struct ServerArgs {
     /// only listen on that address. Be cautious when using this flag
     /// on public networks. A device that opens the web UI by host name
     /// rather than IP address (e.g. http://nas.local:9080) also needs that
-    /// origin passed to --cors-origin, or the UI cannot save changes.
+    /// origin passed to --cors-origin, or the server refuses to answer it.
     #[arg(long, num_args = 0..=1, value_name = "ADDRESS")]
     host: Option<Option<IpAddr>>,
 
@@ -108,12 +108,15 @@ pub struct ServerArgs {
 
     /// Origin allowed to make cross-origin browser requests (repeatable)
     ///
-    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. Use "*"
-    /// for any origin, which is the default. Under a wildcard origin the
-    /// server answers cross-origin reads but refuses cross-origin writes with
-    /// 403; naming explicit origins lets those origins write too. "*" cannot
-    /// be combined with explicit origins. Requests with no Origin header --
-    /// curl and other non-browser clients -- are never affected. Origins may
+    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. By
+    /// default no other origin may read from the server. Use "*" to let any
+    /// origin read; under it the server still refuses cross-origin writes
+    /// with 403. Naming explicit origins lets those origins read and write.
+    /// "*" cannot be combined with explicit origins. The host of a named
+    /// origin is also one the server answers at: any host name other than
+    /// localhost has to be named this way, even to open the web UI there.
+    /// Requests with no Origin header -- curl and other non-browser clients --
+    /// are affected only by that last rule. Origins may
     /// also be named in COOK_CORS_ORIGIN, separated by commas, which this flag
     /// overrides -- for containers, where a flag means restating the whole
     /// command.
@@ -127,18 +130,20 @@ pub struct ServerArgs {
     #[arg(long, default_value_t = false)]
     cors_allow_credentials: bool,
 
-    /// Disable same-origin enforcement on writes and the editor's language server
+    /// Disable same-origin enforcement: the Host check, writes and the editor's
+    /// language server
     ///
-    /// By default a browser request is rejected unless its Origin is the
-    /// server's own address -- the Host it was sent to, when that is localhost
-    /// or an IP address -- or is named by --cors-origin. Any other host name
-    /// has to be named too, or a site could point a domain of its own at the
-    /// server (DNS rebinding) and pass as same-origin. The same rule decides
-    /// which browsers may open the recipe editor's language server. This has
-    /// nothing to do with the cross-origin read policy the other --cors-*
-    /// flags configure. Use it only when a reverse proxy rewrites Host in a way
-    /// that cannot be expressed with --cors-origin. The former spelling
-    /// --no-cors still works.
+    /// By default the server answers only requests sent to localhost, an IP
+    /// address, or the host of a --cors-origin. Any other host name has to be
+    /// named, or a site could point a domain of its own at the server (DNS
+    /// rebinding) and read it as its own. A browser request that would modify
+    /// recipes is rejected unless its Origin is likewise the server's own
+    /// address or is named by --cors-origin, and the same rule decides which
+    /// browsers may open the recipe editor's language server. This has nothing
+    /// to do with the cross-origin read policy the other --cors-* flags
+    /// configure. Use it only when a reverse proxy rewrites Host in a way that
+    /// cannot be expressed with --cors-origin. The former spelling --no-cors
+    /// still works.
     #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
     csrf_check: bool,
 
@@ -344,14 +349,26 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
     // `--no-csrf-check` omits it entirely.
     let app = if csrf_check {
         app.layer(axum::middleware::from_fn_with_state(
-            cors,
+            Arc::clone(&cors),
             cors::write_guard,
         ))
     } else {
         app
     };
 
-    let app = app.layer(cors_layer);
+    // No `--cors-origin`, no CORS headers: see `cors::CorsOrigins::None`.
+    let app = match cors_layer {
+        Some(cors_layer) => app.layer(cors_layer),
+        None => app,
+    };
+
+    // Outside everything, so a host name the server does not trust gets no
+    // answer at all, not even to a preflight. `--no-csrf-check` omits it too.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(cors, cors::host_guard))
+    } else {
+        app
+    };
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
@@ -536,9 +553,10 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
-    /// When true, browser requests that modify recipes, and browsers opening
-    /// the LSP websocket, must come from an origin `cors` trusts: the server's
-    /// own address, or a `--cors-origin`. Cleared by `--no-csrf-check`.
+    /// When true, every request must be sent to a host `cors` trusts, and
+    /// browser requests that modify recipes, and browsers opening the LSP
+    /// websocket, must come from an origin it trusts: the server's own
+    /// address, or a `--cors-origin`. Cleared by `--no-csrf-check`.
     pub csrf_check: bool,
     /// The `--cors-origin` policy. Besides CORS, it decides which origins may
     /// modify recipes and open the LSP websocket, for the write guard, the
