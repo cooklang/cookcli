@@ -297,7 +297,7 @@ fn refuse_inside(base_path: &Utf8Path, path: &Utf8Path, what: &str) -> Result<()
     let base = base_path
         .canonicalize_utf8()
         .unwrap_or_else(|_| base_path.to_path_buf());
-    if canonical_or_nearest(path).starts_with(&base) {
+    if super::canonical_or_nearest(path).starts_with(&base) {
         bail!(
             "{what} {path} is inside the recipe directory {base_path}, which the server \
              publishes. Keep it elsewhere: set {} to another directory, or pass --users-file \
@@ -306,28 +306,6 @@ fn refuse_inside(base_path: &Utf8Path, path: &Utf8Path, what: &str) -> Result<()
         );
     }
     Ok(())
-}
-
-/// `path` canonicalized, or, when it does not exist yet, its nearest existing
-/// ancestor canonicalized with the rest appended.
-fn canonical_or_nearest(path: &Utf8Path) -> Utf8PathBuf {
-    let mut missing = Vec::new();
-    let mut current = path;
-    loop {
-        if let Ok(canonical) = current.canonicalize_utf8() {
-            return missing
-                .iter()
-                .rev()
-                .fold(canonical, |acc: Utf8PathBuf, part| acc.join(part));
-        }
-        match (current.parent(), current.file_name()) {
-            (Some(parent), Some(name)) => {
-                missing.push(name);
-                current = parent;
-            }
-            _ => return path.to_path_buf(),
-        }
-    }
 }
 
 #[cfg(test)]
