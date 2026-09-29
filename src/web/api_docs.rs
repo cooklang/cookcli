@@ -70,8 +70,8 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "Request size limit",
-                "1 MB, except a title picture upload (`PUT /api/recipe_image/{*path}`), which \
-                 takes up to 10 MB.",
+                "1 MB, except a title or step picture upload (`PUT /api/recipe_image/{*path}`), \
+                 which takes up to 10 MB.",
             ),
             note(
                 "Content type",
@@ -109,13 +109,13 @@ pub fn preamble() -> ApiPreamble {
             ),
             note(
                 "413",
-                "the request body is over the size limit, or a title picture has more pixels \
-                 than the server will decode.",
+                "the request body is over the size limit, or a picture has more pixels than \
+                 the server will decode.",
             ),
             note(
                 "415",
-                "a title picture in a format the server cannot read. The body adds a `code`; \
-                 see `PUT /api/recipe_image/{*path}`.",
+                "a picture in a format the server cannot read. The body adds a `code`; see \
+                 `PUT /api/recipe_image/{*path}`.",
             ),
             note("500", "the server could not read or write a file."),
             note(
@@ -162,6 +162,29 @@ fn param(name: &str, kind: &str, type_name: &str, required: bool, description: &
 /// A path segment. Always required, always a string.
 fn path_param(name: &str, description: &str) -> ParamDoc {
     param(name, "path", "string", true, description)
+}
+
+/// `?section=&step=` on `/api/recipe_image/{*path}`.
+fn step_params() -> [ParamDoc; 2] {
+    [
+        param(
+            "section",
+            "query",
+            "integer",
+            false,
+            "With `step`: the step's section, from 1, counting every section of the \
+             recipe. Defaults to 1.",
+        ),
+        param(
+            "step",
+            "query",
+            "integer",
+            false,
+            "A step's picture instead of the title picture: the step's number within its \
+             section, from 1. A step or section the saved recipe does not have, a value \
+             that is not a whole number from 1, or `section` without `step` returns `400`.",
+        ),
+    ]
 }
 
 /// Private authoring builders for `EndpointDoc`, kept off the type's public
@@ -430,64 +453,99 @@ Mix the @flour{200%g} and @water{120%ml}.
             ep(
                 "GET",
                 "/api/recipe_image/{*path}",
-                "Read a recipe's title picture",
+                "Read a recipe's title and step pictures",
                 "Reports the picture the recipe page shows. `image` is a URL — under \
                  `/api/static/`, with the server's `--url-prefix`, or the value itself when \
                  the metadata names an `http(s)` address — and null when there is none. \
                  `source` says where it comes from: `metadata` when the recipe's `image` \
                  (or `images`, `picture`, `pictures`) metadata names it, which takes \
                  precedence over any file; `file` for a `Recipe.jpg`, `.jpeg`, `.png` or \
-                 `.webp` beside the recipe; null for none. The upload and removal endpoints \
-                 answer with this same shape.",
+                 `.webp` beside the recipe; null for none. `sections` lists every section \
+                 of the saved recipe that has steps — `section` is its position counting \
+                 every section, `name` null for an unnamed one — with each step's number \
+                 within the section, its text as plain words, and its picture's URL or \
+                 null. The upload and removal endpoints answer with this same shape. With \
+                 `step`, the answer is that step's `{ path, section, step, image, source }` \
+                 instead, `source` being `file` or null; the upload and removal of a step \
+                 picture answer with it too. A step's picture is `Recipe.S.N.ext` (section \
+                 S, step N within it), else `Recipe.G.ext` with the step counted across \
+                 every section — the order the recipe page looks in.",
             )
-            .params(vec![path_param(
-                "path",
-                "Recipe path relative to the recipe directory; the `.cook` extension is \
-                 optional.",
-            )])
+            .params(
+                [path_param(
+                    "path",
+                    "Recipe path relative to the recipe directory; the `.cook` extension is \
+                     optional.",
+                )]
+                .into_iter()
+                .chain(step_params())
+                .collect(),
+            )
             .response(
                 r#"
 {
   "path": "Breakfast/Easy Pancakes.cook",
   "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
-  "source": "file"
+  "source": "file",
+  "sections": [
+    {
+      "section": 1,
+      "name": null,
+      "steps": [
+        { "step": 1, "text": "Whisk eggs, milk and flour.", "image": null },
+        { "step": 2, "text": "Cook in a pan for 1 minute.", "image": "/api/static/Breakfast/Easy%20Pancakes.1.2.jpg" }
+      ]
+    }
+  ]
 }
 "#,
             ),
             ep(
                 "PUT",
                 "/api/recipe_image/{*path}",
-                "Upload a recipe's title picture",
+                "Upload a recipe's title or step picture",
                 "The request body is the picture's bytes — not a multipart form. JPEG, PNG \
                  and WebP are accepted, up to 10 MB; the format is read from the bytes, not \
                  the `Content-Type`. The picture is turned upright from its Exif orientation, \
                  scaled down to at most 2048 px on its longer edge, laid over white if it has \
-                 transparency, and saved as JPEG at `Recipe.jpg` beside the recipe. It is \
-                 always re-encoded, never stored as sent, so the file holds no Exif (GPS \
-                 position included) and nothing that rode along after the image. The web \
-                 editor scales a photo down in the browser before sending it, which is why \
-                 10 MB is plenty; another client may send the original. Any \
-                 `Recipe.jpeg`, `.png` or `.webp` from before is removed; step pictures \
-                 (`Recipe.1.jpg`) are not touched. A picture the metadata names still wins \
-                 over the uploaded file — see `source` in the response. Errors carry a \
-                 `code` next to `error`: `415` with `heif` for a HEIC or AVIF photo, which \
-                 the server cannot read (an iPhone's own browser converts them to JPEG when \
-                 uploading), `415` with `unsupported` for any other format, `400` with \
-                 `invalid` for a file that does not decode, and `413` with `too_large` for \
-                 one with more pixels than the decoder takes on. A body over 10 MB is refused \
-                 with a plain-text `413` once the server has read past the limit.",
+                 transparency, and saved as JPEG at `Recipe.jpg` beside the recipe — or, \
+                 with `step`, at `Recipe.S.N.jpg`. It is always re-encoded, never stored as \
+                 sent, so the file holds no Exif (GPS position included) and nothing that \
+                 rode along after the image. The web editor scales a photo down in the \
+                 browser before sending it, which is why 10 MB is plenty; another client may \
+                 send the original. For the title, any `Recipe.jpeg`, `.png` or `.webp` from \
+                 before is removed; step pictures (`Recipe.1.jpg`) are not touched. A picture \
+                 the metadata names still wins over the uploaded file — see `source` in the \
+                 response. For a step, that step's other files in both conventions and every \
+                 extension are removed (`Recipe.S.N.png`, `Recipe.G.jpg`, …); the title \
+                 picture and other steps' pictures are not touched. A step picture belongs \
+                 to a position, not to the step's text: adding or removing an earlier step \
+                 moves it onto another step. Errors carry a `code` next to `error`: `415` \
+                 with `heif` for a HEIC or AVIF photo, which the server cannot read (an \
+                 iPhone's own browser converts them to JPEG when uploading), `415` with \
+                 `unsupported` for any other format, `400` with `invalid` for a file that \
+                 does not decode, and `413` with `too_large` for one with more pixels than \
+                 the decoder takes on. A body over 10 MB is refused with a plain-text `413` \
+                 once the server has read past the limit.",
             )
-            .params(vec![path_param(
-                "path",
-                "Recipe path relative to the recipe directory; the `.cook` extension is \
-                 optional. The recipe must exist.",
-            )])
+            .params(
+                [path_param(
+                    "path",
+                    "Recipe path relative to the recipe directory; the `.cook` extension is \
+                     optional. The recipe must exist.",
+                )]
+                .into_iter()
+                .chain(step_params())
+                .collect(),
+            )
             .request("<the picture's bytes>")
             .response(
                 r#"
 {
   "path": "Breakfast/Easy Pancakes.cook",
-  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
+  "section": 1,
+  "step": 2,
+  "image": "/api/static/Breakfast/Easy%20Pancakes.1.2.jpg",
   "source": "file"
 }
 "#,
@@ -495,17 +553,23 @@ Mix the @flour{200%g} and @water{120%ml}.
             ep(
                 "DELETE",
                 "/api/recipe_image/{*path}",
-                "Remove a recipe's title picture",
+                "Remove a recipe's title or step picture",
                 "Deletes every `Recipe.jpg`, `.jpeg`, `.png` and `.webp` beside the recipe, \
-                 for good — there is no undo and no trash. Returns `404` when there was none. \
-                 A picture named by the recipe's metadata is left alone; remove it by editing \
-                 the recipe.",
+                 for good — there is no undo and no trash. With `step`, deletes that step's \
+                 `Recipe.S.N` and `Recipe.G` files in those extensions instead. Returns `404` \
+                 when there was none. A picture named by the recipe's metadata is left \
+                 alone; remove it by editing the recipe.",
             )
-            .params(vec![path_param(
-                "path",
-                "Recipe path relative to the recipe directory; the `.cook` extension is \
-                 optional.",
-            )])
+            .params(
+                [path_param(
+                    "path",
+                    "Recipe path relative to the recipe directory; the `.cook` extension is \
+                     optional.",
+                )]
+                .into_iter()
+                .chain(step_params())
+                .collect(),
+            )
             .response(
                 r#"
 {

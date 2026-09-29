@@ -124,6 +124,13 @@ picture-upload-failed = Igoerak huts egin du
 picture-remove-failed = Ezin izan da argazkia kendu
 picture-too-large = Argazki hau handiegia da. Muga 10 MB da.
 picture-heif = HEIC eta AVIF argazkiak ezin dira irakurri. Igo telefonoaren beraren nabigatzailetik, JPEG bihurtzen baititu, edo ezarri iPhonearen kamera "Bateragarriena" aukeran (Ezarpenak > Kamera > Formatuak).
+picture-for = Argazkia honetarako
+picture-step-title = Urratsaren argazkia
+picture-target-step = { $step }. urratsa: { $text }
+picture-target-section = { $section }. atala
+picture-step-note = Urrats baten argazkia urratsaren posizioari lotuta dago, ez testuari: atal honetan aurreko urrats bat gehitzen edo kentzen baduzu, beste urrats batera pasatuko da.
+step-picture-add = Gehitu argazki bat urrats honi
+step-picture-change = Aldatu urrats honen argazkia
 # Sign-in (users are managed on the server with `cook server user`)
 sign-in = Hasi saioa
 sign-out = Amaitu saioa

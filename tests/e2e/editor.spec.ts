@@ -175,3 +175,121 @@ test.describe('Recipe editor title picture', () => {
     await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2048);
   });
 });
+
+// #562: the same dialog, pointed at one step. Its own folder, like the title
+// picture tests above.
+const STEP_DIR = path.join(SEED_DIR, 'E2E Step Pictures');
+const STEP_RECIPE = path.join(STEP_DIR, 'Step Test.cook');
+const STEP_RECIPE_TEXT =
+  '---\ntitle: Step Test\n---\n\n' +
+  '== Dough ==\n\nMix @flour{200%g} and @water{120%ml}.\n\nKnead for ~{5%minutes}.\n\n' +
+  '== Topping ==\n\nSpread the @tomato sauce{100%ml}.\n\nBake in the #oven{}.\n';
+
+declare const editorView: any;
+
+test.describe('Recipe editor step pictures', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(() => {
+    fs.rmSync(STEP_DIR, { recursive: true, force: true });
+    fs.mkdirSync(STEP_DIR, { recursive: true });
+    fs.writeFileSync(STEP_RECIPE, STEP_RECIPE_TEXT);
+  });
+
+  test.afterAll(() => {
+    fs.rmSync(STEP_DIR, { recursive: true, force: true });
+  });
+
+  test("a step's camera button opens the dialog on that step, which uploads and removes its picture", async ({ page }) => {
+    await page.goto('/recipe/E2E Step Pictures/Step Test.cook');
+    const toppingSteps = page.locator('.step-list').nth(1).locator('.step-box');
+    await toppingSteps.first().getByRole('link', { name: 'Add a picture to this step' }).click();
+
+    await expect(page).toHaveURL(/\/edit\/E2E%20Step%20Pictures\/Step%20Test\.cook$/);
+    const dialog = page.locator('#picture-modal');
+    await expect(dialog.getByRole('dialog')).toBeVisible();
+    await expect(dialog.locator('#picture-heading')).toHaveText('Step picture');
+    const target = dialog.getByLabel('Picture for');
+    await expect(target).toHaveValue('2.1');
+    await expect(dialog.locator('#picture-step-note')).toBeVisible();
+    await expect(dialog.locator('#picture-empty')).toBeVisible();
+
+    await dialog.locator('#picture-input').setInputFiles({
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+
+    const preview = dialog.locator('#picture-preview');
+    await expect(preview).toBeVisible();
+    await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+    await expect(dialog.locator('#picture-remove')).toBeVisible();
+    await expect(target.locator('option:checked')).toHaveText(/📷$/);
+
+    const stored = path.join(STEP_DIR, 'Step Test.2.1.jpg');
+    expect(fs.readFileSync(stored).subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(fs.existsSync(path.join(STEP_DIR, 'Step Test.jpg'))).toBe(false);
+
+    // The recipe page shows it on that step, whose button now offers a change.
+    await page.goto('/recipe/E2E Step Pictures/Step Test.cook');
+    await expect(toppingSteps.first().locator('img.image-step')).toHaveAttribute(
+      'src',
+      '/api/static/E2E%20Step%20Pictures/Step%20Test.2.1.jpg',
+    );
+    await expect(page.locator('img.image-step')).toHaveCount(1);
+    await toppingSteps.first().getByRole('link', { name: "Change this step's picture" }).click();
+
+    await expect(target).toHaveValue('2.1');
+    await expect(preview).toBeVisible();
+    await dialog.locator('#picture-remove').click();
+    await dialog.locator('#picture-confirm .btn-danger').click();
+    await expect(dialog.locator('#picture-empty')).toBeVisible();
+    await expect(target.locator('option:checked')).not.toHaveText(/📷/);
+    expect(fs.existsSync(stored)).toBe(false);
+  });
+
+  test('lists the title and every step, grouped by section', async ({ page }) => {
+    await page.goto('/edit/E2E Step Pictures/Step Test.cook');
+    await page.getByRole('button', { name: 'Picture', exact: true }).click();
+
+    const target = page.getByLabel('Picture for');
+    await expect(target).toHaveValue('');
+    await expect(page.locator('#picture-heading')).toHaveText('Title picture');
+    await expect(page.locator('#picture-step-note')).toBeHidden();
+    expect(
+      await target.evaluate((select: HTMLSelectElement) =>
+        Array.from(select.children).map(child =>
+          child instanceof HTMLOptGroupElement
+            ? [child.label, Array.from(child.children).map(o => o.textContent)]
+            : child.textContent,
+        ),
+      ),
+    ).toEqual([
+      'Title picture',
+      ['Dough', ['Step 1: Mix flour and water.', 'Step 2: Knead for 5 minutes.']],
+      ['Topping', ['Step 1: Spread the tomato sauce.', 'Step 2: Bake in the oven.']],
+    ]);
+
+    await target.selectOption('1.2');
+    await expect(page.locator('#picture-heading')).toHaveText('Step picture');
+    await expect(page.locator('#picture-step-note')).toBeVisible();
+  });
+
+  test('saves what was typed before listing the steps', async ({ page }) => {
+    await page.goto('/edit/E2E Step Pictures/Step Test.cook');
+    await expect(page.locator('#editor-container .cm-editor')).toBeVisible();
+    await page.evaluate(() => {
+      const view = editorView;
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: '\nServe hot.\n' },
+      });
+    });
+    // Before the autosave fires.
+    await page.getByRole('button', { name: 'Picture', exact: true }).click();
+
+    await expect(page.getByLabel('Picture for').locator('option[value="2.3"]')).toHaveText(
+      'Step 3: Serve hot.',
+    );
+    expect(fs.readFileSync(STEP_RECIPE, 'utf8')).toContain('Serve hot.');
+  });
+});

@@ -43,6 +43,22 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
+    /// Translate a message for a page script to finish: each variable named
+    /// in `names` (space-separated) comes out as `{name}`, for the script to
+    /// replace with a value it only learns later.
+    pub fn tp(&self, key: &str, names: &str) -> String {
+        let args = names
+            .split_whitespace()
+            .map(|name| {
+                (
+                    std::borrow::Cow::Owned(name.to_string()),
+                    fluent::FluentValue::from(format!("{{{name}}}")),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
@@ -58,6 +74,15 @@ mod tr_tests {
         let tr = Tr::new(langid!("en-US"));
         assert_eq!(tr.tn("recipes-count", &1), "1 recipe");
         assert_eq!(tr.tn("recipes-count", &3), "3 recipes");
+    }
+
+    #[test]
+    fn placeholders_are_left_for_the_script() {
+        let tr = Tr::new(langid!("fr-FR"));
+        assert_eq!(
+            tr.tp("picture-target-step", "step text"),
+            "Étape {step} : {text}"
+        );
     }
 }
 
@@ -789,6 +814,10 @@ pub struct CookwareData {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RecipeSection {
+    /// One-based position among the parsed recipe's sections, counting the
+    /// empty ones this page leaves out: the `S` of a `Recipe.S.N.jpg` step
+    /// picture.
+    pub number: usize,
     pub name: Option<String>,
     pub items: Vec<RecipeSectionItem>,
     pub step_offset: usize,

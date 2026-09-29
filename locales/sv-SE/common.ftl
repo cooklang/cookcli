@@ -124,6 +124,13 @@ picture-upload-failed = Uppladdningen misslyckades
 picture-remove-failed = Det gick inte att ta bort bilden
 picture-too-large = Bilden är för stor. Gränsen är 10 MB.
 picture-heif = HEIC- och AVIF-foton kan inte läsas. Ladda upp från telefonens egen webbläsare, som konverterar dem till JPEG, eller ställ in iPhone-kameran på Mest kompatibelt (Inställningar > Kamera > Format).
+picture-for = Bild för
+picture-step-title = Stegbild
+picture-target-step = Steg { $step }: { $text }
+picture-target-section = Avsnitt { $section }
+picture-step-note = En stegbild hör till stegets position, inte dess text: lägger du till eller tar bort ett tidigare steg i det här avsnittet hamnar den på ett annat steg.
+step-picture-add = Lägg till en bild på det här steget
+step-picture-change = Byt bild för det här steget
 # Sign-in (users are managed on the server with `cook server user`)
 sign-in = Logga in
 sign-out = Logga ut

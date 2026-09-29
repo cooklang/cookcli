@@ -124,6 +124,13 @@ picture-upload-failed = Hochladen fehlgeschlagen
 picture-remove-failed = Das Bild konnte nicht entfernt werden
 picture-too-large = Dieses Bild ist zu groß. Die Grenze liegt bei 10 MB.
 picture-heif = HEIC- und AVIF-Fotos können nicht gelesen werden. Laden Sie sie über den Browser des Telefons hoch, der sie in JPEG umwandelt, oder stellen Sie die iPhone-Kamera auf „Maximale Kompatibilität“ (Einstellungen > Kamera > Formate).
+picture-for = Bild für
+picture-step-title = Schrittbild
+picture-target-step = Schritt { $step }: { $text }
+picture-target-section = Abschnitt { $section }
+picture-step-note = Ein Schrittbild gehört zur Position des Schritts, nicht zu seinem Text: Wird weiter oben in diesem Abschnitt ein Schritt eingefügt oder entfernt, landet es bei einem anderen Schritt.
+step-picture-add = Bild zu diesem Schritt hinzufügen
+step-picture-change = Bild dieses Schritts ändern
 # Sign-in (users are managed on the server with `cook server user`)
 sign-in = Anmelden
 sign-out = Abmelden
