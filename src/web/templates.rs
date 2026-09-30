@@ -388,6 +388,7 @@ impl RecipeTemplate {
                             "quantity": ing.quantity,
                             "unit": ing.unit,
                             "note": ing.note,
+                            "optional": ing.optional,
                         })
                     })
                     .collect();
@@ -436,6 +437,7 @@ impl RecipeTemplate {
             "scale": self.scale,
             "image": self.image_path,
             "sections": sections,
+            "optionalLabel": self.tr.t("recipe-optional"),
         });
 
         // Escape </script> sequences to prevent premature script tag closing
@@ -933,11 +935,16 @@ pub struct IngredientData {
     /// What the link to `reference_path` adds so the recipe opens at the size
     /// this one asks for — see [`reference_query`]. Empty otherwise.
     pub reference_query: String,
+    /// Marked optional in the recipe (`@?chives`). Required and optional
+    /// amounts of one ingredient are listed as two entries.
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CookwareData {
     pub name: String,
+    /// Marked optional in the recipe (`#?splatter guard{}`).
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

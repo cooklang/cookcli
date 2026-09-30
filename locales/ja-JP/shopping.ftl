@@ -30,6 +30,7 @@ shopping-failed-to-add = 買い物リストに追加できませんでした
 shopping-error = エラー
 shopping-print = 印刷
 shopping-include-in-list = 買い物リストに含める
+shopping-optional = （任意）
 shopping-copy = コピー
 shopping-copied = コピーしました！
 shopping-copy-failed = コピーできませんでした
