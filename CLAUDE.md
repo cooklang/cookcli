@@ -30,7 +30,19 @@ cargo build -p cookcli
 
 # Run without building
 cargo run -- [command] [args]
+
+# Docker image for local testing (thin-LTO `docker-dev` profile, much faster
+# rebuilds than `make docker-build`, which uses `release`)
+make docker-build-dev
 ```
+
+`build.rs` stops the build until `static/css/output.css` and
+`static/js/editor.bundle.js` exist. They are gitignored, so a fresh clone or git
+worktree needs `npm ci && npm run build-css && npm run build-js` before `cargo`.
+
+In debug builds rust-embed reads `static/` from the source tree at runtime
+(`src/web/mod.rs`), so a debug `cook` copied or mounted at a different path
+serves pages without CSS or JS.
 
 ### Testing
 ```bash
@@ -141,7 +153,9 @@ Configuration search order:
 - Styling: Tailwind CSS with custom components
 - API handlers in `src/server/handlers/`
 - Static files served from `static/` directory
-- Shopping list stored as tab-delimited files in `/tmp/`
+- Shopping list stored as `.shopping-list` and `.shopping-checked` at the root
+  of the recipe directory (`ShoppingListStore`); `server/shopping_list_watcher.rs`
+  pushes outside edits to open pages
 - Opt-in sign-in in `src/server/auth/`: a `users.toml` in the config dir (or
   `--users-file` / `COOK_USERS_FILE`) turns it on. Each user has a role
   (`reader` < `shopper` < `editor` < `admin`; a bare hash is `admin`).
@@ -212,6 +226,19 @@ The web UI uses server-side rendering with Askama templates:
 - Compiled CSS output in `static/css/output.css`
 - Tailwind is configured in `static/css/input.css` (`@source`, `@custom-variant`, `@theme`); components live in `static/css/components.css`
 
+### Translations
+- UI strings are Fluent messages in `locales/<lang>/*.ftl` (`common`, `pantry`,
+  `preferences`, `recipes`, `shopping`), one folder per locale: de-DE, en-US,
+  es-ES, eu-ES, fr-FR, it-IT, nl-NL, sv-SE
+- Templates call `tr.t("key")`, `tr.tn("key", count)` (plurals) and
+  `tr.tf("key", factor)`, defined on `Tr` in `src/web/templates.rs`; askama passes
+  fields by reference, so helpers take `&usize` / `&f64`
+- Add every new message to **every** locale. `tests/locales_test.rs` fails when
+  a locale lacks an en-US message id, or defines one twice — Fluent rejects a
+  locale with a duplicate id, and every page in that language panics. Two
+  branches adding the same key both pass on their own, so check again after a
+  merge or rebase
+
 ### Key Templates
 - `base.html` - Common layout with navigation and search
 - `recipes.html` - Recipe listing with directory navigation
@@ -222,7 +249,7 @@ The web UI uses server-side rendering with Askama templates:
 ### Frontend Features
 - **Recipe Browsing**: Directory-based navigation with breadcrumbs
 - **Recipe Display**: Ingredients, steps, metadata with colorful badges
-- **Shopping List**: Persistent storage in `/tmp/shopping_list.txt`
+- **Shopping List**: Persistent storage in `.shopping-list` / `.shopping-checked` in the recipe directory
 - **Recipe Scaling**: Dynamic scaling with URL parameters
 - **Search**: Real-time recipe search with dropdown results
 - **Responsive Design**: Mobile-friendly layout with Tailwind
@@ -244,7 +271,22 @@ Component classes live in `static/css/components.css` and resolve every colour t
 
 ## Testing Approach
 
-Currently no automated tests (as noted in CONTRIBUTING.md). Manual testing approach:
+Automated tests live in two places:
+- Rust integration tests in `tests/*.rs` (`cargo test`), with `insta` snapshots
+  in `tests/snapshots/`
+- Playwright end-to-end specs in `tests/e2e/` (`npm test`; see UI Testing below)
+
+Things to know when running them:
+- When a change alters output other pages share (URLs, templates, badges), run
+  the whole Playwright project, not only the specs you touched — other specs
+  assert on that output too.
+- The pantry e2e specs add and edit items in `./seed`, which can leave
+  `seed/config/pantry.conf` modified; check `git status` after a run.
+- Two `cookcli-core` pantry tests check file permissions and cannot pass when
+  cargo runs as root (e.g. in a root container). Their failure message says so;
+  it is not a regression.
+
+For manual testing:
 1. Use `cook seed` to create test recipes
 2. Test each command with various options
 3. Validate output formats
@@ -277,6 +319,10 @@ Uses semantic commit messages for automated releases:
 - `fix:` - Bug fixes  
 - `docs:` - Documentation changes
 - `chore:` - Maintenance tasks
+
+Packaging scripts live in `packaging/`: `debian/` (.deb), `fedora/` (.rpm) and
+`source-tarball.sh`, which builds the source tarball with the compiled front-end
+assets (shared by the release workflow and the RPM build).
 
 ## Before Creating a PR
 
