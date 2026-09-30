@@ -11,8 +11,8 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingListStore,
-    StoredEntry,
+    extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingIngredients,
+    ShoppingListStore, StoredEntry,
 };
 use cooklang::ingredient_list::IngredientList;
 use serde::Deserialize;
@@ -31,7 +31,7 @@ pub async fn shopping_list(
     State(state): State<Arc<AppState>>,
     axum::extract::Json(payload): axum::extract::Json<Vec<RecipeRequest>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let mut list = IngredientList::new();
+    let mut ingredients = ShoppingIngredients::default();
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
     for entry in payload {
@@ -52,8 +52,11 @@ pub async fn shopping_list(
             &ExtractOptions {
                 ignore_references: false,
                 included_references: entry.included_references.as_deref(),
+                // The web list has no way to choose optional ingredients yet,
+                // so it keeps listing them alongside the required ones.
+                include_optional: true,
             },
-            &mut list,
+            &mut ingredients,
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
@@ -67,6 +70,8 @@ pub async fn shopping_list(
             tracing::warn!("Recipe '{}': {}", name, diagnostic.message);
         }
     }
+
+    let mut list = merged(ingredients);
 
     // Load aisle configuration with lenient parsing
     let aisle_content = if let Some(path) = &state.aisle_path {
@@ -453,7 +458,7 @@ pub async fn compact_checked(
 fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<String>> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load()?;
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
     // Each entry is aggregated independently: the shopping list may
@@ -480,6 +485,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
             &ExtractOptions {
                 ignore_references: false,
                 included_references: included,
+                include_optional: true,
             },
             &mut list,
         )
@@ -502,7 +508,20 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         }
     }
 
-    Ok(list.iter().map(|(name, _)| name.clone()).collect())
+    Ok(merged(list).iter().map(|(name, _)| name.clone()).collect())
+}
+
+/// Fold the optional ingredients into the required ones, the way the web list
+/// has always shown them.
+fn merged(ingredients: ShoppingIngredients) -> IngredientList {
+    let ShoppingIngredients {
+        mut required,
+        optional,
+    } = ingredients;
+    for (name, quantity) in optional.iter() {
+        required.add_ingredient(name.clone(), quantity, PARSER.converter());
+    }
+    required
 }
 
 // -- Add menu (bulk) endpoint --

@@ -37,7 +37,7 @@
 
 use crate::{
     format::{quantity::ordered_components, Style},
-    shopping_list::AggregatedList,
+    shopping_list::{AggregatedList, RawItem},
 };
 use cooklang::quantity::{GroupedQuantity, Quantity, Value};
 use serde::Serialize;
@@ -51,6 +51,16 @@ pub(crate) fn quantity_fmt(qty: &Quantity) -> String {
         format!("{} {}", qty.value(), unit)
     } else {
         format!("{}", qty.value())
+    }
+}
+
+/// The name as the human and markdown output show it, with optional items
+/// marked.
+fn display_name(item: &RawItem) -> String {
+    if item.optional {
+        format!("{} (optional)", item.name)
+    } else {
+        item.name.clone()
     }
 }
 
@@ -74,9 +84,9 @@ fn total_quantity_fmt(qty: &GroupedQuantity, row: &mut tabular::Row) {
 pub fn build_human_table(list: AggregatedList, plain: bool, style: Style) -> tabular::Table {
     let mut table = tabular::Table::new("{:<} {:<}");
     if plain {
-        for (igr, q) in list.raw_items {
-            let mut row = tabular::Row::new().with_cell(igr);
-            total_quantity_fmt(&q, &mut row);
+        for item in list.raw_items {
+            let mut row = tabular::Row::new().with_cell(display_name(&item));
+            total_quantity_fmt(&item.quantity, &mut row);
             table.add_row(row);
         }
     } else {
@@ -87,9 +97,9 @@ pub fn build_human_table(list: AggregatedList, plain: bool, style: Style) -> tab
                 format!("[{cat}]")
             };
             table.add_heading(heading);
-            for (igr, q) in items {
-                let mut row = tabular::Row::new().with_cell(igr);
-                total_quantity_fmt(&q, &mut row);
+            for item in items {
+                let mut row = tabular::Row::new().with_cell(display_name(&item));
+                total_quantity_fmt(&item.quantity, &mut row);
                 table.add_row(row);
             }
         }
@@ -104,11 +114,12 @@ pub fn build_human_table(list: AggregatedList, plain: bool, style: Style) -> tab
 pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool) -> String {
     let mut output = String::new();
 
-    let format_ingredient = |ingredient: &str, quantity: &GroupedQuantity| {
+    let format_ingredient = |item: &RawItem| {
+        let ingredient = display_name(item);
         if ingredients_only {
             format!("- {ingredient}\n")
         } else {
-            let quantity_string = ordered_components(quantity)
+            let quantity_string = ordered_components(&item.quantity)
                 .into_iter()
                 .map(quantity_fmt)
                 .collect::<Vec<_>>()
@@ -118,8 +129,8 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
     };
     if plain {
         // no categories, simple list
-        for (ingredient, quantity) in list.raw_items {
-            output.push_str(&format_ingredient(&ingredient, &quantity));
+        for item in &list.raw_items {
+            output.push_str(&format_ingredient(item));
         }
     } else {
         for (i, (category, items)) in list.raw_categories.into_iter().enumerate() {
@@ -127,8 +138,8 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
                 output.push('\n');
             }
             output.push_str(&format!("# {category}\n"));
-            for (ingredient, quantity) in items {
-                output.push_str(&format_ingredient(&ingredient, &quantity));
+            for item in &items {
+                output.push_str(&format_ingredient(item));
             }
         }
     }
@@ -154,10 +165,19 @@ impl From<Quantity> for JsonQuantity {
 struct JsonIngredient {
     name: String,
     quantity: Vec<JsonQuantity>,
+    /// Only written when set, so lists without optional items keep the shape
+    /// they always had.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    optional: bool,
 }
 
-impl From<(String, GroupedQuantity)> for JsonIngredient {
-    fn from((name, qty): (String, GroupedQuantity)) -> Self {
+impl From<RawItem> for JsonIngredient {
+    fn from(item: RawItem) -> Self {
+        let RawItem {
+            name,
+            quantity: qty,
+            optional,
+        } = item;
         // `GroupedQuantity::into_vec` would save the clones, but it yields the
         // components in the group's own random order; going through
         // `ordered_components` keeps every output path on one ordering rule.
@@ -168,6 +188,7 @@ impl From<(String, GroupedQuantity)> for JsonIngredient {
                 .cloned()
                 .map(JsonQuantity::from)
                 .collect(),
+            optional,
         }
     }
 }
@@ -266,10 +287,56 @@ mod tests {
                 ],
                 ignore_references: false,
                 extra_items: Vec::new(),
+                include_optional: false,
             },
         )
         .expect("generates")
         .value
+    }
+
+    /// A recipe with chives both ways, for the optional marking below.
+    fn optional_list() -> AggregatedList {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("a.cook"),
+            "Add @chives{5%g}, then top with @?chives{2%g}.\n",
+        )
+        .unwrap();
+        let base = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        generate(
+            &Context::new(base),
+            GenerateRequest {
+                recipes: vec![ScaledRecipe::new(RecipeSource::Path("a.cook".into()))],
+                include_optional: true,
+                ..Default::default()
+            },
+        )
+        .expect("generates")
+        .value
+    }
+
+    /// Every format tells the optional item from the required one.
+    #[test]
+    fn optional_items_are_marked_in_every_format() {
+        let human = build_human_table(optional_list(), true, Style::Plain).to_string();
+        assert!(human.contains("chives            5 g"), "{human}");
+        assert!(human.contains("chives (optional) 2 g"), "{human}");
+
+        let md = build_md_value(optional_list(), true, false);
+        assert_eq!(md, "- *5 g* chives\n- *2 g* chives (optional)\n");
+
+        let json = build_json_value(optional_list(), true);
+        let flags: Vec<Option<bool>> = json
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i.get("optional").and_then(|v| v.as_bool()))
+            .collect();
+        assert_eq!(
+            flags,
+            vec![None, Some(true)],
+            "`optional` is only written when set: {json}"
+        );
     }
 
     #[test]
@@ -440,6 +507,7 @@ mod tests {
                     ],
                     ignore_references: false,
                     extra_items: Vec::new(),
+                    include_optional: false,
                 },
             )
             .expect("generates")

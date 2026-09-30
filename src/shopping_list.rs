@@ -151,6 +151,15 @@ pub struct ShoppingListArgs {
     /// into its aisle category, and is subtracted from by the pantry.
     #[arg(long, value_name = "ITEM")]
     extra: Vec<String>,
+
+    /// Include optional ingredients
+    ///
+    /// Ingredients a recipe marks as optional (`@?chives`) are left off the
+    /// list by default, along with everything an optional recipe reference
+    /// (`@?./sauce{}`) would add. This flag includes them, marked as optional
+    /// and kept apart from any required amount of the same ingredient.
+    #[arg(long)]
+    include_optional: bool,
 }
 
 impl ShoppingListArgs {
@@ -266,6 +275,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             recipes,
             ignore_references: args.ignore_references,
             extra_items: args.extra,
+            include_optional: args.include_optional,
         },
     )
     .map_err(cli_error)?;
@@ -288,7 +298,11 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 OutputFormat::Human => {
                     // Simple output: one ingredient per line, no amounts
                     for item in &list.items {
-                        writeln!(w, "{}", item.name)?;
+                        if item.optional {
+                            writeln!(w, "{} (optional)", item.name)?;
+                        } else {
+                            writeln!(w, "{}", item.name)?;
+                        }
                     }
                 }
                 OutputFormat::Json => {

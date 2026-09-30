@@ -42,6 +42,7 @@ fn request(names: &[&str]) -> GenerateRequest {
         recipes: names.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
         extra_items: Vec::new(),
+        include_optional: false,
     }
 }
 
@@ -153,6 +154,7 @@ fn the_request_scale_is_applied_per_recipe() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -510,19 +512,20 @@ fn included_references_are_matched_resolved_however_they_were_spelled() {
 
     for spelling in ["Shared/Vinaigrette", "../Shared/Vinaigrette"] {
         let dir = dir_with(files);
-        let mut list = IngredientList::new();
+        let mut list = ShoppingIngredients::default();
         extract_ingredients(
             &ctx(&dir),
             &at_path("Salads/Caprese.cook"),
             &ExtractOptions {
                 ignore_references: false,
                 included_references: Some(&[spelling.to_string()]),
+                include_optional: false,
             },
             &mut list,
         )
         .unwrap_or_else(|e| panic!("{spelling}: {e}"));
 
-        let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+        let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
         assert!(
             names.iter().any(|n| n.as_str() == "oil"),
             "{spelling} must select the reference it names: {names:?}"
@@ -581,6 +584,7 @@ fn the_request_scale_reaches_every_recipe_down_the_chain() {
             )],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -801,6 +805,7 @@ fn ignore_references_leaves_the_reference_as_a_bare_item() {
             recipes: vec![at_path("main.cook")],
             ignore_references: true,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1040,7 +1045,7 @@ fn included_references_selects_which_references_to_follow() {
         ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
     ]);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     let included = ["sauce".to_string()];
     extract_ingredients(
         &ctx(&dir),
@@ -1048,12 +1053,13 @@ fn included_references_selects_which_references_to_follow() {
         &ExtractOptions {
             ignore_references: false,
             included_references: Some(&included),
+            include_optional: false,
         },
         &mut list,
     )
     .expect("extracts");
 
-    let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+    let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
     assert!(names.contains(&&"tomatoes".to_string()), "{names:?}");
     assert!(
         !names.contains(&&"bones".to_string()),
@@ -1076,7 +1082,7 @@ fn included_references_filter_the_top_level_only() {
         ("stock.cook", "Simmer @bones{1%kg}.\n"),
     ]);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     let included = ["sauce".to_string()];
     extract_ingredients(
         &ctx(&dir),
@@ -1084,12 +1090,14 @@ fn included_references_filter_the_top_level_only() {
         &ExtractOptions {
             ignore_references: false,
             included_references: Some(&included),
+            include_optional: false,
         },
         &mut list,
     )
     .expect("extracts");
 
     let items: Vec<(&String, String)> = list
+        .required
         .iter()
         .map(|(name, q)| {
             (
@@ -1121,7 +1129,7 @@ fn no_included_references_follows_all_of_them() {
         ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
     ]);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     extract_ingredients(
         &ctx(&dir),
         &at_path("main.cook"),
@@ -1130,7 +1138,7 @@ fn no_included_references_follows_all_of_them() {
     )
     .expect("extracts");
 
-    let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+    let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
     assert!(names.contains(&&"tomatoes".to_string()), "{names:?}");
     assert!(names.contains(&&"bones".to_string()), "{names:?}");
 }
@@ -1145,13 +1153,14 @@ fn extract_ingredients_accumulates_across_calls() {
     ]);
     let ctx = ctx(&dir);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     for name in ["a.cook", "b.cook"] {
         extract_ingredients(&ctx, &at_path(name), &ExtractOptions::default(), &mut list)
             .expect("extracts");
     }
 
     let items: Vec<(&String, String)> = list
+        .required
         .iter()
         .map(|(name, q)| {
             (
@@ -1162,6 +1171,198 @@ fn extract_ingredients_accumulates_across_calls() {
         .collect();
     assert_eq!(items.len(), 1, "{items:?}");
     assert_eq!(items[0].1, "5");
+}
+
+// ---------------------------------------------------------------------------
+// Optional ingredients
+// ---------------------------------------------------------------------------
+
+const EGGS_ON_TOAST: &str = "\
+Fry @eggs{2} in @butter{10%g}.
+
+Serve on @toast{2%slices}, garnished with @?chives and @?chilli flakes{1%pinch}.
+";
+
+fn with_optional(names: &[&str]) -> GenerateRequest {
+    GenerateRequest {
+        include_optional: true,
+        ..request(names)
+    }
+}
+
+/// `(name, optional)` for every item on the uncategorised view, in order.
+fn names_and_flags(list: &AggregatedList) -> Vec<(&str, bool)> {
+    list.items
+        .iter()
+        .map(|i| (i.name.as_str(), i.optional))
+        .collect()
+}
+
+/// A recipe contributes only what it needs unless optional ingredients are
+/// asked for.
+#[test]
+fn optional_ingredients_are_left_out_by_default() {
+    let dir = dir_with(&[("eggs.cook", EGGS_ON_TOAST)]);
+
+    let list = generate(&ctx(&dir), request(&["eggs.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        names_and_flags(&list),
+        vec![("eggs", false), ("butter", false), ("toast", false)]
+    );
+}
+
+/// Asked for, they follow the required ingredients, marked optional.
+#[test]
+fn included_optional_ingredients_are_marked() {
+    let dir = dir_with(&[("eggs.cook", EGGS_ON_TOAST)]);
+
+    let list = generate(&ctx(&dir), with_optional(&["eggs.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        names_and_flags(&list),
+        vec![
+            ("eggs", false),
+            ("butter", false),
+            ("toast", false),
+            ("chives", true),
+            ("chilli flakes", true),
+        ]
+    );
+    assert_eq!(
+        quantities(&list, "chilli flakes"),
+        Some(vec!["1 pinch".to_string()])
+    );
+}
+
+/// Required and optional amounts of one ingredient are two items, across
+/// recipes too, so the required total stays what the recipes cannot do
+/// without.
+#[test]
+fn optional_amounts_are_not_merged_into_required_ones() {
+    let dir = dir_with(&[
+        (
+            "risotto.cook",
+            "Stir @parmesan{100%g} in.\n\nTop with @?parmesan{50%g}.\n",
+        ),
+        ("salad.cook", "Shave @parmesan{20%g} over.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), with_optional(&["risotto.cook", "salad.cook"]))
+        .expect("generates")
+        .value;
+
+    let parmesan: Vec<(bool, Vec<String>)> = list
+        .items
+        .iter()
+        .filter(|i| i.name == "parmesan")
+        .map(|i| (i.optional, i.quantities.clone()))
+        .collect();
+    assert_eq!(
+        parmesan,
+        vec![
+            (false, vec!["120 g".to_string()]),
+            (true, vec!["50 g".to_string()]),
+        ]
+    );
+}
+
+/// An optional recipe reference is left out with everything it would add,
+/// and included it makes all of that optional.
+#[test]
+fn an_optional_reference_makes_everything_it_adds_optional() {
+    let dir = dir_with(&[
+        (
+            "steak.cook",
+            "Grill @steak{1}. Serve with @?./sauces/chimichurri{}.\n",
+        ),
+        (
+            "sauces/chimichurri.cook",
+            "Blend @parsley{20%g} with @oil{50%ml}.\n",
+        ),
+    ]);
+
+    let without = generate(&ctx(&dir), request(&["steak.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&without), vec![("steak", false)]);
+
+    let with = generate(&ctx(&dir), with_optional(&["steak.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(
+        names_and_flags(&with),
+        vec![("steak", false), ("parsley", true), ("oil", true)]
+    );
+}
+
+/// Optional items sit in their aisle category after the required ones, and a
+/// category only optional items land in still keeps the configuration's
+/// order.
+#[test]
+fn optional_items_are_categorised_after_required_ones() {
+    let dir = dir_with(&[("a.cook", "Add @?lettuce, @milk{1%l} and @?milk{100%ml}.\n")]);
+    let ctx = ctx(&dir).with_aisle(ConfigSource::Inline(AISLE.to_string()));
+
+    let list = generate(&ctx, with_optional(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    let categories: Vec<(&str, Vec<(&str, bool)>)> = list
+        .categories
+        .iter()
+        .map(|c| {
+            (
+                c.name.as_str(),
+                c.items
+                    .iter()
+                    .map(|i| (i.name.as_str(), i.optional))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        categories,
+        vec![
+            ("produce", vec![("lettuce", true)]),
+            ("dairy", vec![("milk", false), ("milk", true)]),
+        ]
+    );
+}
+
+/// Pantry stock counts against the required amount. An optional ingredient
+/// nothing requires is subtracted from as usual; one also required keeps its
+/// whole optional amount rather than being subtracted from twice.
+#[test]
+fn the_pantry_is_not_subtracted_twice() {
+    let dir = dir_with(&[(
+        "a.cook",
+        "Add @parmesan{100%g}, @?parmesan{50%g} and @?chives{10%g}.\n",
+    )]);
+    let ctx = ctx(&dir).with_pantry(ConfigSource::Inline(
+        "[fridge]\nparmesan = \"120%g\"\nchives = \"4%g\"\n".to_string(),
+    ));
+
+    let list = generate(&ctx, with_optional(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    let items: Vec<(&str, bool, Vec<String>)> = list
+        .items
+        .iter()
+        .map(|i| (i.name.as_str(), i.optional, i.quantities.clone()))
+        .collect();
+    assert_eq!(
+        items,
+        vec![
+            ("parmesan", true, vec!["50 g".to_string()]),
+            ("chives", true, vec!["6 g".to_string()]),
+        ]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1314,6 +1515,7 @@ fn in_memory_recipe_text_reaches_the_list() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1344,6 +1546,7 @@ fn two_in_memory_recipes_aggregate_into_one_list() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1376,6 +1579,7 @@ fn a_buffer_and_a_file_aggregate_together() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1401,6 +1605,7 @@ fn an_in_memory_recipe_expands_references_from_disk() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1431,6 +1636,7 @@ fn a_reference_from_a_buffer_to_an_unsaved_recipe_is_not_found() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     ) {
         Err(CoreError::RecipeNotFound { name }) => assert!(name.contains("sauce"), "{name}"),
@@ -1454,6 +1660,7 @@ fn in_memory_text_is_used_and_the_name_is_never_looked_up() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1484,6 +1691,7 @@ fn the_request_scale_applies_to_an_in_memory_recipe() {
             )],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -1509,6 +1717,7 @@ fn a_broken_buffer_is_a_parse_error_naming_the_supplied_name() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     ) {
         Err(CoreError::Parse {
@@ -1545,6 +1754,7 @@ fn a_warning_from_a_buffer_carries_no_file() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("parses despite warning");
@@ -1569,6 +1779,7 @@ fn request_with_extras(recipes: &[&str], extras: &[&str]) -> GenerateRequest {
         recipes: recipes.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
         extra_items: extras.iter().map(|s| s.to_string()).collect(),
+        include_optional: false,
     }
 }
 
