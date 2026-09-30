@@ -142,6 +142,7 @@ impl ShoppingListStore {
                     path: path.to_string(),
                     multiplier: to_multiplier(scale),
                     children: Vec::new(),
+                    optional: false,
                 }));
             }
         }
@@ -248,6 +249,7 @@ impl ShoppingListStore {
             path: item.path,
             multiplier: to_multiplier(item.scale),
             children,
+            optional: false,
         }));
         self.save_list(&list)
     }
@@ -279,6 +281,7 @@ impl ShoppingListStore {
                     path: recipe.path,
                     multiplier: to_multiplier(recipe.scale),
                     children: sub_children,
+                    optional: false,
                 })
             })
             .collect();
@@ -287,6 +290,7 @@ impl ShoppingListStore {
             path: menu_path,
             multiplier: to_multiplier(menu_scale),
             children,
+            optional: false,
         }));
         self.save_list(&list)
     }
@@ -419,6 +423,7 @@ fn child_reference(path: String) -> ShoppingListItem {
         path,
         multiplier: None,
         children: Vec::new(),
+        optional: false,
     })
 }
 

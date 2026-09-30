@@ -20,7 +20,7 @@ anstyle-yansi = "2"
 # `bundled_units` is deliberately absent: enabling it here would switch it back
 # on for both other crates through feature unification and undo #433, which
 # removed it so quantities keep their authored units.
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+cooklang = { version = "0.19.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 # Timer durations in the human formatter.
 humantime = "2"
 regex = "1"
