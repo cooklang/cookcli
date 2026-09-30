@@ -13,6 +13,7 @@ recipe-ingredients = Osagaiak
 recipe-steps = Urratsak
 recipe-notes = Oharrak
 recipe-cookware = Tresnak
+recipe-optional = (aukerakoa)
 recipe-timers = Tenporizadoreak
 recipe-tags = Etiketak
 recipe-add-to-shopping = Gehitu erosketa zerrendara

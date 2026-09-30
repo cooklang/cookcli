@@ -91,6 +91,8 @@
 
 <script>
 let shoppingList = [];
+// Shown after optional ingredients.
+const OPTIONAL_LABEL = {{ tr.t("shopping-optional")|json|safe }};
 
 // Last payload rendered by displayShoppingList(), kept so the copy button can
 // rebuild the list as plain text without re-fetching.
@@ -414,6 +416,9 @@ async function generateList() {
                         if (recipe.included_references) {
                             req.included_references = recipe.included_references;
                         }
+                        if (recipe.optional_ingredients) {
+                            req.optional_ingredients = recipe.optional_ingredients;
+                        }
                         return req;
                     });
                     return [menuFreehand, ...recipeRequests];
@@ -422,6 +427,10 @@ async function generateList() {
                 const req = { recipe: item.path, scale: item.scale };
                 if (item.included_references) {
                     req.included_references = item.included_references;
+                }
+                // Chosen optional ingredients, with the amounts to buy.
+                if (item.optional_ingredients) {
+                    req.optional_ingredients = item.optional_ingredients;
                 }
                 return [req];
             }))
@@ -579,6 +588,7 @@ function displayShoppingList(data) {
                                     data-ingredient-name="${escHtml(item.name)}">
                                 <label for="${itemId}" class="cursor-pointer flex-1">
                                     <span class="item-name">${escHtml(item.name)}</span>
+                                    ${item.optional ? `<span class="italic text-muted ml-1">${escHtml(OPTIONAL_LABEL)}</span>` : ''}
                                 </label>
                             </div>
                             <span class="text-muted ml-4">
@@ -729,7 +739,8 @@ function buildPlainTextList() {
             .filter(item => !checkedItems.has(String(item.name).toLowerCase()))
             .map(item => {
                 const quantities = copyOptions.amounts ? formatQuantities(item.quantities) : '';
-                return quantities ? `${item.name} ${quantities}` : item.name;
+                const name = item.optional ? `${item.name} ${OPTIONAL_LABEL}` : item.name;
+                return quantities ? `${name} ${quantities}` : name;
             });
         if (lines.length > 0) {
             blocks.push(copyOptions.aisles ? [category.category, ...lines].join('\n') : lines.join('\n'));

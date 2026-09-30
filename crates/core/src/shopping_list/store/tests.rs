@@ -20,6 +20,7 @@ fn entry(path: &str, scale: f64) -> StoredEntry {
         scale,
         included_references: None,
         recipes: None,
+        optional_ingredients: Vec::new(),
     }
 }
 
@@ -119,6 +120,87 @@ fn included_references_are_stored_as_children_and_read_back() {
         items[0].included_references.as_deref(),
         Some(&["Sauce".to_string(), "Sides/Rice".to_string()][..]),
         "the leading ./ is stripped on the way in; the writer puts it back"
+    );
+}
+
+fn selection(name: &str, quantity: Option<&str>) -> OptionalSelection {
+    OptionalSelection {
+        name: name.to_string(),
+        quantity: quantity.map(str::to_string),
+    }
+}
+
+/// Chosen optional ingredients are `? name{quantity}` selection lines under
+/// the recipe, written before its references, and read back as they were.
+#[test]
+fn optional_ingredients_are_stored_as_selection_lines_and_read_back() {
+    let dir = temp();
+    let store = store(&dir);
+    let chosen = vec![
+        selection("chilli flakes", Some("2%pinch")),
+        selection("chives", None),
+    ];
+    store
+        .add(StoredEntry {
+            included_references: Some(vec!["Components/Salsa".to_string()]),
+            optional_ingredients: chosen.clone(),
+            ..entry("Breakfast/Eggs on toast.cook", 2.0)
+        })
+        .unwrap();
+
+    assert_eq!(
+        list_file(&dir),
+        "./Breakfast/Eggs on toast.cook{2}\n  ? chilli flakes{2%pinch}\n  ? chives\n  ./Components/Salsa\n"
+    );
+
+    let items = store.load().expect("loads");
+    assert_eq!(items[0].optional_ingredients, chosen);
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Components/Salsa".to_string()][..]),
+        "a selection line is not a reference"
+    );
+}
+
+/// A list written by another app may accept an optional recipe with a
+/// `? ./path` line. This store does not write those, and must not mistake one
+/// for a reference to include.
+#[test]
+fn an_optional_recipe_selection_is_not_an_included_reference() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "./Steak.cook\n  ? ./sauces/chimichurri{2}\n  ./Sides/Rice\n",
+    );
+
+    let items = store(&dir).load().expect("loads");
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Sides/Rice".to_string()][..])
+    );
+    assert!(items[0].optional_ingredients.is_empty());
+}
+
+#[test]
+fn a_menu_recipe_keeps_its_optional_ingredients() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_menu(
+            "Plans/Week 1.menu".to_string(),
+            1.0,
+            vec![StoredEntry {
+                optional_ingredients: vec![selection("parmesan", Some("50%g"))],
+                ..entry("Risotto.cook", 1.0)
+            }],
+        )
+        .unwrap();
+
+    let items = store.load().expect("loads");
+    let recipes = items[0].recipes.as_ref().expect("a menu carries recipes");
+    assert_eq!(
+        recipes[0].optional_ingredients,
+        vec![selection("parmesan", Some("50%g"))]
     );
 }
 

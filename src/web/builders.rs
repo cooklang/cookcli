@@ -422,9 +422,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let mut cookware = Vec::new();
     let mut sections = Vec::new();
 
-    // Group ingredients by display name and merge quantities
+    // Group ingredients by display name and merge quantities. Optional and
+    // required uses of one ingredient stay two entries, so the required amount
+    // is what the recipe cannot do without.
     let mut grouped_ingredients: std::collections::HashMap<
-        String,
+        (String, bool),
         (
             cooklang::quantity::GroupedQuantity,
             Vec<&cooklang::model::Ingredient>,
@@ -434,9 +436,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
         let ingredient = entry.ingredient;
         let display_name = ingredient.display_name().to_string();
+        let optional = ingredient.modifiers().is_optional();
 
         grouped_ingredients
-            .entry(display_name)
+            .entry((display_name, optional))
             .and_modify(|(merged_qty, igrs)| {
                 merged_qty.merge(&entry.quantity, crate::util::PARSER.converter());
                 igrs.push(ingredient);
@@ -448,7 +451,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let mut sorted_ingredients: Vec<_> = grouped_ingredients.into_iter().collect();
     sorted_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
 
-    for (display_name, (quantity, ingredient_list)) in sorted_ingredients {
+    for ((display_name, optional), (quantity, ingredient_list)) in sorted_ingredients {
         // Use the first ingredient's data for reference path and notes
         let first_ingredient = ingredient_list[0];
         let reference_path = first_ingredient.reference.as_ref().map(|r| {
@@ -507,12 +510,14 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             unit: formatted_unit,
             note: combined_note,
             reference_path,
+            optional,
         });
     }
 
     for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
         cookware.push(CookwareData {
             name: item.cookware.name.to_string(),
+            optional: item.cookware.modifiers().is_optional(),
         });
     }
 
@@ -664,7 +669,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
             // Collect and group ingredients used in this section
             let mut section_grouped_ingredients: std::collections::HashMap<
-                String,
+                (String, bool),
                 (
                     cooklang::quantity::GroupedQuantity,
                     Vec<&cooklang::model::Ingredient>,
@@ -674,6 +679,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             for idx in section_ingredient_indices {
                 if let Some(ingredient) = recipe.ingredients.get(idx) {
                     let display_name = ingredient.display_name().to_string();
+                    let optional = ingredient.modifiers().is_optional();
                     let qty = if let Some(q) = &ingredient.quantity {
                         let mut grouped_qty = cooklang::quantity::GroupedQuantity::empty();
                         grouped_qty.add(q, crate::util::PARSER.converter());
@@ -683,7 +689,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     };
 
                     section_grouped_ingredients
-                        .entry(display_name)
+                        .entry((display_name, optional))
                         .and_modify(|(merged_qty, igrs)| {
                             if let Some(q) = &ingredient.quantity {
                                 merged_qty.add(q, crate::util::PARSER.converter());
@@ -700,7 +706,9 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             sorted_section_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
 
             let mut section_ingredients = Vec::new();
-            for (display_name, (quantity, ingredient_list)) in sorted_section_ingredients {
+            for ((display_name, optional), (quantity, ingredient_list)) in
+                sorted_section_ingredients
+            {
                 let first_ingredient = ingredient_list[0];
                 let reference_path = first_ingredient.reference.as_ref().map(|r| {
                     // For web URLs - always use forward slash
@@ -761,6 +769,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     unit: formatted_unit,
                     note: combined_note,
                     reference_path,
+                    optional,
                 });
             }
 
@@ -793,6 +802,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             unit: formatted_unit,
                             note: ingredient.note.clone(),
                             reference_path: None,
+                            optional: ingredient.modifiers().is_optional(),
                         },
                     ));
                 }
