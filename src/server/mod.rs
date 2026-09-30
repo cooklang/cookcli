@@ -38,7 +38,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand};
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
@@ -707,6 +707,28 @@ async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResp
                 .body(Body::from("404 Not Found"))
                 .unwrap()
         })
+}
+
+/// `path` canonicalized, or, when it does not exist yet, its nearest existing
+/// ancestor canonicalized with the rest appended.
+fn canonical_or_nearest(path: &Utf8Path) -> Utf8PathBuf {
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(canonical) = current.canonicalize_utf8() {
+            return missing
+                .iter()
+                .rev()
+                .fold(canonical, |acc: Utf8PathBuf, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name);
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 #[cfg(test)]

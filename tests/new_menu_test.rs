@@ -2,7 +2,9 @@
 //!
 //! `POST /new` takes a `kind`: `recipe` (the default) makes a `.cook` file,
 //! `menu` a `.menu` file with a first day and meal to fill in. Anything else
-//! is refused, and the path checks are the same for both kinds.
+//! is refused, and the path checks are the same for both kinds: a name that
+//! resolves out of the collection, through a symlinked sub-folder, is refused
+//! without creating or removing anything (#549).
 
 #![cfg(feature = "server")]
 
@@ -252,6 +254,7 @@ async fn a_menu_cannot_be_written_through_a_symlink_out_of_the_collection() {
     let server = start_server().await;
     let outside = server.dir.path().join("outside");
     std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("Other.menu"), "").unwrap();
     std::os::unix::fs::symlink(&outside, server.recipes().join("Linked")).unwrap();
 
     let resp = server
@@ -264,6 +267,75 @@ async fn a_menu_cannot_be_written_through_a_symlink_out_of_the_collection() {
     // Back to the menu form, not the recipe one.
     assert!(to.ends_with("&kind=menu"), "{to}");
     assert!(!outside.join("Week.menu").exists());
+    // Refusing is all it does: the link, and the folder it points at, are
+    // left alone.
+    assert!(std::fs::symlink_metadata(server.recipes().join("Linked"))
+        .unwrap()
+        .is_symlink());
+    assert!(outside.join("Other.menu").exists());
+}
+
+/// #549: a sub-folder symlinked out of the collection (a NAS share) held a
+/// folder the refused request had not created, and the "clean-up" deleted it.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_refused_recipe_leaves_the_symlinked_folder_alone() {
+    let server = start_server().await;
+    let nas = server.dir.path().join("nas");
+    std::fs::create_dir_all(nas.join("Desserts")).unwrap();
+    std::fs::write(
+        nas.join("Desserts/Tiramisu.cook"),
+        "Soak @ladyfingers{12}.\n",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&nas, server.recipes().join("shared")).unwrap();
+
+    let resp = server
+        .create(&[("filename", "shared/Desserts/Cheesecake")])
+        .await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    let to = location(&resp);
+    assert!(to.starts_with("/new?error="), "{to}");
+    assert!(!nas.join("Desserts/Cheesecake.cook").exists());
+    assert_eq!(
+        std::fs::read_to_string(nas.join("Desserts/Tiramisu.cook")).unwrap(),
+        "Soak @ladyfingers{12}.\n"
+    );
+}
+
+/// The check runs before anything is created, so a refused request does not
+/// leave new folders behind outside the collection either.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_refused_recipe_creates_no_folder_outside_the_collection() {
+    let server = start_server().await;
+    let nas = server.dir.path().join("nas");
+    std::fs::create_dir_all(&nas).unwrap();
+    std::os::unix::fs::symlink(&nas, server.recipes().join("shared")).unwrap();
+
+    let resp = server
+        .create(&[("filename", "shared/Cakes/Sponge/Victoria")])
+        .await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert!(location(&resp).starts_with("/new?error="));
+    assert!(nas.exists());
+    assert!(!nas.join("Cakes").exists());
+}
+
+/// New folders inside the collection are still created as before.
+#[tokio::test]
+async fn a_recipe_can_start_a_new_folder() {
+    let server = start_server().await;
+
+    let resp = server
+        .create(&[("filename", "Cakes/Sponge/Victoria")])
+        .await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&resp), "/edit/Cakes/Sponge/Victoria.cook");
+    assert!(server.recipes().join("Cakes/Sponge/Victoria.cook").exists());
 }
 
 #[tokio::test]

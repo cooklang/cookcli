@@ -503,8 +503,7 @@ async fn create_recipe(
         .base_path
         .join(format!("{recipe_path}.{}", kind.extension()));
 
-    // Security: Validate path structure before any filesystem operations
-    // Check that the constructed path, when normalized, stays within base_path
+    // The recipe directory, resolved, for the containment check below
     let base_path_clone = state.base_path.clone();
     let base_canonical =
         match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
@@ -519,56 +518,34 @@ async fn create_recipe(
             }
         };
 
-    // Validate parent path components don't escape base_path
-    // We do this by checking the joined path doesn't contain .. after normalization
-    let normalized_path = file_path.as_str().replace("\\", "/");
-    if normalized_path.contains("/../") || normalized_path.ends_with("/..") {
-        tracing::warn!("Path traversal attempt detected in: {}", recipe_path);
-        return new_page_error(
-            &state.url_prefix,
-            kind,
-            &format!("Invalid {noun} path"),
-            &original_filename,
-        );
-    }
-
-    // For the file path, we check the parent directory
+    // Decide before touching the disk: the folder the file goes in, resolved
+    // through any symlink as far as it exists, must sit under the recipe
+    // directory. Nothing is created until that holds, so a refusal leaves
+    // nothing behind — and nothing that already existed is ever removed. A
+    // sub-folder symlinked elsewhere (a NAS share) used to be deleted here by
+    // a "clean-up" of the folder this request had not created (#549).
     if let Some(parent) = file_path.parent() {
-        // Create parent directories if they don't exist
+        let parent_owned = parent.to_owned();
+        let base = base_canonical.clone();
+        let inside = tokio::task::spawn_blocking(move || {
+            super::canonical_or_nearest(&parent_owned).starts_with(&base)
+        })
+        .await
+        .unwrap_or(false);
+        if !inside {
+            tracing::warn!("Refused to create {file_path}: it resolves outside {base_canonical}");
+            return new_page_error(
+                &state.url_prefix,
+                kind,
+                &format!("Invalid {noun} path"),
+                &original_filename,
+            );
+        }
+
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
                 return new_page_error(&state.url_prefix, kind, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
-            }
-        }
-
-        // Now verify the created parent is under base_path
-        let parent_owned = parent.to_owned();
-        match tokio::task::spawn_blocking(move || parent_owned.canonicalize_utf8()).await {
-            Ok(Ok(parent_canonical)) => {
-                if !parent_canonical.starts_with(&base_canonical) {
-                    tracing::warn!(
-                        "Path traversal attempt: {} not under {}",
-                        parent_canonical,
-                        base_canonical
-                    );
-                    // Clean up the created directory if it's outside base_path
-                    let _ = tokio::fs::remove_dir_all(parent).await;
-                    return new_page_error(
-                        &state.url_prefix,
-                        kind,
-                        &format!("Invalid {noun} path"),
-                        &original_filename,
-                    );
-                }
-            }
-            _ => {
-                return new_page_error(
-                    &state.url_prefix,
-                    kind,
-                    &format!("Invalid {noun} path"),
-                    &original_filename,
-                );
             }
         }
     }
