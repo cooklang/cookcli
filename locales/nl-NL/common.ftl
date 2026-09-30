@@ -19,6 +19,7 @@ action-delete = Verwijderen
 action-clear = Wissen
 action-print = Afdrukken
 action-preview = Voorbeeld
+action-done = Klaar
 
 # Common Labels
 label-scale = Schaal

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -40,6 +40,15 @@ const PICTURE_DIR = path.join(SEED_DIR, 'E2E Picture Upload');
 const PICTURE_RECIPE = path.join(PICTURE_DIR, 'Picture Test.cook');
 const PICTURE_FILE = path.join(PICTURE_DIR, 'Picture Test.jpg');
 const PICTURE_EDIT_URL = '/edit/E2E Picture Upload/Picture Test.cook';
+const METADATA_RECIPE = path.join(PICTURE_DIR, 'Metadata Picture.cook');
+const METADATA_EDIT_URL = '/edit/E2E Picture Upload/Metadata Picture.cook';
+
+// The dialog's visible buttons, left to right, and which one is highlighted.
+async function expectActions(dialog: Locator, labels: string[], primary: string) {
+  const buttons = dialog.locator('#picture-actions button:visible');
+  await expect(buttons).toHaveText(labels);
+  await expect(dialog.locator('#picture-actions .btn-primary:visible')).toHaveText([primary]);
+}
 
 // A 1×1 PNG with an alpha channel.
 const PNG = Buffer.from(
@@ -67,6 +76,7 @@ test.describe('Recipe editor title picture', () => {
     await expect(dialog.getByRole('dialog')).toBeVisible();
     await expect(dialog.locator('#picture-empty')).toBeVisible();
     await expect(dialog.locator('#picture-remove')).toBeHidden();
+    await expectActions(dialog, ['Close', 'Choose picture'], 'Choose picture');
 
     await dialog.locator('#picture-input').setInputFiles({
       name: 'photo.png',
@@ -78,6 +88,8 @@ test.describe('Recipe editor title picture', () => {
     await expect(preview).toBeVisible();
     await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
     await expect(dialog.locator('#picture-remove')).toBeVisible();
+    // Uploaded means finished: Done is the main action, Replace a plain one.
+    await expectActions(dialog, ['Remove', 'Replace picture', 'Done'], 'Done');
 
     // Stored as JPEG whatever was sent.
     expect(fs.readFileSync(PICTURE_FILE).subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
@@ -94,6 +106,23 @@ test.describe('Recipe editor title picture', () => {
     await expect(dialog.locator('#picture-empty')).toBeVisible();
     await expect(preview).toBeHidden();
     expect(fs.existsSync(PICTURE_FILE)).toBe(false);
+    await expectActions(dialog, ['Close', 'Choose picture'], 'Choose picture');
+
+    await dialog.locator('#picture-close').click();
+    await expect(dialog.getByRole('dialog')).toBeHidden();
+  });
+
+  test('offers only Done for a picture set by metadata', async ({ page }) => {
+    fs.writeFileSync(
+      METADATA_RECIPE,
+      '---\ntitle: Metadata Picture\nimage: https://example.invalid/pizza.jpg\n---\n\nMix @flour{100%g}.\n',
+    );
+    await page.goto(METADATA_EDIT_URL);
+    await page.getByRole('button', { name: 'Picture', exact: true }).click();
+
+    const dialog = page.locator('#picture-modal');
+    await expect(dialog.locator('#picture-metadata-note')).toBeVisible();
+    await expectActions(dialog, ['Done'], 'Done');
   });
 
   test('explains that a HEIC photo cannot be read', async ({ page }) => {

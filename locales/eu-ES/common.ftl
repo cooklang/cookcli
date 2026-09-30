@@ -19,6 +19,7 @@ action-delete = Ezabatu
 action-clear = Hustu
 action-print = Inprimatu
 action-preview = Aurrebista
+action-done = Eginda
 
 # Common Labels
 label-scale = Eskala

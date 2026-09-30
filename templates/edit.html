@@ -72,11 +72,14 @@
                  cannot read HEIC. -->
             <input id="picture-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
             <div id="picture-actions" class="flex flex-wrap items-center justify-end gap-3 mt-6">
-                <span id="picture-status" class="text-sm text-muted mr-auto" aria-live="polite"></span>
+                <!-- Remove stands apart on the left, away from the main action.
+                     renderPicture() swaps Close and Choose so the main one is
+                     always last. -->
                 <button id="picture-remove" type="button" onclick="askRemovePicture()" class="btn hidden disabled:opacity-50 disabled:cursor-not-allowed">
                     {{ tr.t("picture-remove") }}
                 </button>
-                <button type="button" onclick="hidePictureModal()" class="btn">
+                <span id="picture-status" class="text-sm text-muted mr-auto" aria-live="polite"></span>
+                <button id="picture-close" type="button" onclick="hidePictureModal()" class="btn">
                     {{ tr.t("aria-close") }}
                 </button>
                 <button id="picture-choose" type="button" onclick="choosePicture()" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
@@ -439,6 +442,8 @@ const SHRINK_QUALITY = 0.92;
 const pictureText = {
     choose: {{ tr.t("picture-choose")|json|safe }},
     replace: {{ tr.t("picture-replace")|json|safe }},
+    close: {{ tr.t("aria-close")|json|safe }},
+    done: {{ tr.t("action-done")|json|safe }},
     uploading: {{ tr.t("picture-uploading")|json|safe }},
     removing: {{ tr.t("picture-removing")|json|safe }},
     loadFailed: {{ tr.t("picture-load-failed")|json|safe }},
@@ -502,6 +507,22 @@ function renderPicture(state, changed) {
     document.getElementById('picture-remove').classList.toggle('hidden', state.source !== 'file');
     const choose = document.getElementById('picture-choose');
     choose.textContent = state.source === 'file' ? pictureText.replace : pictureText.choose;
+    // A metadata picture cannot be replaced from here, so no button offers to.
+    choose.classList.toggle('hidden', fromMetadata);
+
+    // Once the recipe has a picture, the upload is already saved and the
+    // likely next step is to leave: Done becomes the main action and Replace
+    // a plain one. The main action goes last, in tab order as on screen.
+    const hasPicture = Boolean(state.image);
+    const close = document.getElementById('picture-close');
+    close.textContent = hasPicture ? pictureText.done : pictureText.close;
+    close.classList.toggle('btn-primary', hasPicture);
+    choose.classList.toggle('btn-primary', !hasPicture);
+    if (hasPicture) {
+        choose.after(close);
+    } else {
+        choose.before(close);
+    }
     updatePictureControls();
 }
 
