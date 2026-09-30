@@ -19,6 +19,7 @@ action-delete = Elimina
 action-clear = Svuota
 action-print = Stampa
 action-preview = Anteprima
+action-done = Fatto
 
 # Common Labels
 label-scale = Scala

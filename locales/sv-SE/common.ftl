@@ -19,6 +19,7 @@ action-delete = Radera
 action-clear = Rensa
 action-print = Skriv ut
 action-preview = Förhandsgranska
+action-done = Klar
 
 # Common Labels
 label-scale = Skala
