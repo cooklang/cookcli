@@ -60,6 +60,20 @@ fn write_fixture(dir: &Path) {
         "---\ntitle: Linked\nimage: https://example.com/linked.jpg\n---\n\nBoil @water{1%l}.\n",
     )
     .unwrap();
+    // Two sections of two steps, with a note that is not a step: step 1 of
+    // the Topping is `Layered.2.1.jpg`, or step 3 overall, `Layered.3.jpg`.
+    std::fs::write(
+        dir.join("Layered.cook"),
+        "---\ntitle: Layered\n---\n\n\
+         == Dough ==\n\n\
+         Mix @flour{200%g} and @water{120%ml}.\n\n\
+         > Let it rest.\n\n\
+         Knead for ~{5%minutes}.\n\n\
+         == Topping ==\n\n\
+         Spread the @tomato sauce{100%ml}.\n\n\
+         Bake in the #oven{}.\n",
+    )
+    .unwrap();
 }
 
 /// `free_port` only reserves a port long enough to learn its number, so with
@@ -406,5 +420,228 @@ async fn recipe_files_are_served_for_revalidation() {
             .get("cache-control")
             .and_then(|v| v.to_str().ok()),
         Some("no-cache")
+    );
+}
+
+// Step pictures (#562): `?section=S&step=N` on the same route.
+
+#[tokio::test]
+async fn a_step_upload_is_stored_under_its_section_and_step() {
+    let server = start_server().await;
+
+    let (status, body) = put(&server, "Layered?section=2&step=1", png(32, 16)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["section"], 2);
+    assert_eq!(body["step"], 1);
+    assert_eq!(body["source"], "file");
+    assert_eq!(body["image"], "/api/static/Layered.2.1.jpg");
+    assert_is_jpeg(&server.file("Layered.2.1.jpg"));
+    assert!(
+        !server.file("Layered.jpg").exists(),
+        "a step upload must not set the title picture"
+    );
+
+    let (status, body) = get(&server, "Layered.cook?section=2&step=1").await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["image"], "/api/static/Layered.2.1.jpg");
+
+    // The recipe page shows it on that step, and on no other.
+    let page = reqwest::get(server.url("/recipe/Layered.cook"))
+        .await
+        .expect("GET recipe page")
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(
+        page.matches(r#"src="/api/static/Layered.2.1.jpg""#).count(),
+        1,
+        "the step picture should appear once on the recipe page"
+    );
+}
+
+#[tokio::test]
+async fn section_defaults_to_the_first() {
+    let server = start_server().await;
+
+    let (status, body) = put(&server, "Pancakes?step=1", png(8, 8)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["section"], 1);
+    assert_is_jpeg(&server.file("Pancakes.1.1.jpg"));
+}
+
+/// Both conventions name the same step, in any extension: left behind, an
+/// older file would come back when the new one is removed.
+#[tokio::test]
+async fn a_step_upload_replaces_that_steps_older_files_only() {
+    let server = start_server().await;
+    let older = [
+        "Layered.2.1.png",
+        "Layered.2.1.webp",
+        "Layered.3.jpg",
+        "Layered.3.jpeg",
+    ];
+    let untouched = [
+        "Layered.jpg",
+        "Layered.1.jpg",
+        "Layered.2.2.jpg",
+        "Layered.1.1.png",
+        "Layered.4.webp",
+    ];
+    for name in older.iter().chain(&untouched) {
+        std::fs::write(server.file(name), b"older picture").unwrap();
+    }
+
+    let (status, body) = put(&server, "Layered?section=2&step=1", png(16, 16)).await;
+    assert_eq!(status, 200, "{body}");
+
+    assert_is_jpeg(&server.file("Layered.2.1.jpg"));
+    for name in older {
+        assert!(!server.file(name).exists(), "{name} left behind");
+    }
+    for name in untouched {
+        assert_eq!(
+            std::fs::read(server.file(name)).unwrap(),
+            b"older picture",
+            "{name} belongs to something else and must not be touched"
+        );
+    }
+}
+
+#[tokio::test]
+async fn deleting_a_step_picture_removes_both_conventions() {
+    let server = start_server().await;
+    for name in ["Layered.1.2.jpg", "Layered.2.png", "Layered.jpg"] {
+        std::fs::write(server.file(name), b"picture").unwrap();
+    }
+
+    let (status, body) = delete(&server, "Layered?section=1&step=2").await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["image"], Value::Null);
+    assert_eq!(body["source"], Value::Null);
+    assert!(!server.file("Layered.1.2.jpg").exists());
+    assert!(!server.file("Layered.2.png").exists());
+    assert!(
+        server.file("Layered.jpg").exists(),
+        "the title picture must not be removed"
+    );
+
+    let (status, _) = delete(&server, "Layered?section=1&step=2").await;
+    assert_eq!(status, 404);
+}
+
+/// A picture is tied to a position, so one for a step that is not in the
+/// recipe would show on nothing, or on whatever step later lands there.
+#[tokio::test]
+async fn a_step_the_recipe_does_not_have_is_refused() {
+    let server = start_server().await;
+
+    for query in [
+        "section=1&step=3",
+        "section=3&step=1",
+        "step=0",
+        "section=0&step=1",
+        "step=two",
+        "step=-1",
+        "section=2",
+    ] {
+        let (status, body) = put(&server, &format!("Layered?{query}"), png(8, 8)).await;
+        assert_eq!(status, 400, "{query}: {body}");
+        assert!(body["error"].is_string(), "{query}: {body}");
+        let (status, _) = get(&server, &format!("Layered?{query}")).await;
+        assert_eq!(status, 400, "GET {query}");
+        let (status, _) = delete(&server, &format!("Layered?{query}")).await;
+        assert_eq!(status, 400, "DELETE {query}");
+    }
+
+    let written: Vec<_> = std::fs::read_dir(server.dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("Layered.") && name != "Layered.cook")
+        .collect();
+    assert!(written.is_empty(), "nothing should be written: {written:?}");
+}
+
+#[tokio::test]
+async fn a_step_upload_is_checked_like_a_title_picture() {
+    let server = start_server().await;
+
+    let mut heic = b"\0\0\0\x18ftypheic\0\0\0\0mif1heic".to_vec();
+    heic.extend_from_slice(&[0; 64]);
+    let (status, body) = put(&server, "Layered?section=1&step=1", heic).await;
+    assert_eq!(status, 415, "{body}");
+    assert_eq!(body["code"], "heif");
+
+    let (status, body) = put(&server, "Layered?section=1&step=1", Vec::new()).await;
+    assert_eq!(status, 400, "{body}");
+
+    // Every other route is held to 1 MiB; this one carries its own limit.
+    let (status, body) = put(&server, "Layered?section=1&step=1", noisy_png()).await;
+    assert_eq!(status, 200, "{body}");
+    assert_is_jpeg(&server.file("Layered.1.1.jpg"));
+}
+
+type StepSummary = (u64, String, Option<String>);
+
+/// Without `step`, the answer lists every step and its picture, in either
+/// convention, for the editor's step picker.
+#[tokio::test]
+async fn the_title_answer_lists_every_step_and_its_picture() {
+    let server = start_server().await;
+    std::fs::write(server.file("Layered.1.2.jpg"), b"own").unwrap();
+    std::fs::write(server.file("Layered.4.png"), b"overall").unwrap();
+
+    let (status, body) = get(&server, "Layered").await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["image"], Value::Null);
+
+    let sections: Vec<(u64, String, Vec<StepSummary>)> = body["sections"]
+        .as_array()
+        .expect("sections array")
+        .iter()
+        .map(|section| {
+            let steps = section["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|step| {
+                    (
+                        step["step"].as_u64().unwrap(),
+                        step["text"].as_str().unwrap().to_string(),
+                        step["image"].as_str().map(str::to_string),
+                    )
+                })
+                .collect();
+            (
+                section["section"].as_u64().unwrap(),
+                section["name"].as_str().unwrap_or_default().to_string(),
+                steps,
+            )
+        })
+        .collect();
+    let picture = |name: &str| Some(format!("/api/static/{name}"));
+    assert_eq!(
+        sections,
+        vec![
+            (
+                1,
+                "Dough".to_string(),
+                vec![
+                    (1, "Mix flour and water.".to_string(), None),
+                    (
+                        2,
+                        "Knead for 5 minutes.".to_string(),
+                        picture("Layered.1.2.jpg")
+                    ),
+                ]
+            ),
+            (
+                2,
+                "Topping".to_string(),
+                vec![
+                    (1, "Spread the tomato sauce.".to_string(), None),
+                    (2, "Bake in the oven.".to_string(), picture("Layered.4.png")),
+                ]
+            ),
+        ]
     );
 }

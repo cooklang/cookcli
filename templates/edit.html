@@ -56,16 +56,24 @@
         </div>
     </div>
 
-    <!-- Title picture dialog -->
+    <!-- Title and step picture dialog -->
     <div id="picture-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-lg mx-4" role="dialog" aria-modal="true" aria-labelledby="picture-heading">
             <h2 id="picture-heading" class="text-title font-bold text-text mb-4">{{ tr.t("picture-title") }}</h2>
+            {% if !is_menu %}
+            <!-- Filled from the saved recipe's steps; hidden while it has none. -->
+            <div id="picture-target-row" class="hidden mb-4">
+                <label for="picture-target" class="block text-sm text-muted mb-1">{{ tr.t("picture-for") }}</label>
+                <select id="picture-target" class="select w-full"></select>
+            </div>
+            {% endif %}
             <div id="picture-drop" onclick="choosePicture()"
                  class="flex items-center justify-center h-64 rounded-[var(--radius-control)] border border-dashed border-line-strong bg-sunk overflow-hidden cursor-pointer">
                 <img id="picture-preview" class="hidden w-full h-full object-contain" alt="{{ tr.t("picture-title") }}">
                 <p id="picture-empty" class="text-sm text-muted text-center px-6">{{ tr.t("picture-none") }}</p>
             </div>
             <p id="picture-metadata-note" class="hidden text-sm text-muted mt-3">{{ tr.t("picture-from-metadata") }}</p>
+            <p id="picture-step-note" class="hidden text-sm text-muted mt-3">{{ tr.t("picture-step-note") }}</p>
             <p class="text-xs text-faint mt-3">{{ tr.t("picture-hint") }}</p>
             <!-- No image/heic here: iOS converts a HEIC photo to JPEG on upload
                  only while the picker does not ask for HEIC, and the server
@@ -429,7 +437,8 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Title picture: the Recipe.jpg beside the recipe file
+// Pictures: the title's Recipe.jpg beside the recipe file, and each step's
+// Recipe.S.N.jpg
 const pictureUrl = `{{ prefix }}/api/recipe_image/${encodeURIComponent(recipePath)}`;
 const MAX_IMAGE_BYTES = {{ max_image_bytes }};
 const MAX_IMAGE_EDGE = {{ max_image_edge }};
@@ -446,15 +455,38 @@ const pictureText = {
     removeFailed: {{ tr.t("picture-remove-failed")|json|safe }},
     tooLarge: {{ tr.t("picture-too-large")|json|safe }},
     heif: {{ tr.t("picture-heif")|json|safe }},
+    title: {{ tr.t("picture-title")|json|safe }},
+    stepTitle: {{ tr.t("picture-step-title")|json|safe }},
+    step: {{ tr.tp("picture-target-step", "step text")|json|safe }},
+    section: {{ tr.tp("picture-target-section", "section")|json|safe }},
 };
+// Longest step text shown in the picker; enough to tell steps apart.
+const STEP_TEXT_LENGTH = 50;
 let pictureSource = null;
 let pictureBusy = false;
+// What the dialog is about: null for the title picture, else { section, step },
+// both one-based as in Recipe.S.N.jpg.
+let pictureTarget = null;
+// The API's answer without a step: the title's { image, source }, and every
+// step of the saved recipe with its picture.
+let pictureTitle = { image: null, source: null };
+let pictureSections = [];
 
-function showPictureModal() {
+function pictureUrlFor(target) {
+    return target ? `${pictureUrl}?section=${target.section}&step=${target.step}` : pictureUrl;
+}
+
+async function showPictureModal() {
     const modal = document.getElementById('picture-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     cancelRemovePicture();
+    // Step pictures go by position in the saved file, so save what was typed
+    // first; the list then numbers the steps as the recipe page will.
+    if (editorView) {
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        await saveRecipe();
+    }
     // Asked afresh each time: an `image:` line typed into the editor since the
     // page loaded changes which picture the recipe shows.
     loadPicture();
@@ -473,16 +505,96 @@ async function loadPicture() {
             showToast(await pictureError(response, pictureText.loadFailed));
             return;
         }
-        renderPicture(await response.json(), false);
+        const state = await response.json();
+        pictureTitle = { image: state.image, source: state.source };
+        pictureSections = state.sections || [];
+        fillPictureTargets();
+        showPictureTarget(false);
     } catch (error) {
         showToast(`${pictureText.loadFailed}: ${error.message}`);
     }
+}
+
+function findStep(target) {
+    if (!target) return null;
+    const section = pictureSections.find(s => s.section === target.section);
+    return (section && section.steps.find(s => s.step === target.step)) || null;
+}
+
+function stepLabel(step) {
+    const text = step.text.length > STEP_TEXT_LENGTH
+        ? `${step.text.slice(0, STEP_TEXT_LENGTH - 1).trimEnd()}…`
+        : step.text;
+    const label = pictureText.step.replace('{step}', step.step).replace('{text}', text);
+    return step.image ? `${label} 📷` : label;
+}
+
+// Title picture first, then each step, grouped under its section's name when
+// the recipe has sections.
+function fillPictureTargets() {
+    const select = document.getElementById('picture-target');
+    if (!select) return;
+    // A step removed since the dialog last looked falls back to the title.
+    if (!findStep(pictureTarget)) pictureTarget = null;
+
+    const option = (value, label) => {
+        const element = document.createElement('option');
+        element.value = value;
+        element.textContent = label;
+        return element;
+    };
+    select.replaceChildren(option('', pictureText.title));
+    const grouped = pictureSections.length > 1 || pictureSections.some(s => s.name);
+    for (const section of pictureSections) {
+        let parent = select;
+        if (grouped) {
+            parent = document.createElement('optgroup');
+            parent.label = section.name || pictureText.section.replace('{section}', section.section);
+            select.append(parent);
+        }
+        for (const step of section.steps) {
+            parent.append(option(`${section.section}.${step.step}`, stepLabel(step)));
+        }
+    }
+    select.value = pictureTarget ? `${pictureTarget.section}.${pictureTarget.step}` : '';
+    document.getElementById('picture-target-row').classList.toggle('hidden', pictureSections.length === 0);
+}
+
+function parsePictureTarget(value) {
+    const match = /^(\d+)\.(\d+)$/.exec(value || '');
+    return match ? { section: Number(match[1]), step: Number(match[2]) } : null;
+}
+
+// Shows the picture of `pictureTarget` from what the dialog last loaded.
+function showPictureTarget(changed) {
+    const step = findStep(pictureTarget);
+    const state = step
+        ? { image: step.image, source: step.image ? 'file' : null }
+        : pictureTitle;
+    renderPicture(state, changed);
+}
+
+// Takes in an upload's or removal's answer: for a step, the one step's
+// { image, source }; for the title, the same shape as a load.
+function applyPictureState(state) {
+    const step = findStep(state.step ? state : null);
+    if (step) {
+        step.image = state.image;
+        const option = document.querySelector(`#picture-target option[value="${state.section}.${state.step}"]`);
+        if (option) option.textContent = stepLabel(step);
+    } else {
+        pictureTitle = { image: state.image, source: state.source };
+    }
+    renderPicture(state, true);
 }
 
 // `state` is the API's { image, source }. `changed` means the file was just
 // written or removed, so an <img> already showing that URL must fetch it again.
 function renderPicture(state, changed) {
     pictureSource = state.source;
+    const forStep = pictureTarget !== null;
+    document.getElementById('picture-heading').textContent = forStep ? pictureText.stepTitle : pictureText.title;
+    document.getElementById('picture-step-note').classList.toggle('hidden', !forStep);
     const preview = document.getElementById('picture-preview');
     const empty = document.getElementById('picture-empty');
     if (state.image) {
@@ -510,6 +622,9 @@ function updatePictureControls() {
     document.getElementById('picture-choose').disabled = locked;
     document.getElementById('picture-remove').disabled = locked;
     document.getElementById('picture-drop').classList.toggle('cursor-pointer', !locked);
+    // The upload or removal under way answers for the target it was sent for.
+    const select = document.getElementById('picture-target');
+    if (select) select.disabled = pictureBusy;
 }
 
 function setPictureBusy(label) {
@@ -575,13 +690,13 @@ async function uploadPicture(file) {
             return;
         }
         // The picture itself is the body, not a form: the server reads raw bytes.
-        const response = await fetch(pictureUrl, {
+        const response = await fetch(pictureUrlFor(pictureTarget), {
             method: 'PUT',
             headers: { 'Content-Type': body.type || 'application/octet-stream' },
             body,
         });
         if (response.ok) {
-            renderPicture(await response.json(), true);
+            applyPictureState(await response.json());
         } else {
             showToast(await pictureError(response, pictureText.uploadFailed));
         }
@@ -608,9 +723,9 @@ async function removePicture() {
     cancelRemovePicture();
     setPictureBusy(pictureText.removing);
     try {
-        const response = await fetch(pictureUrl, { method: 'DELETE' });
+        const response = await fetch(pictureUrlFor(pictureTarget), { method: 'DELETE' });
         if (response.ok) {
-            renderPicture(await response.json(), true);
+            applyPictureState(await response.json());
         } else {
             showToast(await pictureError(response, pictureText.removeFailed));
             // A 404 means it was already gone; show what is there now.
@@ -667,6 +782,26 @@ document.getElementById('picture-modal').addEventListener('click', function(e) {
 // A file dropped beside the drop zone would otherwise replace the whole page.
 document.getElementById('picture-modal').addEventListener('dragover', e => e.preventDefault());
 document.getElementById('picture-modal').addEventListener('drop', e => e.preventDefault());
+
+document.getElementById('picture-target')?.addEventListener('change', function() {
+    pictureTarget = parsePictureTarget(this.value);
+    cancelRemovePicture();
+    showPictureTarget(false);
+});
+
+// The recipe page's camera button on a step links here with #picture=S.N:
+// open the dialog on that step. A fragment rather than a query, so it
+// survives the redirect from an extensionless /edit/Recipe.
+// Registered after the editor's own DOMContentLoaded handler, so it runs once
+// the editor is there.
+document.addEventListener('DOMContentLoaded', function() {
+    const requested = /^#picture=(\d+\.\d+)$/.exec(window.location.hash);
+    if (requested) {
+        pictureTarget = parsePictureTarget(requested[1]);
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        showPictureModal();
+    }
+});
 
 // LSP WebSocket connection
 let lspSocket = null;

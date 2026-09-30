@@ -124,6 +124,13 @@ picture-upload-failed = Uploaden mislukt
 picture-remove-failed = De foto kon niet worden verwijderd
 picture-too-large = Deze foto is te groot. De limiet is 10 MB.
 picture-heif = HEIC- en AVIF-foto's kunnen niet worden gelezen. Upload vanuit de browser van de telefoon zelf, die ze naar JPEG omzet, of zet de iPhone-camera op 'Meest compatibel' (Instellingen > Camera > Formaten).
+picture-for = Foto voor
+picture-step-title = Foto bij stap
+picture-target-step = Stap { $step }: { $text }
+picture-target-section = Sectie { $section }
+picture-step-note = Een stapfoto hoort bij de positie van de stap, niet bij de tekst: een eerdere stap in deze sectie toevoegen of verwijderen verplaatst hem naar een andere stap.
+step-picture-add = Foto toevoegen aan deze stap
+step-picture-change = Foto van deze stap wijzigen
 # Sign-in (users are managed on the server with `cook server user`)
 sign-in = Inloggen
 sign-out = Uitloggen

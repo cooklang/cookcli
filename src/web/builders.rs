@@ -635,17 +635,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                         }
                     }
 
-                    // Step images come in two naming conventions (issue #374):
-                    // `Recipe.S.N.ext` (section S, step N within it — used by the
-                    // iOS app) and `Recipe.N.ext` (step N counted continuously
-                    // across sections). Prefer the section-specific image.
-                    let section_image_path = entry
-                        .step_images()
-                        .get(section_index + 1, step_count + 1)
-                        .or_else(|| entry.step_images().get(0, total_steps + step_count + 1))
-                        .and_then(|img_path| {
-                            get_image_path(base_path, url_prefix, img_path.to_string())
-                        });
+                    let section_image_path =
+                        step_image(&entry, section_index + 1, step_count + 1, total_steps)
+                            .and_then(|img_path| {
+                                get_image_path(base_path, url_prefix, img_path.to_string())
+                            });
 
                     section_items.push(RecipeSectionItem::Step(StepData {
                         number: step_count + 1,
@@ -818,6 +812,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 .collect();
 
             sections.push(RecipeSection {
+                number: section_index + 1,
                 name: section.name.clone(),
                 items: section_items.clone(),
                 step_offset: total_steps,
@@ -1274,6 +1269,25 @@ pub(crate) fn get_image_path(
                 .map(|name| static_url(prefix, Utf8Path::new(name)))
         }
     }
+}
+
+/// The picture file shown for step `step` of section `section`, both
+/// one-based, with `steps_before` steps in the sections ahead of it.
+///
+/// Step pictures come in two naming conventions (#374): `Recipe.S.N.ext`
+/// (section S, step N within it — what the iOS app writes) and `Recipe.G.ext`
+/// (step G counted across every section). The section-specific one wins.
+/// `section` counts every section of the parsed recipe, empty ones included.
+pub(crate) fn step_image(
+    entry: &cooklang_find::RecipeEntry,
+    section: usize,
+    step: usize,
+    steps_before: usize,
+) -> Option<&String> {
+    let images = entry.step_images();
+    images
+        .get(section, step)
+        .or_else(|| images.get(0, steps_before + step))
 }
 
 /// `{prefix}/api/static/` and `relative`, one percent-encoded segment per

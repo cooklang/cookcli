@@ -142,7 +142,7 @@ the browser.
 Each user has a role, which decides what they can change once signed in. Each
 role can do everything the ones above it can:
 
-| Role | Shopping list & pantry | Recipes & menus (create, edit, delete, title picture) | CookCloud sync |
+| Role | Shopping list & pantry | Recipes & menus (create, edit, delete, pictures) | CookCloud sync |
 |------|:---:|:---:|:---:|
 | `reader` | | | |
 | `shopper` | ✅ | | |
@@ -258,8 +258,8 @@ saying when, who, and what — in the terminal, or in `docker logs`:
 2026-09-27 09:12:44 guest failed to sign in
 ```
 
-It covers recipes and menus (created, updated, deleted, title picture set or
-removed), the shopping list, the pantry, linking the server to cook.md, and
+It covers recipes and menus (created, updated, deleted, title or step picture
+set or removed), the shopping list, the pantry, linking the server to cook.md, and
 signing in and out. Changes are attributed to the signed-in user; without
 [sign-in](#signing-in-to-make-changes), and for a failed sign-in, to `guest`.
 A failed sign-in never shows the name that was typed, since that is sometimes
@@ -278,15 +278,17 @@ Items use the same metadata as the static site's feeds (`title`, `date`, `descri
 
 Feed links are absolute. They are built from the request's `Host` header and `--url-prefix`. Behind a TLS-terminating reverse proxy, send `X-Forwarded-Proto: https` to get `https://` links. As with the same-origin check, `X-Forwarded-Host` is ignored, so the proxy must pass the public `Host` through.
 
-## Title pictures
+## Title and step pictures
 
-The recipe editor's **Picture** button adds, replaces or removes a recipe's title picture — the `Recipe.jpg` next to `Recipe.cook` that the recipe page and the recipe list show — without touching the server's files directly. Choose a file or drop one on the dialog.
+The recipe editor's **Picture** button adds, replaces or removes a recipe's pictures without touching the server's files directly: its title picture — the `Recipe.jpg` next to `Recipe.cook` that the recipe page and the recipe list show — and the picture of each step, shown above the step on the recipe page and in cooking mode. Pick the title or a step in the dialog's **Picture for** list, then choose a file or drop one on the dialog. On the recipe page, the camera button beside a step opens the editor with that step picked; it is shown to those who may edit recipes.
 
 - JPEG, PNG and WebP are accepted. The browser scales a photo down before sending it, so a phone photo of several megabytes goes up as a few hundred kilobytes; the server takes at most 10 MB.
-- Every picture is saved as `Recipe.jpg`: turned upright from the photo's orientation data, scaled down to 2048 px on its longer edge, laid over white where it is transparent, and always re-encoded on the server — never stored as sent — so a malformed or doctored file cannot reach the recipe folder.
+- Every picture is saved as JPEG: turned upright from the photo's orientation data, scaled down to 2048 px on its longer edge, laid over white where it is transparent, and always re-encoded on the server — never stored as sent — so a malformed or doctored file cannot reach the recipe folder.
 - Re-encoding drops the photo's metadata, including its GPS location.
-- An older `Recipe.jpeg`, `Recipe.png` or `Recipe.webp` is removed when a new picture is saved. Step pictures (`Recipe.1.jpg`) are never touched.
+- A title picture is saved as `Recipe.jpg`. An older `Recipe.jpeg`, `Recipe.png` or `Recipe.webp` is removed when a new one is saved. Step pictures are never touched.
+- A step picture is saved as `Recipe.S.N.jpg`: step N of section S, both counted from 1, as the Cooklang iOS app names them. The recipe page also shows a `Recipe.N.jpg` with the step counted across every section, so saving or removing a step's picture clears both names in every extension. The title picture and other steps' pictures are never touched.
+- A step picture belongs to the step's position, not its text: adding or removing an earlier step in the same section moves it onto another step. The dialog saves the recipe before listing its steps, so they are numbered as the recipe page numbers them.
 - HEIC and AVIF photos cannot be read by the server. An iPhone's own browser converts a HEIC photo to JPEG as it uploads it, and so does Safari on a Mac; from another browser, export the photo as JPEG first, or set the iPhone camera to **Most Compatible** (Settings › Camera › Formats).
-- A recipe whose metadata names a picture (`image:` in its frontmatter) shows that one instead. The dialog says so; remove the line to use an uploaded picture.
+- A recipe whose metadata names a picture (`image:` in its frontmatter) shows that one as its title picture instead. The dialog says so; remove the line to use an uploaded picture.
 
 The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
