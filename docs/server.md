@@ -270,6 +270,30 @@ no time zone data, so it logs in UTC unless you mount the host's zone, e.g.
 
 Changes made to the files directly, outside the server, are not listed.
 
+## Meal plans
+
+**New Meal Plan**, beside **New Menu** on the recipe list, makes a menu laid out as a calendar: pick its first day (any day of the week), how many days it lasts (1 to 62), its meals and its servings. The plan is an ordinary `.menu` file whose frontmatter frames it in time:
+
+```yaml
+---
+title: October fortnight
+servings: 2
+plan:
+  start: 2026-10-07   # the first day, YYYY-MM-DD
+  days: 10            # 1 to 62
+  meals: [Breakfast, Lunch, Dinner]   # optional: a slot on every day
+---
+
+== Wednesday (2026-10-07) ==
+
+Dinner: \
+- @./Risotto{2%servings}
+```
+
+- What is eaten each day stays in the body, in sections dated `(YYYY-MM-DD)` like any menu, so the shopping list, the Today's menu banner, `cook shopping-list` and other Cooklang apps read a plan as they read any menu. A new plan has a section for every day, with an empty bullet under each meal to fill in the editor; day and meal names are written in the page's language.
+- A menu with a `plan:` block shows as one card a day, in weekday columns on a wide screen (weeks start on Sunday for `en-US` and `ja-JP`, Monday otherwise) and one under the other on a phone. Each meal of `meals` gets a slot even when nothing is planned; a meal the text adds (`Snacks:`) is shown after them. The reader's own clock marks today and greys the days gone by.
+- A section with no date, or a date outside the plan, is listed under **Outside this plan**. A `plan:` block that cannot be laid out — no valid `start`, or `days` out of range — leaves the menu shown as an ordinary menu.
+
 ## Web feeds
 
 The server publishes an Atom feed at `/atom.xml` and an RSS 2.0 feed at `/rss.xml`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.

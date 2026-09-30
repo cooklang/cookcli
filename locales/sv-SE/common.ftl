@@ -102,6 +102,19 @@ new-menu-path = Meny sökväg
 new-menu-placeholder = Planer/Vecka 12
 new-menu-hint = Använd mapp/meny-namn format
 new-menu-create = Skapa Meny
+new-plan = Ny Måltidsplan
+new-plan-path = Sökväg för planen
+new-plan-placeholder = Planer/Oktober
+new-plan-hint = Använd formatet mapp/plannamn
+new-plan-create = Skapa Måltidsplan
+new-plan-start = Första dagen
+new-plan-today = Idag
+new-plan-this-week = Den här veckan
+new-plan-next-week = Nästa vecka
+new-plan-days = Antal dagar
+new-plan-one-week = 1 vecka
+new-plan-two-weeks = 2 veckor
+new-plan-meals = Måltider
 
 # Delete Recipe
 delete-recipe = Radera Recept

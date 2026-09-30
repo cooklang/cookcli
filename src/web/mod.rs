@@ -33,6 +33,7 @@ pub mod builders;
 pub(crate) mod i18n;
 pub mod language;
 pub mod menus;
+pub mod plan;
 pub mod templates;
 pub mod viewer;
 

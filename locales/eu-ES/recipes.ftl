@@ -43,6 +43,9 @@ meta-description = Deskribapena
 
 # Recipe Types
 recipe-type-menu = Menua
+recipe-type-plan = Otordu-plana
+plan-outside = Plan honetatik kanpo
+plan-nothing-planned = Ezer ez aurreikusita
 
 # Today's Menu Banner
 todays-menu-title = Gaurko menua

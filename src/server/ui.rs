@@ -317,11 +317,13 @@ async fn edit_page(
     template.into_response()
 }
 
-/// What the new-file form creates: a `.cook` recipe or a `.menu` meal plan.
+/// What the new-file form creates: a `.cook` recipe, a `.menu` menu, or a
+/// meal plan (a `.menu` whose frontmatter pins it to dates).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum NewKind {
     Recipe,
     Menu,
+    Plan,
 }
 
 impl NewKind {
@@ -331,6 +333,7 @@ impl NewKind {
         match kind {
             None | Some("recipe") => Some(Self::Recipe),
             Some("menu") => Some(Self::Menu),
+            Some("plan") => Some(Self::Plan),
             Some(_) => None,
         }
     }
@@ -338,7 +341,7 @@ impl NewKind {
     fn extension(self) -> &'static str {
         match self {
             Self::Recipe => "cook",
-            Self::Menu => "menu",
+            Self::Menu | Self::Plan => "menu",
         }
     }
 
@@ -347,19 +350,129 @@ impl NewKind {
         match self {
             Self::Recipe => "recipe",
             Self::Menu => "menu",
+            Self::Plan => "plan",
         }
     }
 
-    /// What a new file starts with, titled `name`.
+    /// The `kind` parameter that brings the form back for this kind of file.
+    fn query(self) -> &'static str {
+        match self {
+            Self::Recipe => "",
+            Self::Menu => "&kind=menu",
+            Self::Plan => "&kind=plan",
+        }
+    }
+
+    /// What a new file starts with, titled `name`. A plan starts from its
+    /// frame instead: see [`crate::web::plan::plan_starter`].
     fn starter(self, name: &str) -> String {
         match self {
             Self::Recipe => format!("---\ntitle: {name}\n---\n\n"),
             // One day and one meal. The ` \` keeps the bullet below it in the
             // same meal: the menu page only groups lines that end with one.
-            Self::Menu => format!(
+            Self::Menu | Self::Plan => format!(
                 "---\ntitle: {name}\nservings: 2\n---\n\n== Day 1 ==\n\nBreakfast: \\\n- \n"
             ),
         }
+    }
+}
+
+/// The meals a new plan offers, as the form field and the translation of the
+/// name written into the file (the editor toolbar's).
+const PLAN_MEALS: [(&str, &str); 4] = [
+    ("breakfast", "editor-toolbar-meal-breakfast"),
+    ("lunch", "editor-toolbar-meal-lunch"),
+    ("dinner", "editor-toolbar-meal-dinner"),
+    ("snacks", "editor-toolbar-meal-snacks"),
+];
+
+/// A new plan's frame, as the form posts it and as an error sends it back.
+/// Numbers stay text: a blank number field posts an empty string.
+#[derive(Deserialize, Default)]
+struct PlanFields {
+    start: Option<String>,
+    days: Option<String>,
+    servings: Option<String>,
+    breakfast: Option<String>,
+    lunch: Option<String>,
+    dinner: Option<String>,
+    snacks: Option<String>,
+}
+
+/// A plan the form asked for, checked.
+struct NewPlan {
+    frame: crate::web::plan::PlanFrame,
+    servings: u32,
+}
+
+impl PlanFields {
+    fn has_meal(&self, field: &str) -> bool {
+        match field {
+            "breakfast" => self.breakfast.is_some(),
+            "lunch" => self.lunch.is_some(),
+            "dinner" => self.dinner.is_some(),
+            "snacks" => self.snacks.is_some(),
+            _ => false,
+        }
+    }
+
+    /// The plan these fields ask for, meals named in `lang`, or what is wrong
+    /// with them.
+    fn plan(&self, lang: &LanguageIdentifier) -> Result<NewPlan, String> {
+        use crate::web::plan::{PlanFrame, MAX_PLAN_DAYS};
+
+        let start = self
+            .start
+            .as_deref()
+            .and_then(|start| chrono::NaiveDate::parse_from_str(start.trim(), "%Y-%m-%d").ok())
+            .ok_or("Pick the day the plan starts")?;
+        let days = self
+            .days
+            .as_deref()
+            .and_then(|days| days.trim().parse::<u32>().ok())
+            .filter(|days| (1..=MAX_PLAN_DAYS).contains(days))
+            .ok_or(format!("A plan lasts from 1 to {MAX_PLAN_DAYS} days"))?;
+        let servings = match self.servings.as_deref().map(str::trim) {
+            None | Some("") => 2,
+            Some(servings) => servings
+                .parse::<u32>()
+                .ok()
+                .filter(|&servings| servings > 0)
+                .ok_or("Servings must be a whole number above zero")?,
+        };
+        let tr = Tr::new(lang.clone());
+        let meals: Vec<String> = PLAN_MEALS
+            .iter()
+            .filter(|(field, _)| self.has_meal(field))
+            .map(|(_, key)| tr.t(key))
+            .collect();
+        if meals.is_empty() {
+            return Err("Pick at least one meal".to_string());
+        }
+        Ok(NewPlan {
+            frame: PlanFrame { start, days, meals },
+            servings,
+        })
+    }
+
+    /// The query string that brings these fields back to the form.
+    fn query(&self) -> String {
+        let mut query = String::new();
+        for (name, value) in [
+            ("start", &self.start),
+            ("days", &self.days),
+            ("servings", &self.servings),
+        ] {
+            if let Some(value) = value {
+                query.push_str(&format!("&{name}={}", urlencoding::encode(value)));
+            }
+        }
+        for (field, _) in PLAN_MEALS {
+            if self.has_meal(field) {
+                query.push_str(&format!("&{field}=on"));
+            }
+        }
+        query
     }
 }
 
@@ -368,6 +481,8 @@ struct NewPageQuery {
     error: Option<String>,
     filename: Option<String>,
     kind: Option<String>,
+    #[serde(flatten)]
+    plan: PlanFields,
 }
 
 async fn new_page(
@@ -377,12 +492,45 @@ async fn new_page(
     Extension(viewer): Extension<Viewer>,
     Query(query): Query<NewPageQuery>,
 ) -> impl IntoResponse {
+    let kind = NewKind::parse(query.kind.as_deref());
+    let tr = Tr::new(lang);
+    // A fresh form (not one an error sent back) offers three meals a day.
+    let fresh = query.plan.start.is_none() && query.plan.days.is_none();
+    let plan = crate::web::templates::NewPlanForm {
+        start: query.plan.start.clone().unwrap_or_else(|| {
+            chrono::Local::now()
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string()
+        }),
+        days: query.plan.days.clone().unwrap_or_else(|| "7".to_string()),
+        max_days: crate::web::plan::MAX_PLAN_DAYS,
+        servings: query
+            .plan
+            .servings
+            .clone()
+            .unwrap_or_else(|| "2".to_string()),
+        meals: PLAN_MEALS
+            .iter()
+            .map(|(field, key)| crate::web::templates::NewPlanMeal {
+                field,
+                label: tr.t(key),
+                checked: if fresh {
+                    *field != "snacks"
+                } else {
+                    query.plan.has_meal(field)
+                },
+            })
+            .collect(),
+    };
     crate::web::templates::NewTemplate {
         active: "recipes".to_string(),
-        tr: Tr::new(lang),
+        tr,
         error: query.error,
         filename: query.filename,
-        is_menu: NewKind::parse(query.kind.as_deref()) == Some(NewKind::Menu),
+        is_menu: matches!(kind, Some(NewKind::Menu | NewKind::Plan)),
+        is_plan: kind == Some(NewKind::Plan),
+        plan,
         prefix: state.url_prefix.clone(),
         static_mode: false,
         repo_url: None,
@@ -395,24 +543,24 @@ async fn new_page(
 struct NewRecipeForm {
     filename: String,
     kind: Option<String>,
+    /// Only a plan's form has these.
+    #[serde(flatten)]
+    plan: PlanFields,
 }
 
 /// Helper to build redirect URL with error message, back to the form for the
-/// same kind of file
+/// same kind of file; `back` is the rest of the form's query (`NewKind::query`
+/// and, for a plan, `PlanFields::query`).
 fn new_page_error(
     prefix: &str,
-    kind: NewKind,
+    back: &str,
     error: &str,
     filename: &str,
 ) -> axum::response::Response {
     let encoded_error = urlencoding::encode(error);
     let encoded_filename = urlencoding::encode(filename);
-    let kind = match kind {
-        NewKind::Recipe => "",
-        NewKind::Menu => "&kind=menu",
-    };
     axum::response::Redirect::to(&format!(
-        "{prefix}/new?error={}&filename={}{kind}",
+        "{prefix}/new?error={}&filename={}{back}",
         encoded_error, encoded_filename
     ))
     .into_response()
@@ -447,6 +595,7 @@ fn validate_same_origin(headers: &HeaderMap, host: &str, cors: &super::cors::Cor
 async fn create_recipe(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
+    Extension(lang): Extension<LanguageIdentifier>,
     headers: HeaderMap,
     Form(form): Form<NewRecipeForm>,
 ) -> impl IntoResponse {
@@ -462,14 +611,28 @@ async fn create_recipe(
         return (StatusCode::BAD_REQUEST, "Unknown kind of file").into_response();
     };
     let noun = kind.noun();
+    let back = match kind {
+        NewKind::Plan => format!("{}{}", kind.query(), form.plan.query()),
+        _ => kind.query().to_string(),
+    };
 
     let original_filename = form.filename.clone();
+
+    let plan = match kind {
+        NewKind::Plan => match form.plan.plan(&lang) {
+            Ok(plan) => Some(plan),
+            Err(error) => {
+                return new_page_error(&state.url_prefix, &back, &error, &original_filename);
+            }
+        },
+        _ => None,
+    };
 
     // Validate input before sanitization
     if form.filename.trim().is_empty() {
         return new_page_error(
             &state.url_prefix,
-            kind,
+            &back,
             &format!("{} name cannot be empty", capitalize(noun)),
             &original_filename,
         );
@@ -493,7 +656,7 @@ async fn create_recipe(
     if recipe_path.is_empty() {
         return new_page_error(
             &state.url_prefix,
-            kind,
+            &back,
             &format!("{} name cannot be empty", capitalize(noun)),
             &original_filename,
         );
@@ -511,7 +674,7 @@ async fn create_recipe(
             _ => {
                 return new_page_error(
                     &state.url_prefix,
-                    kind,
+                    &back,
                     "Internal error: invalid base path",
                     &original_filename,
                 );
@@ -536,7 +699,7 @@ async fn create_recipe(
             tracing::warn!("Refused to create {file_path}: it resolves outside {base_canonical}");
             return new_page_error(
                 &state.url_prefix,
-                kind,
+                &back,
                 &format!("Invalid {noun} path"),
                 &original_filename,
             );
@@ -545,7 +708,7 @@ async fn create_recipe(
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
                 tracing::error!("Failed to create directories: {}", e);
-                return new_page_error(&state.url_prefix, kind, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
+                return new_page_error(&state.url_prefix, &back, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
             }
         }
     }
@@ -558,7 +721,12 @@ async fn create_recipe(
         .replace(['-', '_'], " ");
 
     // Start the file with YAML frontmatter
-    let template = kind.starter(&recipe_name);
+    let template = match &plan {
+        Some(plan) => {
+            crate::web::plan::plan_starter(&recipe_name, plan.servings, &plan.frame, &lang)
+        }
+        None => kind.starter(&recipe_name),
+    };
 
     // Use OpenOptions with create_new to atomically check existence and create
     // This prevents TOCTOU race conditions
@@ -582,7 +750,7 @@ async fn create_recipe(
                 tracing::error!("Failed to write recipe: {}", e);
                 return new_page_error(
                     &state.url_prefix,
-                    kind,
+                    &back,
                     &format!("Failed to write {noun} file"),
                     &original_filename,
                 );
@@ -591,7 +759,7 @@ async fn create_recipe(
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             return new_page_error(
                 &state.url_prefix,
-                kind,
+                &back,
                 &format!("A {noun} with this name already exists"),
                 &original_filename,
             );
@@ -600,7 +768,7 @@ async fn create_recipe(
             tracing::error!("Failed to create recipe file: {}", e);
             return new_page_error(
                 &state.url_prefix,
-                kind,
+                &back,
                 &format!("Failed to create {noun} file"),
                 &original_filename,
             );

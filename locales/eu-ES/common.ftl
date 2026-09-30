@@ -102,6 +102,19 @@ new-menu-path = Menuaren bidea
 new-menu-placeholder = Planak/Astea 12
 new-menu-hint = Formatoa: direktorioa/menu-izena
 new-menu-create = Sortu menua
+new-plan = Otordu-plan berria
+new-plan-path = Planaren bidea
+new-plan-placeholder = Planak/Urria
+new-plan-hint = Erabili karpeta/plan-izena formatua
+new-plan-create = Sortu plana
+new-plan-start = Lehen eguna
+new-plan-today = Gaur
+new-plan-this-week = Aste hau
+new-plan-next-week = Hurrengo astea
+new-plan-days = Egun kopurua
+new-plan-one-week = Aste 1
+new-plan-two-weeks = 2 aste
+new-plan-meals = Otorduak
 
 # Delete Recipe
 delete-recipe = Ezabatu errezeta
