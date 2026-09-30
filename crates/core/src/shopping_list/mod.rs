@@ -128,6 +128,13 @@ pub struct GenerateRequest {
     /// aisle category, and is subtracted from by the pantry — exactly as that
     /// ingredient would be.
     pub extra_items: Vec<String>,
+    /// Put the recipes' optional ingredients (`@?chives`) on the list too,
+    /// marked as optional.
+    ///
+    /// Off by default: a recipe contributes only what it needs, so an optional
+    /// garnish is bought only when someone asks for it. An optional recipe
+    /// reference (`@?./sauce{}`) is left out with everything it would add.
+    pub include_optional: bool,
 }
 
 /// How [`extract_ingredients`] should treat recipe references.
@@ -144,6 +151,25 @@ pub struct ExtractOptions<'a> {
     /// is named by `./sauce` and by `sauce` alike, and one written
     /// `@../shared/sauce{}` by the `shared/sauce` it resolves to.
     pub included_references: Option<&'a [String]>,
+    /// Collect optional ingredients into [`ShoppingIngredients::optional`]
+    /// instead of leaving them out. See [`GenerateRequest::include_optional`].
+    pub include_optional: bool,
+}
+
+/// What [`extract_ingredients`] accumulates into: the ingredients the recipes
+/// need, and apart from them the optional ones.
+///
+/// Optional amounts are never merged into required ones, so the required
+/// total is what the recipes cannot do without, and the same ingredient can
+/// appear in both lists — 100 g of parmesan in the sauce, and 50 g more on
+/// top if you like.
+#[derive(Debug, Default)]
+pub struct ShoppingIngredients {
+    /// Ingredients the recipes need.
+    pub required: IngredientList,
+    /// Optional ingredients, and everything an optional recipe reference adds.
+    /// Stays empty unless [`ExtractOptions::include_optional`] is set.
+    pub optional: IngredientList,
 }
 
 /// One ingredient on a shopping list.
@@ -166,6 +192,20 @@ pub struct ListItem {
     /// [`ordered_components`](crate::format::quantity::ordered_components)
     /// describes.
     pub quantities: Vec<String>,
+    /// The recipes can do without it: an optional ingredient, or one an
+    /// optional recipe reference adds. The same name can appear twice, once
+    /// required and once optional, because the two amounts are kept apart.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
+}
+
+/// One ingredient on the list with `cooklang`'s own quantity model, for the
+/// formatters. See [`AggregatedList::raw_items`].
+#[derive(Debug, Clone)]
+pub(crate) struct RawItem {
+    pub(crate) name: String,
+    pub(crate) quantity: GroupedQuantity,
+    pub(crate) optional: bool,
 }
 
 /// A group of ingredients sharing an aisle category.
@@ -206,10 +246,10 @@ pub struct AggregatedList {
     /// structured values; consumers outside this crate get the rendered
     /// strings above.
     #[serde(skip)]
-    pub(crate) raw_items: Vec<(String, GroupedQuantity)>,
+    pub(crate) raw_items: Vec<RawItem>,
     /// The same as [`categories`](Self::categories), likewise unrendered.
     #[serde(skip)]
-    pub(crate) raw_categories: Vec<(String, Vec<(String, GroupedQuantity)>)>,
+    pub(crate) raw_categories: Vec<(String, Vec<RawItem>)>,
 }
 
 impl AggregatedList {
@@ -218,23 +258,48 @@ impl AggregatedList {
         self.items.is_empty()
     }
 
-    /// Build both views from an aggregated `cooklang` list.
+    /// Build both views from the aggregated required and optional lists.
     ///
     /// The uncategorised pairs are taken first because
     /// [`IngredientList::categorize`] consumes the list and reorders what it
-    /// keeps, so the insertion order cannot be recovered afterwards.
-    fn build(list: IngredientList, aisle: &AisleConf) -> Self {
-        let raw_items: Vec<(String, GroupedQuantity)> = list
-            .iter()
-            .map(|(name, quantity)| (name.clone(), quantity.clone()))
-            .collect();
+    /// keeps, so the insertion order cannot be recovered afterwards. Optional
+    /// items follow the required ones, both uncategorised and within each
+    /// category.
+    fn build(required: IngredientList, optional: IngredientList, aisle: &AisleConf) -> Self {
+        let raw = |list: &IngredientList, optional: bool| {
+            list.iter()
+                .map(|(name, quantity)| RawItem {
+                    name: name.clone(),
+                    quantity: quantity.clone(),
+                    optional,
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut raw_items = raw(&required, false);
+        raw_items.extend(raw(&optional, true));
         let items = raw_items.iter().map(ListItem::render).collect();
 
-        let raw_categories: Vec<(String, Vec<(String, GroupedQuantity)>)> = list
-            .categorize(aisle)
-            .into_iter()
-            .map(|(category, items)| (category, items.into_iter().collect()))
-            .collect();
+        // Categories keep the aisle configuration's order, with "other" last,
+        // whichever of the two lists a category first turns up in.
+        let rank = |category: &str| {
+            aisle
+                .categories
+                .iter()
+                .position(|c| c.name == category)
+                .unwrap_or(usize::MAX)
+        };
+        let mut raw_categories: Vec<(String, Vec<RawItem>)> = Vec::new();
+        for (list, optional) in [(required, false), (optional, true)] {
+            for (category, items) in list.categorize(aisle) {
+                let items = raw(&items, optional);
+                match raw_categories.iter_mut().find(|(c, _)| *c == category) {
+                    Some((_, existing)) => existing.extend(items),
+                    None => raw_categories.push((category, items)),
+                }
+            }
+        }
+        raw_categories.sort_by_key(|(category, _)| rank(category));
+
         let categories = raw_categories
             .iter()
             .map(|(name, items)| ListCategory {
@@ -253,13 +318,14 @@ impl AggregatedList {
 }
 
 impl ListItem {
-    fn render((name, quantity): &(String, GroupedQuantity)) -> Self {
+    fn render(item: &RawItem) -> Self {
         Self {
-            name: name.clone(),
-            quantities: ordered_components(quantity)
+            name: item.name.clone(),
+            quantities: ordered_components(&item.quantity)
                 .into_iter()
                 .map(quantity_fmt)
                 .collect(),
+            optional: item.optional,
         }
     }
 }
@@ -304,9 +370,10 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
     let options = ExtractOptions {
         ignore_references: req.ignore_references,
         included_references: None,
+        include_optional: req.include_optional,
     };
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     for recipe in &req.recipes {
         diagnostics.extend(extract_ingredients(ctx, recipe, &options, &mut list)?);
     }
@@ -319,18 +386,63 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
     for spec in &req.extra_items {
         let outcome = parse_extra_item(spec)?;
         diagnostics.extend(outcome.diagnostics);
-        list.add_recipe(&outcome.value, PARSER.converter(), false);
+        list.required
+            .add_recipe(&outcome.value, PARSER.converter(), false);
     }
 
-    let mut list = list.use_common_names(&aisle, PARSER.converter());
+    let mut required = list.required.use_common_names(&aisle, PARSER.converter());
+    let mut optional = list.optional.use_common_names(&aisle, PARSER.converter());
     if let Some(pantry) = &pantry {
-        list = list.subtract_pantry(pantry, PARSER.converter());
+        optional = subtract_pantry_from_optional(optional, &required, pantry);
+        required = required.subtract_pantry(pantry, PARSER.converter());
     }
 
     Ok(Outcome::with_diagnostics(
-        AggregatedList::build(list, &aisle),
+        AggregatedList::build(required, optional, &aisle),
         diagnostics,
     ))
+}
+
+/// Subtract the pantry from the optional list, except for ingredients the
+/// required list also has.
+///
+/// Pantry stock counts against the required amount first, and
+/// [`IngredientList::subtract_pantry`] does not say what is left over. Taking
+/// the same stock off the optional amount as well would count it twice, so an
+/// ingredient needed both ways keeps its whole optional amount: at worst the
+/// shopper is offered a little more garnish than they need.
+fn subtract_pantry_from_optional(
+    optional: IngredientList,
+    required: &IngredientList,
+    pantry: &PantryConf,
+) -> IngredientList {
+    let required_names: std::collections::HashSet<String> = required
+        .iter()
+        .map(|(name, _)| name.to_lowercase())
+        .collect();
+    let converter = PARSER.converter();
+
+    let mut only_optional = IngredientList::new();
+    for (name, quantity) in optional.iter() {
+        if !required_names.contains(&name.to_lowercase()) {
+            only_optional.add_ingredient(name.clone(), quantity, converter);
+        }
+    }
+    let remaining: std::collections::HashMap<String, GroupedQuantity> = only_optional
+        .subtract_pantry(pantry, converter)
+        .iter()
+        .map(|(name, quantity)| (name.clone(), quantity.clone()))
+        .collect();
+
+    let mut result = IngredientList::new();
+    for (name, quantity) in optional.iter() {
+        if required_names.contains(&name.to_lowercase()) {
+            result.add_ingredient(name.clone(), quantity, converter);
+        } else if let Some(left) = remaining.get(name) {
+            result.add_ingredient(name.clone(), left, converter);
+        }
+    }
+    result
 }
 
 /// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient
@@ -502,13 +614,20 @@ pub fn extract_ingredients(
     ctx: &Context,
     recipe: &ScaledRecipe,
     options: &ExtractOptions<'_>,
-    list: &mut IngredientList,
+    list: &mut ShoppingIngredients,
 ) -> Result<Vec<Diagnostic>, CoreError> {
     let base_path = ctx.base_path();
     let converter = PARSER.converter();
 
     let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
-    let ref_indices = list.add_recipe(&parsed, converter, options.ignore_references);
+    let ref_indices = add_ingredients(
+        list,
+        &parsed,
+        converter,
+        options.ignore_references,
+        options.include_optional,
+        false,
+    );
 
     // The chain of recipes currently being expanded, innermost last, by
     // resolved file path. A reference resolving to something already on it
@@ -536,6 +655,7 @@ pub fn extract_ingredients(
             converter,
             list,
             diagnostics: &mut diagnostics,
+            include_optional: options.include_optional,
         }
         .expand(
             &parsed,
@@ -547,6 +667,63 @@ pub fn extract_ingredients(
     }
 
     Ok(diagnostics)
+}
+
+/// A recipe reference [`add_ingredients`] left to follow: its index in
+/// [`Recipe::ingredients`], and whether what it adds is optional.
+type PendingReference = (usize, bool);
+
+/// Add `recipe`'s own ingredients to `list`, and return the recipe references
+/// it holds for the caller to expand.
+///
+/// The counterpart of [`IngredientList::add_recipe`] that keeps optional
+/// ingredients apart. An optional ingredient is left out unless
+/// `include_optional` is set, and then goes to [`ShoppingIngredients::optional`];
+/// so does every ingredient when `all_optional` says the whole recipe was
+/// reached through an optional reference. An optional reference that is left
+/// out is not returned either, so nothing below it is expanded.
+///
+/// `list_references` puts the references on the list as items named after the
+/// recipe, for `--ignore-references`.
+fn add_ingredients(
+    list: &mut ShoppingIngredients,
+    recipe: &Recipe,
+    converter: &Converter,
+    list_references: bool,
+    include_optional: bool,
+    all_optional: bool,
+) -> Vec<PendingReference> {
+    let mut references = Vec::new();
+    for entry in recipe.group_ingredients(converter) {
+        let ingredient = entry.ingredient;
+        let optional = all_optional || ingredient.modifiers().is_optional();
+        if optional && !include_optional {
+            continue;
+        }
+
+        if ingredient.reference.is_some() {
+            references.push((entry.index, optional));
+            if !list_references {
+                continue;
+            }
+        }
+
+        if !ingredient.modifiers().should_be_listed() {
+            continue;
+        }
+
+        let target = if optional {
+            &mut list.optional
+        } else {
+            &mut list.required
+        };
+        target.add_ingredient(
+            ingredient.display_name().into_owned(),
+            &entry.quantity,
+            converter,
+        );
+    }
+    references
 }
 
 /// How deep a chain of recipe references is followed before the expansion gives
@@ -570,8 +747,10 @@ const MAX_REFERENCE_DEPTH: usize = 100;
 struct Expansion<'a> {
     base_path: &'a Utf8Path,
     converter: &'a Converter,
-    list: &'a mut IngredientList,
+    list: &'a mut ShoppingIngredients,
     diagnostics: &'a mut Vec<Diagnostic>,
+    /// See [`ExtractOptions::include_optional`].
+    include_optional: bool,
 }
 
 impl Expansion<'_> {
@@ -596,9 +775,9 @@ impl Expansion<'_> {
     /// Expand the recipes `recipe` references into `list`, and the recipes *those*
     /// reference, all the way down.
     ///
-    /// `ref_indices` is what [`IngredientList::add_recipe`] returned for `recipe`:
-    /// its own ingredients are already on the list, and the references it skipped
-    /// are what is left to follow.
+    /// `ref_indices` is what [`add_ingredients`] returned for `recipe`: its own
+    /// ingredients are already on the list, and the references it skipped are
+    /// what is left to follow, each with whether what it adds is optional.
     ///
     /// `scale` is the factor `recipe` was scaled by. A reference that carries no
     /// quantity of its own inherits it, so scaling a menu scales every recipe
@@ -619,12 +798,12 @@ impl Expansion<'_> {
     fn expand(
         &mut self,
         recipe: &Recipe,
-        ref_indices: &[usize],
+        ref_indices: &[PendingReference],
         scale: f64,
         included: Option<&[String]>,
         ancestors: &[Utf8PathBuf],
     ) -> Result<(), CoreError> {
-        for &ref_index in ref_indices {
+        for &(ref_index, optional) in ref_indices {
             let ingredient = &recipe.ingredients[ref_index];
             let Some(reference) = ingredient.reference.as_ref() else {
                 continue;
@@ -770,9 +949,17 @@ impl Expansion<'_> {
             };
 
             // The referenced recipe's own ingredients, and then the recipes it
-            // references in turn — `add_recipe` hands back the ones it skipped,
-            // which is exactly what is left to follow.
-            let nested = self.list.add_recipe(&ref_recipe, self.converter, false);
+            // references in turn — `add_ingredients` hands back the ones it
+            // skipped, which is exactly what is left to follow. Everything an
+            // optional reference adds is optional too.
+            let nested = add_ingredients(
+                self.list,
+                &ref_recipe,
+                self.converter,
+                false,
+                self.include_optional,
+                optional,
+            );
             tracing::debug!("Found {} nested references to process", nested.len());
             self.expand(&ref_recipe, &nested, ref_scale, None, &ancestors)?;
         }
