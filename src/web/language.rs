@@ -18,9 +18,11 @@ pub const ES_ES: LanguageIdentifier = langid!("es-ES");
 pub const EU_ES: LanguageIdentifier = langid!("eu-ES");
 pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
 pub const IT_IT: LanguageIdentifier = langid!("it-IT");
+pub const JA_JP: LanguageIdentifier = langid!("ja-JP");
 
-pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] =
-    &[EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT];
+pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[
+    EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT, JA_JP,
+];
 
 /// Per-request feature visibility flags, read from cookies.
 #[derive(Clone, Copy, Debug)]
@@ -250,8 +252,16 @@ mod locale_tests {
     }
 
     #[test]
+    fn test_system_locale_japanese() {
+        assert_eq!(
+            language_from_system_locale(Some("ja_JP.UTF-8".into())),
+            JA_JP
+        );
+    }
+
+    #[test]
     fn test_system_locale_unsupported_falls_back_to_english() {
-        assert_eq!(language_from_system_locale(Some("ja-JP".into())), EN_US);
+        assert_eq!(language_from_system_locale(Some("ko-KR".into())), EN_US);
     }
 
     #[test]
