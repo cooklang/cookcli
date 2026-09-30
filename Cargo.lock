@@ -706,7 +706,7 @@ dependencies = [
  "clap_complete",
  "console",
  "cookcli-core",
- "cooklang 0.19.0",
+ "cooklang",
  "cooklang-find 0.8.1",
  "cooklang-import",
  "cooklang-language-server",
@@ -766,7 +766,7 @@ dependencies = [
  "anstream",
  "camino",
  "chrono",
- "cooklang 0.19.0",
+ "cooklang",
  "cooklang-find 0.8.1",
  "cooklang-format",
  "cooklang-reports",
@@ -810,30 +810,6 @@ dependencies = [
  "serde_json",
  "time",
  "url",
-]
-
-[[package]]
-name = "cooklang"
-version = "0.18.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa816a0452383c8d2bdab659df49c3ca0c86a0ca85699587bcb878d4ba174ebf"
-dependencies = [
- "bitflags 2.13.0",
- "codesnake",
- "enum-map",
- "finl_unicode",
- "indexmap",
- "serde",
- "serde_yaml",
- "smallvec",
- "strum",
- "thiserror 2.0.20",
- "toml 0.8.23",
- "toml_edit 0.22.27",
- "tracing",
- "unicase",
- "unicode-width 0.2.2",
- "yansi",
 ]
 
 [[package]]
@@ -897,7 +873,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "anstyle-yansi",
- "cooklang 0.19.0",
+ "cooklang",
  "humantime",
  "regex",
  "serde",
@@ -932,12 +908,12 @@ dependencies = [
 
 [[package]]
 name = "cooklang-language-server"
-version = "0.2.4"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193ebb7121bdd55fc189baebdbcd689fdc638820fc7b826b01fe3e1aca6c77c0"
+checksum = "0e43f87d1992a4cdb7a1666bf509efabde9b6963b97d8f7529e5a0ccde63b91e"
 dependencies = [
  "anyhow",
- "cooklang 0.18.7",
+ "cooklang",
  "dashmap 6.2.1",
  "nohash-hasher",
  "ropey",
@@ -953,12 +929,12 @@ dependencies = [
 
 [[package]]
 name = "cooklang-reports"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83463dbdc3f41ae75be132d2a1389a1de3dd6395b209dd32721ca8788159dda5"
+checksum = "77d9edeb10af65d6fdb713eabd7ea447b15a8614c21cb270ccf0f095174bb6b5"
 dependencies = [
  "anyhow",
- "cooklang 0.18.7",
+ "cooklang",
  "cooklang-find 0.6.1",
  "minijinja",
  "serde",
@@ -2723,6 +2699,7 @@ dependencies = [
  "indexmap",
  "memo-map",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
