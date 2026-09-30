@@ -19,6 +19,7 @@ action-delete = 削除
 action-clear = クリア
 action-print = 印刷
 action-preview = プレビュー
+action-done = 完了
 
 # Common Labels
 label-scale = 倍率
@@ -124,6 +125,13 @@ picture-upload-failed = アップロードできませんでした
 picture-remove-failed = 写真を削除できませんでした
 picture-too-large = 写真が大きすぎます。上限は 10 MB です。
 picture-heif = HEIC と AVIF の写真は読み込めません。JPEG に変換してくれるスマートフォンのブラウザからアップロードするか、iPhone のカメラを「互換性優先」にしてください（設定 > カメラ > フォーマット）。
+picture-for = 写真の対象
+picture-step-title = 手順の写真
+picture-target-step = 手順 { $step }: { $text }
+picture-target-section = セクション { $section }
+picture-step-note = 手順の写真は、手順の文章ではなく位置に紐づきます。このセクションで前の手順を追加・削除すると、写真は別の手順に移ります。
+step-picture-add = この手順に写真を追加
+step-picture-change = この手順の写真を差し替え
 # Sign-in (users are managed on the server with `cook server user`)
 sign-in = ログイン
 sign-out = ログアウト
