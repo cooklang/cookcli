@@ -1036,6 +1036,7 @@ fn build_menu_template_inner(
                                 .default_servings
                                 .filter(|&n| n > 0 && scaled)
                                 .map(|n| f64::from(n) * factor),
+                            menu: info.is_menu,
                         });
                     }
                     MenuItem::Ingredient {

@@ -128,6 +128,47 @@ mod is_web_url_tests {
     }
 }
 
+#[cfg(test)]
+mod reference_link_tests {
+    use super::{reference_label, reference_path};
+
+    #[test]
+    fn a_recipe_links_to_its_page() {
+        assert_eq!(
+            reference_path("./Salads/Caprese", false, false),
+            "recipe/Salads/Caprese"
+        );
+        assert_eq!(
+            reference_path("./Salads/Caprese", false, true),
+            "recipe/Salads/Caprese.html"
+        );
+    }
+
+    #[test]
+    fn a_menu_links_to_the_menu_however_it_was_written() {
+        for name in ["./Brunches/Sunday.menu", "./Brunches/Sunday"] {
+            assert_eq!(
+                reference_path(name, true, false),
+                "recipe/Brunches/Sunday.menu"
+            );
+            // `cook build web` writes menus under `menu/`, not `recipe/`.
+            assert_eq!(
+                reference_path(name, true, true),
+                "menu/Brunches/Sunday.html"
+            );
+        }
+    }
+
+    #[test]
+    fn labels_drop_the_dot_slash_and_the_extension() {
+        assert_eq!(
+            reference_label("./Brunches/Sunday.menu"),
+            "Brunches › Sunday"
+        );
+        assert_eq!(reference_label("./Risotto"), "Risotto");
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod inline_code_tests {
     use super::filters::inline_code;
@@ -925,6 +966,27 @@ pub struct MenuSection {
     pub lines: Vec<Vec<MenuSectionItem>>,
 }
 
+/// Where a menu's reference to `name` leads, below the site prefix: the
+/// recipe's page, or for a `menu` the other menu's page — `menu/<path>.html`
+/// on a static site, and `recipe/<path>.menu` on the server, whose extension
+/// keeps a recipe of the same name from answering instead.
+pub fn reference_path(name: &str, menu: bool, static_mode: bool) -> String {
+    let path = name.strip_prefix("./").unwrap_or(name);
+    match (menu, static_mode) {
+        (true, true) => format!("menu/{}.html", path.trim_end_matches(".menu")),
+        (true, false) => format!("recipe/{}.menu", path.trim_end_matches(".menu")),
+        (false, true) => format!("recipe/{path}.html"),
+        (false, false) => format!("recipe/{path}"),
+    }
+}
+
+/// A menu's reference as the page names it: `Brunches › Sunday`, without the
+/// `./` or a `.menu` it was written with.
+pub fn reference_label(name: &str) -> String {
+    let path = name.strip_prefix("./").unwrap_or(name);
+    path.trim_end_matches(".menu").replace('/', " › ")
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub enum MenuSectionItem {
     Text(String),
@@ -934,6 +996,9 @@ pub enum MenuSectionItem {
         /// `scale` as servings of the referenced recipe, when it declares
         /// them: its link then carries `?servings=` instead of `?scale=`.
         servings: Option<f64>,
+        /// The reference is to another menu (`@./Brunches/Sunday.menu{}`):
+        /// it links to that menu's page and is labelled as a menu.
+        menu: bool,
     },
     Ingredient {
         name: String,

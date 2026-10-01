@@ -705,7 +705,11 @@ fn menus() -> ApiSection {
                  `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` \
                  query multiplies these, so `?scale=2` yields `10.0`. \
                  `POST /api/shopping_list/add_menu` resolves references identically, so the \
-                 two endpoints always agree. `metadata` values are strings, except `tags`, \
+                 two endpoints always agree. A reference to another menu, used as a meal of \
+                 this one (`@./Brunches/Sunday.menu{}`), is a `recipe_reference` too, with \
+                 `\"menu\": true` and a `path` ending in `.menu`; its `servings` target is \
+                 read from that menu's own `servings`. `menu` is left out for recipes. \
+                 `metadata` values are strings, except `tags`, \
                  which is always an array of strings whichever way the frontmatter spelled \
                  it.",
             )
@@ -1224,7 +1228,11 @@ fn shopping_list() -> ApiSection {
                  `included_references` field to set here). Each nested recipe's scale is \
                  resolved from the menu reference: a bare `{2}` is a raw multiplier, \
                  `{3%servings}` targets 3 servings against the recipe's own `servings` \
-                 metadata, and any other unit targets its `yield` metadata. Responds `200 OK` \
+                 metadata, and any other unit targets its `yield` metadata. A menu the menu \
+                 references (`@./Brunches/Sunday.menu{}`) is nested like a recipe, its own \
+                 references as its `included_references`, so the shopping list counts its \
+                 free-hand ingredients and recipes; a reference leading back to a menu already \
+                 being expanded is skipped there. Responds `200 OK` \
                  with an empty body; returns 404 if `path` does not exist, but does not check \
                  that it's actually a `.menu` file — pointing this at a plain recipe is \
                  accepted and stores it as if it were `POST /api/shopping_list/add` with that \

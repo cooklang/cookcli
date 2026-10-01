@@ -435,6 +435,7 @@ mod tests {
             name: name.to_string(),
             scale: None,
             servings: None,
+            menu: false,
         }]
     }
 

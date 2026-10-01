@@ -6,12 +6,13 @@
 {% match item %}
 {% when crate::web::templates::MenuSectionItem::Text with (text) %}
     <span class="text-text">{{ text }}</span>
-{% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
+{% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings, menu } %}
     <span class="inline-flex items-center gap-1">
-        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
-           class="text-info font-medium hover:underline"{% if short %} title="{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}"{% endif %}>
-            {% if short %}{{ name.rsplit("/").next().unwrap_or(name.as_str()) }}{% else %}{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}{% endif %}
+        <a href="{{ prefix }}/{{ crate::web::templates::reference_path(name, menu.clone(), static_mode.clone()) }}{% if !static_mode %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+           class="text-info font-medium hover:underline"{% if short %} title="{{ crate::web::templates::reference_label(name) }}"{% endif %}>
+            {% if short %}{{ name.rsplit("/").next().unwrap_or(name.as_str()).trim_end_matches(".menu") }}{% else %}{{ crate::web::templates::reference_label(name) }}{% endif %}
         </a>
+        {% if menu.clone() %}<span class="tag">{{ tr.t("recipe-type-menu") }}</span>{% endif %}
         {% match scale %}
         {% when Some with (s) %}
             <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>

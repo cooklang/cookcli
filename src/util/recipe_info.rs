@@ -16,10 +16,14 @@ pub struct RecipeInfo {
     /// Numeric `servings` metadata. The cooklang API only exposes this as
     /// `u32`, so fractional defaults like `servings: 1.5` appear as `None`.
     pub default_servings: Option<u32>,
+    /// The reference names a `.menu` rather than a recipe: a whole menu used
+    /// as one meal of another, such as `@./Brunches/Sunday.menu{}`.
+    pub is_menu: bool,
 }
 
 pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
     let entry = crate::util::get_recipe(base_path, recipe_path)?;
+    let is_menu = entry.is_menu();
     let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
 
     let mut sub_refs = Vec::new();
@@ -38,6 +42,7 @@ pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::R
     Ok(RecipeInfo {
         sub_refs,
         default_servings,
+        is_menu,
     })
 }
 
