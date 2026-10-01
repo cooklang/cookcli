@@ -103,7 +103,7 @@ fluent-templates = "0.15"
 # set adds a dozen formats, and `rayon`, for nothing the server uses.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
 # Signs `cook server` session cookies. 0.12 pairs with sha2 0.10 (digest 0.10).
-hmac = { version = "0.12", optional = true }
+hmac = { version = "0.13", optional = true }
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
