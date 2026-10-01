@@ -41,10 +41,10 @@ pub async fn shopping_list(
         // on Windows, merely looking up `\\host\share` hands that host the
         // user's NTLM hash.
         check_path(&name)?;
-        let recipe = ScaledRecipe {
-            source: cookcli_core::RecipeSource::Path(name.as_str().into()),
-            scale: entry.scale.unwrap_or(1.0),
-        };
+        let recipe = ScaledRecipe::scaled(
+            cookcli_core::RecipeSource::Path(name.as_str().into()),
+            entry.scale.unwrap_or(1.0),
+        );
 
         let diagnostics = extract_ingredients(
             &core_ctx,
@@ -473,10 +473,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         }
         extract_ingredients(
             &core_ctx,
-            &ScaledRecipe {
-                source: cookcli_core::RecipeSource::Path(path.into()),
-                scale,
-            },
+            &ScaledRecipe::scaled(cookcli_core::RecipeSource::Path(path.into()), scale),
             &ExtractOptions {
                 ignore_references: false,
                 included_references: included,
