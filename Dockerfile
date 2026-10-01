@@ -6,7 +6,7 @@ ARG CARGO_PROFILE=release
 # --- Front-end assets ---
 # A stage of its own so the Rust builder needs no Node.js, and so Rust-only
 # edits don't rebuild the CSS and JS.
-FROM node:24.21.0-bookworm-slim AS assets
+FROM node:26.10.0-bookworm-slim AS assets
 
 WORKDIR /usr/src/cookcli
 
@@ -48,7 +48,7 @@ RUN cargo build --profile "$CARGO_PROFILE" --no-default-features --features serv
     && cp "target/$CARGO_PROFILE/cook" /usr/local/bin/cook
 
 # --- Runtime stage ---
-FROM debian:12.15-slim
+FROM debian:13.7-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
