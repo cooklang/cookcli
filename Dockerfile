@@ -6,7 +6,7 @@ ARG CARGO_PROFILE=release
 # --- Front-end assets ---
 # A stage of its own so the Rust builder needs no Node.js, and so Rust-only
 # edits don't rebuild the CSS and JS.
-FROM node:lts-bookworm-slim AS assets
+FROM node:24.21.0-bookworm-slim AS assets
 
 WORKDIR /usr/src/cookcli
 
@@ -24,7 +24,7 @@ RUN npm run build-css && npm run build-js
 # cargo-chef compiles the dependency graph from a recipe that only changes with
 # Cargo.toml/Cargo.lock, so the result is an ordinary image layer: it survives
 # in the registry/GHA layer cache, unlike a `--mount=type=cache` target dir.
-FROM rust:bookworm AS chef
+FROM rust:1.98.1-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /usr/src/cookcli
 
@@ -48,7 +48,7 @@ RUN cargo build --profile "$CARGO_PROFILE" --no-default-features --features serv
     && cp "target/$CARGO_PROFILE/cook" /usr/local/bin/cook
 
 # --- Runtime stage ---
-FROM debian:bookworm-slim
+FROM debian:12.15-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
