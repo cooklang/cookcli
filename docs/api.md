@@ -1028,7 +1028,7 @@ Upgrades to a websocket (verified: a plain WebSocket handshake against this path
 
 ## Sync
 
-Sign in to CookCloud and sync recipes across devices. These four endpoints exist only when CookCLI is built with the `sync` feature, which is on by default — the badge on each entry marks that. Because the router is read as source text (`include_str!`), they are documented unconditionally rather than silently disappearing from this page in a build that lacks the feature. Authentication uses an OAuth device-code flow: start a login, show the user the code, then poll status until it completes.
+Sign in to Cook Cloud and sync recipes across devices (Cook Basic). These four endpoints exist only when CookCLI is built with the `sync` feature, which is on by default — the badge on each entry marks that. Because the router is read as source text (`include_str!`), they are documented unconditionally rather than silently disappearing from this page in a build that lacks the feature. Authentication uses an OAuth device-code flow: start a login, show the user the code, then poll status until it completes.
 
 ### `GET /api/sync/status`
 
