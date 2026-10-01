@@ -24,6 +24,9 @@ pub struct RecipeInfo {
     /// Parsed `yield` metadata (value, unit) if present and well-formed,
     /// e.g. `yield: 500%ml` → `Some((500.0, "ml"))`.
     pub default_yield: Option<(f64, String)>,
+    /// The reference names a `.menu` rather than a recipe: a whole menu used
+    /// as one meal of another, such as `@./Brunches/Sunday.menu{}`.
+    pub is_menu: bool,
 }
 
 /// Parse the `yield` metadata format `"VALUE%UNIT"` (e.g. `"500%ml"`) into
@@ -40,6 +43,7 @@ pub fn parse_yield(s: &str) -> Option<(f64, String)> {
 
 pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
     let entry = crate::util::get_recipe(base_path, recipe_path)?;
+    let is_menu = entry.is_menu();
     let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
 
     let mut sub_refs = Vec::new();
@@ -64,6 +68,7 @@ pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::R
         sub_refs,
         default_servings,
         default_yield,
+        is_menu,
     })
 }
 
