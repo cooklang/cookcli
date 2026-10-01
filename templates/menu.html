@@ -256,6 +256,22 @@
     {% when Some with (plan) %}
     <!-- Meal plan: one card a day, in calendar rows from md up -->
     <div id="plan">
+        {% if !static_mode && viewer.can_edit_lists() %}
+        <!-- Some days to the shopping list: tick the days, then add them. -->
+        <div id="plan-pick" class="flex flex-wrap items-center gap-2 mb-4 print:hidden" role="group" aria-label="{{ tr.t("plan-pick-label") }}">
+            <span class="text-sm font-medium text-muted">{{ tr.t("plan-pick-label") }}:</span>
+            <button type="button" class="btn btn-sm" data-plan-pick="all">{{ tr.t("plan-pick-all") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="week">{{ tr.t("plan-pick-week") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="none">{{ tr.t("plan-pick-none") }}</button>
+            <button type="button" id="plan-add-days" class="btn btn-sm" disabled onclick="addDaysToShoppingList(event)">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span>{{ tr.t("plan-add-days") }}</span>
+                <span id="plan-pick-count" class="tag">0</span>
+            </button>
+        </div>
+        {% endif %}
         <div class="hidden md:grid grid-cols-7 gap-2 mb-2" aria-hidden="true">
             {% for weekday in plan.weekdays %}
             <div class="px-3 text-sm font-medium text-muted">{{ weekday }}</div>
@@ -267,7 +283,7 @@
             {% match cell %}
             {% when Some with (day) %}
             <li class="plan-day card p-3" data-date="{{ day.date }}">
-                <h2 class="text-sm font-semibold text-text"><time datetime="{{ day.date }}">{{ day.label }}</time></h2>
+                <h2 class="text-sm font-semibold text-text">{% if !static_mode && viewer.can_edit_lists() %}<label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" class="plan-day-pick w-4 h-4 accent-[var(--accent)] print:hidden" value="{{ day.date }}"><time datetime="{{ day.date }}">{{ day.label }}</time></label>{% else %}<time datetime="{{ day.date }}">{{ day.label }}</time>{% endif %}</h2>
                 {% for meal in day.meals %}
                 <div class="mt-2">
                     {% if let Some(meal_name) = meal.name %}
@@ -377,18 +393,90 @@ function goToScale(value) {
     window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
 }
 
+// The factor the list wants: the servings stepper holds servings.
+function chosenScale() {
+    const scaleInput = document.getElementById(SCALE_PARAM);
+    let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
+    if (scaleInput && scaleInput.dataset.baseServings) {
+        scale /= parseFloat(scaleInput.dataset.baseServings);
+    }
+    return scale;
+}
+
+// Day pickers of a meal plan: which days go to the shopping list.
+function pickedDays() {
+    return [...document.querySelectorAll('#plan .plan-day-pick:checked')].map(box => box.value);
+}
+
+function updatePickedDays() {
+    const days = pickedDays();
+    const count = document.getElementById('plan-pick-count');
+    const add = document.getElementById('plan-add-days');
+    if (!count || !add) return;
+    count.textContent = days.length;
+    add.disabled = days.length === 0;
+    add.classList.toggle('btn-primary', days.length > 0);
+}
+
+document.querySelectorAll('[data-plan-pick]').forEach(button => {
+    button.addEventListener('click', () => {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const today = iso(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 6);
+        const last = iso(end);
+        document.querySelectorAll('#plan .plan-day-pick').forEach(box => {
+            switch (button.dataset.planPick) {
+                case 'all': box.checked = true; break;
+                case 'none': box.checked = false; break;
+                // The next seven days, today included.
+                case 'week': box.checked = box.value >= today && box.value <= last; break;
+            }
+        });
+        updatePickedDays();
+    });
+});
+document.addEventListener('change', event => {
+    if (event.target.closest('.plan-day-pick')) updatePickedDays();
+});
+
+async function addDaysToShoppingList(event) {
+    const button = event.currentTarget;
+    const label = button.querySelector('span');
+    const original = label.textContent;
+    const dates = pickedDays();
+    if (dates.length === 0) return;
+    let message;
+    let ok = false;
+    try {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: {{ recipe_path|json|safe }}, scale: chosenScale(), dates })
+        });
+        ok = response.ok;
+        message = ok ? {{ tr.t("recipe-added")|json|safe }} : {{ tr.t("shopping-failed-to-add")|json|safe }};
+    } catch (error) {
+        console.error('Error:', error);
+        message = {{ tr.t("shopping-error")|json|safe }};
+    }
+    label.textContent = message;
+    button.classList.add(ok ? 'text-ok' : 'text-danger');
+    setTimeout(() => {
+        label.textContent = original;
+        button.classList.remove('text-ok', 'text-danger');
+    }, 2000);
+}
+
 async function addToShoppingList(event, recipePath) {
     event.preventDefault();
     const button = event.currentTarget;
     const originalText = button.innerHTML;
 
     try {
-        // The servings stepper holds servings; the list wants the factor.
-        const scaleInput = document.getElementById(SCALE_PARAM);
-        let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
-        if (scaleInput && scaleInput.dataset.baseServings) {
-            scale /= parseFloat(scaleInput.dataset.baseServings);
-        }
+        const scale = chosenScale();
         const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
             method: 'POST',
             headers: {

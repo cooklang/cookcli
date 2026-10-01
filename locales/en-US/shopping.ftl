@@ -21,6 +21,7 @@ shopping-selected-recipes = Selected Recipes
 shopping-clear-all = Clear All
 shopping-in-pantry = In Your Pantry
 shopping-remove = Remove
+shopping-extra-items = Extra items
 shopping-add-recipes-first = Please add some recipes first
 shopping-failed-to-generate = Failed to generate shopping list
 shopping-failed-to-add = Failed to add to shopping list

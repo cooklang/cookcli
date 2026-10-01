@@ -21,6 +21,7 @@ shopping-selected-recipes = Aukeratutako errezetak
 shopping-clear-all = Ezabatu dena
 shopping-in-pantry = Zure jaki-tokian
 shopping-remove = Ezabatu
+shopping-extra-items = Elementu gehigarriak
 shopping-add-recipes-first = Mesedez, lehenengo gehitu errezeta batzuk
 shopping-failed-to-generate = Errorea erosketa zerrenda sortzerakoan
 shopping-failed-to-add = Errorea erosketa zerrendara gehitzerakoan

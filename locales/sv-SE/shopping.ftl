@@ -21,6 +21,7 @@ shopping-selected-recipes = Valda recept
 shopping-clear-all = Rensa alla
 shopping-in-pantry = I ditt skafferi
 shopping-remove = Radera
+shopping-extra-items = Extra varor
 shopping-add-recipes-first = Vänligen lägg till recept först
 shopping-failed-to-generate = Misslyckades att generera handlingslista
 shopping-failed-to-add = Misslyckades att lägga till handlingslista

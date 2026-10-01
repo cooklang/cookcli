@@ -50,6 +50,11 @@ recipe-type-menu = Menu
 recipe-type-plan = Planning de repas
 plan-outside = Hors de ce planning
 plan-nothing-planned = Rien de prévu
+plan-pick-label = Jours pour la liste de courses
+plan-pick-all = Tous
+plan-pick-week = 7 prochains jours
+plan-pick-none = Aucun
+plan-add-days = Ajouter les jours à la liste de courses
 
 # Today's Menu Banner
 todays-menu-title = Menu du Jour

@@ -45,7 +45,7 @@
 
 mod store;
 
-pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
+pub use store::{recipe_display_name, FreeHandItem, ShoppingListStore, StoredEntry};
 
 use crate::{
     find,
@@ -317,9 +317,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
     // `use_common_names`, categorisation and the pantry all treat them the
     // same, which is what lets an extra "milk" merge with a recipe's.
     for spec in &req.extra_items {
-        let outcome = parse_extra_item(spec)?;
-        diagnostics.extend(outcome.diagnostics);
-        list.add_recipe(&outcome.value, PARSER.converter(), false);
+        diagnostics.extend(add_extra_item(spec, &mut list)?);
     }
 
     let mut list = list.use_common_names(&aisle, PARSER.converter());
@@ -331,6 +329,17 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         AggregatedList::build(list, &aisle),
         diagnostics,
     ))
+}
+
+/// Add one extra item — a Cooklang ingredient without its `@`, as in
+/// [`GenerateRequest::extra_items`] — to `list`, merging it with any
+/// ingredient of the same name already there.
+///
+/// Errors as [`CoreError::Parse`] when the entry is not a valid ingredient.
+pub fn add_extra_item(spec: &str, list: &mut IngredientList) -> Result<Vec<Diagnostic>, CoreError> {
+    let outcome = parse_extra_item(spec)?;
+    list.add_recipe(&outcome.value, PARSER.converter(), false);
+    Ok(outcome.diagnostics)
 }
 
 /// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient

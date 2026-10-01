@@ -653,6 +653,11 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             post(handlers::remove_from_shopping_list),
         )
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
+        .route("/shopping_list/extra_items", get(handlers::get_extra_items))
+        .route(
+            "/shopping_list/remove_extra_item",
+            post(handlers::remove_extra_item),
+        )
         .route("/shopping_list/check", post(handlers::check_shopping_item))
         .route(
             "/shopping_list/uncheck",

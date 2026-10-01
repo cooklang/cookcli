@@ -429,7 +429,7 @@ Two distinct things live here. `POST /api/shopping_list` is stateless: send reci
 
 Aggregate ingredients across recipes
 
-Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request.
+Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. An element may also be a free-hand item, `{ "name": "almonds", "quantity": "50%g" }` as `GET /api/shopping_list/extra_items` returns it, merged with the recipes' ingredients of the same name.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -442,7 +442,8 @@ Request body:
 ```json
 [
   { "recipe": "Neapolitan Pizza", "scale": 2 },
-  { "recipe": "Salads/Caprese", "included_references": ["Shared/Vinaigrette"] }
+  { "recipe": "Salads/Caprese", "included_references": ["Shared/Vinaigrette"] },
+  { "name": "almonds", "quantity": "50%g" }
 ]
 ```
 
@@ -685,20 +686,54 @@ Request body:
 
 Add every recipe in a menu
 
-Stored as a single entry with the menu's recipes nested inside; each nested recipe's own sub-recipe references are resolved automatically (there is no `included_references` field to set here). Each nested recipe's scale is resolved from the menu reference: a bare `{2}` is a raw multiplier, `{3%servings}` targets 3 servings against the recipe's own `servings` metadata, and any other unit targets its `yield` metadata. Responds `200 OK` with an empty body; returns 404 if `path` does not exist, but does not check that it's actually a `.menu` file — pointing this at a plain recipe is accepted and stores it as if it were `POST /api/shopping_list/add` with that recipe's own references as `included_references`, which can leave the list in a state that later makes `compact` fail.
+Stored as a single entry with the menu's recipes nested inside; each nested recipe's own sub-recipe references are resolved automatically (there is no `included_references` field to set here). Each nested recipe's scale is resolved from the menu reference: a bare `{2}` is a raw multiplier, `{3%servings}` targets 3 servings against the recipe's own `servings` metadata, and any other unit targets its `yield` metadata. Responds `200 OK` with an empty body; returns 404 if `path` does not exist, but does not check that it's actually a `.menu` file — pointing this at a plain recipe is accepted and stores it as if it were `POST /api/shopping_list/add` with that recipe's own references as `included_references`, which can leave the list in a state that later makes `compact` fail. With `dates`, only the sections dated one of them (`== Monday (2026-10-05) ==`) count, and nothing is stored as a menu: their recipes become plain recipe entries, as if each had been added with `POST /api/shopping_list/add`, and their free-hand ingredients (`@almonds{50%g}`) become free-hand items, merged by name and scaled by `scale` (see `GET /api/shopping_list/extra_items`). A date not in the menu adds nothing; `400` if `dates` is empty, longer than 400, or holds something that is not a `YYYY-MM-DD` date.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `path` | body | `string` | yes | Menu path relative to the recipe directory. |
 | `scale` | body | `number` | yes | Scaling factor applied to the whole menu. |
+| `dates` | body | `string[]` | no | Only the days with these dates (`YYYY-MM-DD`). Omit for the whole menu. |
 
 Request body:
 
 ```json
 {
-  "path": "2 Day Plan.menu",
-  "scale": 1.0
+  "path": "Plans/October.menu",
+  "scale": 1.0,
+  "dates": ["2026-10-05", "2026-10-06"]
 }
+```
+
+### `GET /api/shopping_list/extra_items`
+
+Read the stored free-hand items
+
+The items on the list that no recipe put there: the free-hand lines of `.shopping-list`, such as the ingredients written straight into a menu whose days were added with `dates`, or items another Cooklang app added by hand. `quantity` is written as the file stores it (`50%g`, `2`), and absent for an item with no amount.
+
+Response:
+
+```json
+[
+  { "name": "almonds", "quantity": "100%g" },
+  { "name": "paper towels" }
+]
+```
+
+### `POST /api/shopping_list/remove_extra_item`
+
+Remove one free-hand item from the stored list
+
+Removes the first free-hand item with this name and quantity, and compacts the checked log as `remove` does. Responds `200 OK` with an empty body, whether or not there was such an item.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `name` | body | `string` | yes | The item's name. |
+| `quantity` | body | `string` | no | Its quantity exactly as `extra_items` returned it; omit for none. |
+
+Request body:
+
+```json
+{ "name": "almonds", "quantity": "100%g" }
 ```
 
 ### `POST /api/shopping_list/remove`
@@ -721,7 +756,7 @@ Request body:
 
 Empty the stored list
 
-Removes every recipe and all checked state. Responds `200 OK` with an empty body.
+Removes every recipe, every free-hand item and all checked state. Responds `200 OK` with an empty body.
 
 ### `POST /api/shopping_list/check`
 
