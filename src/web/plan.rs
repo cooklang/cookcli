@@ -7,10 +7,8 @@
 //! the shopping list and other Cooklang apps read.
 
 use std::collections::BTreeMap;
-use std::sync::LazyLock;
 
 use chrono::{Datelike, Days, NaiveDate, Weekday};
-use regex::Regex;
 use serde::Serialize;
 use unic_langid::LanguageIdentifier;
 
@@ -22,10 +20,6 @@ use crate::web::templates::{MenuSection, MenuSectionItem};
 pub const MAX_PLAN_DAYS: u32 = 62;
 /// The shortest: a menu needs two dated days to show as a plan.
 pub const MIN_PLAN_DAYS: u32 = 2;
-
-/// A `YYYY-MM-DD` anywhere in a section name, not inside a longer number.
-static SECTION_DATE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:^|[^\d-])(\d{4}-\d{2}-\d{2})(?:[^\d-]|$)").unwrap());
 
 /// What the new-plan form asks for: the days a plan covers and the meals each
 /// of them starts with.
@@ -117,10 +111,9 @@ pub struct PlanMeal {
 /// The day a section is for, and the meal header its name gives after the
 /// date (`2026-10-02 Dinner` → `Dinner:`), if any.
 pub fn section_date(name: &str) -> Option<(NaiveDate, Option<String>)> {
-    let found = SECTION_DATE_RE.captures(name)?.get(1)?;
-    let date = NaiveDate::parse_from_str(found.as_str(), "%Y-%m-%d").ok()?;
+    let (date, rest) = cookcli_core::shopping_list::section_date(name)?;
     // `Wednesday (2026-10-07)` leaves `)`, which names no meal.
-    let rest = name[found.end()..]
+    let rest = rest
         .trim_start_matches(|c: char| c.is_whitespace() || ")]-–—:,".contains(c))
         .trim_end_matches(|c: char| c.is_whitespace() || c == ':');
     let header = format!("{rest}:");

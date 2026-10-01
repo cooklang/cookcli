@@ -43,8 +43,10 @@
 //! `.shopping-checked` files that remember which recipes someone put on their
 //! list and what they have already ticked off while shopping.
 
+mod days;
 mod store;
 
+pub use days::{section_date, DayRange};
 pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
 
 use crate::{
@@ -93,17 +95,39 @@ pub struct ScaledRecipe {
     /// Scaling factor applied to the recipe's quantities. Pass `1.0` to leave
     /// them alone.
     pub scale: f64,
+    /// Only the days of a menu to shop for: its sections dated (a
+    /// `YYYY-MM-DD` in the name, see [`section_date`]) within the range, and
+    /// what they reference. `None`
+    /// takes the whole recipe. A recipe with no dated section has no days to
+    /// choose from and is taken whole either way.
+    pub days: Option<DayRange>,
 }
 
 impl ScaledRecipe {
     /// A recipe at its authored scale.
     pub fn new(source: RecipeSource) -> Self {
-        Self { source, scale: 1.0 }
+        Self {
+            source,
+            scale: 1.0,
+            days: None,
+        }
     }
 
     /// A recipe scaled by `scale`.
     pub fn scaled(source: RecipeSource, scale: f64) -> Self {
-        Self { source, scale }
+        Self {
+            source,
+            scale,
+            days: None,
+        }
+    }
+
+    /// The same recipe narrowed to the sections dated within `days`.
+    pub fn on_days(self, days: DayRange) -> Self {
+        Self {
+            days: Some(days),
+            ..self
+        }
     }
 }
 
@@ -620,6 +644,17 @@ pub fn extract_ingredients(
     let converter = PARSER.converter();
 
     let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
+
+    let starting_entry = match &recipe.source {
+        RecipeSource::Path(path) => find::get_recipe(base_path, path.as_str()).ok(),
+        // An unsaved buffer is no file, so nothing can reference it.
+        RecipeSource::Content { .. } => None,
+    };
+
+    let kept = recipe
+        .days
+        .as_ref()
+        .map(|days| (days, days::kept_ingredients(&parsed, days)));
     let ref_indices = add_ingredients(
         list,
         &parsed,
@@ -627,21 +662,46 @@ pub fn extract_ingredients(
         options.ignore_references,
         options.include_optional,
         false,
+        match &kept {
+            Some((_, days::Kept::Ingredients(kept))) => Some(kept),
+            _ => None,
+        },
     );
+    if let Some((range, kept)) = &kept {
+        let is_menu = starting_entry.as_ref().is_some_and(RecipeEntry::is_menu);
+        let warning = match kept {
+            // A recipe has no days, and nobody expects it to: only a menu
+            // that turns out to have none is worth a word.
+            days::Kept::Undated if is_menu => Some(
+                "No section of this menu is dated (YYYY-MM-DD in its name), so it has no days to \
+                 choose from: all of it is on the list"
+                    .to_string(),
+            ),
+            days::Kept::Ingredients(kept) if kept.is_empty() => Some(format!(
+                "None of this menu's days is in the range asked for ({range}), so nothing \
+                 from it is on the list"
+            )),
+            _ => None,
+        };
+        if let Some(message) = warning {
+            let mut warning = Diagnostic::warning(message);
+            if let Some(path) = starting_entry.as_ref().and_then(|entry| entry.path()) {
+                warning = warning.at_file(path.clone());
+            }
+            diagnostics.push(warning);
+        }
+    }
 
     // The chain of recipes currently being expanded, innermost last, by
     // resolved file path. A reference resolving to something already on it
     // would lead back up its own chain, so it is refused rather than followed.
     // See "Cycles" above for why this is the ancestor chain and not every
     // recipe seen.
-    let starting_path = match &recipe.source {
-        RecipeSource::Path(path) => find::get_recipe(base_path, path.as_str())
-            .ok()
-            .and_then(|entry| entry.path().cloned()),
-        // An unsaved buffer is no file, so nothing can reference it.
-        RecipeSource::Content { .. } => None,
-    };
-    let ancestors: Vec<Utf8PathBuf> = starting_path.into_iter().collect();
+    let ancestors: Vec<Utf8PathBuf> = starting_entry
+        .as_ref()
+        .and_then(|entry| entry.path().cloned())
+        .into_iter()
+        .collect();
 
     tracing::debug!(
         "ignore_references = {}, ref_indices.len() = {}",
@@ -685,6 +745,10 @@ type PendingReference = (usize, bool);
 ///
 /// `list_references` puts the references on the list as items named after the
 /// recipe, for `--ignore-references`.
+///
+/// `kept`, when given, narrows the recipe to the ingredients some days of a
+/// menu use (see [`ScaledRecipe::days`]): the rest is neither listed nor
+/// returned, and a group adds only what its kept members amount to.
 fn add_ingredients(
     list: &mut ShoppingIngredients,
     recipe: &Recipe,
@@ -692,17 +756,25 @@ fn add_ingredients(
     list_references: bool,
     include_optional: bool,
     all_optional: bool,
+    kept: Option<&std::collections::HashSet<usize>>,
 ) -> Vec<PendingReference> {
     let mut references = Vec::new();
     for entry in recipe.group_ingredients(converter) {
-        let ingredient = entry.ingredient;
+        let (index, ingredient) = (entry.index, entry.ingredient);
+        let quantity = match kept {
+            None => entry.quantity,
+            Some(kept) => match days::kept_quantity(recipe, entry, kept, converter) {
+                Some(quantity) => quantity,
+                None => continue,
+            },
+        };
         let optional = all_optional || ingredient.modifiers().is_optional();
         if optional && !include_optional {
             continue;
         }
 
         if ingredient.reference.is_some() {
-            references.push((entry.index, optional));
+            references.push((index, optional));
             if !list_references {
                 continue;
             }
@@ -717,11 +789,7 @@ fn add_ingredients(
         } else {
             &mut list.required
         };
-        target.add_ingredient(
-            ingredient.display_name().into_owned(),
-            &entry.quantity,
-            converter,
-        );
+        target.add_ingredient(ingredient.display_name().into_owned(), &quantity, converter);
     }
     references
 }
@@ -959,6 +1027,7 @@ impl Expansion<'_> {
                 false,
                 self.include_optional,
                 optional,
+                None,
             );
             tracing::debug!("Found {} nested references to process", nested.len());
             self.expand(&ref_recipe, &nested, ref_scale, None, &ancestors)?;
