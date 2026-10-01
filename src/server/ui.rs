@@ -461,174 +461,42 @@ async fn create_recipe(
     let Some(kind) = NewKind::parse(form.kind.as_deref()) else {
         return (StatusCode::BAD_REQUEST, "Unknown kind of file").into_response();
     };
-    let noun = kind.noun();
 
-    let original_filename = form.filename.clone();
-
-    // Validate input before sanitization
-    if form.filename.trim().is_empty() {
-        return new_page_error(
-            &state.url_prefix,
-            kind,
-            &format!("{} name cannot be empty", capitalize(noun)),
-            &original_filename,
-        );
-    }
-
-    // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
-    let recipe_path: String = form
-        .filename
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_' || *c == '/')
-        .collect();
-
-    // Clean up path: remove leading/trailing slashes, collapse multiple slashes
-    let recipe_path = recipe_path
-        .trim_matches('/')
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("/");
-
-    if recipe_path.is_empty() {
-        return new_page_error(
-            &state.url_prefix,
-            kind,
-            &format!("{} name cannot be empty", capitalize(noun)),
-            &original_filename,
-        );
-    }
-
-    let file_path = state
-        .base_path
-        .join(format!("{recipe_path}.{}", kind.extension()));
-
-    // The recipe directory, resolved, for the containment check below
-    let base_path_clone = state.base_path.clone();
-    let base_canonical =
-        match tokio::task::spawn_blocking(move || base_path_clone.canonicalize_utf8()).await {
-            Ok(Ok(p)) => p,
-            _ => {
-                return new_page_error(
-                    &state.url_prefix,
-                    kind,
-                    "Internal error: invalid base path",
-                    &original_filename,
-                );
-            }
-        };
-
-    // Decide before touching the disk: the folder the file goes in, resolved
-    // through any symlink as far as it exists, must sit under the recipe
-    // directory. Nothing is created until that holds, so a refusal leaves
-    // nothing behind — and nothing that already existed is ever removed. A
-    // sub-folder symlinked elsewhere (a NAS share) used to be deleted here by
-    // a "clean-up" of the folder this request had not created (#549).
-    if let Some(parent) = file_path.parent() {
-        let parent_owned = parent.to_owned();
-        let base = base_canonical.clone();
-        let inside = tokio::task::spawn_blocking(move || {
-            super::canonical_or_nearest(&parent_owned).starts_with(&base)
-        })
-        .await
-        .unwrap_or(false);
-        if !inside {
-            tracing::warn!("Refused to create {file_path}: it resolves outside {base_canonical}");
+    let created = super::new_file::create(
+        &state.base_path,
+        &form.filename,
+        kind.extension(),
+        |title| kind.starter(title),
+    )
+    .await;
+    let created = match created {
+        Ok(created) => created,
+        Err(error) => {
             return new_page_error(
                 &state.url_prefix,
                 kind,
-                &format!("Invalid {noun} path"),
-                &original_filename,
+                &error.message(kind.noun()),
+                &form.filename,
             );
         }
-
-        if !parent.exists() {
-            if let Err(e) = tokio::fs::create_dir_all(parent).await {
-                tracing::error!("Failed to create directories: {}", e);
-                return new_page_error(&state.url_prefix, kind, "Failed to create directory. Check that the recipes folder has write permissions.", &original_filename);
-            }
-        }
-    }
-
-    // Get the recipe name (last component of path) for the title
-    let recipe_name = recipe_path
-        .split('/')
-        .next_back()
-        .unwrap_or(&recipe_path)
-        .replace(['-', '_'], " ");
-
-    // Start the file with YAML frontmatter
-    let template = kind.starter(&recipe_name);
-
-    // Use OpenOptions with create_new to atomically check existence and create
-    // This prevents TOCTOU race conditions
-    use tokio::io::AsyncWriteExt;
-    let file = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true) // Fails if file exists - atomic check + create
-        .open(&file_path)
-        .await;
-
-    match file {
-        Ok(mut f) => {
-            // A tokio `File` hands writes to a background task: without the
-            // flush, the redirect below can reach the browser, and the editor
-            // load the file, before anything is on disk.
-            let written = match f.write_all(template.as_bytes()).await {
-                Ok(()) => f.flush().await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = written {
-                tracing::error!("Failed to write recipe: {}", e);
-                return new_page_error(
-                    &state.url_prefix,
-                    kind,
-                    &format!("Failed to write {noun} file"),
-                    &original_filename,
-                );
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return new_page_error(
-                &state.url_prefix,
-                kind,
-                &format!("A {noun} with this name already exists"),
-                &original_filename,
-            );
-        }
-        Err(e) => {
-            tracing::error!("Failed to create recipe file: {}", e);
-            return new_page_error(
-                &state.url_prefix,
-                kind,
-                &format!("Failed to create {noun} file"),
-                &original_filename,
-            );
-        }
-    }
+    };
 
     activity::record(
         &viewer,
-        format_args!("created {}", activity::file(&state.base_path, &file_path)),
+        format_args!(
+            "created {}",
+            activity::file(&state.base_path, &created.file)
+        ),
     );
 
     // Redirect to editor
     axum::response::Redirect::to(&format!(
         "{}/edit/{}.{}",
         state.url_prefix,
-        recipe_path,
+        created.name,
         kind.extension()
     ))
     .into_response()
-}
-
-/// `recipe` -> `Recipe`, for an error message that opens with the noun.
-fn capitalize(word: &str) -> String {
-    let mut chars = word.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
 }
 
 async fn shopping_list_page(

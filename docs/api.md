@@ -723,6 +723,28 @@ Empty the stored list
 
 Removes every recipe and all checked state. Responds `200 OK` with an empty body.
 
+### `POST /api/shopping_list/save_as_menu`
+
+Save the list as a menu
+
+Writes the recipes on the list to a new `.menu` file, one `- @./Path/Recipe{factor}` line each (`{}` at ×1), in list order, so that `POST /api/shopping_list/add_menu` on it stores the same recipes at the same factors. A menu on the list is written as its recipes. Which sub-recipes an entry left out is not kept: a menu includes them all. The name is cleaned up as the New Menu form does it (letters, digits, spaces, `-`, `_`, `/`), and the file is never overwritten nor written outside the recipe directory. It creates a file, so with sign-in on it needs a role that may edit recipes. Responds `201 Created`; `400` for an empty list or a name with nothing left in it, `409` when the menu exists. `skipped` lists paths a reference cannot spell (a `{` in the name, say), which were left out.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `name` | body | `string` | yes | Where the menu goes, relative to the recipe directory and without `.menu`. |
+
+Request body:
+
+```json
+{ "name": "Plans/Week 12" }
+```
+
+Response:
+
+```json
+{ "path": "Plans/Week 12.menu", "skipped": [] }
+```
+
 ### `POST /api/shopping_list/check`
 
 Mark an ingredient as bought

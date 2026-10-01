@@ -151,7 +151,9 @@ role can do everything the ones above it can:
 
 Everyone, signed in or not, can read. A user added without `--role` is an
 `admin`, which is what every user was before roles existed. Pages leave out
-the controls a user's role cannot use.
+the controls a user's role cannot use. [Saving the shopping list as a
+menu](#saving-the-shopping-list-as-a-menu) creates a menu, so it takes an
+`editor`.
 
 ```bash
 cook server user add grandma --role reader
@@ -269,6 +271,18 @@ no time zone data, so it logs in UTC unless you mount the host's zone, e.g.
 `-v /etc/localtime:/etc/localtime:ro`.
 
 Changes made to the files directly, outside the server, are not listed.
+
+## Saving the shopping list as a menu
+
+**Save as Menu** on the shopping list page writes the recipes on the list to a new `.menu` file, to put the same list together again another week: open the menu and use **Add All to Shopping List**, against whatever the pantry holds then.
+
+- The menu gets one line per recipe, in list order, with the amount it has on the list: `- @./Soups/Pea soup{2}`, or `{}` for the recipe as written. Adding the menu back stores each recipe at that same amount.
+- A menu on the list is saved as the recipes in it, with the amounts the menu gave them.
+- Which sub-recipes a recipe was added without is not kept: a menu has no way to say it, so adding the menu back includes them all.
+- The name follows the New Menu form (`Plans/Week 12` makes `Plans/Week 12.menu`, creating the folder). An existing menu is never overwritten.
+- The new menu opens once saved, ready to edit, for instance to split it into days.
+
+It uses `POST /api/shopping_list/save_as_menu`; see [the API reference](api.md).
 
 ## Web feeds
 

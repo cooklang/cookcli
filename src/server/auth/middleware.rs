@@ -39,6 +39,9 @@ const PROTECTED_READS: &[(&str, Capability)] = &[
 /// listed here needs that, so a route added later is kept to admins until
 /// someone decides otherwise.
 const WRITES: &[(&str, Capability)] = &[
+    // Writes a menu file. Listed before `/api/shopping_list`, whose prefix
+    // covers it: the first match wins.
+    ("/api/shopping_list/save_as_menu", Capability::EditRecipes),
     ("/api/shopping_list", Capability::EditLists),
     ("/api/pantry", Capability::EditLists),
     ("/api/recipes", Capability::EditRecipes),
@@ -212,6 +215,8 @@ mod tests {
             (Method::PUT, "/api/recipe_image/Soup.cook"),
             (Method::DELETE, "/api/recipe_image/Soup.cook"),
             (Method::POST, "/new"),
+            // Under the shopping list, but it writes a menu file.
+            (Method::POST, "/api/shopping_list/save_as_menu"),
         ] {
             assert_eq!(
                 needs(method.clone(), path),
