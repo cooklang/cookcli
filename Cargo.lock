@@ -734,7 +734,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "strip-ansi-escapes 0.2.1",
  "sys-locale",
  "tabular",
