@@ -13,7 +13,7 @@ use anyhow::{Context as _, Result};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::http::{header, HeaderMap};
 use camino::Utf8Path;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -253,6 +253,21 @@ fn from_hex(text: &str) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
     use axum::http::HeaderValue;
+
+    /// Pins the exact MAC bytes so a hmac/sha2 upgrade cannot silently
+    /// invalidate (or change) existing session cookies.
+    #[test]
+    fn mac_tag_is_byte_stable() {
+        let key = SessionKey([7u8; 32]);
+        let tag = key
+            .mac("alice", 2_000, "0123456789abcdef0123456789abcdef", "hash")
+            .finalize()
+            .into_bytes();
+        assert_eq!(
+            to_hex(&tag),
+            "7099162eb5d89c10fd09f2474a5cb8a4c1281ad7846cff63ca02f0606cf223d8"
+        );
+    }
 
     const HASH: &str = "$argon2id$v=19$m=64,t=1,p=1$c29tZXNhbHQ$1Yq1Ai2xMSJ5ZB1Hm7Q5Rw";
     const OTHER_HASH: &str = "$argon2id$v=19$m=64,t=1,p=1$b3RoZXJzYWx0$1Yq1Ai2xMSJ5ZB1Hm7Q5Rw";

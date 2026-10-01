@@ -102,8 +102,8 @@ fluent-templates = "0.15"
 # re-encoded as JPEG. Only the codecs that path reads are enabled: the default
 # set adds a dozen formats, and `rayon`, for nothing the server uses.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
-# Signs `cook server` session cookies. 0.12 pairs with sha2 0.10 (digest 0.10).
-hmac = { version = "0.12", optional = true }
+# Signs `cook server` session cookies. 0.13 pairs with sha2 0.11 (digest 0.11).
+hmac = { version = "0.13", optional = true }
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
@@ -118,7 +118,7 @@ self_update = { version = "0.44", default-features = false, features = ["archive
 serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
-sha2 = { version = "0.10", optional = true }
+sha2 = { version = "0.11", optional = true }
 sys-locale = "0.3"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 tokio = { version = "1", features = ["full"] }
