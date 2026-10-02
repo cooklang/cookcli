@@ -51,6 +51,7 @@ any device with a web browser.
 * 🛒 **Smart Shopping** - Generate organized shopping lists
 * 🔍 **Recipe Search** - Find recipes quickly
 * 📦 **Pantry Tracking** - Manage inventory and expiration dates
+* ☁️ **Sync** - after `cook login`, `cook server` keeps your recipe folder in step with your phone and desktop through [Cook Cloud sync](https://cook.md/) (Cook Basic)
 
 ## 🚀 Getting Started
 
@@ -467,7 +468,8 @@ cook search -b ~/recipes pasta
 ### `cook import`
 
 Import recipes from websites and convert them to Cooklang format. Requires
-`OPENAI_API_KEY` environment variable set.
+`OPENAI_API_KEY` environment variable set. Or
+[convert a recipe to Cooklang](https://cook.md/cookifies/new) on cook.md (Cook Basic).
 
 ```bash
 # Import a recipe
