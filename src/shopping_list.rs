@@ -30,12 +30,13 @@
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use chrono::NaiveDate;
 use clap::{Args, ValueEnum};
 use tracing::warn;
 
 use cookcli_core::{
     format::shopping_list as fmt,
-    shopping_list::{generate, GenerateRequest, ScaledRecipe},
+    shopping_list::{generate, DayRange, GenerateRequest, ScaledRecipe},
     ConfigSource,
 };
 
@@ -151,6 +152,38 @@ pub struct ShoppingListArgs {
     /// into its aisle category, and is subtracted from by the pantry.
     #[arg(long, value_name = "ITEM")]
     extra: Vec<String>,
+
+    /// Shop for a menu's days from this date on
+    ///
+    /// A menu's days are its sections dated `(YYYY-MM-DD)`, as meal plans and
+    /// the web editor write them: `== Wednesday (2026-10-07) ==`. With
+    /// `--from` and/or `--to`, only the days in that range go on the list:
+    /// the recipes they reference and the ingredients written into them.
+    /// Sections with no date are left out too. A recipe, or a menu with no
+    /// dated section, is taken whole.
+    ///
+    /// Takes a date (`2026-10-07`) or `today`.
+    ///
+    /// Examples:
+    ///   cook shopping-list Plans/October.menu --from 2026-10-07 --to 2026-10-13
+    ///   cook shopping-list Week.menu --from today
+    #[arg(long, value_name = "DATE", value_parser = parse_day, verbatim_doc_comment)]
+    from: Option<NaiveDate>,
+
+    /// Shop for a menu's days up to this date, included
+    ///
+    /// See `--from`. Takes a date (`2026-10-13`) or `today`.
+    #[arg(long, value_name = "DATE", value_parser = parse_day)]
+    to: Option<NaiveDate>,
+}
+
+/// A day on the command line: `YYYY-MM-DD`, or `today` in local time.
+fn parse_day(value: &str) -> std::result::Result<NaiveDate, String> {
+    if value.eq_ignore_ascii_case("today") {
+        return Ok(chrono::Local::now().date_naive());
+    }
+    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map_err(|_| format!("expected a date as YYYY-MM-DD, or `today`, not `{value}`"))
 }
 
 impl ShoppingListArgs {
@@ -248,6 +281,14 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         None => OutputFormat::Human,
     });
 
+    let days = match (args.from, args.to) {
+        (None, None) => None,
+        (Some(from), Some(to)) if from > to => {
+            anyhow::bail!("--from {from} comes after --to {to}, so no day is in between");
+        }
+        (from, to) => Some(DayRange { from, to }),
+    };
+
     // `name:factor` is this CLI's argument spelling, so it is unpicked here
     // rather than in core, which takes the factor as its own field.
     let recipes = expanded_recipes
@@ -257,6 +298,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 ScaledRecipe::scaled(cookcli_core::RecipeSource::Path(name.into()), scale)
             }
             None => ScaledRecipe::new(cookcli_core::RecipeSource::Path(entry.as_str().into())),
+        })
+        .map(|recipe| match days {
+            Some(days) => recipe.on_days(days),
+            None => recipe,
         })
         .collect();
 
