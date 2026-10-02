@@ -518,6 +518,78 @@ fn doctor_with_no_subcommand_counts_recipes_but_does_not_name_them() {
         .stdout(predicate::str::contains("      dish.cook").not());
 }
 
+/// As [`cook`], and kept away from the real configuration directory.
+///
+/// `with_isolated_config` takes a [`std::process::Command`]. `assert_cmd`'s
+/// wrapper does not deref to one, so this builds the process command, isolates
+/// it, and only then wraps it for assertions.
+fn cook_isolated(dir: &Path) -> Command {
+    let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("cook"));
+    command.current_dir(dir);
+    common::with_isolated_config(&mut command, dir);
+    Command::from_std(command)
+}
+
+/// A textual timer quantity is printed, the totals count it, and the command
+/// still exits successfully: reporting the problem is the point.
+#[test]
+fn validate_reports_a_textual_timer_and_still_exits_successfully() {
+    let quantity = "a few";
+    let dir = collection(&format!("Cook for ~{{{quantity}%minutes}}.\n"), None, None);
+
+    cook_isolated(dir.path())
+        .args(["doctor", "validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Timer value is text"))
+        .stdout(predicate::str::contains(quantity))
+        .stdout(predicate::str::contains(
+            "❌ 1 error(s) found in 1 recipe(s)",
+        ));
+}
+
+/// The same recipe fails `--strict`, which is what CI gates on.
+#[test]
+fn strict_validation_fails_on_a_textual_timer() {
+    let dir = collection("Cook for ~{a few%minutes}.\n", None, None);
+
+    cook_isolated(dir.path())
+        .args(["doctor", "validate", "--strict"])
+        .assert()
+        .code(1);
+}
+
+/// A numeric timer is not that failure.
+#[test]
+fn strict_validation_accepts_a_numeric_timer() {
+    let dir = collection("Bake for ~{40%minutes}.\n", None, None);
+
+    cook_isolated(dir.path())
+        .args(["doctor", "validate", "--strict"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All recipes are valid!"));
+}
+
+/// `cook doctor` with no subcommand runs validation as one of its sections and
+/// reports the same error in the summary it already prints.
+#[test]
+fn doctor_with_no_subcommand_reports_a_textual_timer() {
+    let quantity = "a few";
+    let dir = collection(&format!("Cook for ~{{{quantity}%minutes}}.\n"), None, None);
+
+    cook_isolated(dir.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("=== Recipe Validation ==="))
+        .stdout(predicate::str::contains("Timer value is text"))
+        .stdout(predicate::str::contains(quantity))
+        .stdout(predicate::str::contains(
+            "❌ 1 error(s) found in 1 recipe(s)",
+        ));
+}
+
 /// Every check runs, in order, off one invocation.
 #[test]
 fn doctor_with_no_subcommand_runs_every_check() {

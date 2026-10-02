@@ -6,6 +6,10 @@
 //! [`Outcome`] for the rule. [`broken_references`] follows up on what it found,
 //! resolving the recipe references a report collected.
 //!
+//! The parse is not the shared [`PARSER`](crate::PARSER). Validation turns on
+//! the timer-unit check, so a quantity such as `~{a few%minutes}` is reported
+//! here and left alone by every other command.
+//!
 //! [`aisle_coverage`] and [`pantry_coverage`] answer the other two questions
 //! `cook doctor` asks: which of a collection's ingredients are categorised in
 //! `aisle.conf`, and which of them are already in the pantry.
@@ -13,12 +17,14 @@
 use crate::{
     diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
-    parser::{collect_diagnostics, render_report, PARSER},
+    parser::{collect_diagnostics, render_report},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang::{Converter, CooklangParser, Extensions};
 use cooklang_find::RecipeEntry;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
 
 /// A validation run.
 ///
@@ -221,6 +227,16 @@ impl ValidationReport {
 /// `cook doctor validate --strict` fails on either, which is why it does its
 /// own arithmetic over the two.
 ///
+/// # Timer quantities
+///
+/// The walk does not use [`PARSER`](crate::PARSER). A timer whose quantity is
+/// text (`~{a few%minutes}`) or whose unit is not a known time unit is a
+/// diagnostic. A number with a standard time unit is not, and neither is a
+/// textual ingredient quantity (`@salt{to taste}`). A named timer with no
+/// quantity stays valid: the extension that would reject it is left off.
+/// Nothing else about a recipe — metadata warnings, references, an ingredient
+/// that fails to parse — changes.
+///
 /// # Errors
 ///
 /// - [`CoreError::Search`] if the root does not exist, is not a directory, or
@@ -261,6 +277,104 @@ pub fn validate(
     ))
 }
 
+/// Parser [`validate`] uses.
+///
+/// [`PARSER`](crate::PARSER) is built with [`Extensions::empty`], so
+/// `~{a few%minutes}` is a text value and raises nothing — which is what the
+/// rest of CookCLI wants. [`Extensions::ADVANCED_UNITS`] is the check that
+/// reports a textual timer quantity, and it also requires the unit to be one
+/// the converter knows as time. [`Converter::default`] is empty while
+/// `bundled_units` is disabled, and an empty converter rejects `minutes`
+/// along with every other unit, so this parser carries the standard time
+/// units from cooklang's unit file and no others.
+///
+/// [`Extensions::RANGE_VALUES`] is on for the same check. Without it a numeric
+/// range such as `~{10-20%minutes}` is read as text and reported as a bad
+/// quantity. [`Extensions::TIMER_REQUIRES_TIME`] stays off: a named timer with
+/// no quantity (`~dough`) is valid cooklang, and this command was not asked to
+/// start rejecting it. No other extension is enabled, and [`PARSER`](crate::PARSER)
+/// is left exactly as the other commands use it.
+static VALIDATION_PARSER: LazyLock<CooklangParser> = LazyLock::new(|| {
+    CooklangParser::new(
+        Extensions::ADVANCED_UNITS | Extensions::RANGE_VALUES,
+        time_converter(),
+    )
+});
+
+/// A converter that knows the standard time units and nothing a recipe measures
+/// with.
+///
+/// The names, symbols and ratios are cooklang's bundled time units. The other
+/// physical quantities exist only because [`Converter::builder`] refuses to
+/// finish unless each of them names a best unit. Those placeholders are not
+/// time, and they are not words a recipe writes, so a timer unit is accepted
+/// exactly when it is one of the time units above.
+fn time_converter() -> Converter {
+    use cooklang::convert::units_file::{BestUnits, QuantityGroup, UnitEntry, Units, UnitsFile};
+    use cooklang::convert::PhysicalQuantity;
+    use std::sync::Arc;
+
+    fn keys(values: &[&str]) -> Vec<Arc<str>> {
+        values.iter().copied().map(Arc::<str>::from).collect()
+    }
+
+    fn unit(names: &[&str], symbols: &[&str], aliases: &[&str], ratio: f64) -> UnitEntry {
+        UnitEntry {
+            names: keys(names),
+            symbols: keys(symbols),
+            aliases: keys(aliases),
+            ratio,
+            difference: 0.0,
+            expand_si: false,
+        }
+    }
+
+    fn group(quantity: PhysicalQuantity, best: &[&str], units: Vec<UnitEntry>) -> QuantityGroup {
+        QuantityGroup {
+            quantity,
+            best: Some(BestUnits::Unified(
+                best.iter().copied().map(str::to_string).collect(),
+            )),
+            units: Some(Units::Unified(units)),
+        }
+    }
+
+    // Not a unit a recipe can spell. One per physical quantity the builder
+    // insists on, so that finishing does not require the bundled database.
+    let placeholder = |quantity: PhysicalQuantity, name: &str| {
+        group(quantity, &[name], vec![unit(&[name], &[], &[], 1.0)])
+    };
+
+    let file = UnitsFile {
+        default_system: None,
+        si: None,
+        fractions: None,
+        extend: None,
+        quantity: vec![
+            group(
+                PhysicalQuantity::Time,
+                &["s", "min", "h", "d"],
+                vec![
+                    unit(&["second", "seconds"], &["s", "sec"], &["secs"], 1.0),
+                    unit(&["minute", "minutes"], &["min"], &["mins"], 60.0),
+                    unit(&["hour", "hours"], &["h"], &[], 3600.0),
+                    unit(&["day", "days"], &["d"], &[], 86400.0),
+                ],
+            ),
+            placeholder(PhysicalQuantity::Volume, "cookcli-doctor-volume"),
+            placeholder(PhysicalQuantity::Mass, "cookcli-doctor-mass"),
+            placeholder(PhysicalQuantity::Length, "cookcli-doctor-length"),
+            placeholder(PhysicalQuantity::Temperature, "cookcli-doctor-temperature"),
+        ],
+    };
+
+    Converter::builder()
+        .with_units_file(file)
+        .expect("the doctor time units are a valid converter file")
+        .finish()
+        .expect("the doctor time units build a converter")
+}
+
 /// Read, parse and describe one recipe. Never fails: a recipe that cannot be
 /// read is described as such, so that one bad file does not end the walk.
 fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> RecipeValidation {
@@ -292,7 +406,7 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
         }
     };
 
-    let parsed = PARSER.parse(&content);
+    let parsed = VALIDATION_PARSER.parse(&content);
     let diagnostics = collect_diagnostics(parsed.report(), Some(&path));
 
     // `write` on an empty report produces an empty string anyway; the guard is
@@ -1187,6 +1301,259 @@ mod tests {
                 Utf8Path::new("recipes/soup.cook")
             ),
             "recipes/soup.cook"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Timer quantities
+    // -----------------------------------------------------------------------
+
+    /// The bytes a diagnostic underlines, taken from the recipe that produced it.
+    fn underlined<'a>(diagnostic: &Diagnostic, source: &'a str) -> &'a str {
+        let span = diagnostic
+            .location
+            .as_ref()
+            .and_then(|location| location.span)
+            .unwrap_or_else(|| panic!("expected a span: {diagnostic:?}"));
+        &source[span.start..span.end]
+    }
+
+    /// Textual quantities are an error in both shapes of timer, and the report
+    /// counts the recipe they came from. Two quantities, so this is the check
+    /// and not a special case of one phrase.
+    #[test]
+    fn a_textual_timer_quantity_is_an_error_in_either_shape() {
+        let anon = "a few";
+        let named = "a couple";
+        let source = format!("Cook for ~{{{anon}%minutes}}.\nBake the ~loaf{{{named}%minutes}}.\n");
+
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("timer.cook"), &source);
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        assert_eq!(timer.diagnostics.len(), 2, "{:?}", timer.diagnostics);
+        for (diagnostic, quantity) in timer.diagnostics.iter().zip([anon, named]) {
+            assert_eq!(diagnostic.severity, Severity::Error, "{diagnostic:?}");
+            assert!(
+                diagnostic.message.contains("Timer value is text"),
+                "{:?}",
+                diagnostic.message
+            );
+            assert!(
+                diagnostic.message.contains(quantity),
+                "{:?} should name {quantity}",
+                diagnostic.message
+            );
+            let location = diagnostic.location.as_ref().expect("location set");
+            assert_eq!(location.file.as_deref(), Some(Utf8Path::new("timer.cook")));
+            assert_eq!(underlined(diagnostic, &source), quantity);
+            assert!(
+                timer.rendered.contains(quantity),
+                "the report should identify {quantity}: {}",
+                timer.rendered
+            );
+        }
+
+        assert_eq!(report.total_recipes(), 1);
+        assert_eq!(report.total_errors(), 2);
+        assert_eq!(report.recipes_with_errors(), 1);
+    }
+
+    /// Integers, decimals and numeric ranges with ordinary time units are
+    /// valid. A textual ingredient quantity beside them is not a timer error:
+    /// the check is on timers.
+    #[test]
+    fn numeric_timers_stay_valid_beside_a_textual_ingredient() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("dish.cook"),
+            "Bake for ~{40%minutes}, then rest ~{1.5%hours}.\n\
+             Knead for ~{10-20%minutes}.\n\
+             Add @salt{to taste}.\n",
+        );
+
+        let report = run(&base(&dir));
+        let dish = recipe(&report, "dish.cook");
+        assert!(
+            dish.diagnostics.is_empty(),
+            "a numeric timer must not be reported: {:?}",
+            dish.diagnostics
+        );
+        assert!(dish.rendered.is_empty());
+        assert_eq!(report.total_errors(), 0);
+        assert_eq!(report.total_warnings(), 0);
+    }
+
+    /// What the enabled extensions actually do, taken from cooklang rather than
+    /// invented. `TIMER_REQUIRES_TIME` is off, so a named timer with no
+    /// quantity is valid. A number with no unit is a warning. An unknown unit
+    /// is an error, and a standard time unit is not one of those — the
+    /// converter knows it even though `bundled_units` is disabled.
+    #[test]
+    fn timer_edges_follow_the_extensions_that_are_on() {
+        let unit = "fortnights";
+        let named = "Rest the ~dough.\n";
+        let bare = "Cook for ~{30}.\n";
+        let unknown = format!("Cook for ~{{5%{unit}}}.\n");
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("named.cook"), named);
+        write(&base.join("bare.cook"), bare);
+        write(&base.join("unknown.cook"), &unknown);
+
+        let report = run(&base);
+
+        let named = recipe(&report, "named.cook");
+        assert!(
+            named.diagnostics.is_empty(),
+            "a named timer with no quantity stays valid: {:?}",
+            named.diagnostics
+        );
+
+        let bare = recipe(&report, "bare.cook");
+        assert_eq!(bare.diagnostics.len(), 1, "{:?}", bare.diagnostics);
+        assert_eq!(bare.diagnostics[0].severity, Severity::Warning);
+        assert!(
+            bare.diagnostics[0]
+                .message
+                .contains("Invalid timer quantity: missing unit"),
+            "{:?}",
+            bare.diagnostics[0]
+        );
+        assert_eq!(bare.count(Severity::Error), 0);
+
+        let unknown_recipe = recipe(&report, "unknown.cook");
+        assert_eq!(
+            unknown_recipe.diagnostics.len(),
+            1,
+            "{:?}",
+            unknown_recipe.diagnostics
+        );
+        let diagnostic = &unknown_recipe.diagnostics[0];
+        assert_eq!(diagnostic.severity, Severity::Error);
+        assert!(
+            diagnostic.message.contains("Unknown timer unit"),
+            "{:?}",
+            diagnostic.message
+        );
+        assert!(
+            diagnostic.message.contains(unit),
+            "{:?}",
+            diagnostic.message
+        );
+        assert_eq!(underlined(diagnostic, &unknown), unit);
+        assert!(
+            unknown_recipe.rendered.contains(unit),
+            "{}",
+            unknown_recipe.rendered
+        );
+
+        assert_eq!(report.recipes_with_errors(), 1);
+        assert_eq!(report.recipes_with_warnings(), 1);
+        assert_eq!(report.total_errors(), 1);
+        assert_eq!(report.total_warnings(), 1);
+    }
+
+    /// One bad timer does not stop the walk, and it does not disturb the
+    /// checks that were already there: a broken ingredient, a deprecated
+    /// metadata warning, and a recipe reference.
+    #[test]
+    fn a_mixed_collection_still_reports_every_recipe() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("timer.cook"), "Cook for ~{a few%minutes}.\n");
+        write(&base.join("clean.cook"), "Bake for ~{40%minutes}.\n");
+        write(&base.join("broken.cook"), BROKEN);
+        write(&base.join("deprecated.cook"), DEPRECATED);
+        write(&base.join("sauce.cook"), CLEAN);
+        write(
+            &base.join("with_ref.cook"),
+            "Make @./sauce{} and @./missing{}.\n",
+        );
+
+        let outcome = validate(&Context::new(base), ValidateRequest::default())
+            .expect("errors in recipes are data, not a failed command");
+        let report = &outcome.value;
+
+        assert_eq!(
+            paths(report),
+            [
+                "broken.cook",
+                "clean.cook",
+                "deprecated.cook",
+                "sauce.cook",
+                "timer.cook",
+                "with_ref.cook",
+            ]
+        );
+        assert_eq!(report.total_recipes(), 6);
+
+        let timer = recipe(report, "timer.cook");
+        assert_eq!(timer.count(Severity::Error), 1, "{:?}", timer.diagnostics);
+        assert!(timer.rendered.contains("a few"), "{}", timer.rendered);
+        assert!(
+            timer.references.is_empty(),
+            "a recipe with errors contributes no references: {:?}",
+            timer.references
+        );
+
+        let broken_recipe = recipe(report, "broken.cook");
+        assert_eq!(
+            broken_recipe.diagnostics.len(),
+            2,
+            "{:?}",
+            broken_recipe.diagnostics
+        );
+        assert!(
+            broken_recipe
+                .rendered
+                .contains("Add @{1%tsp} and @{2%tsp}."),
+            "{}",
+            broken_recipe.rendered
+        );
+
+        assert!(recipe(report, "clean.cook").diagnostics.is_empty());
+        assert!(recipe(report, "sauce.cook").diagnostics.is_empty());
+
+        let deprecated = recipe(report, "deprecated.cook");
+        assert_eq!(
+            deprecated.diagnostics.len(),
+            1,
+            "{:?}",
+            deprecated.diagnostics
+        );
+        assert_eq!(deprecated.diagnostics[0].severity, Severity::Warning);
+
+        assert_eq!(
+            recipe(report, "with_ref.cook").references,
+            ["./sauce", "./missing"]
+        );
+        assert_eq!(
+            broken(report),
+            [("with_ref.cook".to_string(), vec!["./missing".to_string()])]
+        );
+
+        assert_eq!(report.total_errors(), 3);
+        assert_eq!(report.recipes_with_errors(), 2);
+        assert_eq!(report.total_warnings(), 1);
+        assert_eq!(report.recipes_with_warnings(), 1);
+        assert!(outcome.has_errors());
+        assert_eq!(
+            outcome.diagnostics.len(),
+            report.total_errors() + report.total_warnings()
+        );
+    }
+
+    /// The timer check belongs to validation. Other commands keep the shared
+    /// parser, which still accepts the quantity this command now reports.
+    #[test]
+    fn the_shared_parser_still_accepts_a_textual_timer() {
+        let parsed = crate::PARSER.parse("Cook for ~{a few%minutes}.\n");
+        assert!(
+            !parsed.report().has_errors(),
+            "the shared parser must not grow this check"
         );
     }
 

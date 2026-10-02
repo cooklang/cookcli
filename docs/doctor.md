@@ -25,6 +25,14 @@ cook doctor validate [OPTIONS]
 
 Checks for: syntax errors, warnings, missing recipe references, invalid units or quantities.
 
+A timer quantity is checked too. It has to be a number with a time unit —
+`minutes`, `hours`, `seconds`, `days`, and the usual short forms — so
+`Cook for ~{a few%minutes}.` is reported, and so is a unit that is not one of
+those. `~{40%minutes}`, `~{1.5%hours}` and a range such as `~{10-20%minutes}`
+are accepted. An ingredient may still be text (`@salt{to taste}`). A number
+with no unit (`~{30}`) is a warning. A named timer with no quantity (`~dough`)
+is left as written.
+
 ### `aisle`
 
 Check for ingredients missing from your aisle configuration.
