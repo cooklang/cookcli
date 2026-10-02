@@ -21,6 +21,7 @@ shopping-selected-recipes = Geselecteerde recepten
 shopping-clear-all = Alles wissen
 shopping-in-pantry = In uw voorraadkast
 shopping-remove = Verwijderen
+shopping-extra-items = Extra artikelen
 shopping-add-recipes-first = Voeg eerst enkele recepten toe
 shopping-failed-to-generate = Boodschappenlijst kon niet worden gegenereerd
 shopping-failed-to-add = Toevoegen aan boodschappenlijst mislukt

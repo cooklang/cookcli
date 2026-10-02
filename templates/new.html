@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}{% if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %} - Cook{% endblock %}
+{% block title %}{% if is_plan %}{{ tr.t("new-plan") }}{% else if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %} - Cook{% endblock %}
 
 {% block content %}
 <div class="max-w-xl mx-auto">
-    <h1 class="text-display font-bold text-text mb-8">{% if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %}</h1>
+    <h1 class="text-display font-bold text-text mb-8">{% if is_plan %}{{ tr.t("new-plan") }}{% else if is_menu %}{{ tr.t("new-menu") }}{% else %}{{ tr.t("new-recipe") }}{% endif %}</h1>
 
     {% if let Some(err) = error %}
     <div class="mb-6 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
@@ -18,10 +18,10 @@
     {% endif %}
 
     <form action="{{ prefix }}/new" method="POST" class="space-y-6">
-        <input type="hidden" name="kind" value="{% if is_menu %}menu{% else %}recipe{% endif %}">
+        <input type="hidden" name="kind" value="{% if is_plan %}plan{% else if is_menu %}menu{% else %}recipe{% endif %}">
         <div>
             <label for="filename" class="block text-sm font-medium text-muted mb-2">
-                {% if is_menu %}{{ tr.t("new-menu-path") }}{% else %}{{ tr.t("new-recipe-path") }}{% endif %}
+                {% if is_plan %}{{ tr.t("new-plan-path") }}{% else if is_menu %}{{ tr.t("new-menu-path") }}{% else %}{{ tr.t("new-recipe-path") }}{% endif %}
             </label>
             <div class="flex items-center gap-2">
                 <input
@@ -30,23 +30,133 @@
                     name="filename"
                     required
                     pattern="[a-zA-Z0-9_/ -]+"
-                    placeholder="{% if is_menu %}{{ tr.t("new-menu-placeholder") }}{% else %}{{ tr.t("new-recipe-placeholder") }}{% endif %}"
+                    placeholder="{% if is_plan %}{{ tr.t("new-plan-placeholder") }}{% else if is_menu %}{{ tr.t("new-menu-placeholder") }}{% else %}{{ tr.t("new-recipe-placeholder") }}{% endif %}"
                     value="{{ filename.as_deref().unwrap_or("") }}"
                     class="flex-1 px-4 py-3 border {% if error.is_some() %}border-danger{% else %}border-line{% endif %} rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]"
                 >
                 <span class="text-faint">{% if is_menu %}.menu{% else %}.cook{% endif %}</span>
             </div>
-            <p class="mt-2 text-sm text-faint">{% if is_menu %}{{ tr.t("new-menu-hint") }}{% else %}{{ tr.t("new-recipe-hint") }}{% endif %}</p>
+            <p class="mt-2 text-sm text-faint">{% if is_plan %}{{ tr.t("new-plan-hint") }}{% else if is_menu %}{{ tr.t("new-menu-hint") }}{% else %}{{ tr.t("new-recipe-hint") }}{% endif %}</p>
         </div>
+
+        {% if is_plan %}
+        <div>
+            <label for="plan-start" class="block text-sm font-medium text-muted mb-2">{{ tr.t("new-plan-start") }}</label>
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="date" id="plan-start" name="start" required value="{{ plan.start }}"
+                       class="px-4 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
+                <button type="button" class="btn btn-sm" data-plan-start="today">{{ tr.t("new-plan-today") }}</button>
+                <button type="button" class="btn btn-sm" data-plan-start="this-week">{{ tr.t("new-plan-this-week") }}</button>
+                <button type="button" class="btn btn-sm" data-plan-start="next-week">{{ tr.t("new-plan-next-week") }}</button>
+            </div>
+        </div>
+
+        <div>
+            <label for="plan-days" class="block text-sm font-medium text-muted mb-2">{{ tr.t("new-plan-days") }}</label>
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="number" id="plan-days" name="days" required min="1" max="{{ plan.max_days }}" step="1" value="{{ plan.days }}"
+                       class="w-24 px-4 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
+                <button type="button" class="btn btn-sm" data-plan-days="7">{{ tr.t("new-plan-one-week") }}</button>
+                <button type="button" class="btn btn-sm" data-plan-days="14">{{ tr.t("new-plan-two-weeks") }}</button>
+            </div>
+            <p id="plan-preview" class="mt-2 text-sm text-muted" aria-live="polite"></p>
+        </div>
+
+        <fieldset>
+            <legend class="block text-sm font-medium text-muted mb-2">{{ tr.t("new-plan-meals") }}</legend>
+            <div class="flex flex-wrap gap-x-6 gap-y-2">
+                {% for meal in plan.meals %}
+                <label class="inline-flex items-center gap-2 text-text">
+                    <input type="checkbox" name="{{ meal.field }}" {% if meal.checked %}checked{% endif %}>
+                    {{ meal.label }}
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <div>
+            <label for="plan-servings" class="block text-sm font-medium text-muted mb-2">{{ tr.t("label-servings") }}</label>
+            <input type="number" id="plan-servings" name="servings" min="1" step="1" value="{{ plan.servings }}"
+                   class="w-24 px-4 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
+        </div>
+        {% endif %}
 
         <div class="flex gap-4">
             <a href="{{ prefix }}/" class="btn">
                 {{ tr.t("action-cancel") }}
             </a>
             <button type="submit" class="btn btn-primary">
-                {% if is_menu %}{{ tr.t("new-menu-create") }}{% else %}{{ tr.t("new-recipe-create") }}{% endif %}
+                {% if is_plan %}{{ tr.t("new-plan-create") }}{% else if is_menu %}{{ tr.t("new-menu-create") }}{% else %}{{ tr.t("new-recipe-create") }}{% endif %}
             </button>
         </div>
     </form>
 </div>
+
+{% if is_plan %}
+<script>
+// Shortcuts for the plan's first day and length, and the dates it will cover.
+// The form works without them: the server checks what it is sent.
+(function () {
+    const start = document.getElementById('plan-start');
+    const days = document.getElementById('plan-days');
+    const preview = document.getElementById('plan-preview');
+    const lang = document.documentElement.lang || undefined;
+    // Weeks start on Sunday in the United States and Japan, as on the plan.
+    const firstWeekday = /-(US|JP)$/i.test(lang || '') ? 0 : 1;
+
+    const iso = date => date.toISOString().slice(0, 10);
+    const parse = value => new Date(`${value}T00:00:00Z`);
+    const localToday = () => {
+        const now = new Date();
+        return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    };
+    const addDays = (date, n) => {
+        const copy = new Date(date);
+        copy.setUTCDate(copy.getUTCDate() + n);
+        return copy;
+    };
+    const weekStart = date => addDays(date, -((date.getUTCDay() - firstWeekday + 7) % 7));
+    const format = date => {
+        const options = { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' };
+        try {
+            return date.toLocaleDateString(lang, options);
+        } catch {
+            return date.toLocaleDateString(undefined, options);
+        }
+    };
+
+    function update() {
+        const count = Number(days.value);
+        if (!start.value || !Number.isInteger(count) || count < 1 || count > Number(days.max)) {
+            preview.textContent = '';
+            return;
+        }
+        const first = parse(start.value);
+        preview.textContent = `${format(first)} → ${format(addDays(first, count - 1))}`;
+    }
+
+    document.querySelectorAll('[data-plan-start]').forEach(button => {
+        button.addEventListener('click', () => {
+            const today = localToday();
+            const choice = button.dataset.planStart;
+            start.value = iso(
+                choice === 'today' ? today
+                    : choice === 'this-week' ? weekStart(today)
+                    : addDays(weekStart(today), 7)
+            );
+            update();
+        });
+    });
+    document.querySelectorAll('[data-plan-days]').forEach(button => {
+        button.addEventListener('click', () => {
+            days.value = button.dataset.planDays;
+            update();
+        });
+    });
+    start.addEventListener('input', update);
+    days.addEventListener('input', update);
+    update();
+})();
+</script>
+{% endif %}
 {% endblock %}

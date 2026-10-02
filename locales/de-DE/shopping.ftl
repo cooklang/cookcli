@@ -21,6 +21,7 @@ shopping-selected-recipes = Ausgewählte Rezepte
 shopping-clear-all = Alles löschen
 shopping-in-pantry = In Ihrer Vorratskammer
 shopping-remove = Entfernen
+shopping-extra-items = Weitere Artikel
 shopping-add-recipes-first = Bitte fügen Sie zuerst einige Rezepte hinzu
 shopping-failed-to-generate = Einkaufsliste konnte nicht erstellt werden
 shopping-failed-to-add = Hinzufügen zur Einkaufsliste fehlgeschlagen

@@ -20,7 +20,9 @@
 use crate::fs_atomic::write_atomically;
 use crate::CoreError;
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang::shopping_list::{self, CheckEntry, RecipeItem, ShoppingList, ShoppingListItem};
+use cooklang::shopping_list::{
+    self, CheckEntry, IngredientItem, RecipeItem, ShoppingList, ShoppingListItem,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -59,6 +61,37 @@ pub struct StoredEntry {
     /// The recipes in a menu entry, or `None` for a plain recipe entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipes: Option<Vec<StoredEntry>>,
+}
+
+/// Something on the shopping list that no recipe on it calls for: a
+/// free-hand line of `.shopping-list`, such as `almonds{50%g}` or
+/// `paper towels`.
+///
+/// The format has always allowed them at the top level of the list; the
+/// Cooklang apps write them for items typed in by hand, and a menu's days
+/// added one by one leave the ingredients written straight into the menu here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FreeHandItem {
+    /// The ingredient's name, e.g. `almonds`.
+    pub name: String,
+    /// The amount as the format writes it, `50%g` or `2`, or `None` for no
+    /// amount at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<String>,
+}
+
+impl FreeHandItem {
+    /// The item as a Cooklang ingredient without its `@`: `almonds{50%g}`, or
+    /// `paper towels{}` when it has no amount. What
+    /// [`GenerateRequest::extra_items`](super::GenerateRequest::extra_items)
+    /// and [`add_extra_item`](super::add_extra_item) take.
+    pub fn spec(&self) -> String {
+        format!(
+            "{}{{{}}}",
+            self.name,
+            self.quantity.as_deref().unwrap_or("")
+        )
+    }
 }
 
 /// Reads and writes the `.shopping-list` / `.shopping-checked` pair beside a
@@ -238,19 +271,65 @@ impl ShoppingListStore {
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
 
-        // Store included references as child recipe entries.
-        // Strip leading "./" from reference paths — the format writer adds it back.
-        let children = match item.included_references {
-            Some(refs) => refs.into_iter().map(child_reference).collect(),
-            None => Vec::new(),
-        };
+        list.items.push(recipe_item(item));
+        self.save_list(&list)
+    }
 
-        list.items.push(ShoppingListItem::Recipe(RecipeItem {
-            path: item.path,
-            multiplier: to_multiplier(item.scale),
-            children,
-            optional: false,
+    /// The free-hand items on the list, in the order they were added.
+    ///
+    /// Only the top level: an ingredient nested under a recipe belongs to that
+    /// recipe's entry, not to the list.
+    pub fn load_free_hand(&self) -> Result<Vec<FreeHandItem>, CoreError> {
+        self.migrate_if_needed()?;
+        let list = self.load_list()?;
+        Ok(list
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ShoppingListItem::Ingredient(ingredient) => Some(FreeHandItem {
+                    name: ingredient.name.clone(),
+                    quantity: ingredient.quantity.clone(),
+                }),
+                ShoppingListItem::Recipe(_) => None,
+            })
+            .collect())
+    }
+
+    /// Add recipes and free-hand items in one go: each recipe as
+    /// [`add`](Self::add) would, then each item as a free-hand line, all in a
+    /// single write so the list is never seen with half of them.
+    pub fn add_all(
+        &self,
+        recipes: Vec<StoredEntry>,
+        items: Vec<FreeHandItem>,
+    ) -> Result<(), CoreError> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        list.items.extend(recipes.into_iter().map(recipe_item));
+        list.items.extend(items.into_iter().map(|item| {
+            ShoppingListItem::Ingredient(IngredientItem {
+                name: item.name,
+                quantity: item.quantity,
+                optional: false,
+            })
         }));
+        self.save_list(&list)
+    }
+
+    /// Remove the first free-hand item with this name and amount, and do
+    /// nothing if there is none. Compaction is the caller's, as for
+    /// [`remove`](Self::remove).
+    pub fn remove_free_hand(&self, item: &FreeHandItem) -> Result<(), CoreError> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        if let Some(pos) = list.items.iter().position(|i| match i {
+            ShoppingListItem::Ingredient(ingredient) => {
+                ingredient.name == item.name && ingredient.quantity == item.quantity
+            }
+            ShoppingListItem::Recipe(_) => false,
+        }) {
+            list.items.remove(pos);
+        }
         self.save_list(&list)
     }
 
@@ -413,6 +492,22 @@ impl ShoppingListStore {
 }
 
 // -- Conversion helpers --
+
+/// A recipe entry as `.shopping-list` stores it: its included references
+/// become child entries.
+fn recipe_item(item: StoredEntry) -> ShoppingListItem {
+    // Strip leading "./" from reference paths — the format writer adds it back.
+    let children = match item.included_references {
+        Some(refs) => refs.into_iter().map(child_reference).collect(),
+        None => Vec::new(),
+    };
+    ShoppingListItem::Recipe(RecipeItem {
+        path: item.path,
+        multiplier: to_multiplier(item.scale),
+        children,
+        optional: false,
+    })
+}
 
 /// A sub-recipe reference as it is stored under its parent. The `./` a
 /// reference is written with is stripped, because the format writer adds it

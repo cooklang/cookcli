@@ -633,6 +633,20 @@
         @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
     }
 
+    /* ---------- Meal plan ---------- */
+    /* Day cards of the planner. The page script marks today and the days
+       gone by against the reader's own clock. */
+    .plan-day-today {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+    }
+    .plan-day-past {
+        background: var(--surface-sunk);
+    }
+    .plan-day-past > h2 {
+        color: var(--text-faint);
+    }
+
     /* ---------- Pantry ---------- */
     /* main's four-line stat block. The transparent border keeps the box from
        shifting when a state border appears. */

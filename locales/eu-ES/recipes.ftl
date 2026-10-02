@@ -43,6 +43,14 @@ meta-description = Deskribapena
 
 # Recipe Types
 recipe-type-menu = Menua
+recipe-type-plan = Otordu-plana
+plan-outside = Plan honetatik kanpo
+plan-nothing-planned = Ezer ez aurreikusita
+plan-pick-label = Erosketa-zerrendarako egunak
+plan-pick-all = Guztiak
+plan-pick-week = Hurrengo 7 egunak
+plan-pick-none = Bat ere ez
+plan-add-days = Gehitu egunak erosketa-zerrendara
 
 # Today's Menu Banner
 todays-menu-title = Gaurko menua

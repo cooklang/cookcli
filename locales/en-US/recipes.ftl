@@ -47,6 +47,14 @@ meta-description = Description
 
 # Recipe Types
 recipe-type-menu = Menu
+recipe-type-plan = Meal Plan
+plan-outside = Outside this plan
+plan-nothing-planned = Nothing planned
+plan-pick-label = Days for the shopping list
+plan-pick-all = All
+plan-pick-week = Next 7 days
+plan-pick-none = None
+plan-add-days = Add days to shopping list
 
 # Today's Menu Banner
 todays-menu-title = Today's Menu

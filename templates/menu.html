@@ -1,5 +1,70 @@
 {% extends "base.html" %}
 
+{# One item of a menu line: a linked recipe, an ingredient, or text. `short`
+   names a recipe without its folders, for the planner's narrow day cards. #}
+{% macro menu_item(item, short) %}
+{% match item %}
+{% when crate::web::templates::MenuSectionItem::Text with (text) %}
+    <span class="text-text">{{ text }}</span>
+{% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
+    <span class="inline-flex items-center gap-1">
+        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+           class="text-info font-medium hover:underline"{% if short %} title="{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}"{% endif %}>
+            {% if short %}{{ name.rsplit("/").next().unwrap_or(name.as_str()) }}{% else %}{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}{% endif %}
+        </a>
+        {% match scale %}
+        {% when Some with (s) %}
+            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
+        {% when None %}
+        {% endmatch %}
+    </span>
+{% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
+    <span class="inline-flex items-center gap-1">
+        <span class="ingredient-badge">
+            {{ name }}
+            {% match quantity %}
+            {% when Some with (q) %}
+                <span>{{ q }}</span>
+            {% when None %}
+            {% endmatch %}
+            {% match unit %}
+            {% when Some with (u) %}
+                <span class="font-normal text-muted">{{ u }}</span>
+            {% when None %}
+            {% endmatch %}
+        </span>
+    </span>
+{% endmatch %}
+{% endmacro %}
+
+{# A section of the menu as a card: its name, then its lines, a line that is
+   only `Name:` being a meal heading. #}
+{% macro section_card(section) %}
+<div class="menu-section card overflow-hidden">
+    {% match section.name %}
+    {% when Some with (section_name) %}
+    <div class="menu-section-header bg-sunk border-b border-line px-6 py-3">
+        <h2 class="text-title font-semibold text-text">{{ section_name }}</h2>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
+    <div class="menu-section-body p-6 space-y-2">
+        {% for line in section.lines %}
+        {% match crate::web::templates::meal_header(line) %}
+        {% when Some with (header) %}
+        <!-- Meal type header -->
+        <h3 class="text-title font-semibold text-text mt-2 mb-1">{{ header }}</h3>
+        {% when None %}
+        <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
+            {% for item in line %}{% call menu_item(item, false) %}{% endfor %}
+        </div>
+        {% endmatch %}
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
 {% block title %}{{ name }} - Cook{% endblock %}
 
 {% block content %}
@@ -36,7 +101,7 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 print:mb-1">
             <div class="flex items-center gap-3">
                 <h1 class="text-display font-bold text-text print:text-2xl">{{ name }}</h1>
-                <span class="tag print:hidden">{{ tr.t("recipe-type-menu") }}</span>
+                <span class="tag print:hidden">{% if plan.is_some() %}{{ tr.t("recipe-type-plan") }}{% else %}{{ tr.t("recipe-type-menu") }}{% endif %}</span>
             </div>
             {% if !static_mode %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
@@ -187,114 +252,100 @@
         </div>
     </div>
 
+    {% match plan %}
+    {% when Some with (plan) %}
+    <!-- Meal plan: one card a day, in calendar rows from md up -->
+    <div id="plan">
+        {% if !static_mode && viewer.can_edit_lists() %}
+        <!-- Some days to the shopping list: tick the days, then add them. -->
+        <div id="plan-pick" class="flex flex-wrap items-center gap-2 mb-4 print:hidden" role="group" aria-label="{{ tr.t("plan-pick-label") }}">
+            <span class="text-sm font-medium text-muted">{{ tr.t("plan-pick-label") }}:</span>
+            <button type="button" class="btn btn-sm" data-plan-pick="all">{{ tr.t("plan-pick-all") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="week">{{ tr.t("plan-pick-week") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="none">{{ tr.t("plan-pick-none") }}</button>
+            <button type="button" id="plan-add-days" class="btn btn-sm" disabled onclick="addDaysToShoppingList(event)">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span>{{ tr.t("plan-add-days") }}</span>
+                <span id="plan-pick-count" class="tag">0</span>
+            </button>
+        </div>
+        {% endif %}
+        <div class="hidden md:grid grid-cols-7 gap-2 mb-2" aria-hidden="true">
+            {% for weekday in plan.weekdays %}
+            <div class="px-3 text-sm font-medium text-muted">{{ weekday }}</div>
+            {% endfor %}
+        </div>
+        <ol class="grid grid-cols-1 md:grid-cols-7 gap-2">
+            {% for week in plan.weeks %}
+            {% for cell in week %}
+            {% match cell %}
+            {% when Some with (day) %}
+            <li class="plan-day card p-3" data-date="{{ day.date }}">
+                <h2 class="text-sm font-semibold text-text">{% if !static_mode && viewer.can_edit_lists() %}<label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" class="plan-day-pick w-4 h-4 accent-[var(--accent)] print:hidden" value="{{ day.date }}"><time datetime="{{ day.date }}">{{ day.label }}</time></label>{% else %}<time datetime="{{ day.date }}">{{ day.label }}</time>{% endif %}</h2>
+                {% for meal in day.meals %}
+                <div class="mt-2">
+                    {% if let Some(meal_name) = meal.name %}
+                    <h3 class="text-xs font-medium text-muted">{{ meal_name }}{% if let Some(time) = meal.time %} · {{ time }}{% endif %}</h3>
+                    {% endif %}
+                    {% if meal.lines.is_empty() %}
+                    <p class="text-sm text-faint"><span aria-hidden="true">—</span><span class="sr-only">{{ tr.t("plan-nothing-planned") }}</span></p>
+                    {% else %}
+                    {% for line in meal.lines %}
+                    <div class="text-sm flex flex-wrap items-baseline gap-x-1">
+                        {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </li>
+            {% when None %}
+            <li class="hidden md:block" aria-hidden="true"></li>
+            {% endmatch %}
+            {% endfor %}
+            {% endfor %}
+        </ol>
+
+        {% if !plan.outside.is_empty() %}
+        <h2 class="text-title font-semibold text-text mt-8 mb-4">{{ tr.t("plan-outside") }}</h2>
+        <div class="space-y-6">
+            {% for section in plan.outside %}{% call section_card(section) %}{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <script>
+    // Marks today and dims the days gone by. Done here rather than on the
+    // server so a static site, or a server in another time zone, still
+    // agrees with the reader's calendar.
+    (function () {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        let todayCell = null;
+        document.querySelectorAll('#plan .plan-day[data-date]').forEach(cell => {
+            if (cell.dataset.date === today) {
+                cell.classList.add('plan-day-today');
+                cell.setAttribute('aria-current', 'date');
+                todayCell = cell;
+            } else if (cell.dataset.date < today) {
+                cell.classList.add('plan-day-past');
+            }
+        });
+        // One column on small screens: start at today rather than at day 1.
+        if (todayCell && todayCell.previousElementSibling &&
+                window.matchMedia('(max-width: 767px)').matches) {
+            todayCell.scrollIntoView({ block: 'start' });
+        }
+    })();
+    </script>
+    {% when None %}
     <!-- Menu sections -->
     <div class="space-y-6">
-            {% for section in sections %}
-            <div class="menu-section card overflow-hidden">
-                {% match section.name %}
-                {% when Some with (name) %}
-                <div class="menu-section-header bg-sunk border-b border-line px-6 py-3">
-                    <h2 class="text-title font-semibold text-text">{{ name }}</h2>
-                </div>
-                {% when None %}
-                {% endmatch %}
-
-                <div class="menu-section-body p-6 space-y-2">
-                    {% for line in section.lines %}
-                    {% if line.len() == 1 %}
-                        {% match line[0] %}
-                        {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                            {% if text.trim().ends_with(":") %}
-                            <!-- Meal type header -->
-                            <h3 class="text-title font-semibold text-text mt-2 mb-1">{{ text }}</h3>
-                            {% else %}
-                            <!-- Regular text line -->
-                            <div class="pl-6">
-                                <span class="text-text">{{ text }}</span>
-                            </div>
-                            {% endif %}
-                        {% when _ %}
-                            <!-- Single non-text item -->
-                            <div class="pl-6 flex items-baseline gap-x-2">
-                                {% match line[0] %}
-                                {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
-                                           class="text-info font-medium hover:underline">
-                                            {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                        </a>
-                                        {% match scale %}
-                                        {% when Some with (s) %}
-                                            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <span class="ingredient-badge">
-                                            {{ name }}
-                                            {% match quantity %}
-                                            {% when Some with (q) %}
-                                                <span>{{ q }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                            {% match unit %}
-                                            {% when Some with (u) %}
-                                                <span class="font-normal text-muted">{{ u }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                        </span>
-                                    </span>
-                                {% when _ %}
-                                {% endmatch %}
-                            </div>
-                        {% endmatch %}
-                    {% else %}
-                    <!-- Multi-item line (meal item with ingredients) -->
-                    <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
-                        {% for item in line %}
-                            {% match item %}
-                            {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                                <span class="text-text">{{ text }}</span>
-
-                            {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
-                                       class="text-info font-medium hover:underline">
-                                        {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                    </a>
-                                    {% match scale %}
-                                    {% when Some with (s) %}
-                                        <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
-                                    {% when None %}
-                                    {% endmatch %}
-                                </span>
-
-                            {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <span class="ingredient-badge">
-                                        {{ name }}
-                                        {% match quantity %}
-                                        {% when Some with (q) %}
-                                            <span>{{ q }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                        {% match unit %}
-                                        {% when Some with (u) %}
-                                            <span class="font-normal text-muted">{{ u }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                </span>
-                            {% endmatch %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
+            {% for section in sections %}{% call section_card(section) %}{% endfor %}
     </div>
+    {% endmatch %}
 </div>
 
 {% if !static_mode %}
@@ -342,18 +393,90 @@ function goToScale(value) {
     window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
 }
 
+// The factor the list wants: the servings stepper holds servings.
+function chosenScale() {
+    const scaleInput = document.getElementById(SCALE_PARAM);
+    let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
+    if (scaleInput && scaleInput.dataset.baseServings) {
+        scale /= parseFloat(scaleInput.dataset.baseServings);
+    }
+    return scale;
+}
+
+// Day pickers of a meal plan: which days go to the shopping list.
+function pickedDays() {
+    return [...document.querySelectorAll('#plan .plan-day-pick:checked')].map(box => box.value);
+}
+
+function updatePickedDays() {
+    const days = pickedDays();
+    const count = document.getElementById('plan-pick-count');
+    const add = document.getElementById('plan-add-days');
+    if (!count || !add) return;
+    count.textContent = days.length;
+    add.disabled = days.length === 0;
+    add.classList.toggle('btn-primary', days.length > 0);
+}
+
+document.querySelectorAll('[data-plan-pick]').forEach(button => {
+    button.addEventListener('click', () => {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const today = iso(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 6);
+        const last = iso(end);
+        document.querySelectorAll('#plan .plan-day-pick').forEach(box => {
+            switch (button.dataset.planPick) {
+                case 'all': box.checked = true; break;
+                case 'none': box.checked = false; break;
+                // The next seven days, today included.
+                case 'week': box.checked = box.value >= today && box.value <= last; break;
+            }
+        });
+        updatePickedDays();
+    });
+});
+document.addEventListener('change', event => {
+    if (event.target.closest('.plan-day-pick')) updatePickedDays();
+});
+
+async function addDaysToShoppingList(event) {
+    const button = event.currentTarget;
+    const label = button.querySelector('span');
+    const original = label.textContent;
+    const dates = pickedDays();
+    if (dates.length === 0) return;
+    let message;
+    let ok = false;
+    try {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: {{ recipe_path|json|safe }}, scale: chosenScale(), dates })
+        });
+        ok = response.ok;
+        message = ok ? {{ tr.t("recipe-added")|json|safe }} : {{ tr.t("shopping-failed-to-add")|json|safe }};
+    } catch (error) {
+        console.error('Error:', error);
+        message = {{ tr.t("shopping-error")|json|safe }};
+    }
+    label.textContent = message;
+    button.classList.add(ok ? 'text-ok' : 'text-danger');
+    setTimeout(() => {
+        label.textContent = original;
+        button.classList.remove('text-ok', 'text-danger');
+    }, 2000);
+}
+
 async function addToShoppingList(event, recipePath) {
     event.preventDefault();
     const button = event.currentTarget;
     const originalText = button.innerHTML;
 
     try {
-        // The servings stepper holds servings; the list wants the factor.
-        const scaleInput = document.getElementById(SCALE_PARAM);
-        let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
-        if (scaleInput && scaleInput.dataset.baseServings) {
-            scale /= parseFloat(scaleInput.dataset.baseServings);
-        }
+        const scale = chosenScale();
         const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
             method: 'POST',
             headers: {

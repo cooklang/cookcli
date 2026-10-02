@@ -1,4 +1,4 @@
-use crate::server::handlers::common::check_path;
+use crate::server::handlers::common::{check_path, ApiError};
 use crate::server::{activity, AppState};
 use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
@@ -11,12 +11,15 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingListStore,
-    StoredEntry,
+    add_extra_item, extract_ingredients, recipe_display_name, ExtractOptions, FreeHandItem,
+    ScaledRecipe, ShoppingListStore, StoredEntry,
 };
 use cooklang::ingredient_list::IngredientList;
+use cooklang::quantity::GroupedQuantity;
+use cooklang::Recipe;
 use serde::Deserialize;
 use serde_json;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -27,14 +30,37 @@ pub struct RecipeRequest {
     included_references: Option<Vec<String>>,
 }
 
+/// One thing for [`shopping_list`] to put on the list: a recipe, or a
+/// free-hand item in the shape `/api/shopping_list/extra_items` returns.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum ListRequest {
+    Recipe(RecipeRequest),
+    Item(FreeHandItem),
+}
+
 pub async fn shopping_list(
     State(state): State<Arc<AppState>>,
-    axum::extract::Json(payload): axum::extract::Json<Vec<RecipeRequest>>,
+    axum::extract::Json(payload): axum::extract::Json<Vec<ListRequest>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut list = IngredientList::new();
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
 
     for entry in payload {
+        let entry = match entry {
+            ListRequest::Recipe(entry) => entry,
+            ListRequest::Item(item) => {
+                // Merged into the list like the CLI's `--extra` items: same
+                // name, same aisle, same pantry subtraction.
+                add_extra_item(&item.spec(), &mut list).map_err(|e| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "error": e.to_string() })),
+                    )
+                })?;
+                continue;
+            }
+        };
         let name = entry.recipe;
         // Straight to `cooklang_find`, which joins it to the recipe directory
         // and asks the filesystem. Checked before that happens, not after:
@@ -301,12 +327,18 @@ pub async fn remove_from_shopping_list(
         ),
     );
 
-    // Compact the checked log now that one recipe is gone: stale checks
-    // (ingredients no longer referenced by any remaining recipe) can drop.
-    // Best-effort — a failure here must not break the remove itself.
-    // Serialize against concurrent check/uncheck/compact.
+    compact_after_remove(&state, &store).await;
+
+    Ok(StatusCode::OK)
+}
+
+/// Compact the checked log once something has left the list: stale checks
+/// (ingredients nothing remaining asks for) can drop. Best-effort — a failure
+/// here must not break the remove itself. Serialized against concurrent
+/// check/uncheck/compact.
+async fn compact_after_remove(state: &AppState, store: &ShoppingListStore) {
     let _guard = state.checked_log_lock.lock().await;
-    match aggregate_current_ingredient_names(&state) {
+    match aggregate_current_ingredient_names(state) {
         Ok(names) => {
             if let Err(e) = store.compact(names) {
                 tracing::warn!("Failed to compact checked log after remove: {:?}", e);
@@ -317,6 +349,46 @@ pub async fn remove_from_shopping_list(
             e
         ),
     }
+}
+
+/// The free-hand items on the list: lines no recipe put there, such as the
+/// ingredients written straight into a menu whose days were added.
+pub async fn get_extra_items(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<FreeHandItem>>, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let items = store.load_free_hand().map_err(|e| {
+        tracing::error!("Failed to load shopping list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    Ok(Json(items))
+}
+
+pub async fn remove_extra_item(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(payload): Json<FreeHandItem>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    store.remove_free_hand(&payload).map_err(|e| {
+        tracing::error!("Failed to remove from shopping list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+    activity::record(
+        &viewer,
+        format_args!(
+            "removed {} from the shopping list",
+            activity::quoted(&payload.spec())
+        ),
+    );
+
+    compact_after_remove(&state, &store).await;
 
     Ok(StatusCode::OK)
 }
@@ -502,6 +574,11 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         }
     }
 
+    for item in store.load_free_hand()? {
+        add_extra_item(&item.spec(), &mut list)
+            .with_context(|| format!("aggregating free-hand item {}", item.spec()))?;
+    }
+
     Ok(list.iter().map(|(name, _)| name.clone()).collect())
 }
 
@@ -511,16 +588,33 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
 pub struct AddMenuRequest {
     pub path: String,
     pub scale: f64,
+    /// Only the days with these dates (`YYYY-MM-DD`), as the menu's dated
+    /// sections name them. Without it the whole menu is added.
+    #[serde(default)]
+    pub dates: Option<Vec<String>>,
 }
 
-/// Add all recipe references from a menu to the shopping list as a single
-/// plan entry with recipes nested inside.
+/// The most days one request may ask for: a year and then some.
+const MAX_DAYS: usize = 400;
+
+/// Add a menu to the shopping list.
+///
+/// The whole menu goes on as a single entry with its recipes nested inside,
+/// its own free-hand ingredients read from the menu when the list is made.
+///
+/// Some of its days (`dates`) cannot be stored that way: the format reads a
+/// menu entry as the whole menu plus the listed recipes, so every day's
+/// free-hand ingredients would come along. Those days' recipes go on as
+/// recipe entries instead, as if added one by one, and their free-hand
+/// ingredients as free-hand lines — both native to the format, so the Cooklang
+/// apps read them too.
 pub async fn add_menu_to_shopping_list(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
     Json(payload): Json<AddMenuRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     check_path(&payload.path)?;
+    let dates = payload.dates.as_deref().map(chosen_dates).transpose()?;
 
     let store = ShoppingListStore::new(&state.base_path);
     let menu_scale = payload.scale;
@@ -545,6 +639,11 @@ pub async fn add_menu_to_shopping_list(
         )
     })?;
 
+    // The ingredients the chosen days use, or every one without a choice.
+    let chosen = dates
+        .as_ref()
+        .map(|dates| ingredients_on_days(&menu, dates));
+
     let mut recipes = Vec::new();
 
     // What a `..` in one of the menu's references steps up from. `payload.path`
@@ -555,7 +654,13 @@ pub async fn add_menu_to_shopping_list(
         .map(Utf8Path::to_owned)
         .unwrap_or_default();
 
-    for ingredient in &menu.ingredients {
+    for (index, ingredient) in menu.ingredients.iter().enumerate() {
+        if chosen
+            .as_ref()
+            .is_some_and(|chosen| !chosen.contains(&index))
+        {
+            continue;
+        }
         if let Some(ref recipe_ref) = ingredient.reference {
             // Build display path from reference components
             let ref_display = if recipe_ref.components.is_empty() {
@@ -616,21 +721,216 @@ pub async fn add_menu_to_shopping_list(
         }
     }
 
+    let failed = |e: cookcli_core::CoreError| {
+        tracing::error!("Failed to add menu to shopping list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    };
+
+    let (Some(dates), Some(chosen)) = (dates, chosen) else {
+        let added = format!(
+            "added menu {}{} to the shopping list",
+            activity::quoted(&payload.path),
+            scaled(menu_scale)
+        );
+        store
+            .add_menu(payload.path, menu_scale, recipes)
+            .map_err(failed)?;
+        activity::record(&viewer, added);
+        return Ok(StatusCode::OK);
+    };
+
+    // Free-hand amounts at the menu's scale. Indices match the unscaled parse:
+    // scaling rewrites quantities in place.
+    let scaled_menu = crate::util::parse_recipe_from_entry(&entry, menu_scale).map_err(|e| {
+        tracing::error!("Failed to parse menu: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
+        )
+    })?;
+    let items = free_hand_items(&scaled_menu, &chosen);
+
     let added = format!(
-        "added menu {}{} to the shopping list",
+        "added {} of menu {}{} to the shopping list",
+        match dates.len() {
+            1 => "1 day".to_string(),
+            n => format!("{n} days"),
+        },
         activity::quoted(&payload.path),
         scaled(menu_scale)
     );
-    store
-        .add_menu(payload.path, menu_scale, recipes)
-        .map_err(|e| {
-            tracing::error!("Failed to add menu to shopping list: {:?}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": e.to_string() })),
-            )
-        })?;
+    store.add_all(recipes, items).map_err(failed)?;
     activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
+}
+
+/// The dates a request chose, checked: each a `YYYY-MM-DD` date, at least one,
+/// at most [`MAX_DAYS`].
+fn chosen_dates(dates: &[String]) -> Result<BTreeSet<String>, ApiError> {
+    let refuse = |message: String| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": message })),
+        )
+    };
+    if dates.is_empty() {
+        return Err(refuse("No days to add".to_string()));
+    }
+    if dates.len() > MAX_DAYS {
+        return Err(refuse(format!("At most {MAX_DAYS} days at a time")));
+    }
+    dates
+        .iter()
+        .map(|date| {
+            chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                .map(|day| day.format("%Y-%m-%d").to_string())
+                .map_err(|_| refuse(format!("Not a date (YYYY-MM-DD): {date}")))
+        })
+        .collect()
+}
+
+/// The indices of the ingredients written in the menu's sections dated one of
+/// `dates` — recipe references and free-hand ingredients alike.
+fn ingredients_on_days(menu: &Recipe, dates: &BTreeSet<String>) -> BTreeSet<usize> {
+    let mut chosen = BTreeSet::new();
+    for section in &menu.sections {
+        let on_a_chosen_day = section
+            .name
+            .as_deref()
+            .and_then(crate::web::menus::extract_date)
+            .is_some_and(|date| dates.contains(&date));
+        if !on_a_chosen_day {
+            continue;
+        }
+        for content in &section.content {
+            if let cooklang::Content::Step(step) = content {
+                for item in &step.items {
+                    if let cooklang::Item::Ingredient { index } = item {
+                        chosen.insert(*index);
+                    }
+                }
+            }
+        }
+    }
+    chosen
+}
+
+/// The free-hand ingredients among `chosen`, as shopping list lines: the ones
+/// a list made from the whole menu would show (not recipe references, not
+/// hidden), merged by name, in the order the menu first names them.
+fn free_hand_items(menu: &Recipe, chosen: &BTreeSet<usize>) -> Vec<FreeHandItem> {
+    let converter = PARSER.converter();
+    let mut list = IngredientList::new();
+    for &index in chosen {
+        let Some(ingredient) = menu.ingredients.get(index) else {
+            continue;
+        };
+        if ingredient.reference.is_some() || !ingredient.modifiers().should_be_listed() {
+            continue;
+        }
+        let mut quantity = GroupedQuantity::empty();
+        if let Some(q) = &ingredient.quantity {
+            quantity.add(q, converter);
+        }
+        list.add_ingredient(ingredient.display_name().into_owned(), &quantity, converter);
+    }
+
+    let mut items = Vec::new();
+    for (name, quantity) in list.iter() {
+        let components = crate::util::format::quantity::ordered_components(quantity);
+        if components.is_empty() {
+            items.push(FreeHandItem {
+                name: name.clone(),
+                quantity: None,
+            });
+        }
+        for component in components {
+            items.push(FreeHandItem {
+                name: name.clone(),
+                quantity: Some(quantity_spec(component)),
+            });
+        }
+    }
+    items
+}
+
+/// A quantity as the shopping list format writes one: `50%g`, `1/2%cup`,
+/// `2-3`, `2`.
+fn quantity_spec(quantity: &cooklang::Quantity) -> String {
+    use crate::util::format::number::format_number;
+    let value = match quantity.value() {
+        cooklang::Value::Number(n) => format_number(n.value()),
+        cooklang::Value::Range { start, end } => format!(
+            "{}-{}",
+            format_number(start.value()),
+            format_number(end.value())
+        ),
+        cooklang::Value::Text(text) => text.clone(),
+    };
+    match quantity.unit() {
+        Some(unit) => format!("{value}%{unit}"),
+        None => value,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn menu(text: &str) -> Recipe {
+        PARSER.parse(text).into_output().expect("the menu parses")
+    }
+
+    fn dates(dates: &[&str]) -> BTreeSet<String> {
+        dates.iter().map(|d| d.to_string()).collect()
+    }
+
+    const MENU: &str = "== Mon (2026-10-05) ==\n\nLunch: \\\n- @./Soup{} \\\n- @almonds{50%g}\n\n\
+        == Tue (2026-10-06) ==\n\n- @bread{1%loaf}\n\n\
+        == Wed (2026-10-07) ==\n\n- @almonds{1/2%cup} \\\n- @almonds{25%g} \\\n- @pepper\n\n\
+        == Later ==\n\n- @eggs{6}\n";
+
+    fn names(menu: &Recipe, chosen: &BTreeSet<usize>) -> Vec<String> {
+        chosen
+            .iter()
+            .map(|&i| menu.ingredients[i].name.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn only_the_sections_of_the_chosen_dates_count() {
+        let menu = menu(MENU);
+        let chosen = ingredients_on_days(&menu, &dates(&["2026-10-05", "2027-01-01"]));
+        assert_eq!(names(&menu, &chosen), ["Soup", "almonds"]);
+
+        assert!(ingredients_on_days(&menu, &dates(&["2026-10-08"])).is_empty());
+    }
+
+    #[test]
+    fn free_hand_items_merge_by_name_and_keep_units_apart() {
+        let menu = menu(MENU);
+        let chosen = ingredients_on_days(&menu, &dates(&["2026-10-05", "2026-10-07"]));
+        let items: Vec<String> = free_hand_items(&menu, &chosen)
+            .iter()
+            .map(FreeHandItem::spec)
+            .collect();
+        // The recipe reference is not on the list; units that cannot be
+        // added up stay apart.
+        assert_eq!(items, ["almonds{1/2%cup}", "almonds{75%g}", "pepper{}"]);
+    }
+
+    #[test]
+    fn chosen_dates_are_checked() {
+        assert_eq!(
+            chosen_dates(&["2026-10-07".into(), "2026-10-05".into()]).unwrap(),
+            dates(&["2026-10-05", "2026-10-07"])
+        );
+        assert!(chosen_dates(&[]).is_err());
+        assert!(chosen_dates(&["2026-13-01".into()]).is_err());
+        assert!(chosen_dates(&vec!["2026-10-05".to_string(); MAX_DAYS + 1]).is_err());
+    }
 }

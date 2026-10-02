@@ -17,6 +17,7 @@ shopping-selected-recipes = 選んだレシピ
 shopping-clear-all = すべてクリア
 shopping-in-pantry = 在庫にあるもの
 shopping-remove = 削除
+shopping-extra-items = その他の品目
 shopping-add-recipes-first = 先にレシピを追加してください
 shopping-failed-to-generate = 買い物リストを作成できませんでした
 shopping-failed-to-add = 買い物リストに追加できませんでした

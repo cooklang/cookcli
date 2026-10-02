@@ -39,6 +39,14 @@ meta-description = 説明
 
 # Recipe Types
 recipe-type-menu = 献立
+recipe-type-plan = 食事計画
+plan-outside = この計画の期間外
+plan-nothing-planned = 予定なし
+plan-pick-label = 買い物リストに入れる日
+plan-pick-all = すべて
+plan-pick-week = 今後7日間
+plan-pick-none = なし
+plan-add-days = 選んだ日を買い物リストに追加
 
 # Today's Menu Banner
 todays-menu-title = 今日の献立
