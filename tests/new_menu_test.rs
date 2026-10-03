@@ -227,8 +227,14 @@ async fn spaces_around_names_and_folders_are_dropped() {
         assert_eq!(location(&resp), format!("/edit/{file}"), "{typed:?}");
         assert!(server.recipes().join(file).is_file(), "{file} must exist");
     }
-    assert!(!server.recipes().join("Mains ").exists());
-    assert!(!server.recipes().join("Plans ").exists());
+    // Listed rather than probed with `exists()`: Windows drops trailing
+    // spaces when it resolves a path, so `Mains ` would find `Mains`.
+    let padded: Vec<String> = std::fs::read_dir(server.recipes())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.trim() != name)
+        .collect();
+    assert!(padded.is_empty(), "{padded:?}");
 
     let content = std::fs::read_to_string(server.recipes().join("Mains/Beef  Stew.cook")).unwrap();
     assert_eq!(content, "---\ntitle: Beef  Stew\n---\n\n");

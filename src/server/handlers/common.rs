@@ -259,15 +259,18 @@ mod tests {
 
     /// A file made with spaces around its name before they were refused can
     /// still be opened, saved and deleted.
+    ///
+    /// Leading spaces only: Windows drops trailing ones from a file or folder
+    /// name, so ` Stew .cook` cannot be made there to begin with.
     #[test]
     fn an_existing_file_with_spaces_around_its_name_still_resolves() {
         let (_dir, base) = collection();
-        std::fs::create_dir_all(base.join("Mains ")).unwrap();
-        std::fs::write(base.join("Mains / Stew .cook"), "x").unwrap();
+        std::fs::create_dir_all(base.join(" Mains")).unwrap();
+        std::fs::write(base.join(" Mains/ Stew.cook"), "x").unwrap();
 
         assert_eq!(
-            resolve(&base, "Mains / Stew "),
-            RecipeFile::Existing(base.join("Mains / Stew .cook"))
+            resolve(&base, " Mains/ Stew"),
+            RecipeFile::Existing(base.join(" Mains/ Stew.cook"))
         );
     }
 
