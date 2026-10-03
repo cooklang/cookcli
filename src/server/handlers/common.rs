@@ -63,29 +63,57 @@ pub enum RecipeFile {
 /// existed there, so `PUT /api/recipes/config/aisle.conf` overwrote the aisle
 /// configuration and `DELETE` removed any file in the directory (#545). They
 /// all go through here now, so they cannot drift apart again.
+///
+/// A file that does not exist yet is refused when a folder or file name in
+/// `path` starts or ends with whitespace, as `POST /new` never makes one: a
+/// save would otherwise create ` Soup .cook` beside `Soup.cook`. One already
+/// on disk under such a name still resolves, so it can be opened and removed.
 pub fn recipe_file(base: &Utf8Path, path: &str) -> Result<RecipeFile, ApiError> {
     check_path(path)?;
 
     let named = base.join(path);
-    if named
+    let file = if named
         .extension()
         .is_some_and(|ext| RECIPE_FILE_EXTENSIONS.contains(&ext))
     {
-        return Ok(if named.is_file() {
+        if named.is_file() {
             RecipeFile::Existing(named)
         } else {
             RecipeFile::Missing(named)
-        });
-    }
-
-    let [cook, menu] =
-        RECIPE_FILE_EXTENSIONS.map(|ext| Utf8PathBuf::from(format!("{named}.{ext}")));
-    Ok(if cook.is_file() {
-        RecipeFile::Existing(cook)
-    } else if menu.is_file() {
-        RecipeFile::Existing(menu)
+        }
     } else {
-        RecipeFile::Missing(cook)
+        let [cook, menu] =
+            RECIPE_FILE_EXTENSIONS.map(|ext| Utf8PathBuf::from(format!("{named}.{ext}")));
+        if cook.is_file() {
+            RecipeFile::Existing(cook)
+        } else if menu.is_file() {
+            RecipeFile::Existing(menu)
+        } else {
+            RecipeFile::Missing(cook)
+        }
+    };
+
+    if matches!(file, RecipeFile::Missing(_)) && has_padded_name(path) {
+        tracing::error!("Refused to create a file with spaces around a name: {path:?}");
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!(
+                "Invalid path: {path:?}: a name cannot start or end with a space"
+            )),
+        ));
+    }
+    Ok(file)
+}
+
+/// Whether a folder or file name in `path` starts or ends with whitespace,
+/// leaving out a `.cook` or `.menu` extension: `Soup .cook` is padded too.
+fn has_padded_name(path: &str) -> bool {
+    path.split('/').any(|segment| {
+        let name = RECIPE_FILE_EXTENSIONS
+            .iter()
+            .find_map(|ext| segment.strip_suffix(ext)?.strip_suffix('.'))
+            .unwrap_or(segment);
+        name.trim() != name
     })
 }
 
@@ -206,6 +234,41 @@ mod tests {
         assert_eq!(resolve(&base, "Soup"), missing("Soup.cook"));
         assert_eq!(resolve(&base, "Soup.cook"), missing("Soup.cook"));
         assert_eq!(resolve(&base, "Week.menu"), missing("Week.menu"));
+    }
+
+    #[test]
+    fn a_new_file_cannot_have_spaces_around_a_name() {
+        let (_dir, base) = collection();
+        for path in [
+            " Soup",
+            "Soup ",
+            "Soup .cook",
+            " Week.menu",
+            "Folder /Soup",
+            " Mains/Soup.cook",
+        ] {
+            let (status, _) = recipe_file(&base, path).expect_err(path);
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{path:?}");
+        }
+        // Spaces inside a name are fine.
+        assert_eq!(
+            resolve(&base, "Beef and Beer Stew"),
+            RecipeFile::Missing(base.join("Beef and Beer Stew.cook"))
+        );
+    }
+
+    /// A file made with spaces around its name before they were refused can
+    /// still be opened, saved and deleted.
+    #[test]
+    fn an_existing_file_with_spaces_around_its_name_still_resolves() {
+        let (_dir, base) = collection();
+        std::fs::create_dir_all(base.join("Mains ")).unwrap();
+        std::fs::write(base.join("Mains / Stew .cook"), "x").unwrap();
+
+        assert_eq!(
+            resolve(&base, "Mains / Stew "),
+            RecipeFile::Existing(base.join("Mains / Stew .cook"))
+        );
     }
 
     #[test]

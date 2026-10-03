@@ -211,6 +211,40 @@ async fn a_recipe_is_still_the_default() {
     assert!(!page.contains(r#"data-action="add-recipe""#));
 }
 
+/// Spaces typed around a name or a folder are not part of it: they used to
+/// make a folder `Mains ` holding ` Stew .cook`.
+#[tokio::test]
+async fn spaces_around_names_and_folders_are_dropped() {
+    let server = start_server().await;
+
+    for (typed, kind, file) in [
+        (" Mains / Beef  Stew ", "recipe", "Mains/Beef  Stew.cook"),
+        ("  Plans /Week 13  ", "menu", "Plans/Week 13.menu"),
+    ] {
+        let resp = server.create(&[("filename", typed), ("kind", kind)]).await;
+
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER, "{typed:?}");
+        assert_eq!(location(&resp), format!("/edit/{file}"), "{typed:?}");
+        assert!(server.recipes().join(file).is_file(), "{file} must exist");
+    }
+    assert!(!server.recipes().join("Mains ").exists());
+    assert!(!server.recipes().join("Plans ").exists());
+
+    let content = std::fs::read_to_string(server.recipes().join("Mains/Beef  Stew.cook")).unwrap();
+    assert_eq!(content, "---\ntitle: Beef  Stew\n---\n\n");
+
+    // Nothing but spaces and slashes is still an empty name.
+    let resp = server
+        .create(&[("filename", " / "), ("kind", "recipe")])
+        .await;
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert!(
+        location(&resp).starts_with("/new?error="),
+        "{}",
+        location(&resp)
+    );
+}
+
 #[tokio::test]
 async fn an_unknown_kind_is_refused() {
     let server = start_server().await;

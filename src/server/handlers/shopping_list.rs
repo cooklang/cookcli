@@ -349,14 +349,32 @@ pub struct CheckItemRequest {
     pub name: String,
 }
 
+impl CheckItemRequest {
+    /// The ingredient's name, trimmed, as the checked log reads it back.
+    ///
+    /// A blank name only wrote a `+ ` line matching nothing, and a line break
+    /// would turn one request into several log entries, so both are refused.
+    fn ingredient(&self) -> Result<&str, (StatusCode, Json<serde_json::Value>)> {
+        let name = self.name.trim();
+        if name.is_empty() || name.contains(['\n', '\r']) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "Invalid ingredient name" })),
+            ));
+        }
+        Ok(name)
+    }
+}
+
 pub async fn check_shopping_item(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let name = payload.ingredient()?;
     let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
-    store.check(&payload.name).map_err(|e| {
+    store.check(name).map_err(|e| {
         tracing::error!("Failed to check item: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -367,7 +385,7 @@ pub async fn check_shopping_item(
         &viewer,
         format_args!(
             "checked off {} on the shopping list",
-            activity::quoted(&payload.name)
+            activity::quoted(name)
         ),
     );
     Ok(StatusCode::OK)
@@ -378,9 +396,10 @@ pub async fn uncheck_shopping_item(
     Extension(viewer): Extension<Viewer>,
     Json(payload): Json<CheckItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    let name = payload.ingredient()?;
     let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);
-    store.uncheck(&payload.name).map_err(|e| {
+    store.uncheck(name).map_err(|e| {
         tracing::error!("Failed to uncheck item: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -389,10 +408,7 @@ pub async fn uncheck_shopping_item(
     })?;
     activity::record(
         &viewer,
-        format_args!(
-            "unchecked {} on the shopping list",
-            activity::quoted(&payload.name)
-        ),
+        format_args!("unchecked {} on the shopping list", activity::quoted(name)),
     );
     Ok(StatusCode::OK)
 }
@@ -633,4 +649,30 @@ pub async fn add_menu_to_shopping_list(
     activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CheckItemRequest;
+
+    fn ingredient(name: &str) -> Option<String> {
+        CheckItemRequest {
+            name: name.to_string(),
+        }
+        .ingredient()
+        .ok()
+        .map(str::to_string)
+    }
+
+    #[test]
+    fn a_checked_name_is_trimmed() {
+        assert_eq!(ingredient("  olive oil "), Some("olive oil".to_string()));
+    }
+
+    #[test]
+    fn a_blank_or_multi_line_name_is_refused() {
+        for name in ["", "   ", "milk\n- eggs", "milk\r+ eggs"] {
+            assert_eq!(ingredient(name), None, "{name:?}");
+        }
+    }
 }

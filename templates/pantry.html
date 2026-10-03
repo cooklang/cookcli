@@ -359,12 +359,12 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             
             const data = {
-                section: document.getElementById('add-section').value,
-                name: document.getElementById('add-name').value,
-                quantity: document.getElementById('add-quantity').value || null,
-                bought: document.getElementById('add-bought').value || null,
-                expire: document.getElementById('add-expire').value || null,
-                low: document.getElementById('add-low').value || null
+                section: document.getElementById('add-section').value.trim(),
+                name: document.getElementById('add-name').value.trim(),
+                quantity: document.getElementById('add-quantity').value.trim() || null,
+                bought: document.getElementById('add-bought').value.trim() || null,
+                expire: document.getElementById('add-expire').value.trim() || null,
+                low: document.getElementById('add-low').value.trim() || null
             };
             
             try {

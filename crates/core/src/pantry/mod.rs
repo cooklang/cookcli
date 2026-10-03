@@ -754,9 +754,9 @@ fn most_wanted(missing: &[BTreeSet<String>]) -> Option<String> {
 /// keeps a literal working if it grows a field.
 #[derive(Debug, Clone, Default)]
 pub struct AddRequest {
-    /// The section to add it under, matched and written exactly as given —
-    /// unlike [`ListRequest::section`], case counts, so adding to `Dairy` when
-    /// the file says `dairy` makes a second section.
+    /// The section to add it under, matched and written exactly as given once
+    /// trimmed — unlike [`ListRequest::section`], case counts, so adding to
+    /// `Dairy` when the file says `dairy` makes a second section.
     pub section: String,
     /// The ingredient's name.
     pub name: String,
@@ -769,6 +769,36 @@ pub struct AddRequest {
     pub expire: Option<String>,
     /// The quantity at or below which it counts as low.
     pub low: Option<String>,
+}
+
+impl AddRequest {
+    /// The request with the spaces around each field taken off, and blank
+    /// attributes left unset. A blank section or name is refused.
+    fn trimmed(self) -> Result<Self, CoreError> {
+        let section = self.section.trim().to_string();
+        let name = self.name.trim().to_string();
+        for (what, value) in [("section", &section), ("item name", &name)] {
+            if value.is_empty() {
+                return Err(CoreError::PantryEdit {
+                    message: format!("the {what} cannot be empty"),
+                });
+            }
+        }
+
+        let attribute = |value: Option<String>| {
+            value
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        Ok(Self {
+            section,
+            name,
+            quantity: attribute(self.quantity),
+            bought: attribute(self.bought),
+            expire: attribute(self.expire),
+            low: attribute(self.low),
+        })
+    }
 }
 
 /// Which item to take out of the pantry.
@@ -810,6 +840,10 @@ pub struct UpdateRequest {
 /// is where [`Context::discover`] looks first. That is the one case where this
 /// crate invents a path rather than being told one.
 ///
+/// Spaces around the section, the name and each attribute are dropped first,
+/// and a blank attribute is left unset: the pantry is matched against recipe
+/// ingredients by name, and ` milk` would never match `milk`.
+///
 /// Returns the pantry as it now stands on disk, so a caller need not read it
 /// back, together with any warnings from parsing what was there before.
 ///
@@ -821,12 +855,13 @@ pub struct UpdateRequest {
 /// - [`CoreError::ReadOnlyConfig`] if the context carries the pantry inline.
 ///   There is nowhere to write it, and inventing a path would put an editor's
 ///   unsaved buffer on someone's disk.
-/// - [`CoreError::PantryEdit`] if the section already holds an item of that
-///   name, compared exactly. Nothing is written; [`update`] is how an item is
-///   changed.
+/// - [`CoreError::PantryEdit`] if the section or the name is blank, or if the
+///   section already holds an item of that name, compared exactly once
+///   trimmed. Nothing is written; [`update`] is how an item is changed.
 /// - [`CoreError::Config`] if the existing file cannot be parsed at all, and
 ///   [`CoreError::Io`] if it cannot be read or the new one cannot be written.
 pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    let req = req.trimmed()?;
     let attributes = edit::Attributes {
         quantity: req.quantity,
         bought: req.bought,
