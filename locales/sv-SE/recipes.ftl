@@ -47,6 +47,24 @@ meta-description = Beskrivning
 
 # Recipe Types
 recipe-type-menu = Meny
+recipe-type-plan = Måltidsplan
+plan-outside = Utanför den här planen
+plan-nothing-planned = Inget planerat
+plan-add-to = Lägg till i { $meal }, { $day }
+plan-line-actions = Ändra
+plan-move-to = Flytta till…
+plan-copy-to = Kopiera till…
+plan-remove = Ta bort
+plan-move-title = Flytta till en annan dag
+plan-copy-title = Kopiera till en annan dag
+plan-move = Flytta
+plan-copy = Kopiera
+plan-target-day = Dag
+plan-target-meal = Måltid
+plan-changed = Planen har ändrats sedan sidan laddades. Ladda om för att se den och försök igen.
+plan-save-failed = Det gick inte att spara planen.
+plan-saved = Planen sparad
+plan-reload = Ladda om
 
 # Today's Menu Banner
 todays-menu-title = Dagens meny

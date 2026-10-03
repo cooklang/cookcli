@@ -71,7 +71,7 @@ argon2 = { version = "0.5", features = ["std"], optional = true }
 askama = { version = "0.12", features = ["serde-json"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["unstable-locales"] }
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 # No-echo password prompt for `cook server user add` / `hash-password`.

@@ -633,6 +633,80 @@
         @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
     }
 
+    /* ---------- Meal plan ---------- */
+    /* Day cards of the planner. The page script marks today and the days
+       gone by against the reader's own clock. */
+    .plan-day-today {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+    }
+    .plan-day-past {
+        background: var(--surface-sunk);
+    }
+    .plan-day-past > h2 {
+        color: var(--text-faint);
+    }
+
+    /* Controls that change the plan from the calendar (planner.js). Small:
+       a day card is a seventh of the page. */
+    .plan-add,
+    .plan-line-button {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+    .plan-add svg,
+    .plan-line-button svg { width: 16px; height: 16px; }
+    .plan-add:hover,
+    .plan-line-button:hover,
+    .plan-line-button[aria-expanded="true"] {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+    .plan-line[draggable="true"] { cursor: grab; }
+    /* A day card is narrow: let a loose ingredient wrap rather than run
+       under the line's button. */
+    .plan-line .ingredient-badge { white-space: normal; }
+    .plan-line > div > * { min-width: 0; max-width: 100%; }
+    .plan-meal.plan-drop {
+        outline: 2px dashed var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+    }
+    .plan-popup {
+        position: absolute;
+        z-index: 40;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-overlay);
+    }
+    .plan-popup[hidden] { display: none; }
+    .plan-popup [role="menuitem"] {
+        height: 32px;
+        padding: 0 12px;
+        text-align: left;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        color: var(--text);
+        cursor: pointer;
+    }
+    .plan-popup [role="menuitem"]:hover,
+    .plan-popup [role="menuitem"]:focus {
+        background: var(--surface-sunk);
+        outline: none;
+    }
+
     /* ---------- Pantry ---------- */
     /* main's four-line stat block. The transparent border keeps the box from
        shifting when a state border appears. */
@@ -842,5 +916,7 @@
         .ref-checkbox,
         .list-checkbox { width: 24px; height: 24px; }
         .pantry-actions { opacity: 1; }
+        .plan-add,
+        .plan-line-button { width: 36px; height: 36px; }
     }
 }

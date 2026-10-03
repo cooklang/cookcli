@@ -47,6 +47,24 @@ meta-description = Beschrijving
 
 # Recipe Types
 recipe-type-menu = Menu
+recipe-type-plan = Maaltijdplan
+plan-outside = Buiten dit plan
+plan-nothing-planned = Niets gepland
+plan-add-to = Toevoegen aan { $meal }, { $day }
+plan-line-actions = Wijzigen
+plan-move-to = Verplaatsen naar…
+plan-copy-to = Kopiëren naar…
+plan-remove = Verwijderen
+plan-move-title = Naar een andere dag verplaatsen
+plan-copy-title = Naar een andere dag kopiëren
+plan-move = Verplaatsen
+plan-copy = Kopiëren
+plan-target-day = Dag
+plan-target-meal = Maaltijd
+plan-changed = Het plan is gewijzigd sinds deze pagina is geladen. Laad opnieuw om het te zien en probeer het nog eens.
+plan-save-failed = Het plan kon niet worden opgeslagen.
+plan-saved = Plan opgeslagen
+plan-reload = Opnieuw laden
 
 # Today's Menu Banner
 todays-menu-title = Menu van Vandaag

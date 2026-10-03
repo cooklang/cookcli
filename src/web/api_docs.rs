@@ -719,6 +719,99 @@ fn menus() -> ApiSection {
 }
 "#,
             ),
+            ep(
+                "POST",
+                "/api/plans/{*path}",
+                "Change a meal plan",
+                "Makes one change to a meal plan — a `.menu` with sections on two days or \
+                 more — as its calendar page does: `add` a recipe to the end of a day's \
+                 meal, `remove` a line, or `move` / `copy` a line to another day's meal. Only \
+                 the lines concerned change; the rest of the file keeps its bytes. A day is a \
+                 section whose name holds its `YYYY-MM-DD` date, `== Wednesday (2026-10-07) ==` \
+                 or `= 2026-10-07 Dinner`, and a meal starts at a line that is only `Name:`, \
+                 or at the section's heading for the meal named after its date; a missing day \
+                 or meal is created, days in date order, meals in the order the plan's days \
+                 name them. A line is \
+                 named by its day, meal and place among the meal's bullets (from 0), plus \
+                 its text without the bullet, which must match the file. `version` is the \
+                 SHA-256 of the file's text, in hex, as the plan's page carries it; a change \
+                 to any other version, or to a line that is no longer there, is refused with \
+                 409 and the current `version`. `add` takes a recipe's path in the \
+                 collection and writes `- @./Path{}`, or `- @./Path{2%servings}` with \
+                 `servings`. Returns 400 for a menu dated on fewer than two days, a meal name \
+                 that would not read back (`:`, brackets, …) or a recipe that does not \
+                 exist, and 404 for a missing file. When sign-in is on, needs the `editor` \
+                 role. The response carries the file's new `version`.",
+            )
+            .params(vec![
+                path_param(
+                    "path",
+                    "Plan path relative to the recipe directory, e.g. `Plans/October.menu`.",
+                ),
+                param(
+                    "op",
+                    "body",
+                    "string",
+                    true,
+                    "`add`, `remove`, `move` or `copy`.",
+                ),
+                param(
+                    "version",
+                    "body",
+                    "string",
+                    true,
+                    "The version of the plan the change was made to.",
+                ),
+                param(
+                    "date, meal",
+                    "body",
+                    "string",
+                    true,
+                    "The day (`YYYY-MM-DD`) and meal: where `add` adds, or the line's for the others.",
+                ),
+                param(
+                    "index, text",
+                    "body",
+                    "number, string",
+                    false,
+                    "`remove`, `move`, `copy`: the line's place in the meal and its text.",
+                ),
+                param(
+                    "to",
+                    "body",
+                    "object",
+                    false,
+                    "`move`, `copy`: `{ \"date\", \"meal\" }` the line goes to.",
+                ),
+                param(
+                    "recipe, servings",
+                    "body",
+                    "string, number",
+                    false,
+                    "`add`: the recipe's path, e.g. `Salads/Caprese.cook`, and optional servings.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "version": "8e507b3bf24da02c9f3fa5c788eab55839e4ea7d37a1683ee8505ef177bde090",
+  "op": "move",
+  "date": "2026-10-07",
+  "meal": "Dinner",
+  "index": 0,
+  "text": "@./Risotto{}",
+  "to": { "date": "2026-10-09", "meal": "Breakfast" }
+}
+"#,
+            )
+            .response(
+                r#"
+{
+  "status": "success",
+  "version": "8bb83c4f83bc739a1c5ea480a71c182e7a92c86b57e6478e58b4cea1aba562c7"
+}
+"#,
+            ),
         ],
     )
 }

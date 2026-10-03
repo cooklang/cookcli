@@ -1,6 +1,7 @@
 use super::common::{check_path, json_error, normalize_tags};
 use crate::server::AppState;
 use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
+use crate::web::menus::{extract_date, extract_meal_type, extract_time, is_meal_header};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -8,15 +9,9 @@ use axum::{
 };
 use camino::Utf8PathBuf;
 use cooklang_find::RecipeTree;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
-
-static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
-static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
-static MEAL_HEADER_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\s*\(\d{2}:\d{2}\)\s*").unwrap());
+use std::sync::Arc;
 
 #[derive(Serialize)]
 pub struct MenuListItem {
@@ -110,41 +105,6 @@ pub enum MenuMealItem {
         quantity: Option<String>,
         unit: Option<String>,
     },
-}
-
-/// Extract a date in YYYY-MM-DD format from a section name.
-/// Matches patterns like "Day 1 (2026-03-04)".
-pub fn extract_date(name: &str) -> Option<String> {
-    DATE_RE.captures(name).map(|caps| caps[1].to_string())
-}
-
-/// Extract a time in HH:MM format from a meal type header.
-/// Matches patterns like "Breakfast (08:30):".
-fn extract_time(header: &str) -> Option<String> {
-    TIME_RE.captures(header).map(|caps| caps[1].to_string())
-}
-
-/// Extract the meal type name from a header string.
-/// Strips the trailing colon and any time in parentheses.
-/// "Breakfast (08:30):" -> "Breakfast"
-/// "Dinner:" -> "Dinner"
-pub fn extract_meal_type(header: &str) -> String {
-    // Remove trailing colon (and whitespace around it)
-    let stripped = header.trim().trim_end_matches(':').trim();
-    // Remove time in parentheses
-    MEAL_HEADER_RE.replace_all(stripped, "").trim().to_string()
-}
-
-/// Check if a text line is a meal type header (ends with ":" possibly with whitespace).
-pub fn is_meal_header(text: &str) -> bool {
-    let trimmed = text.trim();
-    // Must end with ':'
-    if !trimmed.ends_with(':') {
-        return false;
-    }
-    // Must have some content before the colon
-    let before_colon = trimmed.trim_end_matches(':').trim();
-    !before_colon.is_empty()
 }
 
 pub async fn get_menu(

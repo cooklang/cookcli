@@ -261,6 +261,7 @@ pub struct RecipesTemplate {
     pub todays_menu: Option<TodaysMenu>,
     pub new_recipe_url: String,
     pub new_menu_url: String,
+    pub new_plan_url: String,
     /// `/random` link for the current folder; `None` hides the button.
     pub random_recipe_url: Option<String>,
     pub tr: Tr,
@@ -613,6 +614,9 @@ pub struct MenuTemplate {
     pub servings: Option<ServingsScale>,
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
+    /// Set when the menu is a meal plan: the page shows `sections` as a
+    /// calendar instead of one card each.
+    pub plan: Option<crate::web::plan::PlanView>,
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
@@ -701,6 +705,27 @@ pub struct EditTemplate {
     pub viewer: Viewer,
 }
 
+/// The frame fields of the new-plan form, as the form shows them.
+#[cfg(feature = "server")]
+pub struct NewPlanForm {
+    /// `YYYY-MM-DD`.
+    pub start: String,
+    pub days: String,
+    pub min_days: u32,
+    pub max_days: u32,
+    pub servings: String,
+    pub meals: Vec<NewPlanMeal>,
+}
+
+#[cfg(feature = "server")]
+pub struct NewPlanMeal {
+    /// The form field, e.g. `breakfast`.
+    pub field: &'static str,
+    /// The meal's name in the page language, as the plan will write it.
+    pub label: String,
+    pub checked: bool,
+}
+
 #[cfg(feature = "server")]
 #[derive(Template)]
 #[template(path = "new.html")]
@@ -711,6 +736,9 @@ pub struct NewTemplate {
     pub filename: Option<String>,
     /// The form creates a `.menu` file rather than a `.cook` recipe.
     pub is_menu: bool,
+    /// The `.menu` is a meal plan: the form asks for its frame too.
+    pub is_plan: bool,
+    pub plan: NewPlanForm,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
@@ -864,6 +892,14 @@ pub enum StepItem {
     },
     Quantity(String),
     LineBreak,
+}
+
+/// The text of a menu line that is only a meal heading (`Breakfast:`).
+pub fn meal_header(line: &[MenuSectionItem]) -> Option<&str> {
+    match line {
+        [MenuSectionItem::Text(text)] if text.trim().ends_with(':') => Some(text),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

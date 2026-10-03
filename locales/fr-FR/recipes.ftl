@@ -47,6 +47,24 @@ meta-description = Description
 
 # Recipe Types
 recipe-type-menu = Menu
+recipe-type-plan = Planning de repas
+plan-outside = Hors de ce planning
+plan-nothing-planned = Rien de prévu
+plan-add-to = Ajouter à { $meal }, { $day }
+plan-line-actions = Modifier
+plan-move-to = Déplacer vers…
+plan-copy-to = Copier vers…
+plan-remove = Retirer
+plan-move-title = Déplacer vers un autre jour
+plan-copy-title = Copier vers un autre jour
+plan-move = Déplacer
+plan-copy = Copier
+plan-target-day = Jour
+plan-target-meal = Repas
+plan-changed = Le planning a changé depuis le chargement de la page. Rechargez-la pour le voir, puis réessayez.
+plan-save-failed = Impossible d'enregistrer le planning.
+plan-saved = Planning enregistré
+plan-reload = Recharger
 
 # Today's Menu Banner
 todays-menu-title = Menu du Jour

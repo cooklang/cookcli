@@ -52,6 +52,7 @@ mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
+mod plan_text;
 mod shopping_list_watcher;
 mod title_image;
 mod ui;
@@ -692,6 +693,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         )
         .route("/menus", get(handlers::list_menus))
         .route("/menus/{*path}", get(handlers::get_menu))
+        .route("/plans/{*path}", post(handlers::plan_edit))
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))
