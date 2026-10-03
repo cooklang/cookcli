@@ -194,6 +194,11 @@ pub(crate) fn tree_error(error: TreeError, base_dir: &Utf8Path) -> CoreError {
             path: base_dir.to_owned(),
             source: entry_error(source),
         },
+        // Added by cooklang-find after 0.8.1 (local-path trial only).
+        TreeError::IoError(source) => CoreError::Io {
+            path: base_dir.to_owned(),
+            source,
+        },
     }
 }
 
