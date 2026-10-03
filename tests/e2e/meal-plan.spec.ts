@@ -1,8 +1,8 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-// Meal plans (#385): a menu whose `plan:` frontmatter pins it to dates, shown
-// as a calendar. The server under test answers in en-US, where weeks start
+// Meal plans (#385): a menu with sections on two days or more, shown as a
+// calendar. The server under test answers in en-US, where weeks start
 // on Sunday.
 
 function isoDate(date: Date): string {
@@ -16,11 +16,14 @@ function addDays(date: Date, n: number): Date {
   return copy;
 }
 
-/** Writes a plan straight to disk through the recipe API. */
+/** Writes a plan straight to disk through the recipe API: a section a day,
+ * with Risotto for dinner on the first. */
 async function writePlan(request: APIRequestContext, name: string, start: string, days: number) {
+  const first = new Date(`${start}T00:00:00`);
+  const sections = Array.from({ length: days }, (_, i) =>
+    `== Day (${isoDate(addDays(first, i))}) ==\n\nBreakfast: \\\n- \n\nDinner: \\\n- ${i === 0 ? '@./Risotto{}' : ''}\n`);
   const response = await request.put(`/api/recipes/${encodeURIComponent(name)}.menu`, {
-    data: `---\nplan:\n  start: ${start}\n  days: ${days}\n  meals: [Breakfast, Dinner]\n---\n\n` +
-      `== Day (${start}) ==\n\nDinner: \\\n- @./Risotto{}\n`,
+    data: sections.join('\n'),
     headers: { 'content-type': 'text/plain' },
   });
   expect(response.ok()).toBeTruthy();

@@ -1,62 +1,48 @@
-//! Meal plans: menus that a `plan:` block in the frontmatter pins to dates.
+//! Meal plans: menus whose sections are dated.
 //!
-//! ```yaml
-//! plan:
-//!   start: 2026-10-01
-//!   days: 10
-//!   meals: [Breakfast, Lunch, Dinner]
-//! ```
-//!
-//! The block only frames the plan. What is eaten each day stays in dated
-//! sections (`== Thursday (2026-10-01) ==`), as in any menu, so the CLI, the
-//! shopping list and other Cooklang apps read a plan like any other menu.
+//! A menu with sections on two days or more, such as
+//! `== Thursday (2026-10-01) ==` or `= 2026-10-02 Dinner` (the forms
+//! cooklang-find's `list_menus_for_date` matches), shows as a calendar.
+//! Nothing else marks a plan: the dates are already in the text that the CLI,
+//! the shopping list and other Cooklang apps read.
+
+use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 use chrono::{Datelike, Days, NaiveDate, Weekday};
+use regex::Regex;
 use serde::Serialize;
 use unic_langid::LanguageIdentifier;
 
-use crate::web::menus::{extract_date, extract_meal_type, extract_time, is_meal_header};
+use crate::web::menus::{extract_meal_type, extract_time, is_meal_header};
 use crate::web::templates::{MenuSection, MenuSectionItem};
 
-/// The longest plan the planner lays out: about two months.
+/// The longest plan the new-plan form writes: about two months.
+#[cfg(feature = "server")]
 pub const MAX_PLAN_DAYS: u32 = 62;
+/// The shortest: a menu needs two dated days to show as a plan.
+pub const MIN_PLAN_DAYS: u32 = 2;
 
-/// The `plan:` block of a menu's frontmatter.
+/// A `YYYY-MM-DD` anywhere in a section name, not inside a longer number.
+static SECTION_DATE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:^|[^\d-])(\d{4}-\d{2}-\d{2})(?:[^\d-]|$)").unwrap());
+
+/// What the new-plan form asks for: the days a plan covers and the meals each
+/// of them starts with.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanFrame {
     pub start: NaiveDate,
     pub days: u32,
-    /// Meals every day has a slot for, in order. May be empty.
+    /// Meals every day has a slot for, in order.
     pub meals: Vec<String>,
 }
 
+#[cfg(feature = "server")]
 impl PlanFrame {
     fn dates(&self) -> impl Iterator<Item = NaiveDate> + '_ {
         (0..self.days).filter_map(|offset| self.start.checked_add_days(Days::new(offset.into())))
     }
-}
-
-/// Reads the `plan:` block, or `None` when there is none or it is not one the
-/// planner can lay out; the menu then shows as an ordinary menu.
-pub fn plan_frame(metadata: &cooklang::Metadata) -> Option<PlanFrame> {
-    let plan = metadata.get("plan")?;
-    let start = NaiveDate::parse_from_str(plan.get("start")?.as_str()?, "%Y-%m-%d").ok()?;
-    let days = u32::try_from(plan.get("days")?.as_u64()?).ok()?;
-    if !(1..=MAX_PLAN_DAYS).contains(&days) {
-        return None;
-    }
-    let meals = match plan.get("meals") {
-        None => Vec::new(),
-        Some(meals) => meals
-            .as_sequence()?
-            .iter()
-            .filter_map(|meal| meal.as_str())
-            .map(str::trim)
-            .filter(|meal| !meal.is_empty())
-            .map(String::from)
-            .collect(),
-    };
-    Some(PlanFrame { start, days, meals })
 }
 
 /// A plan laid out as a calendar, one row per week.
@@ -64,9 +50,10 @@ pub fn plan_frame(metadata: &cooklang::Metadata) -> Option<PlanFrame> {
 pub struct PlanView {
     /// Column headings, in the order the rows run.
     pub weekdays: Vec<String>,
-    /// Seven cells a row; `None` pads the first and last week.
+    /// Seven cells a row; `None` pads the first and last week. A week with no
+    /// dated section is left out.
     pub weeks: Vec<Vec<Option<PlanDay>>>,
-    /// Sections with no date, or a date the plan does not cover.
+    /// Sections with no date.
     pub outside: Vec<MenuSection>,
 }
 
@@ -88,59 +75,88 @@ pub struct PlanMeal {
     pub lines: Vec<Vec<MenuSectionItem>>,
 }
 
-/// Sorts the menu's `sections` into the days of `frame`.
-pub fn build_plan_view(
-    frame: &PlanFrame,
-    sections: &[MenuSection],
-    lang: &LanguageIdentifier,
-) -> PlanView {
-    let locale = chrono_locale(lang);
-    let first_weekday = first_weekday(lang);
+/// The day a section is for, and the meal header its name gives after the
+/// date (`2026-10-02 Dinner` → `Dinner:`), if any.
+pub fn section_date(name: &str) -> Option<(NaiveDate, Option<String>)> {
+    let found = SECTION_DATE_RE.captures(name)?.get(1)?;
+    let date = NaiveDate::parse_from_str(found.as_str(), "%Y-%m-%d").ok()?;
+    // `Wednesday (2026-10-07)` leaves `)`, which names no meal.
+    let rest = name[found.end()..]
+        .trim_start_matches(|c: char| c.is_whitespace() || ")]-–—:,".contains(c))
+        .trim_end_matches(|c: char| c.is_whitespace() || c == ':');
+    let header = format!("{rest}:");
+    Some((date, is_meal_header(&header).then_some(header)))
+}
 
-    let mut days: Vec<(NaiveDate, Vec<PlanMeal>)> = frame
-        .dates()
-        .map(|date| {
-            let meals = frame
-                .meals
-                .iter()
-                .map(|name| PlanMeal {
-                    name: Some(name.clone()),
-                    time: None,
-                    lines: Vec::new(),
-                })
-                .collect();
-            (date, meals)
-        })
-        .collect();
-
+/// Lays `sections` out as a calendar, or `None` when fewer than two days are
+/// dated: the menu then shows as an ordinary menu.
+///
+/// The calendar runs from the first dated day to the last. A day no section
+/// is for still gets a cell in a week that has one, and every day offers the
+/// meals the plan's days name, in the order they first appear.
+pub fn build_plan_view(sections: &[MenuSection], lang: &LanguageIdentifier) -> Option<PlanView> {
+    let mut dated: BTreeMap<NaiveDate, Vec<PlanMeal>> = BTreeMap::new();
     let mut outside = Vec::new();
     for section in sections {
-        let date = section
-            .name
-            .as_deref()
-            .and_then(extract_date)
-            .and_then(|date| NaiveDate::parse_from_str(&date, "%Y-%m-%d").ok());
-        match date.and_then(|date| days.iter_mut().find(|(day, _)| *day == date)) {
-            Some((_, meals)) => add_lines(meals, &section.lines),
+        match section.name.as_deref().and_then(section_date) {
+            Some((date, header)) => {
+                let meals = dated.entry(date).or_default();
+                match header {
+                    // The meal the name gives holds the lines before the
+                    // section's first meal header.
+                    Some(header) => {
+                        let mut lines = vec![vec![MenuSectionItem::Text(header)]];
+                        lines.extend(section.lines.iter().cloned());
+                        add_lines(meals, &lines);
+                    }
+                    None => add_lines(meals, &section.lines),
+                }
+            }
             None => outside.push(section.clone()),
         }
     }
-
-    let lead = days.first().map_or(0, |(date, _)| {
-        date.weekday().days_since(first_weekday) as usize
-    });
-    let mut cells: Vec<Option<PlanDay>> = std::iter::repeat_with(|| None).take(lead).collect();
-    cells.extend(days.into_iter().map(|(date, meals)| {
-        Some(PlanDay {
-            date: date.format("%Y-%m-%d").to_string(),
-            label: capitalize(&date.format_localized("%a %-d %b", locale).to_string()),
-            meals,
-        })
-    }));
-    while !cells.len().is_multiple_of(7) {
-        cells.push(None);
+    if dated.len() < MIN_PLAN_DAYS as usize {
+        return None;
     }
-    let weeks = cells.chunks(7).map(<[_]>::to_vec).collect();
+
+    let slots = meal_slots(dated.values());
+    for meals in dated.values_mut() {
+        fill_slots(meals, &slots);
+    }
+
+    let locale = chrono_locale(lang);
+    let first_weekday = first_weekday(lang);
+    let first = *dated.keys().next()?;
+    let last = *dated.keys().next_back()?;
+    let mut week_starts: Vec<NaiveDate> = dated
+        .keys()
+        .map(|date| *date - Days::new(date.weekday().days_since(first_weekday).into()))
+        .collect();
+    week_starts.dedup();
+
+    let weeks = week_starts
+        .into_iter()
+        .map(|week_start| {
+            (0..7)
+                .map(|offset| {
+                    let date = week_start.checked_add_days(Days::new(offset))?;
+                    if date < first || date > last {
+                        return None;
+                    }
+                    let meals = dated.remove(&date).unwrap_or_else(|| {
+                        let mut meals = Vec::new();
+                        fill_slots(&mut meals, &slots);
+                        meals
+                    });
+                    Some(PlanDay {
+                        date: date.format("%Y-%m-%d").to_string(),
+                        label: capitalize(&date.format_localized("%a %-d %b", locale).to_string()),
+                        meals,
+                    })
+                })
+                .collect()
+        })
+        .collect();
 
     // 2024-01-01 was a Monday: walk a week from there to name the columns.
     let monday = NaiveDate::from_ymd_opt(2024, 1, 1).expect("a valid date");
@@ -152,16 +168,58 @@ pub fn build_plan_view(
         })
         .collect();
 
-    PlanView {
+    Some(PlanView {
         weekdays,
         weeks,
         outside,
+    })
+}
+
+/// The meals the plan's days name, each once. A meal a day adds goes after
+/// the meal it follows on that day, so days with `Breakfast, Dinner` and
+/// `Breakfast, Lunch` give `Breakfast, Lunch, Dinner`.
+fn meal_slots<'a>(days: impl Iterator<Item = &'a Vec<PlanMeal>>) -> Vec<String> {
+    let mut slots: Vec<String> = Vec::new();
+    for meals in days {
+        let mut after: Option<usize> = None;
+        for name in meals.iter().filter_map(|meal| meal.name.as_ref()) {
+            let index = match slots.iter().position(|slot| slot == name) {
+                Some(index) => index,
+                None => {
+                    let index = after.map_or(slots.len(), |after| after + 1);
+                    slots.insert(index, name.clone());
+                    index
+                }
+            };
+            after = Some(index);
+        }
     }
+    slots
+}
+
+/// Gives `meals` an empty meal for each slot it lacks, and puts its meals in
+/// the slots' order after the lines written before any meal.
+fn fill_slots(meals: &mut Vec<PlanMeal>, slots: &[String]) {
+    for slot in slots {
+        if !meals.iter().any(|meal| meal.name.as_ref() == Some(slot)) {
+            meals.push(PlanMeal {
+                name: Some(slot.clone()),
+                time: None,
+                lines: Vec::new(),
+            });
+        }
+    }
+    meals.sort_by_key(|meal| {
+        meal.name
+            .as_ref()
+            .map(|name| slots.iter().position(|slot| slot == name))
+    });
 }
 
 /// Appends a section's lines to the day's meals: a line that is only
 /// `Name:` starts a meal (the rule the menu API follows), and a meal the day
-/// already has, such as one of the plan's, is continued rather than repeated.
+/// already has, from another of its sections, is continued rather than
+/// repeated.
 fn add_lines(meals: &mut Vec<PlanMeal>, lines: &[Vec<MenuSectionItem>]) {
     let mut current: Option<usize> = None;
     for line in lines {
@@ -239,7 +297,8 @@ fn day_heading(date: NaiveDate, lang: &LanguageIdentifier) -> String {
 }
 
 /// What a new plan titled `title` starts with: the frontmatter, then every day
-/// with an empty bullet under each meal, ready to fill in the editor.
+/// as a dated section with an empty bullet under each meal, ready to fill in
+/// the editor. The dated sections are all that makes it a plan.
 #[cfg(feature = "server")]
 pub fn plan_starter(
     title: &str,
@@ -249,18 +308,7 @@ pub fn plan_starter(
 ) -> String {
     use std::fmt::Write;
 
-    // JSON strings are valid YAML double-quoted scalars.
-    let meals = frame
-        .meals
-        .iter()
-        .map(|meal| serde_json::to_string(meal).expect("a string serializes"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut out = format!(
-        "---\ntitle: {title}\nservings: {servings}\nplan:\n  start: {}\n  days: {}\n  meals: [{meals}]\n---\n",
-        frame.start.format("%Y-%m-%d"),
-        frame.days,
-    );
+    let mut out = format!("---\ntitle: {title}\nservings: {servings}\n---\n");
     for date in frame.dates() {
         let _ = write!(out, "\n== {} ==\n", day_heading(date, lang));
         for meal in &frame.meals {
@@ -303,19 +351,11 @@ fn capitalize(text: &str) -> String {
 mod tests {
     use super::*;
 
-    fn metadata(yaml: &str) -> cooklang::Metadata {
-        let text = format!("---\n{yaml}\n---\n\n== Day ==\n\n- @eggs{{}}\n");
-        crate::util::PARSER
-            .parse(&text)
-            .into_output()
-            .expect("the menu parses")
-            .metadata
-    }
-
     fn lang(tag: &str) -> LanguageIdentifier {
         tag.parse().unwrap()
     }
 
+    #[cfg(feature = "server")]
     fn date(text: &str) -> NaiveDate {
         NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
     }
@@ -339,65 +379,73 @@ mod tests {
         }
     }
 
-    fn frame(start: &str, days: u32, meals: &[&str]) -> PlanFrame {
-        PlanFrame {
-            start: date(start),
-            days,
-            meals: meals.iter().map(|meal| meal.to_string()).collect(),
-        }
+    fn day(date: &str) -> MenuSection {
+        section(&format!("Day ({date})"), vec![])
+    }
+
+    fn dates(view: &PlanView) -> Vec<Option<&str>> {
+        view.weeks
+            .iter()
+            .flatten()
+            .map(|cell| cell.as_ref().map(|day| day.date.as_str()))
+            .collect()
+    }
+
+    fn meals(day: &PlanDay) -> Vec<(Option<String>, usize)> {
+        day.meals
+            .iter()
+            .map(|meal| (meal.name.clone(), meal.lines.len()))
+            .collect()
     }
 
     #[test]
-    fn reads_the_plan_block() {
-        let frame = plan_frame(&metadata(
-            "plan:\n  start: 2026-10-01\n  days: 10\n  meals: [Breakfast, \"Dinner\"]",
-        ));
+    fn a_section_date_can_sit_anywhere_in_its_name() {
+        let date = |text: &str| NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap();
         assert_eq!(
-            frame,
-            Some(PlanFrame {
-                start: date("2026-10-01"),
-                days: 10,
-                meals: vec!["Breakfast".into(), "Dinner".into()],
-            })
+            section_date("Wednesday (2026-10-07)"),
+            Some((date("2026-10-07"), None))
         );
-    }
-
-    #[test]
-    fn meals_are_optional() {
-        let frame = plan_frame(&metadata("plan:\n  start: 2026-10-01\n  days: 7")).unwrap();
-        assert!(frame.meals.is_empty());
-    }
-
-    #[test]
-    fn a_plan_block_the_planner_cannot_lay_out_is_ignored() {
-        for yaml in [
-            "servings: 2",
-            "plan: yes",
-            "plan:\n  start: 2026-02-30\n  days: 7",
-            "plan:\n  start: next week\n  days: 7",
-            "plan:\n  start: 2026-10-01\n  days: 0",
-            "plan:\n  start: 2026-10-01\n  days: 63",
-            "plan:\n  start: 2026-10-01\n  days: -1",
-            "plan:\n  start: 2026-10-01",
-            "plan:\n  start: 2026-10-01\n  days: 7\n  meals: Dinner",
+        assert_eq!(
+            section_date("2026-10-07 Dinner"),
+            Some((date("2026-10-07"), Some("Dinner:".into())))
+        );
+        assert_eq!(
+            section_date("(2026-10-07) - Breakfast (08:30)"),
+            Some((date("2026-10-07"), Some("Breakfast (08:30):".into())))
+        );
+        assert_eq!(section_date("2026-10-07"), Some((date("2026-10-07"), None)));
+        for name in [
+            "Day 1",
+            "2026-02-30",
+            "12026-10-07",
+            "2026-10-071",
+            "Week 2026-10",
         ] {
-            assert_eq!(plan_frame(&metadata(yaml)), None, "{yaml}");
+            assert_eq!(section_date(name), None, "{name}");
         }
+    }
+
+    #[test]
+    fn a_menu_needs_two_dated_days_to_be_a_plan() {
+        let en = lang("en-GB");
+        assert!(build_plan_view(&[], &en).is_none());
+        assert!(build_plan_view(&[day("2026-12-25"), section("Day 2", vec![])], &en).is_none());
+        // Two sections on the same day are still one day.
+        assert!(build_plan_view(&[day("2026-12-25"), day("2026-12-25")], &en).is_none());
+        assert!(build_plan_view(&[day("2026-12-25"), day("2026-12-26")], &en).is_some());
     }
 
     #[test]
     fn a_wednesday_start_leaves_blank_cells_before_it() {
-        let view = build_plan_view(&frame("2026-10-07", 10, &[]), &[], &lang("fr-FR"));
+        let view =
+            build_plan_view(&[day("2026-10-16"), day("2026-10-07")], &lang("fr-FR")).unwrap();
 
         assert_eq!(view.weeks.len(), 2);
         assert!(view.weeks.iter().all(|week| week.len() == 7));
-        let dates: Vec<Option<&str>> = view
-            .weeks
-            .iter()
-            .flatten()
-            .map(|cell| cell.as_ref().map(|day| day.date.as_str()))
-            .collect();
+        let dates = dates(&view);
         assert_eq!(&dates[..3], &[None, None, Some("2026-10-07")]);
+        // The days between the two sections get a cell too.
+        assert_eq!(dates[5], Some("2026-10-10"));
         assert_eq!(dates[11], Some("2026-10-16"));
         assert!(dates[12..].iter().all(Option::is_none));
         assert_eq!(view.weekdays[0], "Lun.");
@@ -405,12 +453,26 @@ mod tests {
 
     #[test]
     fn weeks_start_on_sunday_in_american_english() {
-        let view = build_plan_view(&frame("2026-10-07", 10, &[]), &[], &lang("en-US"));
+        let view =
+            build_plan_view(&[day("2026-10-07"), day("2026-10-16")], &lang("en-US")).unwrap();
 
         assert_eq!(view.weekdays[0], "Sun");
         let first_week = &view.weeks[0];
         assert!(first_week[..3].iter().all(Option::is_none));
         assert_eq!(first_week[3].as_ref().unwrap().label, "Wed 7 Oct");
+    }
+
+    #[test]
+    fn weeks_with_no_dated_section_are_left_out() {
+        let view =
+            build_plan_view(&[day("2026-10-07"), day("2027-01-01")], &lang("en-GB")).unwrap();
+
+        assert_eq!(view.weeks.len(), 2);
+        let dates = dates(&view);
+        assert_eq!(dates[2], Some("2026-10-07"));
+        assert_eq!(dates[6], Some("2026-10-11"));
+        assert_eq!(dates[7], Some("2026-12-28"));
+        assert_eq!(dates[11], Some("2027-01-01"));
     }
 
     #[test]
@@ -434,46 +496,61 @@ mod tests {
                     recipe("./Nuts"),
                 ],
             ),
-            section("Saturday (2026-10-03)", vec![recipe("./Toast")]),
+            section("2026-10-03 Lunch", vec![recipe("./Soup")]),
+            section("Sunday (2026-10-04)", vec![recipe("./Toast")]),
             section("Day 1", vec![recipe("./Undated")]),
-            section("Much later (2027-01-01)", vec![recipe("./Late")]),
         ];
-        let view = build_plan_view(
-            &frame("2026-10-01", 3, &["Breakfast", "Dinner"]),
-            &sections,
-            &lang("en-GB"),
-        );
+        let view = build_plan_view(&sections, &lang("en-GB")).unwrap();
         let days: Vec<&PlanDay> = view.weeks.iter().flatten().flatten().collect();
+        assert_eq!(days.len(), 3);
 
-        let meals = |day: &PlanDay| -> Vec<(Option<String>, usize)> {
-            day.meals
-                .iter()
-                .map(|meal| (meal.name.clone(), meal.lines.len()))
-                .collect()
+        // Every day offers every meal the plan names, in the order they first
+        // appear: Lunch comes last, as nothing comes before it on Saturday.
+        let slots = |lines: [usize; 4]| {
+            ["Dinner", "Breakfast", "Snacks", "Lunch"]
+                .into_iter()
+                .zip(lines)
+                .map(|(name, lines)| (Some(name.to_string()), lines))
+                .collect::<Vec<_>>()
         };
-        // The plan's meals come first, even empty, then the ones the text adds.
-        assert_eq!(
-            meals(days[0]),
-            [(Some("Breakfast".into()), 0), (Some("Dinner".into()), 0)]
-        );
-        assert_eq!(
-            meals(days[1]),
-            [
-                (Some("Breakfast".into()), 1),
-                (Some("Dinner".into()), 2),
-                (Some("Snacks".into()), 1),
-            ]
-        );
-        assert_eq!(days[1].meals[0].time.as_deref(), Some("08:30"));
+        assert_eq!(meals(days[0]), slots([2, 1, 1, 0]));
+        assert_eq!(days[0].meals[1].time.as_deref(), Some("08:30"));
+        // A section named after its meal fills that meal.
+        assert_eq!(meals(days[1]), slots([0, 0, 0, 1]));
         // Lines before any meal come first, under no heading.
-        assert_eq!(meals(days[2])[0], (None, 1));
+        let mut sunday = vec![(None, 1)];
+        sunday.extend(slots([0, 0, 0, 0]));
+        assert_eq!(meals(days[2]), sunday);
 
         let outside: Vec<_> = view
             .outside
             .iter()
             .map(|s| s.name.clone().unwrap())
             .collect();
-        assert_eq!(outside, ["Day 1", "Much later (2027-01-01)"]);
+        assert_eq!(outside, ["Day 1"]);
+    }
+
+    #[test]
+    fn a_meal_a_day_adds_goes_after_the_one_it_follows() {
+        let meals = |names: &[&str]| -> Vec<PlanMeal> {
+            names
+                .iter()
+                .map(|name| PlanMeal {
+                    name: Some(name.to_string()),
+                    time: None,
+                    lines: Vec::new(),
+                })
+                .collect()
+        };
+        let days = [
+            meals(&["Breakfast", "Dinner"]),
+            meals(&["Breakfast", "Lunch"]),
+            meals(&["Supper"]),
+        ];
+        assert_eq!(
+            meal_slots(days.iter()),
+            ["Breakfast", "Lunch", "Dinner", "Supper"]
+        );
     }
 
     #[cfg(feature = "server")]
@@ -492,33 +569,43 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn a_new_plan_reads_back_as_the_plan_it_was_made_from() {
-        let frame = frame("2026-10-07", 3, &["Breakfast", "Dinner"]);
+        let frame = PlanFrame {
+            start: date("2026-10-07"),
+            days: 3,
+            meals: vec!["Breakfast".into(), "Dinner".into()],
+        };
         let text = plan_starter("October", 2, &frame, &lang("en-US"));
         let recipe = crate::util::PARSER
             .parse(&text)
             .into_output()
             .expect("the plan parses");
 
-        assert_eq!(plan_frame(&recipe.metadata), Some(frame));
         assert_eq!(
             recipe.metadata.get("servings").and_then(|v| v.as_u64()),
             Some(2)
         );
-        let dates: Vec<Option<String>> = recipe
-            .sections
-            .iter()
-            .map(|section| section.name.as_deref().and_then(extract_date))
-            .collect();
-        assert_eq!(
-            dates,
-            [
-                Some("2026-10-07".into()),
-                Some("2026-10-08".into()),
-                Some("2026-10-09".into()),
-            ]
-        );
+        assert!(recipe.metadata.get("plan").is_none());
         assert!(
             text.contains("== Thursday (2026-10-08) ==\n\nBreakfast: \\\n- \n\nDinner: \\\n- \n")
         );
+
+        // The menu page reads the same days and meals back from the sections.
+        let sections: Vec<MenuSection> = recipe
+            .sections
+            .iter()
+            .map(|section| section_with_name(section.name.as_deref()))
+            .collect();
+        let view = build_plan_view(&sections, &lang("en-US")).unwrap();
+        let days: Vec<&PlanDay> = view.weeks.iter().flatten().flatten().collect();
+        let dates: Vec<&str> = days.iter().map(|day| day.date.as_str()).collect();
+        assert_eq!(dates, ["2026-10-07", "2026-10-08", "2026-10-09"]);
+    }
+
+    #[cfg(feature = "server")]
+    fn section_with_name(name: Option<&str>) -> MenuSection {
+        MenuSection {
+            name: name.map(String::from),
+            lines: Vec::new(),
+        }
     }
 }

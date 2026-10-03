@@ -711,6 +711,7 @@ pub struct NewPlanForm {
     /// `YYYY-MM-DD`.
     pub start: String,
     pub days: String,
+    pub min_days: u32,
     pub max_days: u32,
     pub servings: String,
     pub meals: Vec<NewPlanMeal>,

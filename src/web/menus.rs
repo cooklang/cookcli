@@ -4,6 +4,7 @@ use crate::web::templates::TodaysMenu;
 use regex::Regex;
 use std::sync::LazyLock;
 
+#[cfg(feature = "server")]
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{4}-\d{2}-\d{2})\)").unwrap());
 static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\d{2}:\d{2})\)").unwrap());
 static MEAL_HEADER_RE: LazyLock<Regex> =
@@ -41,6 +42,7 @@ pub fn find_todays_menu(base_path: &camino::Utf8Path) -> Option<TodaysMenu> {
 
 /// Extract a date in YYYY-MM-DD format from a section name.
 /// Matches patterns like "Day 1 (2026-03-04)".
+#[cfg(feature = "server")]
 pub fn extract_date(name: &str) -> Option<String> {
     DATE_RE.captures(name).map(|caps| caps[1].to_string())
 }

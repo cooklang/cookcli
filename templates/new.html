@@ -54,7 +54,7 @@
         <div>
             <label for="plan-days" class="block text-sm font-medium text-muted mb-2">{{ tr.t("new-plan-days") }}</label>
             <div class="flex flex-wrap items-center gap-2">
-                <input type="number" id="plan-days" name="days" required min="1" max="{{ plan.max_days }}" step="1" value="{{ plan.days }}"
+                <input type="number" id="plan-days" name="days" required min="{{ plan.min_days }}" max="{{ plan.max_days }}" step="1" value="{{ plan.days }}"
                        class="w-24 px-4 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
                 <button type="button" class="btn btn-sm" data-plan-days="7">{{ tr.t("new-plan-one-week") }}</button>
                 <button type="button" class="btn btn-sm" data-plan-days="14">{{ tr.t("new-plan-two-weeks") }}</button>

@@ -419,7 +419,7 @@ impl PlanFields {
     /// The plan these fields ask for, meals named in `lang`, or what is wrong
     /// with them.
     fn plan(&self, lang: &LanguageIdentifier) -> Result<NewPlan, String> {
-        use crate::web::plan::{PlanFrame, MAX_PLAN_DAYS};
+        use crate::web::plan::{PlanFrame, MAX_PLAN_DAYS, MIN_PLAN_DAYS};
 
         let start = self
             .start
@@ -430,8 +430,10 @@ impl PlanFields {
             .days
             .as_deref()
             .and_then(|days| days.trim().parse::<u32>().ok())
-            .filter(|days| (1..=MAX_PLAN_DAYS).contains(days))
-            .ok_or(format!("A plan lasts from 1 to {MAX_PLAN_DAYS} days"))?;
+            .filter(|days| (MIN_PLAN_DAYS..=MAX_PLAN_DAYS).contains(days))
+            .ok_or(format!(
+                "A plan lasts from {MIN_PLAN_DAYS} to {MAX_PLAN_DAYS} days"
+            ))?;
         let servings = match self.servings.as_deref().map(str::trim) {
             None | Some("") => 2,
             Some(servings) => servings
@@ -504,6 +506,7 @@ async fn new_page(
                 .to_string()
         }),
         days: query.plan.days.clone().unwrap_or_else(|| "7".to_string()),
+        min_days: crate::web::plan::MIN_PLAN_DAYS,
         max_days: crate::web::plan::MAX_PLAN_DAYS,
         servings: query
             .plan

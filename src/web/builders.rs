@@ -1190,9 +1190,8 @@ fn build_menu_template_inner(
                 .replace(".menu", "")
         });
 
-    // A `plan:` block lays the dated sections out as a calendar.
-    let plan = crate::web::plan::plan_frame(&recipe.metadata)
-        .map(|frame| crate::web::plan::build_plan_view(&frame, &sections, &lang));
+    // Sections on two days or more are laid out as a calendar.
+    let plan = crate::web::plan::build_plan_view(&sections, &lang);
 
     Ok(MenuTemplate {
         active: "recipes".to_string(),

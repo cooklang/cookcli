@@ -402,7 +402,7 @@ async fn the_form_and_the_listing_offer_menus() {
     );
 }
 
-// -- Meal plans (#385): a menu whose frontmatter pins it to dates --
+// -- Meal plans (#385): a menu with sections on two days or more --
 
 /// The fields the new-plan form posts for a three-day plan from Wednesday
 /// 7 October 2026, with breakfast and dinner.
@@ -432,7 +432,7 @@ async fn a_plan_is_created_with_a_section_a_day() {
     assert_eq!(
         content,
         format!(
-            "---\ntitle: Fortnight\nservings: 4\nplan:\n  start: 2026-10-07\n  days: 3\n  meals: [\"Breakfast\", \"Dinner\"]\n---\n{}{}{}",
+            "---\ntitle: Fortnight\nservings: 4\n---\n{}{}{}",
             day("Wednesday (2026-10-07)"),
             day("Thursday (2026-10-08)"),
             day("Friday (2026-10-09)"),
@@ -468,10 +468,6 @@ async fn a_plan_names_its_days_and_meals_in_the_page_language() {
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
     let content = std::fs::read_to_string(server.recipes().join("Semaine.menu")).unwrap();
     assert!(
-        content.contains("  meals: [\"Petit-déjeuner\", \"Dîner\"]\n"),
-        "{content}"
-    );
-    assert!(
         content.contains("\n== Mercredi (2026-10-07) ==\n\nPetit-déjeuner: \\\n- \n"),
         "{content}"
     );
@@ -482,8 +478,8 @@ async fn a_plan_the_form_got_wrong_goes_back_with_its_choices() {
     let server = start_server().await;
 
     for (field, value, error) in [
-        ("days", "0", "A%20plan%20lasts%20from%201%20to%2062%20days"),
-        ("days", "63", "A%20plan%20lasts%20from%201%20to%2062%20days"),
+        ("days", "1", "A%20plan%20lasts%20from%202%20to%2062%20days"),
+        ("days", "63", "A%20plan%20lasts%20from%202%20to%2062%20days"),
         (
             "start",
             "2026-02-30",
@@ -556,9 +552,10 @@ async fn the_planner_lays_a_plan_out_by_day() {
     let server = start_server().await;
     std::fs::write(
         server.recipes().join("Week.menu"),
-        "---\nplan:\n  start: 2026-10-07\n  days: 3\n  meals: [Breakfast, Dinner]\n---\n\n\
+        "== Wednesday (2026-10-07) ==\n\nBreakfast: \\\n- \n\n\
          == Thursday (2026-10-08) ==\n\nDinner: \\\n- @./Omelette{} \\\n- @salad{1%bowl}\n\n\
-         == Day 1 ==\n\nLunch: \\\n- @bread{}\n",
+         == Day 1 ==\n\nLunch: \\\n- @bread{}\n\n\
+         = 2026-10-09 Dinner\n\n- @soup{}\n",
     )
     .unwrap();
     std::fs::write(
@@ -600,6 +597,10 @@ async fn the_planner_lays_a_plan_out_by_day() {
         "{thursday}"
     );
     assert!(thursday.contains("salad"), "{thursday}");
+    // Every day offers the meals the plan names.
+    assert!(thursday.contains(">Breakfast</h3>"), "{thursday}");
+    assert!(cells[5].contains(r#"data-date="2026-10-09""#));
+    assert!(cells[5].contains(">Dinner</h3>") && cells[5].contains("soup"));
     // Bullets are the file's layout, not something to show.
     assert!(!thursday.contains(">- <"), "{thursday}");
     // The undated section is not lost.
@@ -607,7 +608,7 @@ async fn the_planner_lays_a_plan_out_by_day() {
     assert!(page.contains("Day 1"));
     assert!(page.contains("Meal Plan</span>"));
 
-    // A menu without a plan block still shows one card a section.
+    // A menu with a single dated day still shows one card a section.
     let page = client()
         .get(server.url("/recipe/Plain"))
         .send()
