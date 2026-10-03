@@ -23,6 +23,7 @@ shopping-in-pantry = Dans votre garde-manger
 shopping-pantry-unused = Le fichier du garde-manger n'a pas pu être lu : rien de votre garde-manger n'a été retiré de cette liste.
 shopping-pantry-open = Ouvrir le garde-manger pour le corriger
 shopping-remove = Retirer
+shopping-extra-items = Articles en plus
 shopping-add-recipes-first = Veuillez d'abord ajouter quelques recettes
 shopping-failed-to-generate = Échec de la génération de la liste de courses
 shopping-warnings = Certaines recettes sont à vérifier, il manque peut-être quelque chose à la liste :

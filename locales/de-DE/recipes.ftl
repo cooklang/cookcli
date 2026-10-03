@@ -66,6 +66,11 @@ plan-changed = Der Plan wurde seit dem Laden der Seite geändert. Laden Sie neu,
 plan-save-failed = Der Plan konnte nicht gespeichert werden.
 plan-saved = Plan gespeichert
 plan-reload = Neu laden
+plan-pick-label = Tage für die Einkaufsliste
+plan-pick-all = Alle
+plan-pick-week = Nächste 7 Tage
+plan-pick-none = Keine
+plan-add-days = Tage zur Einkaufsliste hinzufügen
 
 # Today's Menu Banner
 todays-menu-title = Heutiges Menü

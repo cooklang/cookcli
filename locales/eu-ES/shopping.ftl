@@ -23,6 +23,7 @@ shopping-in-pantry = Zure jaki-tokian
 shopping-pantry-unused = Ezin izan da jakitegiko fitxategia irakurri, beraz zure jaki-tokiko ezer ez da zerrenda honetatik kendu.
 shopping-pantry-open = Ireki jaki-tokia konpontzeko
 shopping-remove = Ezabatu
+shopping-extra-items = Elementu gehigarriak
 shopping-add-recipes-first = Mesedez, lehenengo gehitu errezeta batzuk
 shopping-failed-to-generate = Errorea erosketa zerrenda sortzerakoan
 shopping-warnings = Errezeta batzuk berrikusi behar dira; baliteke zerrendan zerbait falta izatea:

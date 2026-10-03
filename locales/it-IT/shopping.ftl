@@ -23,6 +23,7 @@ shopping-in-pantry = Già in dispensa
 shopping-pantry-unused = Impossibile leggere il file della dispensa, quindi nulla della tua dispensa è stato tolto da questa lista.
 shopping-pantry-open = Apri la dispensa per correggerlo
 shopping-remove = Rimuovi
+shopping-extra-items = Articoli extra
 shopping-add-recipes-first = Aggiungi prima qualche ricetta
 shopping-failed-to-generate = Impossibile generare la lista della spesa
 shopping-warnings = Alcune ricette vanno controllate: alla lista potrebbe mancare qualcosa:

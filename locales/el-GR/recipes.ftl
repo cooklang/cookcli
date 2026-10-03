@@ -66,6 +66,11 @@ plan-changed = Το πρόγραμμα άλλαξε από τότε που φο�
 plan-save-failed = Δεν ήταν δυνατή η αποθήκευση του προγράμματος.
 plan-saved = Το πρόγραμμα αποθηκεύτηκε
 plan-reload = Επαναφόρτωση
+plan-pick-label = Μέρες για τη λίστα αγορών
+plan-pick-all = Όλες
+plan-pick-week = Επόμενες 7 μέρες
+plan-pick-none = Καμία
+plan-add-days = Προσθήκη ημερών στη λίστα αγορών
 
 # Today's Menu Banner
 todays-menu-title = Το σημερινό μενού

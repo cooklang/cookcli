@@ -23,6 +23,7 @@ shopping-in-pantry = In Your Pantry
 shopping-pantry-unused = The pantry file could not be read, so nothing in your pantry was taken off this list.
 shopping-pantry-open = Open the pantry to fix it
 shopping-remove = Remove
+shopping-extra-items = Extra items
 shopping-add-recipes-first = Please add some recipes first
 shopping-failed-to-generate = Failed to generate shopping list
 shopping-warnings = Some recipes need a look, so the list may be missing something:

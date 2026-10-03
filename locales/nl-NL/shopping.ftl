@@ -23,6 +23,7 @@ shopping-in-pantry = In uw voorraadkast
 shopping-pantry-unused = Het voorraadbestand kon niet worden gelezen, dus er is niets uit uw voorraadkast van deze lijst afgetrokken.
 shopping-pantry-open = Open de voorraadkast om het te herstellen
 shopping-remove = Verwijderen
+shopping-extra-items = Extra artikelen
 shopping-add-recipes-first = Voeg eerst enkele recepten toe
 shopping-failed-to-generate = Boodschappenlijst kon niet worden gegenereerd
 shopping-warnings = Sommige recepten verdienen een blik; er ontbreekt misschien iets op de lijst:

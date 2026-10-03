@@ -23,6 +23,7 @@ shopping-in-pantry = Στα αποθέματά σας
 shopping-pantry-unused = Το αρχείο αποθεμάτων δεν ήταν δυνατό να διαβαστεί, οπότε τίποτα από τα αποθέματά σας δεν αφαιρέθηκε από αυτή τη λίστα.
 shopping-pantry-open = Ανοίξτε τα αποθέματα για να το διορθώσετε
 shopping-remove = Αφαίρεση
+shopping-extra-items = Επιπλέον είδη
 shopping-add-recipes-first = Προσθέστε πρώτα μερικές συνταγές
 shopping-failed-to-generate = Αποτυχία δημιουργίας λίστας αγορών
 shopping-warnings = Ορισμένες συνταγές χρειάζονται έλεγχο, οπότε στη λίστα μπορεί να λείπει κάτι:
