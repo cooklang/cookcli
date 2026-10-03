@@ -33,15 +33,17 @@ cook server hash-password
 | `--no-csrf-check` | Disable same-origin enforcement: the `Host` check, requests that modify recipes and the editor's language server connection. |
 | `--max-lsp-sessions <N>` | Language server sessions to run at once (default: 8). `0` disables the editor's language server. |
 | `--users-file <PATH>` | Users who may sign in to make changes. Defaults to `COOK_USERS_FILE`, then `users.toml` in the configuration directory. See [Signing in to make changes](#signing-in-to-make-changes). |
+| `--recipes-only` | Show visitors who are not signed in only the recipes: no shopping list, pantry, editor or preferences beyond the language. Signed-in users keep everything their role allows. See [Showing guests only the recipes](#showing-guests-only-the-recipes). |
 
 ## Environment
 
 | Variable | Description |
 |----------|-------------|
 | `COOK_CORS_ORIGIN` | Origins allowed to make cross-origin browser requests, and whose hosts the server answers at, separated by commas. Same values as `--cors-origin`, which overrides it. For containers, where passing a flag means restating the image's whole command. An empty value means "unset". |
+| `COOK_RECIPES_ONLY` | `1`, `true` or `yes` turns on `--recipes-only`. Anything else, an empty value included, leaves it to the flag. |
 | `COOK_CONFIG_DIR` | Global configuration directory, holding `aisle.conf`, `pantry.conf`, the cook.md session and the sync database. See [the README](../README.md#cook_config_dir). |
 
-No other option can be set this way. `--no-csrf-check` in particular has to be passed on the command line.
+No other option can be set this way; `COOK_USERS_FILE` is covered under [Signing in to make changes](#signing-in-to-make-changes). `--no-csrf-check` in particular has to be passed on the command line.
 
 ## Examples
 
@@ -158,6 +160,30 @@ cook server user add grandma --role reader
 cook server user add kid --role shopper
 cook server user role kid editor   # applies at once, without signing them out
 ```
+
+### Showing guests only the recipes
+
+`--recipes-only` (or `COOK_RECIPES_ONLY=1`) turns the server into a cookbook
+for anyone who is not signed in. They can browse, search and read recipes and
+menus, follow the feeds and pick a language, and nothing else:
+
+- The shopping list and pantry links, the editing controls and the
+  **Add to shopping list** buttons are gone, and the preferences page only
+  offers the language.
+- Every other page and API, including any file in the recipe directory that
+  is not a picture, answers as if it needed sign-in: a page sends the browser
+  to sign in and back, an API request gets `401`.
+- Once signed in, a user gets everything their [role](#roles) allows, as
+  without the option.
+
+```bash
+cook server user add alice
+cook server --host --recipes-only
+```
+
+Without users nobody can sign in, so every visitor gets the recipes only, and
+the rest of the server answers `404`. That makes a read-only cookbook, for
+sharing recipes with people who should not see your shopping list.
 
 ### Managing users
 

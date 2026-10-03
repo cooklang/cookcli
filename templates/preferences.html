@@ -51,6 +51,8 @@
             <p class="text-sm text-muted mt-3">Your language preference will be saved in a cookie.</p>
         </div>
 
+        {# --recipes-only: a guest only picks a language. #}
+        {% if !viewer.recipes_only() %}
         <!-- Features -->
         {% if !static_mode %}
         <div class="card p-6">
@@ -195,6 +197,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

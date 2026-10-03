@@ -74,6 +74,8 @@
         }
 
         const staticMode = window.__STATIC_MODE__ === true;
+        // `cook server --recipes-only` and nobody signed in: recipes alone.
+        const recipesOnly = window.__RECIPES_ONLY__ === true;
         const kbd = 'class="px-2 py-1 bg-sunk rounded text-sm font-mono"';
         const row = (label, keys) => `
             <div class="flex justify-between items-center">
@@ -87,16 +89,18 @@
             row('Navigate search results', `${k('&uarr;')} ${k('&darr;')} ${k('Enter')}`),
             row('Go to recipes', `${k('g')} ${k('h')}`),
         ];
-        if (!staticMode) {
+        if (!staticMode && !recipesOnly) {
             navRows.push(
                 row('Go to shopping list', `${k('g')} ${k('s')}`),
-                row('Go to pantry', `${k('g')} ${k('p')}`),
-                row('Go to preferences', `${k('g')} ${k('x')}`)
+                row('Go to pantry', `${k('g')} ${k('p')}`)
             );
+        }
+        if (!staticMode) {
+            navRows.push(row('Go to preferences', `${k('g')} ${k('x')}`));
         }
 
         // A guest on a server that requires signing in cannot change anything.
-        const canEdit = !staticMode && window.__CAN_EDIT__ !== false;
+        const canEdit = !staticMode && !recipesOnly && window.__CAN_EDIT__ !== false;
 
         const recipeRows = [row('Start cooking mode', k('c'))];
         if (canEdit) {
@@ -206,6 +210,7 @@
             clearPendingKey();
             const pfx = window.__PREFIX__ || '';
             const staticMode = window.__STATIC_MODE__ === true;
+            const recipesOnly = window.__RECIPES_ONLY__ === true;
             switch (key) {
                 case 'h':
                 case 'r':
@@ -213,12 +218,12 @@
                     window.location.href = pfx + '/';
                     return;
                 case 's':
-                    if (staticMode) break;
+                    if (staticMode || recipesOnly) break;
                     event.preventDefault();
                     window.location.href = pfx + '/shopping-list';
                     return;
                 case 'p':
-                    if (staticMode) break;
+                    if (staticMode || recipesOnly) break;
                     event.preventDefault();
                     window.location.href = pfx + '/pantry';
                     return;

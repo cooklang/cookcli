@@ -169,6 +169,17 @@ pub struct ServerArgs {
     /// it with `cook server user`.
     #[arg(long, value_name = "PATH", value_hint = clap::ValueHint::FilePath)]
     users_file: Option<Utf8PathBuf>,
+
+    /// Show visitors who are not signed in only the recipes
+    ///
+    /// They can browse, search and read recipes and menus, and pick a
+    /// language, but get no shopping list, pantry, editor, preferences or
+    /// API beyond reading recipes; the rest asks them to sign in. Signed-in
+    /// users keep everything their role allows. Without a users file nobody
+    /// can sign in, so this applies to every visitor. Also turned on by
+    /// setting COOK_RECIPES_ONLY to 1, true or yes.
+    #[arg(long)]
+    recipes_only: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -292,6 +303,16 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
              add a user with `cook server user add <name>` to require sign-in."
         ),
         None => {}
+    }
+    if state.recipes_only {
+        println!(
+            "Recipes only: {} only browse recipes.",
+            if state.auth.is_some() {
+                "guests"
+            } else {
+                "visitors"
+            }
+        );
     }
 
     // Maximum request body size: 1MB (reasonable for recipe files)
@@ -424,11 +445,28 @@ fn cors_origins(args: &ServerArgs) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Turns `--recipes-only` on from the environment, for containers.
+const RECIPES_ONLY_ENV: &str = "COOK_RECIPES_ONLY";
+
+/// Whether `--recipes-only` is on: the flag, or `COOK_RECIPES_ONLY`.
+fn recipes_only(args: &ServerArgs) -> bool {
+    args.recipes_only || std::env::var(RECIPES_ONLY_ENV).is_ok_and(|value| env_flag(&value))
+}
+
+/// Whether an environment variable's value turns its switch on. An empty or
+/// unrecognised value leaves it off.
+fn env_flag(value: &str) -> bool {
+    ["1", "true", "yes"]
+        .iter()
+        .any(|on| value.trim().eq_ignore_ascii_case(on))
+}
+
 fn build_state(
     ctx: Context,
     args: ServerArgs,
     cors: Arc<cors::CorsConfig>,
 ) -> Result<Arc<AppState>> {
+    let recipes_only = recipes_only(&args);
     let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
@@ -504,6 +542,7 @@ fn build_state(
         csrf_check: args.csrf_check,
         cors,
         auth,
+        recipes_only,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         shopping_list_events,
@@ -565,6 +604,8 @@ pub struct AppState {
     /// Sign-in, when a users file exists. `None` leaves the server open to
     /// anyone who can reach it.
     pub auth: Option<Arc<auth::Auth>>,
+    /// `--recipes-only`: whoever is not signed in only browses recipes.
+    pub recipes_only: bool,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
     pub lsp_sessions: lsp_bridge::SessionLimit,
@@ -757,6 +798,16 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         CliArgs::command().debug_assert();
+    }
+
+    #[test]
+    fn recipes_only_env_values() {
+        for value in ["1", "true", "TRUE", "yes", " Yes "] {
+            assert!(super::env_flag(value), "{value:?}");
+        }
+        for value in ["", "0", "false", "no", "off", "2"] {
+            assert!(!super::env_flag(value), "{value:?}");
+        }
     }
 
     /// `cook server` takes an optional recipe directory *and* subcommands,
