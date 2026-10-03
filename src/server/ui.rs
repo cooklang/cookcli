@@ -475,21 +475,7 @@ async fn create_recipe(
         );
     }
 
-    // Sanitize path - allow alphanumeric, space, dash, underscore, and forward slash
-    let recipe_path: String = form
-        .filename
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_' || *c == '/')
-        .collect();
-
-    // Clean up path: remove leading/trailing slashes, collapse multiple slashes
-    let recipe_path = recipe_path
-        .trim_matches('/')
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("/");
-
+    let recipe_path = new_file_path(&form.filename);
     if recipe_path.is_empty() {
         return new_page_error(
             &state.url_prefix,
@@ -620,6 +606,26 @@ async fn create_recipe(
         kind.extension()
     ))
     .into_response()
+}
+
+/// The path, without extension, that `POST /new` creates for the name typed
+/// into the form.
+///
+/// Only letters, digits, spaces, `-`, `_` and `/` are kept. Each folder and
+/// the file name is then trimmed and empty ones dropped, so ` Mains / Stew `
+/// becomes `Mains/Stew` rather than a folder `Mains ` holding ` Stew.cook`.
+/// Spaces inside a name are kept as typed.
+fn new_file_path(filename: &str) -> String {
+    let kept: String = filename
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '/'))
+        .collect();
+
+    kept.split('/')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// `recipe` -> `Recipe`, for an error message that opens with the noun.
@@ -890,6 +896,30 @@ async fn api_docs_page(
         repo_url: None,
         features,
         viewer,
+    }
+}
+
+#[cfg(test)]
+mod new_file_path_tests {
+    use super::new_file_path;
+
+    #[test]
+    fn names_and_folders_are_trimmed() {
+        assert_eq!(new_file_path(" Soup "), "Soup");
+        assert_eq!(new_file_path(" Mains / Stew "), "Mains/Stew");
+        assert_eq!(new_file_path("\tMains\t/Stew\n"), "Mains/Stew");
+    }
+
+    #[test]
+    fn inner_spaces_are_kept() {
+        assert_eq!(new_file_path("Beef  and Beer Stew"), "Beef  and Beer Stew");
+    }
+
+    #[test]
+    fn empty_and_blank_folders_are_dropped() {
+        assert_eq!(new_file_path("/Mains//  /Stew/"), "Mains/Stew");
+        assert_eq!(new_file_path(" / "), "");
+        assert_eq!(new_file_path("../.."), "");
     }
 }
 

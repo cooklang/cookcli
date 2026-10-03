@@ -55,7 +55,8 @@ pub struct ReadResult {
 ///
 /// `"pasta.cook:2"` becomes `("pasta.cook", 2.0)`. Returns `None` when there is
 /// no colon, or when what follows the last one is not a number — so a Windows
-/// path like `C:\recipes\pasta.cook` is left alone.
+/// path like `C:\recipes\pasta.cook` is left alone. Spaces around the colon
+/// are dropped, so `"pasta : 2"` names `pasta` rather than `pasta `.
 ///
 /// This is CookCLI's command-line convention for naming a recipe and a scaling
 /// factor in one argument. [`read`] deliberately does not apply it: callers
@@ -63,8 +64,8 @@ pub struct ReadResult {
 /// [`ReadRequest::scale`] themselves.
 pub fn split_name_and_scale(query: &str) -> Option<(&str, f64)> {
     let (name, factor) = query.trim().rsplit_once(SCALING_DELIMITER)?;
-    let factor = factor.parse::<f64>().ok()?;
-    Some((name, factor))
+    let factor = factor.trim().parse::<f64>().ok()?;
+    Some((name.trim_end(), factor))
 }
 
 /// Read a recipe, scale it, and report anything the parser had to say.
@@ -543,5 +544,11 @@ mod tests {
             split_name_and_scale("odd:dir/recipe.cook:2"),
             Some(("odd:dir/recipe.cook", 2.0))
         );
+    }
+
+    #[test]
+    fn spaces_around_the_colon_are_not_part_of_the_name_or_factor() {
+        assert_eq!(split_name_and_scale("Soup :2"), Some(("Soup", 2.0)));
+        assert_eq!(split_name_and_scale(" Soup : 2 "), Some(("Soup", 2.0)));
     }
 }

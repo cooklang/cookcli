@@ -1263,6 +1263,69 @@ fn add_matches_the_item_name_exactly() {
     assert_eq!(names(&reread.sections[0].items), ["flour", "Flour"]);
 }
 
+/// Spaces typed around a name are not part of it: ` flour ` is the `flour`
+/// already there, not a second item no recipe would ever match.
+#[test]
+fn add_trims_what_it_is_given() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: " pantry ".to_string(),
+            name: " flour ".to_string(),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "item 'flour' already exists in section 'pantry'")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    add(
+        &ctx,
+        AddRequest {
+            section: " dairy\t".to_string(),
+            name: "  milk ".to_string(),
+            quantity: Some(" 2%l ".to_string()),
+            low: Some("  ".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let milk = reread
+        .items()
+        .find(|item| item.name == "milk")
+        .expect("milk is there under its trimmed name");
+    assert_eq!(milk.section, "dairy");
+    assert_eq!(milk.quantity.as_deref(), Some("2%l"));
+    assert_eq!(milk.low, None, "a blank attribute is not written");
+}
+
+#[test]
+fn add_refuses_a_blank_section_or_name() {
+    let (_dir, ctx) = planted(SMALL);
+
+    for (section, name) in [("pantry", "   "), (" ", "milk"), ("", "")] {
+        let result = add(
+            &ctx,
+            AddRequest {
+                section: section.to_string(),
+                name: name.to_string(),
+                ..Default::default()
+            },
+        );
+        assert!(
+            matches!(result, Err(CoreError::PantryEdit { .. })),
+            "{section:?} / {name:?} must be refused"
+        );
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing is written");
+}
+
 /// The same name in another section is a different item.
 #[test]
 fn add_allows_the_same_name_in_a_different_section() {

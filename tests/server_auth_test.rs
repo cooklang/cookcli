@@ -656,8 +656,7 @@ async fn changes_are_logged_with_who_made_them() {
         ),
         (
             "/api/shopping_list/check",
-            // A newline from the request stays inside its quotes.
-            serde_json::json!({ "name": "flour\n2026-01-01 00:00:00 bob deleted it all" }),
+            serde_json::json!({ "name": " flour " }),
         ),
         (
             "/api/pantry/add",
@@ -672,6 +671,13 @@ async fn changes_are_logged_with_who_made_them() {
             "{path}"
         );
     }
+    // A name that would write a second line to the checked log is refused,
+    // and a refused change is not logged.
+    let forged = post(
+        "/api/shopping_list/check",
+        serde_json::json!({ "name": "flour\n2026-01-01 00:00:00 bob deleted it all" }),
+    );
+    assert_eq!(forged.await.unwrap().status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         sign_out(&server, &cookie).await.status(),
         StatusCode::SEE_OTHER
@@ -686,7 +692,7 @@ async fn changes_are_logged_with_who_made_them() {
             "alice updated recipe \"Logged.cook\"",
             "alice deleted recipe \"Logged.cook\"",
             "alice added \"Recipe.cook\" ×2 to the shopping list",
-            "alice checked off \"flour\\n2026-01-01 00:00:00 bob deleted it all\" on the shopping list",
+            "alice checked off \"flour\" on the shopping list",
             "alice added \"milk\" to the \"dairy\" section of the pantry",
             "alice cleared the shopping list",
             "alice signed out",

@@ -59,6 +59,43 @@ pub struct AddPantryItem {
     pub low: Option<String>,
 }
 
+impl AddPantryItem {
+    /// The item with the spaces typed around each field taken off, and blank
+    /// attributes left unset.
+    ///
+    /// The pantry is matched against recipe ingredients by name, so ` Milk`
+    /// kept as typed is never taken off a shopping list that asks for `milk`,
+    /// and a quantity of ` unlim` is not unlimited.
+    ///
+    /// # Errors
+    ///
+    /// When the section or the name is blank.
+    fn trimmed(self) -> Result<Self, &'static str> {
+        let section = self.section.trim().to_string();
+        let name = self.name.trim().to_string();
+        if section.is_empty() {
+            return Err("Section cannot be empty");
+        }
+        if name.is_empty() {
+            return Err("Item name cannot be empty");
+        }
+
+        let attribute = |value: Option<String>| {
+            value
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        Ok(Self {
+            section,
+            name,
+            quantity: attribute(self.quantity),
+            bought: attribute(self.bought),
+            expire: attribute(self.expire),
+            low: attribute(self.low),
+        })
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UpdatePantryItem {
     pub quantity: Option<String>,
@@ -78,6 +115,9 @@ pub async fn add_item(
     Extension(viewer): Extension<Viewer>,
     Json(item): Json<AddPantryItem>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let item = item
+        .trimmed()
+        .map_err(|e| (StatusCode::BAD_REQUEST, json_error(e)))?;
     let pantry_path = get_pantry_path(&state)?;
     let mut pantry_conf = load_pantry(&state).await.unwrap_or_default();
 
@@ -394,4 +434,39 @@ pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
 
 fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) -> String {
     cooklang::pantry::to_toml_string(pantry_conf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AddPantryItem;
+
+    fn item(section: &str, name: &str, quantity: Option<&str>) -> AddPantryItem {
+        AddPantryItem {
+            section: section.to_string(),
+            name: name.to_string(),
+            quantity: quantity.map(str::to_string),
+            bought: None,
+            expire: Some(" 2026-01-01 ".to_string()),
+            low: Some("   ".to_string()),
+        }
+    }
+
+    #[test]
+    fn a_new_item_is_trimmed() {
+        let added = item(" fridge ", " Milk ", Some(" unlim "))
+            .trimmed()
+            .unwrap();
+        assert_eq!(added.section, "fridge");
+        assert_eq!(added.name, "Milk");
+        assert_eq!(added.quantity.as_deref(), Some("unlim"));
+        assert_eq!(added.expire.as_deref(), Some("2026-01-01"));
+        // A blank attribute is not an attribute.
+        assert_eq!(added.low, None);
+    }
+
+    #[test]
+    fn a_blank_name_or_section_is_refused() {
+        assert!(item("fridge", "   ", None).trimmed().is_err());
+        assert!(item(" ", "Milk", None).trimmed().is_err());
+    }
 }
