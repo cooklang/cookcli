@@ -108,6 +108,16 @@ delete-recipe = Recept Verwijderen
 delete-recipe-confirm = Weet je zeker dat je dit recept wilt verwijderen?
 delete-recipe-warning = Deze actie kan niet ongedaan worden gemaakt.
 
+# Rename Recipe
+action-rename = Hernoemen
+rename-title = Bestand hernoemen
+rename-label = Nieuwe naam
+rename-hint = Het bestand blijft in zijn map. De foto's worden mee hernoemd, en recepten en menu's die het gebruiken krijgen de nieuwe naam.
+rename-failed = Hernoemen mislukt: %s
+rename-skipped = Hernoemd, maar sommige verwijzingen zijn niet aangepast: %s
+rename-write-failed = Hernoemd, maar deze bestanden konden niet worden bijgewerkt: %s
+rename-shopping-list = De boodschappenlijst gebruikt nog de oude naam; voeg het opnieuw toe vanaf de nieuwe pagina.
+
 # Title Picture
 picture-button = Foto
 picture-title = Titelfoto

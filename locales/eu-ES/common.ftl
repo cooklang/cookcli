@@ -108,6 +108,16 @@ delete-recipe = Ezabatu errezeta
 delete-recipe-confirm = Ziur zaude errezeta hau ezabatu nahi duzula?
 delete-recipe-warning = Ekintza hau ezin da desegin.
 
+# Rename Recipe
+action-rename = Berrizendatu
+rename-title = Berrizendatu fitxategia
+rename-label = Izen berria
+rename-hint = Fitxategia bere karpetan geratzen da. Bere argazkiak ere berrizendatzen dira, eta erabiltzen duten errezeta eta menuak izen berrira eguneratzen dira.
+rename-failed = Ezin izan da berrizendatu: %s
+rename-skipped = Berrizendatuta, baina erreferentzia batzuk ez dira aldatu: %s
+rename-write-failed = Berrizendatuta, baina fitxategi hauek ezin izan dira eguneratu: %s
+rename-shopping-list = Erosketa-zerrendak izen zaharra darabil oraindik; gehitu berriro bere orri berritik.
+
 # Title Picture
 picture-button = Argazkia
 picture-title = Errezetaren argazkia

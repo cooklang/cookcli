@@ -238,6 +238,36 @@ Response:
 }
 ```
 
+### `POST /api/recipe_rename/{*path}`
+
+Rename a recipe or menu file
+
+Renames the file within its own folder; moving it to another folder is not possible. Its title and step pictures (`Recipe.jpg`, `Recipe.2.jpg`, `Recipe.1.2.jpg`) are renamed with it, except one another recipe or menu in the folder shows too. Every reference to it in the collection's `.cook` and `.menu` files (`@./Breakfast/Old Recipe{}`, `@../Old Recipe{}`) is rewritten to the new name — only the name, the rest of each file is kept byte for byte. A reference that cannot be rewritten exactly (an escape or a comment inside the name, another letter case, a file reached through a symbolic link, a file saved meanwhile) is left alone and listed in `references_skipped`, with its line when known; a file that could not be written is listed in `references_failed`, and the rename stands. The saved shopping list is not changed: `shopping_list_stale` says whether it still names the old path. Nothing is ever overwritten: `409` when a file already has the new name, when a picture would land on an existing file or on another recipe's picture name, or when renaming a recipe to the name of a menu beside it (references to the menu would reach the recipe). `400` for a name that is not a plain file name (a folder, a leading dot, characters Windows or a Cooklang reference cannot hold, a Windows device name), for a file or folder that is a symbolic link, and for the same name; `404` when the file does not exist.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe or menu path relative to the recipe directory; the extension is optional, resolved as for the raw endpoint. |
+| `name` | body | `string` | yes | The new name, without folder. The file's own extension may be typed and is dropped; a recipe cannot be renamed to `.menu` or the other way round. |
+
+Request body:
+
+```json
+{ "name": "New Recipe" }
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "path": "Breakfast/New Recipe.cook",
+  "references_updated": ["Plans/Week 1.menu"],
+  "references_skipped": [{ "file": "Lunch/Bowl.cook", "line": 4 }],
+  "references_failed": [],
+  "shopping_list_stale": false
+}
+```
+
 ### `GET /api/recipe_image/{*path}`
 
 Read a recipe's title and step pictures

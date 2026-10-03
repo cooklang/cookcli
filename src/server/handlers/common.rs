@@ -117,6 +117,134 @@ fn has_padded_name(path: &str) -> bool {
     })
 }
 
+/// Longest new name a rename accepts, in bytes. File systems stop at 255, and
+/// the step pictures that move along add up to `.99.99.jpeg` to it.
+const MAX_NAME_BYTES: usize = 200;
+
+/// Names Windows keeps for devices, whatever follows the first dot:
+/// `CON.cook` opens the console there, not a file. Collections are synced to
+/// Windows machines, so they are refused everywhere.
+const WINDOWS_DEVICE_NAMES: [&str; 6] = ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"];
+
+/// The stem a `.cook` or `.menu` file of extension `ext` is renamed to, from
+/// the name typed for it.
+///
+/// The name is one file name in the file's own folder, never a path. Typing
+/// the file's own extension is allowed and dropped; the other one is refused,
+/// since a rename cannot turn a recipe into a menu. Refused besides:
+///
+/// - path separators, `:` and the other characters Windows does not allow in a
+///   file name (`* ? " < > |`), control and invisible formatting characters;
+/// - a leading `.`, which would hide the file (see [`is_request_path`]), and a
+///   trailing `.` or space, which Windows drops;
+/// - Windows device names (`CON`, `COM1`, …);
+/// - what could not be written in a recipe reference, since the references to
+///   the file are rewritten to the new name: `@ # ~ { } [ ]` would end or
+///   split it, `--` would start a comment, and two spaces in a row would be
+///   read back as one.
+pub fn new_file_name(name: &str, ext: &str) -> Result<String, ApiError> {
+    let refuse = |why: &str| {
+        Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!("Invalid name: {why}")),
+        ))
+    };
+
+    let name = name.trim();
+    let stem = name
+        .strip_suffix(ext)
+        .and_then(|rest| rest.strip_suffix('.'))
+        .unwrap_or(name)
+        .trim_end();
+
+    if stem.is_empty() {
+        return refuse("it is empty");
+    }
+    if let Some(other) = RECIPE_FILE_EXTENSIONS
+        .iter()
+        .find(|other| **other != ext && stem.ends_with(&format!(".{other}")))
+    {
+        return refuse(&format!("a .{ext} file cannot be renamed to .{other}"));
+    }
+    if stem.len() > MAX_NAME_BYTES {
+        return refuse(&format!("it is longer than {MAX_NAME_BYTES} bytes"));
+    }
+    if let Some(c) = stem.chars().find(|c| {
+        matches!(
+            c,
+            '/' | '\\'
+                | ':'
+                | '*'
+                | '?'
+                | '"'
+                | '<'
+                | '>'
+                | '|'
+                | '@'
+                | '#'
+                | '~'
+                | '{'
+                | '}'
+                | '['
+                | ']'
+        ) || c.is_control()
+            || is_invisible(*c)
+    }) {
+        return refuse(&format!("it contains {:?}", c));
+    }
+    if stem.contains("--") {
+        return refuse("it contains \"--\"");
+    }
+    if stem.contains("  ") {
+        return refuse("it contains two spaces in a row");
+    }
+    if stem.starts_with('.') {
+        return refuse("it starts with a dot");
+    }
+    if stem.ends_with('.') {
+        return refuse("it ends with a dot");
+    }
+    if is_windows_device_name(stem) {
+        return refuse("it is a name Windows reserves for a device");
+    }
+
+    Ok(stem.to_string())
+}
+
+/// Zero-width and bidirectional formatting characters: they do not show, so a
+/// name holding one looks like another name.
+fn is_invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{2028}'..='\u{202E}'
+            | '\u{2060}'..='\u{2069}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+    )
+}
+
+fn is_windows_device_name(stem: &str) -> bool {
+    let device = stem.split('.').next().unwrap_or(stem).trim_end();
+    // `COM1` to `COM9`, and `COM¹` to `COM³`, which Windows reserves too.
+    let numbered = |prefix: &str| {
+        let mut chars = device.chars();
+        let start: String = chars.by_ref().take(3).collect();
+        start.eq_ignore_ascii_case(prefix)
+            && matches!(
+                (chars.next(), chars.next()),
+                (Some('0'..='9' | '¹' | '²' | '³'), None)
+            )
+    };
+    WINDOWS_DEVICE_NAMES
+        .iter()
+        .any(|reserved| device.eq_ignore_ascii_case(reserved))
+        || numbered("COM")
+        || numbered("LPT")
+}
+
 /// Rewrites the `tags` entry of a serialised metadata map into an array.
 ///
 /// YAML frontmatter takes `tags: a, b` as well as `tags: [a, b]`, and the
@@ -286,6 +414,75 @@ mod tests {
         assert_eq!(resolve(&base, "notes.txt"), missing("notes.txt.cook"));
         // A directory is not a recipe either, even under a recipe's name.
         assert_eq!(resolve(&base, "Folder"), missing("Folder.cook"));
+    }
+
+    fn renamed(name: &str, ext: &str) -> Result<String, String> {
+        new_file_name(name, ext).map_err(|(status, body)| {
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{name:?}");
+            body["error"].as_str().unwrap().to_string()
+        })
+    }
+
+    #[test]
+    fn a_new_name_is_a_plain_file_name() {
+        for (name, ext, stem) in [
+            ("Noodles", "cook", "Noodles"),
+            ("  Noodles  ", "cook", "Noodles"),
+            ("Noodles.cook", "cook", "Noodles"),
+            ("Week 42.menu", "menu", "Week 42"),
+            ("Mr. Smith's Stew", "cook", "Mr. Smith's Stew"),
+            ("Crème brûlée (v2)", "cook", "Crème brûlée (v2)"),
+            ("Pasta - quick", "cook", "Pasta - quick"),
+            ("Console", "cook", "Console"),
+            ("COM10", "cook", "COM10"),
+            ("COé1", "cook", "COé1"),
+        ] {
+            assert_eq!(renamed(name, ext).as_deref(), Ok(stem), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn a_new_name_that_could_reach_another_file_is_refused() {
+        for (name, ext) in [
+            ("", "cook"),
+            ("   ", "cook"),
+            (".cook", "cook"),
+            ("../Pasta", "cook"),
+            ("Sub/Pasta", "cook"),
+            ("Sub\\Pasta", "cook"),
+            ("..", "cook"),
+            (".hidden", "cook"),
+            ("C:Pasta", "cook"),
+            ("Pasta.", "cook"),
+            ("Week.menu", "cook"),
+            ("Pasta.cook", "menu"),
+            ("CON", "cook"),
+            ("con.cook", "cook"),
+            ("Nul.backup", "cook"),
+            ("COM1", "cook"),
+            ("lpt9", "menu"),
+            ("COM¹", "cook"),
+            ("lpt³.notes", "cook"),
+            ("Pas\u{2028}ta", "cook"),
+            ("Pas\u{FE0F}ta", "cook"),
+            ("Pas\nta", "cook"),
+            ("Pas\u{202E}ta", "cook"),
+            ("Pas\u{200B}ta", "cook"),
+            ("Pasta?", "cook"),
+            ("Pasta*", "cook"),
+            ("Pasta|Alias", "cook"),
+            ("Pasta@home", "cook"),
+            ("Pasta{2}", "cook"),
+            ("Pasta #1", "cook"),
+            ("Pasta~", "cook"),
+            ("Pasta [v2]", "cook"),
+            ("Pasta -- quick", "cook"),
+            ("Red  Beans", "cook"),
+        ] {
+            assert!(renamed(name, ext).is_err(), "{name:?} must be refused");
+        }
+        assert!(renamed(&"a".repeat(MAX_NAME_BYTES), "cook").is_ok());
+        assert!(renamed(&"a".repeat(MAX_NAME_BYTES + 1), "cook").is_err());
     }
 
     #[test]

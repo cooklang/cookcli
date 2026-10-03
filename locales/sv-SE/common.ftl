@@ -108,6 +108,16 @@ delete-recipe = Radera Recept
 delete-recipe-confirm = Är du säker att du vill radera detta recept?
 delete-recipe-warning = Detta kan inte ångras.
 
+# Rename Recipe
+action-rename = Byt namn
+rename-title = Byt namn på fil
+rename-label = Nytt namn
+rename-hint = Filen stannar i sin mapp. Dess bilder byter namn med den, och recept och menyer som använder den uppdateras med det nya namnet.
+rename-failed = Kunde inte byta namn: %s
+rename-skipped = Namnet är bytt, men vissa referenser lämnades oförändrade: %s
+rename-write-failed = Namnet är bytt, men dessa filer kunde inte uppdateras: %s
+rename-shopping-list = Inköpslistan använder fortfarande det gamla namnet; lägg till det igen från dess nya sida.
+
 # Title Picture
 picture-button = Bild
 picture-title = Titelbild

@@ -11,7 +11,10 @@
 use crate::server::activity;
 use crate::server::{
     fs_atomic,
-    handlers::common::{check_path, json_error},
+    handlers::{
+        common::{check_path, json_error},
+        recipe_rename::RECIPE_FILES,
+    },
     title_image::{self, PrepareError},
     AppState,
 };
@@ -109,6 +112,15 @@ pub async fn recipe_image_put(
         .await
         .map_err(prepare_error)?;
 
+    // Not before decoding, which takes seconds. The recipe may have been
+    // renamed meanwhile: the picture would then land under its old name.
+    let _writing = RECIPE_FILES.lock().await;
+    if !recipe.is_file() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("{path} was renamed or removed meanwhile")),
+        ));
+    }
     let files = picture_files(&recipe, slot.as_ref());
     let (target, older) = files.split_first().expect("there is always a target");
     write_atomically(target, jpeg).await?;
@@ -140,6 +152,7 @@ pub async fn recipe_image_delete(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let _writing = RECIPE_FILES.lock().await;
     let requested = requested_step(&query)?;
     let entry = find_recipe(&state, &path)?;
     let recipe = recipe_file(&entry, &path)?;
