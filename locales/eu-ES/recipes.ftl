@@ -46,6 +46,21 @@ recipe-type-menu = Menua
 recipe-type-plan = Otordu-plana
 plan-outside = Plan honetatik kanpo
 plan-nothing-planned = Ezer ez aurreikusita
+plan-add-to = Gehitu hona: { $meal }, { $day }
+plan-line-actions = Aldatu
+plan-move-to = Eraman hona…
+plan-copy-to = Kopiatu hona…
+plan-remove = Kendu
+plan-move-title = Eraman beste egun batera
+plan-copy-title = Kopiatu beste egun batera
+plan-move = Eraman
+plan-copy = Kopiatu
+plan-target-day = Eguna
+plan-target-meal = Otordua
+plan-changed = Plana aldatu egin da orria kargatu zenetik. Kargatu berriro ikusteko, eta saiatu berriro.
+plan-save-failed = Ezin izan da plana gorde.
+plan-saved = Plana gordeta
+plan-reload = Kargatu berriro
 
 # Today's Menu Banner
 todays-menu-title = Gaurko menua

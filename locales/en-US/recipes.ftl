@@ -50,6 +50,21 @@ recipe-type-menu = Menu
 recipe-type-plan = Meal Plan
 plan-outside = Outside this plan
 plan-nothing-planned = Nothing planned
+plan-add-to = Add to { $meal }, { $day }
+plan-line-actions = Change
+plan-move-to = Move to…
+plan-copy-to = Copy to…
+plan-remove = Remove
+plan-move-title = Move to another day
+plan-copy-title = Copy to another day
+plan-move = Move
+plan-copy = Copy
+plan-target-day = Day
+plan-target-meal = Meal
+plan-changed = The plan changed since this page was loaded. Reload to see it, then try again.
+plan-save-failed = Could not save the plan.
+plan-saved = Plan saved
+plan-reload = Reload
 
 # Today's Menu Banner
 todays-menu-title = Today's Menu

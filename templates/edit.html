@@ -108,28 +108,7 @@
         </div>
     </div>
 
-    <!-- Recipe picker: behind Add recipe (menus) and Recipe reference (recipes) -->
-    <div id="recipe-picker" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50"
-         data-no-results="{{ tr.t("recipe-picker-no-results") }}" data-load-failed="{{ tr.t("recipe-picker-load-failed") }}">
-        <div class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-lg mx-4" role="dialog" aria-modal="true" aria-labelledby="recipe-picker-heading">
-            <h2 id="recipe-picker-heading" class="text-title font-bold text-text mb-4">{{ tr.t("recipe-picker-title") }}</h2>
-            <input id="recipe-picker-search" type="search" class="picker-search" autocomplete="off" spellcheck="false"
-                   role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="recipe-picker-results"
-                   aria-label="{{ tr.t("recipe-picker-search") }}" placeholder="{{ tr.t("recipe-picker-search") }}">
-            <ul id="recipe-picker-results" class="picker-results" role="listbox" aria-label="{{ tr.t("recipe-picker-results") }}"></ul>
-            <p id="recipe-picker-status" class="text-sm text-muted mt-2 empty:mt-0" aria-live="polite"></p>
-            <div id="recipe-picker-servings" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4">
-                <label for="recipe-picker-servings-input" class="text-sm font-medium text-muted">{{ tr.t("recipe-picker-servings") }}</label>
-                <input id="recipe-picker-servings-input" type="number" min="0" step="any" inputmode="decimal" class="picker-servings"
-                       aria-describedby="recipe-picker-servings-hint">
-                <p id="recipe-picker-servings-hint" class="w-full text-xs text-faint">{{ tr.t("recipe-picker-servings-hint") }}</p>
-            </div>
-            <div class="flex justify-end gap-3 mt-6">
-                <button type="button" id="recipe-picker-cancel" class="btn">{{ tr.t("action-cancel") }}</button>
-                <button type="button" id="recipe-picker-insert" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{{ tr.t("recipe-picker-insert") }}</button>
-            </div>
-        </div>
-    </div>
+{% include "recipe_picker.html" %}
 
     <!-- Cooklang toolbar: each button inserts the markup or wraps the selection -->
     <div id="editor-toolbar" class="editor-toolbar" role="toolbar" aria-label="{{ tr.t("editor-toolbar-label") }}" data-mode="{% if is_menu %}menu{% else %}recipe{% endif %}">

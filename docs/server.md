@@ -297,6 +297,12 @@ Dinner: \
 - **New Meal Plan**, beside **New Menu** on the recipe list, writes one: pick its first day (any day of the week), how many days it lasts (2 to 62), its meals and its servings. It has a section for every day, with an empty bullet under each meal to fill in the editor; day and meal names are written in the page's language.
 - The plan shows as one card a day, from its first dated day to its last, in weekday columns on a wide screen (weeks start on Sunday for `en-US` and `ja-JP`, Monday otherwise) and one under the other on a phone. A day with no section still gets a card, but a week with none is left out. Every day offers a slot for each meal the plan's days name (`Breakfast:`), in the order they first appear, even when nothing is planned. The reader's own clock marks today and greys the days gone by.
 - A section with no date is listed under **Outside this plan**. A menu with a single dated day shows as an ordinary menu.
+- Those who may edit recipes can change a plan from its calendar:
+  - **+** beside a meal opens the recipe picker and adds the recipe at the end of that meal, as `- @./Folder/Recipe{2%servings}` (servings start at the plan's own). A missing day or meal is written for it: days in date order, meals in the order the plan's days name them.
+  - **⋯** beside a line opens **Move to…**, **Copy to…** and **Remove**. Move and Copy ask for a day and a meal. A line can also be dragged onto another meal; holding Alt, Ctrl or ⌘ copies it instead.
+  - Only the lines concerned change: comments, notes and the rest of the file are left as they are. Removing a meal's only line leaves an empty bullet, so the meal keeps its slot.
+  - The page reloads after each change. If the plan was changed elsewhere since the page was loaded (in the editor, another tab, or on disk), the change is refused and the page asks for a reload, rather than overwrite it.
+  - A meal whose lines the calendar cannot match one for one with the file, such as one with free text between bullets, can still be added to, but its lines are only changed in the editor. The calendar uses [`POST /api/plans/{*path}`](api.md).
 
 ## Web feeds
 
