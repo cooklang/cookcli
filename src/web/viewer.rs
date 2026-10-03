@@ -97,6 +97,9 @@ impl Capability {
 pub struct Viewer {
     auth_enabled: bool,
     user: Option<(String, Role)>,
+    /// `--recipes-only` and nobody is signed in: this viewer only browses
+    /// recipes and menus.
+    recipes_only: bool,
 }
 
 impl Viewer {
@@ -112,6 +115,7 @@ impl Viewer {
         Self {
             auth_enabled: true,
             user: None,
+            recipes_only: false,
         }
     }
 
@@ -121,11 +125,25 @@ impl Viewer {
         Self {
             auth_enabled: true,
             user: Some((user.into(), role)),
+            recipes_only: false,
+        }
+    }
+
+    /// The same viewer under `--recipes-only`: unless someone is signed in,
+    /// they may only browse recipes, and may change nothing.
+    #[cfg(feature = "server")]
+    pub fn limited_to_recipes(self) -> Self {
+        Self {
+            recipes_only: !self.is_signed_in(),
+            ..self
         }
     }
 
     /// Whether this viewer may do `capability`.
     pub fn can(&self, capability: Capability) -> bool {
+        if self.recipes_only {
+            return false;
+        }
         match &self.user {
             Some((_, role)) => role.allows(capability),
             None => !self.auth_enabled,
@@ -153,6 +171,13 @@ impl Viewer {
     /// navigation shows a sign-in link.
     pub fn auth_enabled(&self) -> bool {
         self.auth_enabled
+    }
+
+    /// Whether this viewer only browses recipes (`--recipes-only` and nobody
+    /// signed in), so pages leave out the shopping list, the pantry and the
+    /// rest of the preferences.
+    pub fn recipes_only(&self) -> bool {
+        self.recipes_only
     }
 
     /// Whether someone is signed in.
@@ -217,6 +242,21 @@ mod tests {
         assert_eq!(can(Role::Shopper), [true, false, false]);
         assert_eq!(can(Role::Editor), [true, true, false]);
         assert_eq!(can(Role::Admin), [true, true, true]);
+    }
+
+    #[test]
+    fn recipes_only_limits_whoever_is_not_signed_in() {
+        for viewer in [Viewer::open(), Viewer::guest()] {
+            let viewer = viewer.limited_to_recipes();
+            assert!(viewer.recipes_only());
+            for capability in EVERYTHING {
+                assert!(!viewer.can(capability), "{capability:?}");
+            }
+        }
+
+        let viewer = Viewer::signed_in("alice", Role::Shopper).limited_to_recipes();
+        assert!(!viewer.recipes_only());
+        assert!(viewer.can_edit_lists());
     }
 
     #[test]

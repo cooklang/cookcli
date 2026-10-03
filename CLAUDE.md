@@ -167,6 +167,11 @@ Configuration search order:
   change anything. Guests get `401`, signed-in users whose role falls short
   `403`. Templates get a `Viewer` (`src/web/viewer.rs`) and hide controls
   with `viewer.can_edit_lists()` / `can_edit_recipes()` / `can_admin()`
+- `--recipes-only` / `COOK_RECIPES_ONLY`: whoever is not signed in (everyone
+  without a users file) only reads recipes. `auth::middleware::browses_recipes`
+  is an allowlist of what they may request; anything else, a new route
+  included, asks them to sign in (`404` without sign-in). Their `Viewer` can
+  do nothing and `viewer.recipes_only()` hides the rest in templates
 - Every handler that changes something takes `Extension<Viewer>` and, once
   the change succeeded, calls `server::activity::record` — one stdout line
   saying who did what. Quote request text with `activity::quoted` /

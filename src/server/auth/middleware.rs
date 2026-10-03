@@ -46,6 +46,27 @@ const WRITES: &[(&str, Capability)] = &[
     ("/new", Capability::EditRecipes),
 ];
 
+/// What a guest may still open under `--recipes-only`, below each prefix:
+/// the recipe pages and the reads they make, the feeds, the app's own assets,
+/// and the preferences page, cut down to the language picker. Anything else,
+/// a route added later included, is out of their reach.
+const RECIPE_READS: &[&str] = &[
+    "/directory",
+    "/random",
+    "/recipe",
+    "/preferences",
+    "/atom.xml",
+    "/rss.xml",
+    "/static",
+    "/api/recipes",
+    "/api/search",
+];
+
+/// The files a guest may fetch from the recipe directory under
+/// `--recipes-only`: the recipes' pictures. Not the shopping list, the
+/// pantry or anything else that happens to live there.
+const PICTURES: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "avif"];
+
 /// Whether `path` is `prefix` or lies below it: `/edit` covers `/edit/Soup`
 /// but not `/editor-notes`.
 fn under(path: &str, prefix: &str) -> bool {
@@ -80,6 +101,31 @@ pub fn required_capability(method: &Method, path: &str) -> Option<Capability> {
     }
 }
 
+/// Whether a viewer limited by `--recipes-only` may send this request:
+/// reading recipes, and signing in to get more.
+///
+/// `path` is the request path without the `--url-prefix`.
+pub fn browses_recipes(method: &Method, path: &str) -> bool {
+    if matches!(path, "/login" | "/logout") {
+        return true;
+    }
+    if !matches!(*method, Method::GET | Method::HEAD) {
+        return false;
+    }
+    if path == "/" {
+        return true;
+    }
+    if under(path, "/api/static") {
+        return path.rsplit_once('.').is_some_and(|(name, extension)| {
+            !name.ends_with('/')
+                && PICTURES
+                    .iter()
+                    .any(|picture| extension.eq_ignore_ascii_case(picture))
+        });
+    }
+    RECIPE_READS.iter().any(|prefix| under(path, prefix))
+}
+
 /// Works out who sent each request, hands that to the handlers as a
 /// [`Viewer`] extension, and turns away anyone whose role does not allow the
 /// request. Runs on every route, sign-in on or off, since the page handlers
@@ -93,6 +139,29 @@ pub async fn middleware(
         Some(auth) => auth.viewer(request.headers()),
         None => Viewer::open(),
     };
+
+    let viewer = if state.recipes_only {
+        viewer.limited_to_recipes()
+    } else {
+        viewer
+    };
+
+    if viewer.recipes_only() {
+        if !browses_recipes(request.method(), request.uri().path()) {
+            // Without sign-in there is nothing to unlock: to this visitor,
+            // the rest of the server does not exist.
+            return match state.auth {
+                Some(_) => refuse(&state.url_prefix, &request),
+                None => StatusCode::NOT_FOUND.into_response(),
+            };
+        }
+        // Leaves the visitor's own choice in its cookie alone, for when they
+        // sign in.
+        request.extensions_mut().insert(FeatureFlags {
+            show_shopping_list: false,
+            show_pantry: false,
+        });
+    }
 
     if let Some(capability) = required_capability(request.method(), request.uri().path()) {
         if !viewer.can(capability) {
@@ -282,6 +351,79 @@ mod tests {
             "/api/synchronized",
         ] {
             assert_eq!(needs(Method::GET, path), None, "{path}");
+        }
+    }
+
+    #[test]
+    fn recipes_only_lets_guests_read_recipes() {
+        for path in [
+            "/",
+            "/directory/Mains",
+            "/random",
+            "/random/Mains",
+            "/recipe/Soup.cook",
+            "/recipe/Week.menu",
+            "/preferences",
+            "/atom.xml",
+            "/rss.xml",
+            "/static/css/output.css",
+            "/api/recipes",
+            "/api/recipes/Soup.cook",
+            "/api/recipes/raw/Soup.cook",
+            "/api/search",
+            "/api/static/Soup.jpg",
+            "/api/static/Mains/Soup.1.WEBP",
+            "/login",
+        ] {
+            assert!(browses_recipes(&Method::GET, path), "{path}");
+            assert!(browses_recipes(&Method::HEAD, path), "{path}");
+        }
+        assert!(browses_recipes(&Method::POST, "/login"));
+        assert!(browses_recipes(&Method::POST, "/logout"));
+    }
+
+    #[test]
+    fn recipes_only_keeps_guests_from_the_rest() {
+        for path in [
+            "/shopping-list",
+            "/pantry",
+            "/edit/Soup.cook",
+            "/new",
+            "/api-docs",
+            "/api/shopping_list/items",
+            "/api/shopping_list/events",
+            "/api/pantry",
+            "/api/menus",
+            "/api/stats",
+            "/api/reload",
+            "/api/ws/lsp",
+            "/api/sync/status",
+            "/api/recipe_image/Soup.cook",
+            "/api/static/.shopping-list",
+            "/api/static/.shopping-checked",
+            "/api/static/config/pantry.conf",
+            "/api/static/Week.menu",
+            "/api/static/Soup.cook",
+            "/api/static/.jpg",
+            "/api/static/Mains/.png",
+            "/api/anything-added-later",
+            // Look-alikes of allowed paths.
+            "/recipes",
+            "/preferences-backup",
+            "/api/searchx",
+            "/loginx",
+        ] {
+            assert!(!browses_recipes(&Method::GET, path), "{path}");
+        }
+        for (method, path) in [
+            (Method::POST, "/api/shopping_list"),
+            (Method::POST, "/api/shopping_list/add"),
+            (Method::PUT, "/api/recipes/Soup.cook"),
+            (Method::DELETE, "/api/recipes/Soup.cook"),
+            (Method::POST, "/new"),
+            (Method::POST, "/recipe/Soup.cook"),
+        ] {
+            assert!(!browses_recipes(&method, path), "{method} {path}");
         }
     }
 }
