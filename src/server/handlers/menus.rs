@@ -103,6 +103,11 @@ pub enum MenuMealItem {
         /// Multiplier for the referenced recipe. Always present: a reference
         /// with no `{...}` target is ×1 before the menu scale is applied.
         scale: f64,
+        /// The reference is another menu, used as a meal of this one; `path`
+        /// then ends in `.menu`. Only sent when true, so a response without
+        /// menus reads as it always has.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        menu: bool,
     },
     #[serde(rename = "ingredient")]
     Ingredient {
@@ -315,6 +320,15 @@ pub async fn get_menu(
                                         .get(*index)
                                         .and_then(|i| i.quantity.as_ref());
 
+                                    // Looked up whatever the quantity: it says
+                                    // whether the reference is a recipe or
+                                    // another menu.
+                                    let lookup = recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
+                                    let info =
+                                        ref_info_cache.entry(lookup.clone()).or_insert_with(|| {
+                                            ref_info_or_default(&state.base_path, &lookup, &name)
+                                        });
+
                                     // The factor comes from the authored
                                     // quantity, so the menu scale still has to
                                     // be applied here. A reference with no
@@ -322,29 +336,23 @@ pub async fn get_menu(
                                     // which is what `add_menu` stores for it.
                                     let final_scale = match authored_quantity {
                                         Some(quantity) => {
-                                            let lookup =
-                                                recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
-                                            let info = ref_info_cache
-                                                .entry(lookup.clone())
-                                                .or_insert_with(|| {
-                                                    ref_info_or_default(
-                                                        &state.base_path,
-                                                        &lookup,
-                                                        &name,
-                                                    )
-                                                });
                                             reference_scale_factor(Some(quantity), info, &name)
                                                 * scale
                                         }
-                                        // No lookup needed: the factor is 1.0
-                                        // whatever the referenced recipe says.
                                         None => scale,
                                     };
 
-                                    // Build the .cook path for the reference
-                                    let ref_path = format!("{}.cook", name);
+                                    // The file the reference names: a recipe's
+                                    // `.cook`, or the `.menu` of a menu used as
+                                    // a meal of this one.
+                                    let ref_path = if info.is_menu {
+                                        format!("{}.menu", name.trim_end_matches(".menu"))
+                                    } else {
+                                        format!("{}.cook", name)
+                                    };
 
                                     step_items.push(LineItem::RecipeRef {
+                                        menu: info.is_menu,
                                         name,
                                         path: Some(ref_path),
                                         scale: final_scale,
@@ -417,11 +425,17 @@ pub async fn get_menu(
                         // structured recipe references and ingredients; consumers that
                         // need the raw text should read the .menu file directly.
                     }
-                    LineItem::RecipeRef { name, path, scale } => {
+                    LineItem::RecipeRef {
+                        name,
+                        path,
+                        scale,
+                        menu,
+                    } => {
                         current_items.push(MenuMealItem::RecipeReference {
                             name: name.clone(),
                             path: path.clone(),
                             scale: *scale,
+                            menu: *menu,
                         });
                     }
                     LineItem::Ingredient {
@@ -471,6 +485,7 @@ enum LineItem {
         name: String,
         path: Option<String>,
         scale: f64,
+        menu: bool,
     },
     Ingredient {
         name: String,

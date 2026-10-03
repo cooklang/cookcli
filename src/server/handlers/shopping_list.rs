@@ -623,7 +623,33 @@ pub async fn add_menu_to_shopping_list(
             let recipe_factor =
                 reference_scale_factor(ingredient.quantity.as_ref(), &info, &ref_display);
             let final_scale = recipe_factor * menu_scale;
-            let sub_refs = info.sub_refs;
+            let mut sub_refs = info.sub_refs;
+
+            // A menu used as a meal of this one (`@./Brunches/Sunday.menu{}`)
+            // is listed like a recipe, its references followed in a request
+            // of its own. A reference of it back to this menu would count this
+            // menu's contents a second time there, where nothing knows it is
+            // already on the list, so it is dropped here instead.
+            if info.is_menu {
+                let this_menu = payload.path.trim_end_matches(".menu");
+                let nested_dir = Utf8Path::new(&path)
+                    .parent()
+                    .map(Utf8Path::to_owned)
+                    .unwrap_or_default();
+                sub_refs.retain(|sub_ref| {
+                    let back = cookcli_core::resolve_reference(&nested_dir, sub_ref)
+                        .is_some_and(|p| p.as_str().trim_end_matches(".menu") == this_menu);
+                    if back {
+                        tracing::warn!(
+                            "Skipping reference '{}' in menu '{}': it leads back to '{}'",
+                            sub_ref,
+                            path,
+                            payload.path
+                        );
+                    }
+                    !back
+                });
+            }
 
             recipes.push(StoredEntry {
                 name: recipe_display_name(&path),

@@ -396,9 +396,9 @@ export function pickerActions(picker) {
       if (choice) insertInline(view, `@${choice.reference}{}`, 1);
     },
     // A menu entry: `- @./Path/Name{N%servings}`, or `{}` for the recipe's
-    // own servings.
+    // own servings. Another menu can be a meal too: `@./Brunches/Sunday.menu{}`.
     "add-recipe": async view => {
-      const choice = await picker.open({ servings: menuServings(view.state) });
+      const choice = await picker.open({ servings: menuServings(view.state), menus: true });
       if (!choice) return;
       const amount = choice.servings ? `${choice.servings}%servings` : "";
       insertMenuItem(view, `@${choice.reference}{${amount}}`);
