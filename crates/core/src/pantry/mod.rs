@@ -56,7 +56,7 @@
 
 use crate::{
     diagnostic::parse_failure,
-    find::{build_tree, listed_ingredients, parse_or_skip, walk},
+    find::{build_tree, parse_or_skip, required_ingredients, walk},
     fs_atomic::write_atomically,
     parser::collect_diagnostics,
     ConfigSource, Context, CoreError, Diagnostic, Outcome,
@@ -515,9 +515,10 @@ pub struct RecipeMatches {
 /// An ingredient counts as in stock when its name matches a pantry item's,
 /// compared lowercased and otherwise exactly — no unit or quantity is
 /// considered, so a recipe needing a kilo of flour matches a pantry holding a
-/// gram of it. References to other recipes are ignored, and a recipe left with
-/// no ingredients at all matches nothing. See [`listed_ingredients`] for what
-/// else is left out.
+/// gram of it. References to other recipes are ignored, and so are optional
+/// ingredients (`@?chives`): a recipe whose only absent ingredients are
+/// optional is a full match. A recipe left with no ingredients at all matches
+/// nothing. See [`required_ingredients`] for what else is left out.
 ///
 /// Recipes are found by walking the collection, `.menu` files included. A
 /// recipe that cannot be read or parsed is left out, with a warning in
@@ -549,7 +550,7 @@ pub fn recipes(ctx: &Context, req: RecipesRequest) -> Result<Outcome<RecipeMatch
         };
         // Lowercased into the set, so a recipe naming `Salt` and `salt` wants
         // one ingredient rather than two.
-        let wanted: BTreeSet<String> = listed_ingredients(&recipe)
+        let wanted: BTreeSet<String> = required_ingredients(&recipe)
             .iter()
             .map(|name| name.to_lowercase())
             .collect();
@@ -665,7 +666,8 @@ impl PantryPlan {
 /// Only `.cook` files are considered; `.menu` files are skipped, and so are
 /// recipes that list no ingredients — and, as in [`recipes`], any that cannot
 /// be read or parsed, each with a warning in [`Outcome::diagnostics`].
-/// Ingredients are those of [`listed_ingredients`], compared exactly as
+/// Ingredients are those of [`required_ingredients`] — optional ones are
+/// never worth stocking to make a recipe cookable — compared exactly as
 /// recipes write them, so `Flour` and `flour` are two ingredients — unlike
 /// [`recipes`], which lowercases.
 ///
@@ -683,7 +685,7 @@ pub fn plan(ctx: &Context, req: PlanRequest) -> Result<Outcome<PantryPlan>, Core
         .into_iter()
         .filter(|entry| !entry.is_menu())
         .filter_map(|entry| parse_or_skip(entry, &mut diagnostics))
-        .map(|recipe| listed_ingredients(&recipe))
+        .map(|recipe| required_ingredients(&recipe))
         .filter(|ingredients| !ingredients.is_empty())
         .collect();
 
