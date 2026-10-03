@@ -27,6 +27,7 @@ recipe-print = Inprimatu errezeta
 recipe-added = Gehituta!
 recipe-main-section = Nagusia
 recipe-preparation = prestaketa
+recipe-optional = Aukerakoa
 
 # Recipe Metadata
 meta-course = Platera
