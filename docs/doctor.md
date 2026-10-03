@@ -28,11 +28,13 @@ Checks for: syntax errors, warnings, missing recipe references, invalid units or
 A timer whose quantity is text rather than a number is a warning.
 `Cook for ~{a few%minutes}.` and `~{overnight}` are reported. The unit is not
 checked, so `~{1%hr}`, `~{90%m}`, `~{10%Minutes}` and `~{5%минут}` are
-accepted, and so are `~{40%minutes}` and `~{1.5%hours}`. A quantity the
-parser reads as text, including a range such as `~{10-20%minutes}`, is the
-same warning. An ingredient may still be text (`@salt{to taste}`). A number
-with no unit (`~{30}`) is a warning. A named timer with no quantity (`~dough`)
-is left as written.
+accepted, and so are `~{40%minutes}` and `~{1.5%hours}`. A range such as
+`~{10-20%minutes}` and a fraction such as `~{½%hour}` are numbers too, and are
+not reported. Each warning names the file and line of the timer. An ingredient
+may still be text (`@salt{to taste}`). A number with no unit (`~{30}`) is a
+warning. A named timer with no quantity (`~dough`) is left as written.
+`--strict` counts these warnings like any other, so a recipe with
+`~{overnight}` makes it exit with code 1.
 
 ### `aisle`
 

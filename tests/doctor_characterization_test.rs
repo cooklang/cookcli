@@ -524,8 +524,9 @@ fn doctor_with_no_subcommand_counts_recipes_but_does_not_name_them() {
         .stdout(predicate::str::contains("      dish.cook").not());
 }
 
-/// A textual timer quantity is printed as a warning, the totals count it, and
-/// the command still exits successfully: reporting the problem is the point.
+/// A textual timer quantity is printed as a warning with its file and line, the
+/// totals count it, and the command still exits successfully: reporting the
+/// problem is the point.
 #[test]
 fn validate_reports_a_textual_timer_and_still_exits_successfully() {
     let quantity = "a few";
@@ -535,8 +536,10 @@ fn validate_reports_a_textual_timer_and_still_exits_successfully() {
         .args(["doctor", "validate"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Timer value is text"))
-        .stdout(predicate::str::contains(quantity))
+        .stdout(predicate::str::contains("Warning:"))
+        .stdout(predicate::str::contains(format!(
+            "Timer value is text: {quantity} (dish.cook:1)"
+        )))
         .stdout(predicate::str::contains(
             "1 warning(s) found in 1 recipe(s)",
         ))
