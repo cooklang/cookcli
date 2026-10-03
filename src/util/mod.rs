@@ -28,7 +28,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod menu_scale;
+pub mod menu;
+pub mod recipe_info;
 
 // The formatters and the parser now live in `cookcli-core`. Re-exported here
 // so the rest of the CLI keeps reaching them as `crate::util::format::..` and
