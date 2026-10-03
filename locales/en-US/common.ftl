@@ -108,6 +108,16 @@ delete-recipe = Delete Recipe
 delete-recipe-confirm = Are you sure you want to delete this recipe?
 delete-recipe-warning = This action cannot be undone.
 
+# Rename Recipe
+action-rename = Rename
+rename-title = Rename file
+rename-label = New name
+rename-hint = The file stays in its folder. Its pictures are renamed with it, and the recipes and menus that use it are updated to the new name.
+rename-failed = Could not rename: %s
+rename-skipped = Renamed, but some references were left unchanged: %s
+rename-write-failed = Renamed, but these files could not be updated: %s
+rename-shopping-list = The shopping list still uses the old name; add it again from its new page.
+
 # Title Picture
 picture-button = Picture
 picture-title = Title picture

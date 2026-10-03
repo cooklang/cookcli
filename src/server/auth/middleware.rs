@@ -43,6 +43,7 @@ const WRITES: &[(&str, Capability)] = &[
     ("/api/pantry", Capability::EditLists),
     ("/api/recipes", Capability::EditRecipes),
     ("/api/recipe_image", Capability::EditRecipes),
+    ("/api/recipe_rename", Capability::EditRecipes),
     ("/new", Capability::EditRecipes),
 ];
 
@@ -211,6 +212,7 @@ mod tests {
             (Method::PUT, "/api/recipes/Week.menu"),
             (Method::PUT, "/api/recipe_image/Soup.cook"),
             (Method::DELETE, "/api/recipe_image/Soup.cook"),
+            (Method::POST, "/api/recipe_rename/Soup.cook"),
             (Method::POST, "/new"),
         ] {
             assert_eq!(
@@ -229,6 +231,7 @@ mod tests {
             (Method::POST, "/api/sync/cancel_login"),
             (Method::PATCH, "/api/anything-added-later"),
             (Method::POST, "/api/recipes-bulk"),
+            (Method::POST, "/api/recipe_renamex/Soup.cook"),
             (Method::POST, "/api/pantryx"),
             (Method::POST, "/edit/Soup.cook"),
             (Method::POST, "/loginx"),

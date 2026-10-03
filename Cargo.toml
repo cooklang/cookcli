@@ -33,6 +33,7 @@ server = [
     "dep:sha2",
     "dep:console",
     "dep:toml_edit",
+    "dep:same-file",
 ]
 # `cook import` - scrape a recipe from a website.
 import = ["dep:cooklang-import", "dep:reqwest"]
@@ -111,6 +112,9 @@ open = { version = "5.3", optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 rust-embed = "8"
+# Tells a case-only rename (`pasta` to `Pasta`) on a case-insensitive file
+# system from a rename onto another file.
+same-file = { version = "1", optional = true }
 # "reqwest" selects the HTTP backend: since 0.44 it is a feature in its own right,
 # and "rustls" only configures TLS on an already-enabled backend ("reqwest?/rustls"),
 # so without it the crate compiles with no `http_client::get`.
