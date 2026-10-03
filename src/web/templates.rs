@@ -108,6 +108,77 @@ mod scale_factor_tests {
 }
 
 #[cfg(test)]
+mod menu_line_tests {
+    use super::{menu_line, ServingsScale};
+
+    fn servings(base: u32, chosen: f64) -> ServingsScale {
+        ServingsScale { base, chosen }
+    }
+
+    #[test]
+    fn counts_servings_when_the_recipe_declares_them() {
+        assert_eq!(
+            menu_line("Lunch/Soup", 1.0, Some(&servings(4, 4.0))),
+            "- @./Lunch/Soup{4%servings}"
+        );
+        assert_eq!(
+            menu_line("Lunch/Soup", 0.625, Some(&servings(4, 2.5))),
+            "- @./Lunch/Soup{2.5%servings}"
+        );
+    }
+
+    #[test]
+    fn otherwise_writes_the_factor_or_nothing() {
+        assert_eq!(menu_line("Soup", 1.0, None), "- @./Soup{}");
+        assert_eq!(menu_line("Soup", 2.0, None), "- @./Soup{2}");
+        assert_eq!(menu_line("Soup", 1.0 / 3.0, None), "- @./Soup{0.333}");
+    }
+
+    #[test]
+    fn writes_the_path_as_the_recipe_picker_does() {
+        for path in [
+            "Lunch/Soup.cook",
+            "./Lunch/Soup",
+            "/Lunch/Soup",
+            "Lunch\\Soup",
+        ] {
+            assert_eq!(menu_line(path, 1.0, None), "- @./Lunch/Soup{}", "{path}");
+        }
+        assert_eq!(
+            menu_line("Lunch/Cheese, tomato and avocado sandwich", 1.0, None),
+            "- @./Lunch/Cheese, tomato and avocado sandwich{}"
+        );
+    }
+
+    #[test]
+    fn a_menu_reads_the_line_back_as_the_same_recipe_and_amount() {
+        let line = menu_line(
+            "Lunch/Cheese, tomato sandwich",
+            0.5,
+            Some(&servings(2, 1.0)),
+        );
+        let menu = crate::util::PARSER
+            .parse(&format!("Lunch: \\\n{line}\n"))
+            .into_output()
+            .expect("the line parses");
+        let reference = menu.ingredients[0]
+            .reference
+            .as_ref()
+            .expect("a recipe reference");
+        assert_eq!(
+            reference.path(cookcli_core::REFERENCE_SEPARATOR),
+            format!(
+                ".{sep}Lunch{sep}Cheese, tomato sandwich",
+                sep = cookcli_core::REFERENCE_SEPARATOR
+            )
+        );
+        let quantity = menu.ingredients[0].quantity.as_ref().expect("an amount");
+        assert_eq!(quantity.value().to_string(), "1");
+        assert_eq!(quantity.unit(), Some("servings"));
+    }
+}
+
+#[cfg(test)]
 mod is_web_url_tests {
     use super::filters::is_web_url;
 
@@ -315,7 +386,31 @@ pub struct RecipeTemplate {
     pub viewer: Viewer,
 }
 
+/// The bullet that puts the recipe at `recipe_path` into a `.menu`, at the
+/// amount the page shows: `- @./Lunch/Soup{3%servings}` when the recipe
+/// declares servings, `- @./Soup{1.5}` scaled by a factor, `- @./Soup{}` as
+/// written. The path is written as the menu editor's recipe picker writes it
+/// (`referencePath` in `static/js/src/picker.js`), so a pasted line and a
+/// picked one look the same.
+pub fn menu_line(recipe_path: &str, scale: f64, servings: Option<&ServingsScale>) -> String {
+    let path = recipe_path.replace('\\', "/");
+    let path = path.trim_start_matches("./").trim_start_matches('/');
+    let path = path.strip_suffix(".cook").unwrap_or(path);
+    let number = |n: f64| filters::scale_factor(&n).unwrap_or_else(|_| n.to_string());
+    let amount = match servings {
+        Some(servings) => format!("{}%servings", number(servings.chosen)),
+        None if scale == 1.0 => String::new(),
+        None => number(scale),
+    };
+    format!("- @./{path}{{{amount}}}")
+}
+
 impl RecipeTemplate {
+    /// This recipe as a `.menu` bullet, at the page's servings or scale.
+    pub fn menu_line(&self) -> String {
+        menu_line(&self.recipe_path, self.scale, self.servings.as_ref())
+    }
+
     /// Build JSON data for the cooking mode feature.
     /// This is called from the template to embed structured recipe data.
     pub fn cooking_mode_json(&self) -> String {
