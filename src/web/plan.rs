@@ -119,7 +119,11 @@ pub fn build_plan_view(sections: &[MenuSection], lang: &LanguageIdentifier) -> O
         return None;
     }
 
-    let slots = meal_slots(dated.values());
+    let slots = meal_slots(
+        dated
+            .values()
+            .map(|meals| meals.iter().filter_map(|meal| meal.name.as_deref())),
+    );
     for meals in dated.values_mut() {
         fill_slots(meals, &slots);
     }
@@ -176,18 +180,30 @@ pub fn build_plan_view(sections: &[MenuSection], lang: &LanguageIdentifier) -> O
 }
 
 /// The meals the plan's days name, each once. A meal a day adds goes after
-/// the meal it follows on that day, so days with `Breakfast, Dinner` and
-/// `Breakfast, Lunch` give `Breakfast, Lunch, Dinner`.
-fn meal_slots<'a>(days: impl Iterator<Item = &'a Vec<PlanMeal>>) -> Vec<String> {
+/// the meal it follows on that day, or before the one it precedes when it is
+/// the day's first: days with `Breakfast, Dinner` and `Breakfast, Lunch` give
+/// `Breakfast, Lunch, Dinner`, and days with `Dinner` and `Lunch, Dinner`
+/// give `Lunch, Dinner`.
+pub fn meal_slots<'a, D>(days: impl IntoIterator<Item = D>) -> Vec<String>
+where
+    D: IntoIterator<Item = &'a str>,
+{
     let mut slots: Vec<String> = Vec::new();
     for meals in days {
+        let meals: Vec<&str> = meals.into_iter().collect();
         let mut after: Option<usize> = None;
-        for name in meals.iter().filter_map(|meal| meal.name.as_ref()) {
+        for (n, name) in meals.iter().enumerate() {
             let index = match slots.iter().position(|slot| slot == name) {
                 Some(index) => index,
                 None => {
-                    let index = after.map_or(slots.len(), |after| after + 1);
-                    slots.insert(index, name.clone());
+                    let index = match after {
+                        Some(after) => after + 1,
+                        None => meals[n + 1..]
+                            .iter()
+                            .find_map(|next| slots.iter().position(|slot| slot == next))
+                            .unwrap_or(slots.len()),
+                    };
+                    slots.insert(index, name.to_string());
                     index
                 }
             };
@@ -532,24 +548,18 @@ mod tests {
 
     #[test]
     fn a_meal_a_day_adds_goes_after_the_one_it_follows() {
-        let meals = |names: &[&str]| -> Vec<PlanMeal> {
-            names
-                .iter()
-                .map(|name| PlanMeal {
-                    name: Some(name.to_string()),
-                    time: None,
-                    lines: Vec::new(),
-                })
-                .collect()
-        };
-        let days = [
-            meals(&["Breakfast", "Dinner"]),
-            meals(&["Breakfast", "Lunch"]),
-            meals(&["Supper"]),
-        ];
         assert_eq!(
-            meal_slots(days.iter()),
+            meal_slots([
+                vec!["Breakfast", "Dinner"],
+                vec!["Breakfast", "Lunch"],
+                vec!["Supper"],
+            ]),
             ["Breakfast", "Lunch", "Dinner", "Supper"]
+        );
+        // A day's first meal goes before the next one it has.
+        assert_eq!(
+            meal_slots([vec!["Dinner"], vec!["Lunch", "Dinner"]]),
+            ["Lunch", "Dinner"]
         );
     }
 
