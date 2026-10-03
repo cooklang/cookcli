@@ -42,6 +42,21 @@ recipe-type-menu = 献立
 recipe-type-plan = 食事計画
 plan-outside = この計画の期間外
 plan-nothing-planned = 予定なし
+plan-add-to = { $day }の{ $meal }に追加
+plan-line-actions = 変更
+plan-move-to = 移動…
+plan-copy-to = コピー…
+plan-remove = 削除
+plan-move-title = 別の日に移動
+plan-copy-title = 別の日にコピー
+plan-move = 移動
+plan-copy = コピー
+plan-target-day = 日
+plan-target-meal = 食事
+plan-changed = このページを読み込んだ後に計画が変更されました。再読み込みして確認し、もう一度お試しください。
+plan-save-failed = 計画を保存できませんでした。
+plan-saved = 計画を保存しました
+plan-reload = 再読み込み
 
 # Today's Menu Banner
 todays-menu-title = 今日の献立

@@ -50,6 +50,21 @@ recipe-type-menu = Menü
 recipe-type-plan = Essensplan
 plan-outside = Außerhalb dieses Plans
 plan-nothing-planned = Nichts geplant
+plan-add-to = Zu { $meal }, { $day } hinzufügen
+plan-line-actions = Ändern
+plan-move-to = Verschieben nach…
+plan-copy-to = Kopieren nach…
+plan-remove = Entfernen
+plan-move-title = Auf einen anderen Tag verschieben
+plan-copy-title = Auf einen anderen Tag kopieren
+plan-move = Verschieben
+plan-copy = Kopieren
+plan-target-day = Tag
+plan-target-meal = Mahlzeit
+plan-changed = Der Plan wurde seit dem Laden der Seite geändert. Laden Sie neu, um ihn zu sehen, und versuchen Sie es erneut.
+plan-save-failed = Der Plan konnte nicht gespeichert werden.
+plan-saved = Plan gespeichert
+plan-reload = Neu laden
 
 # Today's Menu Banner
 todays-menu-title = Heutiges Menü

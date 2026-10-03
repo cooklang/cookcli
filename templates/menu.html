@@ -269,17 +269,41 @@
             <li class="plan-day card p-3" data-date="{{ day.date }}">
                 <h2 class="text-sm font-semibold text-text"><time datetime="{{ day.date }}">{{ day.label }}</time></h2>
                 {% for meal in day.meals %}
-                <div class="mt-2">
+                {% let meal_index = loop.index0 %}
+                <div class="plan-meal mt-2"{% if let Some(meal_name) = meal.name %} data-meal="{{ meal_name }}"{% endif %}>
+                    <div class="flex items-center justify-between gap-1">
                     {% if let Some(meal_name) = meal.name %}
                     <h3 class="text-xs font-medium text-muted">{{ meal_name }}{% if let Some(time) = meal.time %} · {{ time }}{% endif %}</h3>
+                    {% if plan.edit.is_some() %}
+                    <button type="button" class="plan-add print:hidden" data-plan-add
+                            aria-label="{{ tr.tp("plan-add-to", "meal day").replace("{meal}", meal_name).replace("{day}", day.label.as_str()) }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M12 5v14M5 12h14"></path></svg>
+                    </button>
                     {% endif %}
+                    {% endif %}
+                    </div>
                     {% if meal.lines.is_empty() %}
                     <p class="text-sm text-faint"><span aria-hidden="true">—</span><span class="sr-only">{{ tr.t("plan-nothing-planned") }}</span></p>
                     {% else %}
                     {% for line in meal.lines %}
+                    {% match plan.line_text(day.date.as_str(), meal.name.as_deref(), loop.index0) %}
+                    {% when Some with (text) %}
+                    <div class="plan-line text-sm flex items-start gap-1" data-index="{{ loop.index0 }}" data-text="{{ text }}" draggable="true">
+                        <div id="plan-line-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}" class="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-1">
+                            {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
+                        </div>
+                        <button type="button" class="plan-line-button print:hidden" id="plan-line-button-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}"
+                                aria-haspopup="menu" aria-expanded="false" aria-controls="plan-line-menu"
+                                aria-labelledby="plan-line-button-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }} plan-line-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}">
+                            <span class="sr-only">{{ tr.t("plan-line-actions") }}</span>
+                            <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.75"></circle><circle cx="12" cy="12" r="1.75"></circle><circle cx="19" cy="12" r="1.75"></circle></svg>
+                        </button>
+                    </div>
+                    {% when None %}
                     <div class="text-sm flex flex-wrap items-baseline gap-x-1">
                         {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
                     </div>
+                    {% endmatch %}
                     {% endfor %}
                     {% endif %}
                 </div>
@@ -299,6 +323,57 @@
         </div>
         {% endif %}
     </div>
+
+    {% if let Some(edit) = plan.edit %}
+    <!-- Changing the plan from the calendar: static/js/src/planner.js -->
+    {% include "recipe_picker.html" %}
+    <div id="plan-line-menu" class="plan-popup" role="menu" hidden>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="move">{{ tr.t("plan-move-to") }}</button>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="copy">{{ tr.t("plan-copy-to") }}</button>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="remove">{{ tr.t("plan-remove") }}</button>
+    </div>
+    <div id="plan-target" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <form class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-sm mx-4" role="dialog" aria-modal="true" aria-labelledby="plan-target-heading">
+            <h2 id="plan-target-heading" class="text-title font-bold text-text mb-4"
+                data-move="{{ tr.t("plan-move-title") }}" data-copy="{{ tr.t("plan-copy-title") }}"></h2>
+            <label for="plan-target-day" class="block text-sm font-medium text-muted mb-1">{{ tr.t("plan-target-day") }}</label>
+            <select id="plan-target-day" class="select w-full mb-4">
+                {% for week in plan.weeks %}{% for cell in week %}{% if let Some(day) = cell %}
+                <option value="{{ day.date }}">{{ day.label }}</option>
+                {% endif %}{% endfor %}{% endfor %}
+            </select>
+            <label for="plan-target-meal" class="block text-sm font-medium text-muted mb-1">{{ tr.t("plan-target-meal") }}</label>
+            <select id="plan-target-meal" class="select w-full">
+                {% for meal in edit.meals %}
+                <option value="{{ meal }}">{{ meal }}</option>
+                {% endfor %}
+            </select>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" class="btn" data-plan-cancel>{{ tr.t("action-cancel") }}</button>
+                <button type="submit" class="btn btn-primary" data-move="{{ tr.t("plan-move") }}" data-copy="{{ tr.t("plan-copy") }}"></button>
+            </div>
+        </form>
+    </div>
+    <div id="plan-error" class="fixed bottom-4 inset-x-4 md:inset-x-auto md:right-4 md:max-w-md card p-4 border-l-[3px] border-l-danger bg-danger-soft z-50 flex items-center gap-3" hidden>
+        <p class="flex-1 text-text" role="alert"></p>
+        <button type="button" class="btn btn-sm" data-plan-reload>{{ tr.t("plan-reload") }}</button>
+    </div>
+    <p id="plan-status" class="sr-only" role="status"></p>
+    <script type="module">
+    const { initPlanner } = await import({{ prefix|json|safe }} + '/static/js/src/planner.js');
+    initPlanner(document.getElementById('plan'), {
+        prefix: {{ prefix|json|safe }},
+        path: {{ edit.path|json|safe }},
+        version: {{ edit.version|json|safe }},
+        servings: {{ edit.servings|json|safe }},
+        strings: {
+            changed: {{ tr.t("plan-changed")|json|safe }},
+            failed: {{ tr.t("plan-save-failed")|json|safe }},
+            saved: {{ tr.t("plan-saved")|json|safe }},
+        },
+    });
+    </script>
+    {% endif %}
     <script>
     // Marks today and dims the days gone by. Done here rather than on the
     // server so a static site, or a server in another time zone, still
