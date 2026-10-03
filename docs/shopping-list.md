@@ -27,6 +27,7 @@ cook shopping-list [OPTIONS] [RECIPES]...
 | `-i, --ignore-references` | Don't expand referenced recipes |
 | `--ingredients-only` | Display only ingredient names without quantities |
 | `--extra <ITEM>` | Add an extra item no recipe calls for. Repeat for each item. A bare name (`"paper towels"`) has no amount; the brace form (`"eggs{12}"`, `"flour{200%g}"`) gives one. |
+| `--include-optional` | Include optional ingredients (`@?chives`), marked as optional |
 
 ## Examples
 
@@ -52,6 +53,9 @@ cook shopping-list "Recipe.cook" -a ~/my-store.conf
 # Add items no recipe calls for
 cook shopping-list "Pizza.cook" --extra "paper towels" --extra "eggs{12}"
 
+# Include optional ingredients, such as garnishes
+cook shopping-list "Eggs on toast.cook" --include-optional
+
 # From a menu file
 cook shopping-list "2 Day Plan.menu"
 ```
@@ -68,3 +72,9 @@ cook shopping-list "2 Day Plan.menu"
 - `--extra` items are merged with the recipe ingredients, so an extra sharing a
   name with one a recipe already needs adds to it, is grouped into its aisle
   category, and is subtracted from by the pantry
+- [Optional ingredients](https://cooklang.org/docs/spec/#optional-ingredients-and-cookware)
+  (`@?chives`) are left off the list unless `--include-optional` is given, and
+  so is everything an optional recipe reference (`@?./sauce{}`) would add. When
+  included, they are marked `(optional)` (`"optional": true` in JSON and YAML)
+  and kept apart from any required amount of the same ingredient. Pantry stock
+  counts against the required amount first
