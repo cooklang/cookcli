@@ -21,6 +21,7 @@ shopping-selected-recipes = Ricette selezionate
 shopping-clear-all = Svuota tutto
 shopping-in-pantry = Già in dispensa
 shopping-remove = Rimuovi
+shopping-extra-items = Articoli extra
 shopping-add-recipes-first = Aggiungi prima qualche ricetta
 shopping-failed-to-generate = Impossibile generare la lista della spesa
 shopping-failed-to-add = Impossibile aggiungere alla lista della spesa

@@ -91,6 +91,9 @@
 
 <script>
 let shoppingList = [];
+// Free-hand lines of the list, such as the ingredients written straight into
+// a menu whose days were added: `{name, quantity}`.
+let extraItems = [];
 
 // Last payload rendered by displayShoppingList(), kept so the copy button can
 // rebuild the list as plain text without re-fetching.
@@ -187,21 +190,30 @@ let generatedFrom = null;
 
 async function refreshList() {
     const ticks = tickSnapshot();
-    const response = await fetch('{{ prefix }}/api/shopping_list/items');
+    const [response, extraResponse] = await Promise.all([
+        fetch('{{ prefix }}/api/shopping_list/items'),
+        fetch('{{ prefix }}/api/shopping_list/extra_items'),
+    ]);
     if (!response.ok) {
         throw new Error(`loading the shopping list answered ${response.status}`);
     }
-    const items = await response.text();
+    if (!extraResponse.ok) {
+        throw new Error(`loading the shopping list's extra items answered ${extraResponse.status}`);
+    }
+    const recipesText = await response.text();
+    const extraText = await extraResponse.text();
+    const items = recipesText + '\n' + extraText;
     if (items === generatedFrom) {
         return refreshChecked();
     }
 
     generatedFrom = null;
-    shoppingList = JSON.parse(items);
+    shoppingList = JSON.parse(recipesText);
+    extraItems = JSON.parse(extraText);
     renderSelectedRecipes();
 
     // Automatically generate the shopping list if there are items
-    if (shoppingList.length > 0) {
+    if (!listIsEmpty()) {
         const data = await generateList();
         if (!data) return;
         displayShoppingList(data);
@@ -225,6 +237,27 @@ async function refreshChecked(ticks = tickSnapshot()) {
     applyServerChecked(await response.json(), ticks);
 }
 
+function listIsEmpty() {
+    return shoppingList.length === 0 && extraItems.length === 0;
+}
+
+// The extra items as the sidebar lists them, each with its Remove button.
+function extraItemsHtml() {
+    if (extraItems.length === 0) return '';
+    const rows = extraItems.map(item => {
+        const amount = item.quantity ? ' ' + escHtml(String(item.quantity).replace('%', ' ')) : '';
+        const remove = window.__CAN_EDIT_LISTS__
+            ? `<button type="button" data-action="remove-extra" data-name="${escHtml(item.name)}" data-quantity="${escHtml(item.quantity == null ? '' : item.quantity)}" data-has-quantity="${item.quantity == null ? '' : '1'}" class="text-danger hover:underline font-medium text-sm">{{ tr.t("shopping-remove") }}</button>`
+            : '';
+        return `<li class="flex items-center justify-between gap-2 text-sm text-text"><span>${escHtml(item.name)}<span class="text-muted">${amount}</span></span>${remove}</li>`;
+    }).join('');
+    return `
+    <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
+        <div class="font-medium text-text mb-1">{{ tr.t("shopping-extra-items") }}</div>
+        <ul id="extra-items" class="space-y-1">${rows}</ul>
+    </div>`;
+}
+
 function renderSelectedRecipes() {
     const container = document.getElementById('selected-recipes');
 
@@ -232,9 +265,9 @@ function renderSelectedRecipes() {
     // selection rather than the generated items: with recipes selected but
     // every ingredient in the pantry there is nothing to copy, yet Clear All
     // still has to be reachable.
-    setHeaderVisible(shoppingList.length > 0);
+    setHeaderVisible(!listIsEmpty());
 
-    if (shoppingList.length === 0) {
+    if (listIsEmpty()) {
         setHtml(container, '<p class="text-faint text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>');
         setHtml(document.getElementById('list-content'), '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>');
         document.getElementById('pantry-section').classList.add('hidden');
@@ -311,7 +344,7 @@ function renderSelectedRecipes() {
             </div>
             ${refsHtml}
         </div>`;
-    }).join(''));
+    }).join('') + extraItemsHtml());
 }
 
 // Guests may look at the list but not change it, so they get no Remove
@@ -331,6 +364,35 @@ document.addEventListener('click', (event) => {
     if (!btn) return;
     removeRecipe(btn.dataset.path);
 });
+
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action="remove-extra"]');
+    if (!btn) return;
+    removeExtraItem({
+        name: btn.dataset.name,
+        quantity: btn.dataset.hasQuantity ? btn.dataset.quantity : null,
+    });
+});
+
+async function removeExtraItem(item) {
+    try {
+        const response = await fetch('{{ prefix }}/api/shopping_list/remove_extra_item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item)
+        });
+        if (response.ok) {
+            hideError();
+            await requestRefresh('list');
+        } else {
+            const data = await response.json().catch(() => ({}));
+            showError(data.error || 'Failed to remove item');
+        }
+    } catch (error) {
+        console.error('Failed to remove item:', error);
+        showError('Failed to remove item');
+    }
+}
 
 // Same delegation trick for ingredient checkboxes — inline `onchange` with
 // unescaped ingredient names would execute script if a name contained a
@@ -388,7 +450,7 @@ async function clearList() {
 async function generateList() {
     hideError();
 
-    if (shoppingList.length === 0) {
+    if (listIsEmpty()) {
         showError({{ tr.t("shopping-add-recipes-first")|json|safe }});
         return null;
     }
@@ -424,7 +486,8 @@ async function generateList() {
                     req.included_references = item.included_references;
                 }
                 return [req];
-            }))
+            }).concat(extraItems.map(item => ({ name: item.name, quantity: item.quantity })))
+            )
         });
 
         const data = await response.json();

@@ -464,3 +464,110 @@ fn a_rewrite_never_shortens_the_file_in_place() {
     #[cfg(not(unix))]
     let _ = (before, after);
 }
+
+// -- Free-hand items -------------------------------------------------------
+
+fn free_hand(name: &str, quantity: Option<&str>) -> FreeHandItem {
+    FreeHandItem {
+        name: name.to_string(),
+        quantity: quantity.map(String::from),
+    }
+}
+
+#[test]
+fn add_all_appends_recipes_then_free_hand_items_in_one_write() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add(entry("Soup.cook", 1.0)).unwrap();
+
+    store
+        .add_all(
+            vec![entry("Risotto.cook", 2.0), entry("Salad.cook", 1.0)],
+            vec![
+                free_hand("almonds", Some("100%g")),
+                free_hand("paper towels", None),
+            ],
+        )
+        .expect("adds");
+
+    assert_eq!(
+        list_file(&dir),
+        "./Soup.cook\n./Risotto.cook{2}\n./Salad.cook\nalmonds{100%g}\npaper towels\n"
+    );
+    let paths: Vec<String> = store.load().unwrap().into_iter().map(|e| e.path).collect();
+    assert_eq!(paths, ["Soup.cook", "Risotto.cook", "Salad.cook"]);
+    assert_eq!(
+        store.load_free_hand().unwrap(),
+        [
+            free_hand("almonds", Some("100%g")),
+            free_hand("paper towels", None)
+        ]
+    );
+}
+
+#[test]
+fn free_hand_lines_written_by_another_app_are_read() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "salt\n./Pancakes{2}\n  flour{500%g}\nmilk{1%l}\n",
+    );
+    let store = store(&dir);
+
+    // Only the top level: `flour` belongs to the pancakes.
+    assert_eq!(
+        store.load_free_hand().unwrap(),
+        [free_hand("salt", None), free_hand("milk", Some("1%l"))]
+    );
+    assert_eq!(store.load().unwrap().len(), 1);
+}
+
+#[test]
+fn remove_free_hand_takes_the_first_item_with_that_name_and_amount() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_all(
+            vec![entry("Soup.cook", 1.0)],
+            vec![
+                free_hand("coffee", Some("1%cup")),
+                free_hand("coffee", Some("2%cup")),
+                free_hand("coffee", Some("1%cup")),
+            ],
+        )
+        .unwrap();
+
+    store
+        .remove_free_hand(&free_hand("coffee", Some("1%cup")))
+        .expect("removes");
+    store
+        .remove_free_hand(&free_hand("coffee", None))
+        .expect("nothing to remove is fine");
+
+    assert_eq!(
+        list_file(&dir),
+        "./Soup.cook\ncoffee{2%cup}\ncoffee{1%cup}\n"
+    );
+}
+
+#[test]
+fn removing_a_recipe_leaves_free_hand_items_alone() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_all(
+            vec![entry("Soup.cook", 1.0)],
+            vec![free_hand("Soup.cook", None)],
+        )
+        .unwrap();
+
+    store.remove("Soup.cook").unwrap();
+
+    assert_eq!(list_file(&dir), "Soup.cook\n");
+}
+
+#[test]
+fn a_free_hand_item_spec_is_an_ingredient_without_its_at() {
+    assert_eq!(free_hand("almonds", Some("50%g")).spec(), "almonds{50%g}");
+    assert_eq!(free_hand("paper towels", None).spec(), "paper towels{}");
+}
