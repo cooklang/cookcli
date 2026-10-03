@@ -1,6 +1,6 @@
 use crate::server::handlers::common::check_path;
 use crate::server::{activity, AppState};
-use crate::util::menu_scale::{reference_scale_factor, resolve_recipe_info, RecipeInfo};
+use crate::util::recipe_info::{resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
 use crate::web::viewer::Viewer;
 use anyhow::Context as _;
@@ -631,81 +631,48 @@ pub async fn add_menu_to_shopping_list(
         )
     })?;
 
-    // Parse at scale 1.0 to get raw quantities for recipe references
-    let menu = crate::util::parse_recipe_from_entry(&entry, 1.0).map_err(|e| {
-        tracing::error!("Failed to parse menu: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
-        )
-    })?;
+    // References come back with their factor already resolved: `{target%unit}`
+    // against the referenced recipe's servings/yield, times the menu scale.
+    let menu = crate::util::menu::load_menu(&entry, &recipe_path, &state.base_path, menu_scale)
+        .map_err(|e| {
+            tracing::error!("Failed to parse menu: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
+            )
+        })?;
 
     let mut recipes = Vec::new();
 
-    // What a `..` in one of the menu's references steps up from. `payload.path`
-    // is the menu as the client named it, which `check_path` has established is
-    // a plain relative path, so its parent is relative to the recipe directory.
-    let menu_dir = recipe_path
-        .parent()
-        .map(Utf8Path::to_owned)
-        .unwrap_or_default();
-
-    for ingredient in &menu.ingredients {
-        if let Some(ref recipe_ref) = ingredient.reference {
-            // Build display path from reference components
-            let ref_display = if recipe_ref.components.is_empty() {
-                recipe_ref.name.clone()
-            } else {
-                format!("{}/{}", recipe_ref.components.join("/"), recipe_ref.name)
+    for section in &menu.sections {
+        for item in section.meals.iter().flat_map(|meal| &meal.items) {
+            let cooklang_find::MenuItem::RecipeReference { path, scale, .. } = item else {
+                continue;
             };
-
-            // Where the reference actually points, relative to the recipe
-            // directory — `./Shared/Sauce` from the root, `../Shared/Sauce`
-            // from the menu's own directory. This is both what gets looked up
-            // and what gets stored, so `.shopping-list` holds a path the rest
-            // of the server can use without resolving a reference again.
-            let Some(path) = cookcli_core::resolve_reference(&menu_dir, &ref_display) else {
+            if crate::util::menu::is_outside_reference(path) {
                 tracing::warn!(
                     "Skipping recipe reference '{}' in menu '{}': it points outside the \
                      recipe directory",
-                    ref_display,
+                    path,
                     payload.path
                 );
                 continue;
-            };
-            let path = path.to_string();
+            }
 
-            // Resolve this recipe's sub-recipe references, default servings, and yield
-            let info = match resolve_recipe_info(&state.base_path, &path) {
+            // Resolve this recipe's sub-recipe references
+            let info = match resolve_recipe_info(&state.base_path, path) {
                 Ok(info) => info,
                 Err(e) => {
-                    tracing::warn!(
-                        "Could not resolve referenced recipe '{}': {}",
-                        ref_display,
-                        e
-                    );
+                    tracing::warn!("Could not resolve referenced recipe '{}': {}", path, e);
                     RecipeInfo::default()
                 }
             };
 
-            // Convert `{target%unit}` on the menu reference into a scale
-            // multiplier for `.shopping-list`. The menu was parsed at 1.0
-            // above, so `ingredient.quantity` is the quantity as authored,
-            // which is what `reference_scale_factor` requires.
-            //
-            // Storing a raw multiplier without this conversion was the bug:
-            // e.g. a 2-serving recipe referenced as `{3%servings}` got stored
-            // as `{3}` and scaled to 6 servings instead of 3.
-            let recipe_factor =
-                reference_scale_factor(ingredient.quantity.as_ref(), &info, &ref_display);
-            let final_scale = recipe_factor * menu_scale;
-            let sub_refs = info.sub_refs;
-
             recipes.push(StoredEntry {
-                name: recipe_display_name(&path),
-                path,
-                scale: final_scale,
-                included_references: Some(sub_refs),
+                name: recipe_display_name(path),
+                path: path.clone(),
+                scale: scale.unwrap_or(menu_scale),
+                included_references: Some(info.sub_refs),
                 included_reference_names: None,
                 recipes: None,
             });

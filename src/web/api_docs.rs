@@ -682,8 +682,8 @@ fn menus() -> ApiSection {
                 "/api/menus/{*path}",
                 "Read one menu",
                 "Sections correspond to days; a `date` is extracted when the section name \
-                 contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't \
-                 use that convention, so `date` is null below. A meal's `time` is likewise \
+                 contains a `YYYY-MM-DD` date (the first one), e.g. `Day 1 (2026-03-04)` — the \
+                 seed menus don't use that convention, so `date` is null below. A meal's `time` is likewise \
                  extracted from its header, e.g. `Breakfast (08:30):` yields \
                  `\"type\": \"Breakfast\", \"time\": \"08:30\"`; none of the seed menus set a \
                  time either, hence null throughout. Meal items are tagged by `kind`: \
