@@ -13,6 +13,7 @@ recipe-ingredients = Ingredienser
 recipe-steps = Instruktioner
 recipe-notes = Anteckningar
 recipe-cookware = Köksredskap
+recipe-optional = (valfritt)
 recipe-timers = Timers
 recipe-tags = Taggar
 recipe-add-to-shopping = Lägg till handlingslistan

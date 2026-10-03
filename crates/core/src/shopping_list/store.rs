@@ -20,7 +20,9 @@
 use crate::fs_atomic::write_atomically;
 use crate::CoreError;
 use camino::{Utf8Path, Utf8PathBuf};
-use cooklang::shopping_list::{self, CheckEntry, RecipeItem, ShoppingList, ShoppingListItem};
+use cooklang::shopping_list::{
+    self, CheckEntry, IngredientItem, RecipeItem, ShoppingList, ShoppingListItem,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -59,6 +61,28 @@ pub struct StoredEntry {
     /// The recipes in a menu entry, or `None` for a plain recipe entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipes: Option<Vec<StoredEntry>>,
+    /// The recipe's optional ingredients someone chose to buy, each with the
+    /// amount to buy. Stored as `? name{quantity}` selection lines under the
+    /// recipe. See [`OptionalSelection`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional_ingredients: Vec<OptionalSelection>,
+}
+
+/// An optional ingredient someone chose to buy: a `? name{quantity}` selection
+/// line under a recipe in `.shopping-list`.
+///
+/// The quantity is the **final amount to buy**, with the recipe's scaling
+/// already applied, so it is used as written rather than multiplied by the
+/// entry's scale. [`optional_selections`](super::optional_selections) works it
+/// out from the recipe.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OptionalSelection {
+    /// The ingredient's name, as the recipe spells it.
+    pub name: String,
+    /// The amount in Cooklang quantity syntax — `2%pinch`, `50%g`, `3` — or
+    /// `None` when the recipe gives none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<String>,
 }
 
 /// Reads and writes the `.shopping-list` / `.shopping-checked` pair beside a
@@ -240,10 +264,11 @@ impl ShoppingListStore {
 
         // Store included references as child recipe entries.
         // Strip leading "./" from reference paths — the format writer adds it back.
-        let children = match item.included_references {
+        let mut children: Vec<ShoppingListItem> = match item.included_references {
             Some(refs) => refs.into_iter().map(child_reference).collect(),
             None => Vec::new(),
         };
+        children.extend(item.optional_ingredients.into_iter().map(selection_line));
 
         list.items.push(ShoppingListItem::Recipe(RecipeItem {
             path: item.path,
@@ -272,10 +297,11 @@ impl ShoppingListStore {
         let children: Vec<ShoppingListItem> = recipes
             .into_iter()
             .map(|recipe| {
-                let sub_children = match recipe.included_references {
+                let mut sub_children: Vec<ShoppingListItem> = match recipe.included_references {
                     Some(refs) => refs.into_iter().map(child_reference).collect(),
                     None => Vec::new(),
                 };
+                sub_children.extend(recipe.optional_ingredients.into_iter().map(selection_line));
 
                 ShoppingListItem::Recipe(RecipeItem {
                     path: recipe.path,
@@ -427,13 +453,37 @@ fn child_reference(path: String) -> ShoppingListItem {
     })
 }
 
+/// A `? name{quantity}` selection line.
+fn selection_line(selection: OptionalSelection) -> ShoppingListItem {
+    ShoppingListItem::Ingredient(IngredientItem {
+        name: selection.name,
+        quantity: selection.quantity,
+        optional: true,
+    })
+}
+
 /// The paths of an item's direct recipe children, ignoring any free-hand
-/// ingredients among them.
+/// ingredients among them and any optional recipe selected with a `? ./path`
+/// line, which this store does not write.
 fn child_paths(item: &RecipeItem) -> Vec<String> {
     item.children
         .iter()
         .filter_map(|child| match child {
-            ShoppingListItem::Recipe(recipe) => Some(recipe.path.clone()),
+            ShoppingListItem::Recipe(recipe) if !recipe.optional => Some(recipe.path.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The `? name{quantity}` selection lines among an item's direct children.
+fn child_selections(item: &RecipeItem) -> Vec<OptionalSelection> {
+    item.children
+        .iter()
+        .filter_map(|child| match child {
+            ShoppingListItem::Ingredient(i) if i.optional => Some(OptionalSelection {
+                name: i.name.clone(),
+                quantity: i.quantity.clone(),
+            }),
             _ => None,
         })
         .collect()
@@ -455,6 +505,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                             scale: cr.multiplier.unwrap_or(1.0),
                             included_references: Some(child_paths(cr)),
                             recipes: None,
+                            optional_ingredients: child_selections(cr),
                         }),
                         _ => None,
                     })
@@ -465,6 +516,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: None,
                     recipes: Some(recipes),
+                    optional_ingredients: Vec::new(),
                 });
             } else {
                 // Regular recipe entry — children are sub-references.
@@ -474,6 +526,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: Some(child_paths(r)),
                     recipes: None,
+                    optional_ingredients: child_selections(r),
                 });
             }
         }

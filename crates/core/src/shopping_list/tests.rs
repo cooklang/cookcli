@@ -1365,6 +1365,101 @@ fn the_pantry_is_not_subtracted_twice() {
     );
 }
 
+/// The amounts a selection line records are the recipe's optional amounts at
+/// the recipe's scale, added up per ingredient, and split where they do not
+/// add up.
+#[test]
+fn optional_selections_are_scaled_and_summed() {
+    let dir = dir_with(&[(
+        "risotto.cook",
+        "Stir @parmesan{100%g} in.\n\n\
+         Top with @?parmesan{50%g}, then @?parmesan{20%g}.\n\n\
+         Add @?chilli{1%pinch} and @?chilli{2%g}, and @?basil.\n",
+    )]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &ScaledRecipe::scaled(RecipeSource::Path("risotto.cook".into()), 2.0),
+        &[
+            " Parmesan".to_string(),
+            "chilli".to_string(),
+            "basil".to_string(),
+        ],
+    )
+    .expect("reads the recipe")
+    .value;
+
+    let got: Vec<(&str, Option<&str>)> = selections
+        .iter()
+        .map(|s| (s.name.as_str(), s.quantity.as_deref()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan", Some("140%g")),
+            ("chilli", Some("4%g")),
+            ("chilli", Some("2%pinch")),
+            ("basil", None),
+        ]
+    );
+}
+
+/// Only optional ingredients can be selected, and only by a name the recipe
+/// has.
+#[test]
+fn optional_selections_ignore_required_and_unknown_names() {
+    let dir = dir_with(&[("a.cook", "Add @salt{1%tsp} and @?chives.\n")]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &at_path("a.cook"),
+        &["salt".to_string(), "nutmeg".to_string()],
+    )
+    .expect("reads the recipe")
+    .value;
+
+    assert!(selections.is_empty(), "{selections:?}");
+}
+
+/// Stored selections join the optional list as written, not scaled again,
+/// and several lines for one name add up.
+#[test]
+fn stored_selections_are_added_as_optional_amounts() {
+    let mut list = ShoppingIngredients::default();
+    let diagnostics = add_optional_selections(
+        &mut list,
+        &[
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("50%g".to_string()),
+            },
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("20%g".to_string()),
+            },
+            OptionalSelection {
+                name: "chives".to_string(),
+                quantity: None,
+            },
+        ],
+    );
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(list.required.is_empty());
+    let got: Vec<(String, String)> = list
+        .optional
+        .iter()
+        .map(|(name, q)| (name.clone(), q.to_string()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan".to_string(), "70 g".to_string()),
+            ("chives".to_string(), String::new()),
+        ]
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Diagnostics and errors
 // ---------------------------------------------------------------------------
