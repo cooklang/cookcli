@@ -623,6 +623,51 @@ async fn the_planner_lays_a_plan_out_by_day() {
 }
 
 #[tokio::test]
+async fn empty_dated_sections_are_days_of_the_plan() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join("Bare.menu"),
+        "== Wednesday (2026-10-07) ==\n\nDinner: \\\n- @./Omelette{}\n\n\
+         == Thursday (2026-10-08) ==\n\n== Friday (2026-10-09) ==\n",
+    )
+    .unwrap();
+    std::fs::write(
+        server.recipes().join("Party.menu"),
+        "== Party (2026-12-31) ==\n\n== Food ==\n\n- @./Omelette{}\n",
+    )
+    .unwrap();
+
+    let page = client()
+        .get(server.url("/recipe/Bare"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    // The plan runs to its last heading, even with nothing under it.
+    assert_eq!(
+        page.matches(r#"class="plan-day card p-3" data-date="#)
+            .count(),
+        3,
+        "{page}"
+    );
+    assert!(page.contains(r#"data-date="2026-10-09""#));
+
+    // In an ordinary menu an empty section still shows no card.
+    let page = client()
+        .get(server.url("/recipe/Party"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!page.contains(r#"id="plan""#));
+    assert!(!page.contains("Party (2026-12-31)"), "{page}");
+}
+
+#[tokio::test]
 async fn the_form_and_the_listing_offer_plans() {
     let server = start_server().await;
 
