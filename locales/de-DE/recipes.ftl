@@ -47,6 +47,9 @@ meta-description = Beschreibung
 
 # Recipe Types
 recipe-type-menu = Menü
+recipe-type-plan = Essensplan
+plan-outside = Außerhalb dieses Plans
+plan-nothing-planned = Nichts geplant
 
 # Today's Menu Banner
 todays-menu-title = Heutiges Menü

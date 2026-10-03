@@ -47,6 +47,9 @@ meta-description = Beskrivning
 
 # Recipe Types
 recipe-type-menu = Meny
+recipe-type-plan = Måltidsplan
+plan-outside = Utanför den här planen
+plan-nothing-planned = Inget planerat
 
 # Today's Menu Banner
 todays-menu-title = Dagens meny

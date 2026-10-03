@@ -102,6 +102,19 @@ new-menu-path = Ruta del menú
 new-menu-placeholder = Planes/Semana 12
 new-menu-hint = Formato: carpeta/nombre-menú
 new-menu-create = Crear Menú
+new-plan = Nuevo Plan de Comidas
+new-plan-path = Ruta del plan
+new-plan-placeholder = Planes/Octubre
+new-plan-hint = Usa el formato carpeta/nombre-del-plan
+new-plan-create = Crear Plan
+new-plan-start = Primer día
+new-plan-today = Hoy
+new-plan-this-week = Esta semana
+new-plan-next-week = La próxima semana
+new-plan-days = Número de días
+new-plan-one-week = 1 semana
+new-plan-two-weeks = 2 semanas
+new-plan-meals = Comidas
 
 # Delete Recipe
 delete-recipe = Eliminar Receta

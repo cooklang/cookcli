@@ -270,6 +270,34 @@ no time zone data, so it logs in UTC unless you mount the host's zone, e.g.
 
 Changes made to the files directly, outside the server, are not listed.
 
+## Meal plans
+
+Any menu with sections on two days or more is a meal plan, laid out as a calendar. A section is for a day when its name holds a `YYYY-MM-DD` date, as the **Today's menu** banner reads it:
+
+```
+---
+title: October fortnight
+servings: 2
+---
+
+== Wednesday (2026-10-07) ==
+
+Breakfast: \
+-
+
+Dinner: \
+- @./Risotto{2%servings}
+
+= 2026-10-08 Dinner
+
+- @./Soup{}
+```
+
+- Nothing else marks a plan: the shopping list, `cook shopping-list` and other Cooklang apps read it as they read any menu. Several sections may share a day. Text after the date names the meal for the section's lines before its first meal header, so `= 2026-10-08 Dinner` is a dinner.
+- **New Meal Plan**, beside **New Menu** on the recipe list, writes one: pick its first day (any day of the week), how many days it lasts (2 to 62), its meals and its servings. It has a section for every day, with an empty bullet under each meal to fill in the editor; day and meal names are written in the page's language.
+- The plan shows as one card a day, from its first dated day to its last, in weekday columns on a wide screen (weeks start on Sunday for `en-US` and `ja-JP`, Monday otherwise) and one under the other on a phone. A day with no section still gets a card, but a week with none is left out. Every day offers a slot for each meal the plan's days name (`Breakfast:`), in the order they first appear, even when nothing is planned. The reader's own clock marks today and greys the days gone by.
+- A section with no date is listed under **Outside this plan**. A menu with a single dated day shows as an ordinary menu.
+
 ## Web feeds
 
 The server publishes an Atom feed at `/atom.xml` and an RSS 2.0 feed at `/rss.xml`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.

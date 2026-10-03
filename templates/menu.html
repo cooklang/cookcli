@@ -1,5 +1,70 @@
 {% extends "base.html" %}
 
+{# One item of a menu line: a linked recipe, an ingredient, or text. `short`
+   names a recipe without its folders, for the planner's narrow day cards. #}
+{% macro menu_item(item, short) %}
+{% match item %}
+{% when crate::web::templates::MenuSectionItem::Text with (text) %}
+    <span class="text-text">{{ text }}</span>
+{% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
+    <span class="inline-flex items-center gap-1">
+        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+           class="text-info font-medium hover:underline"{% if short %} title="{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}"{% endif %}>
+            {% if short %}{{ name.rsplit("/").next().unwrap_or(name.as_str()) }}{% else %}{{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}{% endif %}
+        </a>
+        {% match scale %}
+        {% when Some with (s) %}
+            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
+        {% when None %}
+        {% endmatch %}
+    </span>
+{% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
+    <span class="inline-flex items-center gap-1">
+        <span class="ingredient-badge">
+            {{ name }}
+            {% match quantity %}
+            {% when Some with (q) %}
+                <span>{{ q }}</span>
+            {% when None %}
+            {% endmatch %}
+            {% match unit %}
+            {% when Some with (u) %}
+                <span class="font-normal text-muted">{{ u }}</span>
+            {% when None %}
+            {% endmatch %}
+        </span>
+    </span>
+{% endmatch %}
+{% endmacro %}
+
+{# A section of the menu as a card: its name, then its lines, a line that is
+   only `Name:` being a meal heading. #}
+{% macro section_card(section) %}
+<div class="menu-section card overflow-hidden">
+    {% match section.name %}
+    {% when Some with (section_name) %}
+    <div class="menu-section-header bg-sunk border-b border-line px-6 py-3">
+        <h2 class="text-title font-semibold text-text">{{ section_name }}</h2>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
+    <div class="menu-section-body p-6 space-y-2">
+        {% for line in section.lines %}
+        {% match crate::web::templates::meal_header(line) %}
+        {% when Some with (header) %}
+        <!-- Meal type header -->
+        <h3 class="text-title font-semibold text-text mt-2 mb-1">{{ header }}</h3>
+        {% when None %}
+        <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
+            {% for item in line %}{% call menu_item(item, false) %}{% endfor %}
+        </div>
+        {% endmatch %}
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
 {% block title %}{{ name }} - Cook{% endblock %}
 
 {% block content %}
@@ -36,7 +101,7 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 print:mb-1">
             <div class="flex items-center gap-3">
                 <h1 class="text-display font-bold text-text print:text-2xl">{{ name }}</h1>
-                <span class="tag print:hidden">{{ tr.t("recipe-type-menu") }}</span>
+                <span class="tag print:hidden">{% if plan.is_some() %}{{ tr.t("recipe-type-plan") }}{% else %}{{ tr.t("recipe-type-menu") }}{% endif %}</span>
             </div>
             {% if !static_mode %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
@@ -187,114 +252,84 @@
         </div>
     </div>
 
+    {% match plan %}
+    {% when Some with (plan) %}
+    <!-- Meal plan: one card a day, in calendar rows from md up -->
+    <div id="plan">
+        <div class="hidden md:grid grid-cols-7 gap-2 mb-2" aria-hidden="true">
+            {% for weekday in plan.weekdays %}
+            <div class="px-3 text-sm font-medium text-muted">{{ weekday }}</div>
+            {% endfor %}
+        </div>
+        <ol class="grid grid-cols-1 md:grid-cols-7 gap-2">
+            {% for week in plan.weeks %}
+            {% for cell in week %}
+            {% match cell %}
+            {% when Some with (day) %}
+            <li class="plan-day card p-3" data-date="{{ day.date }}">
+                <h2 class="text-sm font-semibold text-text"><time datetime="{{ day.date }}">{{ day.label }}</time></h2>
+                {% for meal in day.meals %}
+                <div class="mt-2">
+                    {% if let Some(meal_name) = meal.name %}
+                    <h3 class="text-xs font-medium text-muted">{{ meal_name }}{% if let Some(time) = meal.time %} · {{ time }}{% endif %}</h3>
+                    {% endif %}
+                    {% if meal.lines.is_empty() %}
+                    <p class="text-sm text-faint"><span aria-hidden="true">—</span><span class="sr-only">{{ tr.t("plan-nothing-planned") }}</span></p>
+                    {% else %}
+                    {% for line in meal.lines %}
+                    <div class="text-sm flex flex-wrap items-baseline gap-x-1">
+                        {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </li>
+            {% when None %}
+            <li class="hidden md:block" aria-hidden="true"></li>
+            {% endmatch %}
+            {% endfor %}
+            {% endfor %}
+        </ol>
+
+        {% if !plan.outside.is_empty() %}
+        <h2 class="text-title font-semibold text-text mt-8 mb-4">{{ tr.t("plan-outside") }}</h2>
+        <div class="space-y-6">
+            {% for section in plan.outside %}{% call section_card(section) %}{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <script>
+    // Marks today and dims the days gone by. Done here rather than on the
+    // server so a static site, or a server in another time zone, still
+    // agrees with the reader's calendar.
+    (function () {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        let todayCell = null;
+        document.querySelectorAll('#plan .plan-day[data-date]').forEach(cell => {
+            if (cell.dataset.date === today) {
+                cell.classList.add('plan-day-today');
+                cell.setAttribute('aria-current', 'date');
+                todayCell = cell;
+            } else if (cell.dataset.date < today) {
+                cell.classList.add('plan-day-past');
+            }
+        });
+        // One column on small screens: start at today rather than at day 1.
+        if (todayCell && todayCell.previousElementSibling &&
+                window.matchMedia('(max-width: 767px)').matches) {
+            todayCell.scrollIntoView({ block: 'start' });
+        }
+    })();
+    </script>
+    {% when None %}
     <!-- Menu sections -->
     <div class="space-y-6">
-            {% for section in sections %}
-            <div class="menu-section card overflow-hidden">
-                {% match section.name %}
-                {% when Some with (name) %}
-                <div class="menu-section-header bg-sunk border-b border-line px-6 py-3">
-                    <h2 class="text-title font-semibold text-text">{{ name }}</h2>
-                </div>
-                {% when None %}
-                {% endmatch %}
-
-                <div class="menu-section-body p-6 space-y-2">
-                    {% for line in section.lines %}
-                    {% if line.len() == 1 %}
-                        {% match line[0] %}
-                        {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                            {% if text.trim().ends_with(":") %}
-                            <!-- Meal type header -->
-                            <h3 class="text-title font-semibold text-text mt-2 mb-1">{{ text }}</h3>
-                            {% else %}
-                            <!-- Regular text line -->
-                            <div class="pl-6">
-                                <span class="text-text">{{ text }}</span>
-                            </div>
-                            {% endif %}
-                        {% when _ %}
-                            <!-- Single non-text item -->
-                            <div class="pl-6 flex items-baseline gap-x-2">
-                                {% match line[0] %}
-                                {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
-                                           class="text-info font-medium hover:underline">
-                                            {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                        </a>
-                                        {% match scale %}
-                                        {% when Some with (s) %}
-                                            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <span class="ingredient-badge">
-                                            {{ name }}
-                                            {% match quantity %}
-                                            {% when Some with (q) %}
-                                                <span>{{ q }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                            {% match unit %}
-                                            {% when Some with (u) %}
-                                                <span class="font-normal text-muted">{{ u }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                        </span>
-                                    </span>
-                                {% when _ %}
-                                {% endmatch %}
-                            </div>
-                        {% endmatch %}
-                    {% else %}
-                    <!-- Multi-item line (meal item with ingredients) -->
-                    <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
-                        {% for item in line %}
-                            {% match item %}
-                            {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                                <span class="text-text">{{ text }}</span>
-
-                            {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% else %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
-                                       class="text-info font-medium hover:underline">
-                                        {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                    </a>
-                                    {% match scale %}
-                                    {% when Some with (s) %}
-                                        <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
-                                    {% when None %}
-                                    {% endmatch %}
-                                </span>
-
-                            {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <span class="ingredient-badge">
-                                        {{ name }}
-                                        {% match quantity %}
-                                        {% when Some with (q) %}
-                                            <span>{{ q }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                        {% match unit %}
-                                        {% when Some with (u) %}
-                                            <span class="font-normal text-muted">{{ u }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                </span>
-                            {% endmatch %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
+            {% for section in sections %}{% call section_card(section) %}{% endfor %}
     </div>
+    {% endmatch %}
 </div>
 
 {% if !static_mode %}

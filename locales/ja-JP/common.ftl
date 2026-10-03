@@ -102,6 +102,19 @@ new-menu-path = 献立のパス
 new-menu-placeholder = 献立/第12週
 new-menu-hint = 「フォルダ/献立名」の形で入力してください
 new-menu-create = 献立を作成
+new-plan = 新しい食事計画
+new-plan-path = 食事計画のパス
+new-plan-placeholder = 計画/10月
+new-plan-hint = フォルダ/計画名 の形式で入力
+new-plan-create = 食事計画を作成
+new-plan-start = 開始日
+new-plan-today = 今日
+new-plan-this-week = 今週
+new-plan-next-week = 来週
+new-plan-days = 日数
+new-plan-one-week = 1週間
+new-plan-two-weeks = 2週間
+new-plan-meals = 食事
 
 # Delete Recipe
 delete-recipe = レシピを削除
