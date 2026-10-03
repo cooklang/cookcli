@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Bug Fixes
-
-* **doctor:** report non-numeric timer quantities ([#214](https://github.com/cooklang/cookcli/issues/214))
-
 ## [0.37.0](https://github.com/cooklang/cookcli/compare/v0.36.0...v0.37.0) (2026-09-24)
 
 
