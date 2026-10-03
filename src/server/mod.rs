@@ -52,6 +52,7 @@ mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
+mod new_file;
 mod shopping_list_watcher;
 mod title_image;
 mod ui;
@@ -653,6 +654,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             post(handlers::remove_from_shopping_list),
         )
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
+        .route("/shopping_list/save_as_menu", post(handlers::save_as_menu))
         .route("/shopping_list/check", post(handlers::check_shopping_item))
         .route(
             "/shopping_list/uncheck",

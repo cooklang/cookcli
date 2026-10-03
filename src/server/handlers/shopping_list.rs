@@ -15,7 +15,7 @@ use cookcli_core::shopping_list::{
     ShoppingListStore, StoredEntry,
 };
 use cooklang::ingredient_list::IngredientList;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
 
@@ -652,4 +652,207 @@ pub async fn add_menu_to_shopping_list(
     activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
+}
+
+// -- Save as menu --
+
+#[derive(Debug, Deserialize)]
+pub struct SaveAsMenuRequest {
+    /// Where the menu goes, relative to the recipe directory and without the
+    /// extension, as the New Menu form takes it: `Plans/Week 12`.
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SaveAsMenuResponse {
+    /// The menu written, relative to the recipe directory:
+    /// `Plans/Week 12.menu`.
+    pub path: String,
+    /// Paths on the list that a menu cannot refer to, left out.
+    pub skipped: Vec<String>,
+}
+
+/// Writes the recipes on the shopping list to a new menu, so the same list
+/// can be put together again later with the menu's "Add All to Shopping
+/// List".
+pub async fn save_as_menu(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(payload): Json<SaveAsMenuRequest>,
+) -> Result<(StatusCode, Json<SaveAsMenuResponse>), (StatusCode, Json<serde_json::Value>)> {
+    let store = ShoppingListStore::new(&state.base_path);
+    let entries = store.load().map_err(|e| {
+        tracing::error!("Failed to load shopping list: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+
+    let (references, skipped) = menu_references(&entries);
+    if references.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "The shopping list has no recipes to save" })),
+        ));
+    }
+
+    let created =
+        crate::server::new_file::create(&state.base_path, &payload.name, "menu", |title| {
+            menu_text(title, &references)
+        })
+        .await
+        .map_err(|error| {
+            use crate::server::new_file::NewFileError;
+            let status = match error {
+                NewFileError::EmptyName | NewFileError::OutsideCollection => {
+                    StatusCode::BAD_REQUEST
+                }
+                NewFileError::Exists => StatusCode::CONFLICT,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            (
+                status,
+                Json(serde_json::json!({ "error": error.message("menu") })),
+            )
+        })?;
+
+    activity::record(
+        &viewer,
+        format_args!(
+            "saved the shopping list as {}",
+            activity::file(&state.base_path, &created.file)
+        ),
+    );
+
+    Ok((
+        StatusCode::CREATED,
+        Json(SaveAsMenuResponse {
+            path: format!("{}.menu", created.name),
+            skipped,
+        }),
+    ))
+}
+
+/// One `@./Path/Recipe{factor}` reference per recipe on the list, in list
+/// order, a menu's recipes in its place; and the paths that cannot be written
+/// as a reference.
+///
+/// Only the recipe and its factor survive: a menu has no way to say which of
+/// a recipe's sub-recipes to leave out, so a menu adds them all, and a menu
+/// on the list is written as its recipes, not as a reference to itself.
+fn menu_references(entries: &[StoredEntry]) -> (Vec<String>, Vec<String>) {
+    let mut references = Vec::new();
+    let mut skipped = Vec::new();
+    let recipes = entries.iter().flat_map(|entry| match &entry.recipes {
+        Some(recipes) => recipes.iter().collect::<Vec<_>>(),
+        None => vec![entry],
+    });
+    for recipe in recipes {
+        match menu_reference(&recipe.path, recipe.scale) {
+            Some(reference) => references.push(reference),
+            None => skipped.push(recipe.path.clone()),
+        }
+    }
+    (references, skipped)
+}
+
+/// `@./Path/Recipe{factor}`, `{}` at ×1: a factor with no unit is how a menu
+/// asks for a multiple of a recipe, which `add_menu` stores back unchanged.
+/// `None` for a path a reference cannot spell.
+fn menu_reference(path: &str, scale: f64) -> Option<String> {
+    let path = path.trim_start_matches("./");
+    let path = path.strip_suffix(".cook").unwrap_or(path);
+    if path.is_empty()
+        || path.ends_with(".menu")
+        || path.contains(['{', '}', '\n', '\r'])
+        || !scale.is_finite()
+        || scale <= 0.0
+    {
+        return None;
+    }
+    let factor = if scale == 1.0 {
+        String::new()
+    } else {
+        scale.to_string()
+    };
+    Some(format!("@./{path}{{{factor}}}"))
+}
+
+/// A menu titled `title` listing `references`, one bullet each. The ` \` at
+/// the end of a line keeps the next bullet on a line of its own: without it
+/// Cooklang joins the lines of a paragraph into one.
+fn menu_text(title: &str, references: &[String]) -> String {
+    let bullets = references
+        .iter()
+        .map(|reference| format!("- {reference}"))
+        .collect::<Vec<_>>()
+        .join(" \\\n");
+    format!("---\ntitle: {title}\n---\n\n{bullets}\n")
+}
+
+#[cfg(test)]
+mod save_as_menu_tests {
+    use super::*;
+
+    fn entry(path: &str, scale: f64) -> StoredEntry {
+        StoredEntry {
+            path: path.to_string(),
+            name: recipe_display_name(path),
+            scale,
+            included_references: Some(Vec::new()),
+            recipes: None,
+        }
+    }
+
+    #[test]
+    fn references_carry_the_factor_and_expand_menus() {
+        let mut menu = entry("Plans/Week.menu", 2.0);
+        menu.recipes = Some(vec![entry("Risotto", 3.0), entry("Salads/Caprese", 1.0)]);
+        let entries = [
+            entry("Breakfast/Easy Pancakes.cook", 1.5),
+            menu,
+            entry("./Thai Green Curry", 1.0),
+        ];
+
+        let (references, skipped) = menu_references(&entries);
+
+        assert_eq!(
+            references,
+            [
+                "@./Breakfast/Easy Pancakes{1.5}",
+                "@./Risotto{3}",
+                "@./Salads/Caprese{}",
+                "@./Thai Green Curry{}",
+            ]
+        );
+        assert!(skipped.is_empty());
+    }
+
+    #[test]
+    fn a_path_a_reference_cannot_spell_is_skipped() {
+        let entries = [
+            entry("Odd {name}", 1.0),
+            entry("Nested.menu", 1.0),
+            entry("Soup", 1.0),
+        ];
+
+        let (references, skipped) = menu_references(&entries);
+
+        assert_eq!(references, ["@./Soup{}"]);
+        assert_eq!(skipped, ["Odd {name}", "Nested.menu"]);
+    }
+
+    #[test]
+    fn the_menu_is_one_group_of_bullets() {
+        let text = menu_text(
+            "Week 12",
+            &["@./Soup{}".to_string(), "@./Bread{2}".to_string()],
+        );
+
+        assert_eq!(
+            text,
+            "---\ntitle: Week 12\n---\n\n- @./Soup{} \\\n- @./Bread{2}\n"
+        );
+    }
 }

@@ -19,7 +19,7 @@ pub use recipes::{all_recipes, recipe, recipe_delete, recipe_raw, recipe_save, r
 pub use shopping_list::{
     add_menu_to_shopping_list, add_to_shopping_list, check_shopping_item, clear_shopping_list,
     compact_checked, get_checked_items, get_shopping_list_items, remove_from_shopping_list,
-    shopping_list, uncheck_shopping_item,
+    save_as_menu, shopping_list, uncheck_shopping_item,
 };
 pub use shopping_list_events::shopping_list_events;
 pub use stats::stats;

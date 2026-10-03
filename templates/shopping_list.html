@@ -75,6 +75,12 @@
                         </label>
                     </div>
                 </div>
+                {% if !static_mode && viewer.can_edit_recipes() %}
+                <button type="button" id="save-menu-button" onclick="openSaveMenu()" class="btn"
+                        aria-haspopup="dialog" aria-controls="save-menu-dialog">
+                    {{ tr.t("shopping-save-menu") }}
+                </button>
+                {% endif %}
                 {% if viewer.can_edit_lists() %}
                 <button type="button" onclick="clearList()" class="btn">
                     {{ tr.t("shopping-clear-all") }}
@@ -88,6 +94,121 @@
         </div>
     </div>
 </div>
+
+{% if !static_mode && viewer.can_edit_recipes() %}
+<!-- Save as menu: the recipes on the list, with their amounts, as a new .menu -->
+<div id="save-menu-dialog" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <form id="save-menu-form" class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-lg mx-4" role="dialog" aria-modal="true"
+          aria-labelledby="save-menu-heading" aria-describedby="save-menu-note" novalidate>
+        <h2 id="save-menu-heading" class="text-title font-bold text-text mb-2">{{ tr.t("shopping-save-menu-title") }}</h2>
+        <p id="save-menu-note" class="text-sm text-muted mb-4">{{ tr.t("shopping-save-menu-note") }}</p>
+        <label for="save-menu-name" class="block text-sm font-medium text-muted mb-2">{{ tr.t("new-menu-path") }}</label>
+        <div class="flex items-center gap-2">
+            <input type="text" id="save-menu-name" name="name" required autocomplete="off"
+                   pattern="[a-zA-Z0-9_/ -]+" placeholder="{{ tr.t("new-menu-placeholder") }}"
+                   aria-describedby="save-menu-hint save-menu-error"
+                   class="flex-1 px-4 py-3 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
+            <span class="text-faint">.menu</span>
+        </div>
+        <p id="save-menu-hint" class="mt-2 text-sm text-faint">{{ tr.t("new-menu-hint") }}</p>
+        <p id="save-menu-error" class="mt-2 text-sm text-danger" role="alert"></p>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" class="btn" onclick="closeSaveMenu()">{{ tr.t("action-cancel") }}</button>
+            <button type="submit" id="save-menu-submit" class="btn btn-primary">{{ tr.t("shopping-save-menu-save") }}</button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Saving the list as a menu. The server writes the file (see
+// `save_as_menu`); on success the new menu opens, ready to be added back to
+// the list another week.
+(function () {
+    const dialog = document.getElementById('save-menu-dialog');
+    const form = document.getElementById('save-menu-form');
+    const name = document.getElementById('save-menu-name');
+    const error = document.getElementById('save-menu-error');
+    const submit = document.getElementById('save-menu-submit');
+    let returnFocus = null;
+
+    window.openSaveMenu = function () {
+        returnFocus = document.activeElement;
+        error.textContent = '';
+        name.removeAttribute('aria-invalid');
+        dialog.classList.remove('hidden');
+        dialog.classList.add('flex');
+        name.focus();
+    };
+
+    window.closeSaveMenu = function () {
+        dialog.classList.add('hidden');
+        dialog.classList.remove('flex');
+        if (returnFocus && returnFocus.isConnected) returnFocus.focus();
+        returnFocus = null;
+    };
+
+    function fail(message) {
+        error.textContent = message;
+        name.setAttribute('aria-invalid', 'true');
+        name.focus();
+    }
+
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!name.value.trim() || !name.checkValidity()) {
+            fail({{ tr.t("new-menu-hint")|json|safe }});
+            return;
+        }
+        submit.disabled = true;
+        try {
+            const response = await fetch('{{ prefix }}/api/shopping_list/save_as_menu', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.value })
+            });
+            if (response.status === 201) {
+                const saved = await response.json();
+                window.location.href = '{{ prefix }}/recipe/' + encodeRecipePath(saved.path);
+                return;
+            }
+            if (response.status === 409) {
+                fail({{ tr.t("shopping-save-menu-exists")|json|safe }});
+            } else {
+                const body = await response.json().catch(() => ({}));
+                fail(body.error || {{ tr.t("shopping-save-menu-failed")|json|safe }});
+            }
+        } catch {
+            fail({{ tr.t("shopping-save-menu-failed")|json|safe }});
+        } finally {
+            submit.disabled = false;
+        }
+    });
+
+    dialog.addEventListener('click', event => {
+        if (event.target === dialog) closeSaveMenu();
+    });
+
+    dialog.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeSaveMenu();
+        } else if (event.key === 'Tab') {
+            // Keep the focus inside while the dialog is open.
+            const items = [...form.querySelectorAll('input, button')].filter(el => !el.disabled);
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
 
 <script>
 let shoppingList = [];

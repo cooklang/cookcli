@@ -774,6 +774,31 @@ async fn each_role_can_do_only_what_it_allows() {
         let new = get_page(&server, "/new", Some(&cookie)).await;
         assert_eq!(refused_for_role(new.status()), !recipes, "{user} /new");
 
+        // Saving the list as a menu writes a menu file: a shopper may change
+        // the list but not that. (The list is empty by now, so the handler
+        // answers 400 to whoever gets through.)
+        let save_menu = post(
+            "/api/shopping_list/save_as_menu",
+            serde_json::json!({ "name": format!("Saved by {user}") }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            refused_for_role(save_menu.status()),
+            !recipes,
+            "{user} save as menu"
+        );
+        let list_page = get_page(&server, "/shopping-list", Some(&cookie))
+            .await
+            .text()
+            .await
+            .unwrap();
+        assert_eq!(
+            list_page.contains("id=\"save-menu-button\""),
+            recipes,
+            "{user} Save as Menu"
+        );
+
         // The editor's language server.
         let lsp = get_page(&server, "/api/ws/lsp", Some(&cookie)).await;
         assert_eq!(refused_for_role(lsp.status()), !recipes, "{user} lsp");
