@@ -278,7 +278,7 @@
                         <div class="flex-1 flex items-center">
                             {% match ingredient.reference_path %}
                             {% when Some with (path) %}
-                            {% if !static_mode && viewer.can_edit_lists() %}
+                            {% if !static_mode && viewer.can_edit_lists() && !ingredient.optional %}
                             <input type="checkbox" checked
                                    class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
                                    data-ref-path="{{ path }}"
@@ -291,6 +291,12 @@
                                 {{ ingredient.name }}
                             </a>
                             {% when None %}
+                            {% if !static_mode && viewer.can_edit_lists() && ingredient.optional %}
+                            <input type="checkbox"
+                                   class="opt-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-name="{{ ingredient.name }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}">
+                            {% endif %}
                             <span class="font-medium">{{ ingredient.name }}</span>
                             {% endmatch %}
                             {% match ingredient.note %}
@@ -298,6 +304,9 @@
                             <span class="row-note italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                             {% when None %}
                             {% endmatch %}
+                            {% if ingredient.optional %}
+                            <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                            {% endif %}
                         </div>
                         <span class="row-value ml-2">
                             {% match ingredient.quantity %}
@@ -318,7 +327,7 @@
                         <div class="flex-1 flex items-center">
                             {% match ingredient.reference_path %}
                             {% when Some with (path) %}
-                            {% if !static_mode && viewer.can_edit_lists() %}
+                            {% if !static_mode && viewer.can_edit_lists() && !ingredient.optional %}
                             <input type="checkbox" checked
                                    class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
                                    data-ref-path="{{ path }}"
@@ -331,6 +340,12 @@
                                 {{ ingredient.name }}
                             </a>
                             {% when None %}
+                            {% if !static_mode && viewer.can_edit_lists() && ingredient.optional %}
+                            <input type="checkbox"
+                                   class="opt-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-name="{{ ingredient.name }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}">
+                            {% endif %}
                             <span class="font-medium">{{ ingredient.name }}</span>
                             {% endmatch %}
                             {% match ingredient.note %}
@@ -338,6 +353,9 @@
                             <span class="row-note italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                             {% when None %}
                             {% endmatch %}
+                            {% if ingredient.optional %}
+                            <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                            {% endif %}
                         </div>
                         <span class="row-value ml-2">
                             {% match ingredient.quantity %}
@@ -356,6 +374,9 @@
                     {% for item in cookware %}
                     <li class="ingredient-row">
                         <span class="font-medium">{{ item.name }}</span>
+                        {% if item.optional %}
+                        <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
@@ -432,6 +453,16 @@
 
 {% if !static_mode %}
 <script>
+// An optional ingredient used in several sections has a checkbox in each;
+// they are one choice, so keep them in step.
+document.querySelectorAll('.opt-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+        document.querySelectorAll('.opt-checkbox').forEach(other => {
+            if (other.dataset.name === cb.dataset.name) other.checked = cb.checked;
+        });
+    });
+});
+
 async function addToShoppingList(event, recipePath) {
     // The servings stepper holds servings; the list wants the factor.
     const scaleInput = document.getElementById(SCALE_PARAM);
@@ -453,6 +484,14 @@ async function addToShoppingList(event, recipePath) {
         payload.included_references = Array.from(refCheckboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.dataset.refPath);
+    }
+    // Optional ingredients are left off unless ticked. The same ingredient
+    // can appear in several sections, so the names are de-duplicated.
+    const optionalNames = Array.from(document.querySelectorAll('.opt-checkbox'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.name);
+    if (optionalNames.length > 0) {
+        payload.optional_ingredients = [...new Set(optionalNames)];
     }
 
     try {

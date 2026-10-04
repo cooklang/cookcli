@@ -333,6 +333,7 @@ impl RecipeTemplate {
                             "quantity": ing.quantity,
                             "unit": ing.unit,
                             "note": ing.note,
+                            "optional": ing.optional,
                         })
                     })
                     .collect();
@@ -381,6 +382,7 @@ impl RecipeTemplate {
             "scale": self.scale,
             "image": self.image_path,
             "sections": sections,
+            "optionalLabel": self.tr.t("recipe-optional"),
         });
 
         // Escape </script> sequences to prevent premature script tag closing
@@ -833,11 +835,16 @@ pub struct IngredientData {
     /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
     pub reference_path: Option<String>,
+    /// Marked optional in the recipe (`@?chives`). Required and optional
+    /// amounts of one ingredient are listed as two entries.
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CookwareData {
     pub name: String,
+    /// Marked optional in the recipe (`#?splatter guard{}`).
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

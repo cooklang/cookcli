@@ -13,6 +13,7 @@ recipe-ingredients = Ingrediënten
 recipe-steps = Bereidingswijze
 recipe-notes = Notities
 recipe-cookware = Keukengerei
+recipe-optional = (optioneel)
 recipe-timers = Timers
 recipe-tags = Tags
 recipe-add-to-shopping = Toevoegen aan boodschappenlijst

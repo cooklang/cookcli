@@ -27,6 +27,7 @@ shopping-failed-to-add = Misslyckades att lägga till handlingslista
 shopping-error = Fel
 shopping-print = Skriv ut
 shopping-include-in-list = Ta med i handlingslistan
+shopping-optional = (valfritt)
 shopping-copy = Kopiera
 shopping-copied = Kopierad!
 shopping-copy-failed = Kopiering misslyckades

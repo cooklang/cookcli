@@ -13,6 +13,7 @@ recipe-ingredients = Ingredienti
 recipe-steps = Preparazione
 recipe-notes = Note
 recipe-cookware = Utensili
+recipe-optional = (facoltativo)
 recipe-timers = Timer
 recipe-tags = Tag
 recipe-add-to-shopping = Aggiungi alla lista della spesa

@@ -27,6 +27,7 @@ shopping-failed-to-add = Impossibile aggiungere alla lista della spesa
 shopping-error = Errore
 shopping-print = Stampa
 shopping-include-in-list = Includi nella lista della spesa
+shopping-optional = (facoltativo)
 shopping-copy = Copia
 shopping-copied = Copiato!
 shopping-copy-failed = Copia non riuscita

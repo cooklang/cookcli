@@ -45,7 +45,7 @@
 
 mod store;
 
-pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
+pub use store::{recipe_display_name, OptionalSelection, ShoppingListStore, StoredEntry};
 
 use crate::{
     find,
@@ -411,7 +411,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
 /// the same stock off the optional amount as well would count it twice, so an
 /// ingredient needed both ways keeps its whole optional amount: at worst the
 /// shopper is offered a little more garnish than they need.
-fn subtract_pantry_from_optional(
+pub fn subtract_pantry_from_optional(
     optional: IngredientList,
     required: &IngredientList,
     pantry: &PantryConf,
@@ -667,6 +667,110 @@ pub fn extract_ingredients(
     }
 
     Ok(diagnostics)
+}
+
+/// The selection lines for the optional ingredients of `recipe` named in
+/// `names`, with the amounts to buy at the recipe's scale.
+///
+/// This is what a shopping list records when someone accepts optional
+/// ingredients while adding a recipe: each named ingredient's optional
+/// occurrences are added up, scaled, and written as the final amount, so a
+/// reader never has to look the recipe up again. Amounts that do not add up
+/// into one quantity (`1 pinch` and `5 g`) become one selection each.
+///
+/// Names are compared case-insensitively with surrounding whitespace trimmed,
+/// against the ingredient's display name. A name that is not an optional
+/// ingredient of the recipe is ignored, and so are optional recipe
+/// references, which a selection line of this kind cannot hold.
+///
+/// # Errors
+///
+/// As [`extract_ingredients`] for reading and parsing the recipe.
+pub fn optional_selections(
+    ctx: &Context,
+    recipe: &ScaledRecipe,
+    names: &[String],
+) -> Result<Outcome<Vec<OptionalSelection>>, CoreError> {
+    let converter = PARSER.converter();
+    let wanted: Vec<String> = names.iter().map(|n| n.trim().to_lowercase()).collect();
+    let (parsed, diagnostics) = parse_source(ctx.base_path(), &recipe.source, recipe.scale)?;
+
+    let mut accepted = IngredientList::new();
+    for entry in parsed.group_ingredients(converter) {
+        let ingredient = entry.ingredient;
+        let name = ingredient.display_name();
+        if ingredient.modifiers().is_optional()
+            && ingredient.reference.is_none()
+            && ingredient.modifiers().should_be_listed()
+            && wanted.contains(&name.trim().to_lowercase())
+        {
+            accepted.add_ingredient(name.into_owned(), &entry.quantity, converter);
+        }
+    }
+
+    let mut selections = Vec::new();
+    for (name, quantity) in accepted.iter() {
+        let components = ordered_components(quantity);
+        if components.is_empty() {
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: None,
+            });
+        }
+        for component in components {
+            let quantity = match component.unit() {
+                Some(unit) => format!("{}%{unit}", component.value()),
+                None => component.value().to_string(),
+            };
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: Some(quantity),
+            });
+        }
+    }
+    Ok(Outcome::with_diagnostics(selections, diagnostics))
+}
+
+/// Add stored selection lines to the optional ingredients of `list`.
+///
+/// Each amount is used as written — it is already the amount to buy — and
+/// several lines for one name add up. A quantity that does not parse is
+/// reported and the ingredient is added without one, so the shopper still
+/// sees it.
+pub fn add_optional_selections(
+    list: &mut ShoppingIngredients,
+    selections: &[OptionalSelection],
+) -> Vec<Diagnostic> {
+    let converter = PARSER.converter();
+    let mut diagnostics = Vec::new();
+    for selection in selections {
+        let quantity = match &selection.quantity {
+            None => GroupedQuantity::default(),
+            Some(quantity) => {
+                let line = format!("@x{{{quantity}}}");
+                match parse_unscaled(&line, &selection.name, None) {
+                    Ok(outcome) => outcome
+                        .value
+                        .group_ingredients(converter)
+                        .into_iter()
+                        .next()
+                        .map(|entry| entry.quantity)
+                        .unwrap_or_default(),
+                    Err(_) => {
+                        diagnostics.push(Diagnostic::warning(format!(
+                            "Optional ingredient '{}' has an amount that is not a Cooklang \
+                             quantity: '{quantity}'. It is listed without one",
+                            selection.name
+                        )));
+                        GroupedQuantity::default()
+                    }
+                }
+            }
+        };
+        list.optional
+            .add_ingredient(selection.name.clone(), &quantity, converter);
+    }
+    diagnostics
 }
 
 /// A recipe reference [`add_ingredients`] left to follow: its index in

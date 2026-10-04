@@ -897,7 +897,10 @@ fn shopping_list() -> ApiSection {
                  alphabetically. Quantities are reduced by anything in `pantry.conf`; \
                  `pantry_items` lists the ingredient names that were found there (with a \
                  nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's \
-                 current persistent checked state, unrelated to the recipes in this request.",
+                 current persistent checked state, unrelated to the recipes in this request. \
+                 A recipe's optional ingredients are left out unless they are listed in \
+                 `optional_ingredients`; those come back with `optional: true`, as separate \
+                 items from any required amount of the same ingredient.",
             )
             .params(vec![
                 param(
@@ -921,6 +924,15 @@ fn shopping_list() -> ApiSection {
                     false,
                     "Which sub-recipe references to expand. Omit to include all of them.",
                 ),
+                param(
+                    "optional_ingredients",
+                    "body",
+                    "{ name: string, quantity?: string }[]",
+                    false,
+                    "Optional ingredients to include, each with the amount to buy in Cooklang \
+                     quantity syntax (`2%pinch`). The amount is used as given, not scaled — \
+                     this is what `GET /api/shopping_list/items` returns for the entry.",
+                ),
             ])
             .request(
                 r#"
@@ -939,6 +951,7 @@ fn shopping_list() -> ApiSection {
       "items": [
         {
           "name": "ripe tomatoes",
+          "optional": false,
           "quantities": [
             {
               "scalable": true,
@@ -954,6 +967,7 @@ fn shopping_list() -> ApiSection {
       "items": [
         {
           "name": "fresh mozzarella",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -964,6 +978,7 @@ fn shopping_list() -> ApiSection {
         },
         {
           "name": "mozzarella cheese",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -979,6 +994,7 @@ fn shopping_list() -> ApiSection {
       "items": [
         {
           "name": "tipo zero flour",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -989,6 +1005,7 @@ fn shopping_list() -> ApiSection {
         },
         {
           "name": "fresh yeast",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1004,6 +1021,7 @@ fn shopping_list() -> ApiSection {
       "items": [
         {
           "name": "salt",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1022,6 +1040,7 @@ fn shopping_list() -> ApiSection {
         },
         {
           "name": "black pepper",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1037,6 +1056,7 @@ fn shopping_list() -> ApiSection {
       "items": [
         {
           "name": "Dijon mustard",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1050,6 +1070,7 @@ fn shopping_list() -> ApiSection {
         },
         {
           "name": "honey",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1063,6 +1084,7 @@ fn shopping_list() -> ApiSection {
         },
         {
           "name": "red wine vinegar",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1079,6 +1101,7 @@ fn shopping_list() -> ApiSection {
         { "name": "basil leaves", "quantities": [] },
         {
           "name": "San Marzano tomato sauce",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -1103,7 +1126,9 @@ fn shopping_list() -> ApiSection {
                 "Returns the recipes currently on the shopping list, not their ingredients. \
                  An entry with a `recipes` array is a menu added via `add_menu`; its nested \
                  entries carry their own resolved scale and `included_references`, independent \
-                 of whatever the same recipe's standalone entry (if any) was given.",
+                 of whatever the same recipe's standalone entry (if any) was given. \
+                 `optional_ingredients` lists the optional ingredients chosen for an entry, \
+                 with the amounts to buy, and is left out when there are none.",
             )
             .response(
                 r#"
@@ -1112,7 +1137,8 @@ fn shopping_list() -> ApiSection {
     "path": "Salads/Caprese.cook",
     "name": "Caprese",
     "scale": 2.0,
-    "included_references": []
+    "included_references": [],
+    "optional_ingredients": [{ "name": "basil", "quantity": "10%g" }]
   },
   {
     "path": "2 Day Plan.menu",
@@ -1181,6 +1207,16 @@ fn shopping_list() -> ApiSection {
                      this field means \"expand all\", omitting it here is not preserved through \
                      storage and reads back as an explicit empty array. Pass the reference \
                      paths explicitly if you want them expanded.",
+                ),
+                param(
+                    "optional_ingredients",
+                    "body",
+                    "string[]",
+                    false,
+                    "Names of the recipe's optional ingredients to buy too. Their amounts are \
+                     worked out from the recipe at `scale` and stored as `? name{quantity}` \
+                     lines under the entry; `GET /api/shopping_list/items` returns them as \
+                     `optional_ingredients`. Omit to buy none of them.",
                 ),
             ])
             .request(

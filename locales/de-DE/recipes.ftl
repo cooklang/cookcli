@@ -13,6 +13,7 @@ recipe-ingredients = Zutaten
 recipe-steps = Anleitung
 recipe-notes = Notizen
 recipe-cookware = Kochgeschirr
+recipe-optional = (optional)
 recipe-timers = Timer
 recipe-tags = Schlagwörter
 recipe-add-to-shopping = Zur Einkaufsliste hinzufügen

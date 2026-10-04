@@ -13,6 +13,7 @@ recipe-ingredients = Ingredients
 recipe-steps = Instructions
 recipe-notes = Notes
 recipe-cookware = Cookware
+recipe-optional = (optional)
 recipe-timers = Timers
 recipe-tags = Tags
 recipe-add-to-shopping = Add to Shopping List
