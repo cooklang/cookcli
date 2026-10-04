@@ -108,6 +108,16 @@ delete-recipe = Rezept löschen
 delete-recipe-confirm = Möchten Sie dieses Rezept wirklich löschen?
 delete-recipe-warning = Diese Aktion kann nicht rückgängig gemacht werden.
 
+# Rename Recipe
+action-rename = Umbenennen
+rename-title = Datei umbenennen
+rename-label = Neuer Name
+rename-hint = Die Datei bleibt in ihrem Ordner. Ihre Bilder werden mit umbenannt, und Rezepte und Menüs, die sie verwenden, erhalten den neuen Namen.
+rename-failed = Umbenennen fehlgeschlagen: %s
+rename-skipped = Umbenannt, aber einige Verweise wurden nicht geändert: %s
+rename-write-failed = Umbenannt, aber diese Dateien konnten nicht aktualisiert werden: %s
+rename-shopping-list = Die Einkaufsliste verwendet noch den alten Namen; füge es über seine neue Seite erneut hinzu.
+
 # Title Picture
 picture-button = Bild
 picture-title = Titelbild

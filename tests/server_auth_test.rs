@@ -407,6 +407,15 @@ async fn guests_can_browse_but_not_change_anything() {
     assert_eq!(delete.status(), StatusCode::UNAUTHORIZED);
     assert!(recipe.exists());
 
+    let rename = http
+        .post(server.url("/api/recipe_rename/Recipe.cook"))
+        .json(&serde_json::json!({ "name": "Renamed" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rename.status(), StatusCode::UNAUTHORIZED);
+    assert!(recipe.exists());
+
     for path in [
         "/api/shopping_list/add",
         "/api/shopping_list/check",
@@ -783,6 +792,27 @@ async fn each_role_can_do_only_what_it_allows() {
         // The editor's language server.
         let lsp = get_page(&server, "/api/ws/lsp", Some(&cookie)).await;
         assert_eq!(refused_for_role(lsp.status()), !recipes, "{user} lsp");
+
+        // Renaming, which an editor may undo again.
+        let renamed = server.fixture.recipes.path().join("Renamed.cook");
+        let rename = post(
+            "/api/recipe_rename/Recipe.cook",
+            serde_json::json!({ "name": "Renamed" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(refused_for_role(rename.status()), !recipes, "{user} rename");
+        assert_eq!(renamed.exists(), recipes, "{user} rename");
+        if recipes {
+            let back = post(
+                "/api/recipe_rename/Renamed.cook",
+                serde_json::json!({ "name": "Recipe" }),
+            )
+            .await
+            .unwrap();
+            assert_eq!(back.status(), StatusCode::OK, "{user} rename back");
+        }
+        assert!(recipe.exists(), "{user}");
 
         // Sync.
         #[cfg(feature = "sync")]

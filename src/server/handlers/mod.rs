@@ -2,6 +2,7 @@ pub(super) mod common;
 pub mod menus;
 pub mod pantry;
 pub mod recipe_image;
+pub mod recipe_rename;
 pub mod recipes;
 pub mod shopping_list;
 pub mod shopping_list_events;
@@ -15,6 +16,7 @@ pub use pantry::{
     remove_item as remove_pantry_item, update_item as update_pantry_item,
 };
 pub use recipe_image::{recipe_image_delete, recipe_image_get, recipe_image_put};
+pub use recipe_rename::recipe_rename;
 pub use recipes::{all_recipes, recipe, recipe_delete, recipe_raw, recipe_save, reload, search};
 pub use shopping_list::{
     add_menu_to_shopping_list, add_to_shopping_list, check_shopping_item, clear_shopping_list,

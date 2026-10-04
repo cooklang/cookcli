@@ -108,6 +108,16 @@ delete-recipe = レシピを削除
 delete-recipe-confirm = このレシピを削除してもよろしいですか？
 delete-recipe-warning = この操作は取り消せません。
 
+# Rename Recipe
+action-rename = 名前を変更
+rename-title = ファイル名を変更
+rename-label = 新しい名前
+rename-hint = ファイルは同じフォルダーに残ります。写真も一緒に名前が変わり、このファイルを使うレシピやメニューは新しい名前に更新されます。
+rename-failed = 名前を変更できませんでした: %s
+rename-skipped = 名前を変更しましたが、一部の参照は変更されていません: %s
+rename-write-failed = 名前を変更しましたが、次のファイルを更新できませんでした: %s
+rename-shopping-list = 買い物リストはまだ古い名前を使っています。新しいページからもう一度追加してください。
+
 # Title Picture
 picture-button = 写真
 picture-title = タイトル写真

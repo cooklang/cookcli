@@ -108,6 +108,16 @@ delete-recipe = Eliminar Receta
 delete-recipe-confirm = ¿Estás seguro de que quieres eliminar esta receta?
 delete-recipe-warning = Esta acción no se puede deshacer.
 
+# Rename Recipe
+action-rename = Renombrar
+rename-title = Renombrar archivo
+rename-label = Nuevo nombre
+rename-hint = El archivo se queda en su carpeta. Sus fotos se renombran con él, y las recetas y menús que lo usan se actualizan con el nuevo nombre.
+rename-failed = No se pudo renombrar: %s
+rename-skipped = Renombrado, pero algunas referencias no se cambiaron: %s
+rename-write-failed = Renombrado, pero estos archivos no se pudieron actualizar: %s
+rename-shopping-list = La lista de la compra aún usa el nombre antiguo; vuelve a añadirlo desde su nueva página.
+
 # Title Picture
 picture-button = Foto
 picture-title = Foto de la receta

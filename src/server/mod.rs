@@ -52,6 +52,7 @@ mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
+mod rename;
 mod shopping_list_watcher;
 mod title_image;
 mod ui;
@@ -690,6 +691,7 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
                 // held to; this layer sits inside that one, so it wins.
                 .layer(DefaultBodyLimit::max(title_image::MAX_UPLOAD_BYTES)),
         )
+        .route("/recipe_rename/{*path}", post(handlers::recipe_rename))
         .route("/menus", get(handlers::list_menus))
         .route("/menus/{*path}", get(handlers::get_menu))
         .route("/search", get(handlers::search))

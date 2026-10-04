@@ -23,6 +23,12 @@
                 </svg>
                 {{ tr.t("picture-button") }}
             </button>
+            <button onclick="showRenameModal()" class="btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                </svg>
+                {{ tr.t("action-rename") }}
+            </button>
             <button onclick="showDeleteModal()" class="btn btn-danger">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -54,6 +60,30 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- Rename dialog -->
+    <div id="rename-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <form id="rename-form" class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="rename-heading">
+            <h2 id="rename-heading" class="text-title font-bold text-text mb-4">{{ tr.t("rename-title") }}</h2>
+            <label for="rename-input" class="block text-sm font-medium text-muted mb-2">{{ tr.t("rename-label") }}</label>
+            <div class="flex items-center gap-2">
+                <input id="rename-input" type="text" required autocomplete="off" spellcheck="false" maxlength="200"
+                       aria-describedby="rename-hint rename-error"
+                       class="flex-1 min-w-0 px-4 py-3 border border-line rounded-[var(--radius-control)] bg-surface text-text outline-hidden focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-soft)]">
+                <span class="text-faint">{% if is_menu %}.menu{% else %}.cook{% endif %}</span>
+            </div>
+            <p id="rename-hint" class="mt-2 text-sm text-faint">{{ tr.t("rename-hint") }}</p>
+            <p id="rename-error" class="mt-2 text-sm text-danger empty:hidden" aria-live="polite"></p>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" onclick="hideRenameModal()" class="btn">
+                    {{ tr.t("action-cancel") }}
+                </button>
+                <button id="rename-submit" type="submit" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ tr.t("action-rename") }}
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- Title and step picture dialog -->
@@ -333,11 +363,17 @@ function showToast(message, type = 'error') {
     }, 5000);
 }
 
+// Set while a rename is under way. A save then would write the old path,
+// and the save endpoint creates a file that is missing: the old file would
+// come back beside the renamed one.
+let renaming = false;
+
+// Resolves to whether the editor's text is now on disk.
 async function saveRecipe() {
-    if (isSaving) return;
+    if (isSaving || renaming) return false;
 
     const content = window.CooklangEditor.getContent(editorView);
-    if (content === originalContent) return;
+    if (content === originalContent) return true;
 
     isSaving = true;
     updateSaveStatus('saving');
@@ -354,16 +390,19 @@ async function saveRecipe() {
         if (response.ok) {
             originalContent = content;
             updateSaveStatus('saved');
+            return true;
         } else {
             updateSaveStatus('error');
             const errorText = await errorMessage(response);
             console.error('Save failed:', errorText);
             showToast(`Save failed: ${errorText || 'Unknown error'}`);
+            return false;
         }
     } catch (error) {
         updateSaveStatus('error');
         console.error('Save failed:', error.message);
         showToast(`Save failed: ${error.message}`);
+        return false;
     } finally {
         isSaving = false;
     }
@@ -425,6 +464,155 @@ async function deleteRecipe() {
     }
 }
 
+// Rename dialog
+const renameMessages = {
+    failed: {{ tr.t("rename-failed")|json|safe }},
+    skipped: {{ tr.t("rename-skipped")|json|safe }},
+    writeFailed: {{ tr.t("rename-write-failed")|json|safe }},
+    shoppingList: {{ tr.t("rename-shopping-list")|json|safe }}
+};
+const RENAME_NOTICE_KEY = 'cook-rename-notice';
+// The file's own stem: `recipe_name` drops every `.cook` in the name.
+const currentName = recipePath.split('/').pop().replace(/\.(cook|menu)$/, '');
+
+// One percent-encoded segment per path component, as the page URLs spell it.
+function encodePath(path) {
+    return path.split('/').map(encodeURIComponent).join('/');
+}
+
+function updateRenameSubmit() {
+    const name = document.getElementById('rename-input').value.trim();
+    document.getElementById('rename-submit').disabled = renaming || !name || name === currentName;
+}
+
+function showRenameModal() {
+    const modal = document.getElementById('rename-modal');
+    const input = document.getElementById('rename-input');
+    input.value = currentName;
+    document.getElementById('rename-error').textContent = '';
+    updateRenameSubmit();
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    input.focus();
+    input.select();
+}
+
+function hideRenameModal() {
+    if (renaming) return;
+    const modal = document.getElementById('rename-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function renameFailed(message) {
+    renaming = false;
+    updateRenameSubmit();
+    // Anything typed meanwhile was held back; save it now.
+    if (window.CooklangEditor.getContent(editorView) !== originalContent) {
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(() => saveRecipe(), AUTOSAVE_DELAY_MS);
+    }
+    document.getElementById('rename-error').textContent = renameMessages.failed.replace('%s', message);
+}
+
+async function renameRecipe(event) {
+    event.preventDefault();
+    const name = document.getElementById('rename-input').value.trim();
+    if (renaming || !name || name === currentName) return;
+
+    // Write what is in the editor first, under the old name, and keep any
+    // later autosave from writing that name again.
+    if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+    }
+    while (isSaving) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    if (!(await saveRecipe())) {
+        renameFailed('Save failed');
+        return;
+    }
+    renaming = true;
+    updateRenameSubmit();
+
+    let result;
+    try {
+        const response = await fetch(`{{ prefix }}/api/recipe_rename/${encodePath(recipePath)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (!response.ok) {
+            renameFailed(await errorMessage(response));
+            return;
+        }
+        result = await response.json();
+    } catch (error) {
+        renameFailed(error.message);
+        return;
+    }
+
+    const notices = [];
+
+    // Typed while the rename was on its way: save it under the new name.
+    const content = window.CooklangEditor.getContent(editorView);
+    if (content !== originalContent) {
+        let saved = false;
+        try {
+            const response = await fetch(`{{ prefix }}/api/recipes/${encodeURIComponent(result.path)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'text/plain' },
+                body: content
+            });
+            saved = response.ok;
+        } catch (error) {
+            console.error('Save after rename failed:', error.message);
+        }
+        if (!saved) {
+            notices.push(renameMessages.writeFailed.replace('%s', result.path));
+        }
+    }
+
+    if (result.references_skipped && result.references_skipped.length) {
+        const files = result.references_skipped.map(s => s.line ? `${s.file}:${s.line}` : s.file);
+        notices.push(renameMessages.skipped.replace('%s', [...new Set(files)].join(', ')));
+    }
+    if (result.references_failed && result.references_failed.length) {
+        notices.push(renameMessages.writeFailed.replace('%s', result.references_failed.join(', ')));
+    }
+    if (result.shopping_list_stale) {
+        notices.push(renameMessages.shoppingList);
+    }
+    if (notices.length) {
+        try {
+            sessionStorage.setItem(RENAME_NOTICE_KEY, notices.join(' '));
+        } catch (error) {
+            // No storage: the notices are lost, not the rename.
+        }
+    }
+    window.location.href = `{{ prefix }}/edit/${encodePath(result.path)}`;
+}
+
+document.getElementById('rename-form').addEventListener('submit', renameRecipe);
+document.getElementById('rename-input').addEventListener('input', updateRenameSubmit);
+document.getElementById('rename-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        hideRenameModal();
+    }
+});
+
+// What the rename that led here could not do.
+try {
+    const notice = sessionStorage.getItem(RENAME_NOTICE_KEY);
+    if (notice) {
+        sessionStorage.removeItem(RENAME_NOTICE_KEY);
+        showToast(notice);
+    }
+} catch (error) {
+    // No storage, no notice.
+}
+
 // Close modal when clicking outside
 document.getElementById('delete-modal').addEventListener('click', function(e) {
     if (e.target === this) {
@@ -436,6 +624,7 @@ document.getElementById('delete-modal').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         hideDeleteModal();
+        hideRenameModal();
         hidePictureModal();
     }
 });

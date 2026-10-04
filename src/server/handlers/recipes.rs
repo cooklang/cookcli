@@ -2,7 +2,10 @@ use crate::server::activity;
 use crate::web::viewer::Viewer;
 use crate::{
     server::{
-        handlers::common::{check_path, normalize_tags, recipe_file, RecipeFile},
+        handlers::{
+            common::{check_path, normalize_tags, recipe_file, RecipeFile},
+            recipe_rename::RECIPE_FILES,
+        },
         AppState,
     },
     util::PARSER,
@@ -157,6 +160,7 @@ pub async fn recipe_save(
     Extension(viewer): Extension<Viewer>,
     body: String,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let _writing = RECIPE_FILES.lock().await;
     let (file_path, created) = match recipe_file(&state.base_path, &path)? {
         RecipeFile::Existing(file_path) => (file_path, false),
         RecipeFile::Missing(file_path) => (file_path, true),
@@ -271,6 +275,7 @@ pub async fn recipe_delete(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let _writing = RECIPE_FILES.lock().await;
     let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
         tracing::error!("Recipe file not found for deletion: {path}");
         return Err((
