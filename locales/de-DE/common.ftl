@@ -102,6 +102,19 @@ new-menu-path = Menüpfad
 new-menu-placeholder = Planung/Woche 12
 new-menu-hint = Format: Ordner/Menüname
 new-menu-create = Menü erstellen
+new-plan = Neuer Essensplan
+new-plan-path = Pfad des Essensplans
+new-plan-placeholder = Pläne/Oktober
+new-plan-hint = Format: Ordner/Planname
+new-plan-create = Essensplan erstellen
+new-plan-start = Erster Tag
+new-plan-today = Heute
+new-plan-this-week = Diese Woche
+new-plan-next-week = Nächste Woche
+new-plan-days = Anzahl der Tage
+new-plan-one-week = 1 Woche
+new-plan-two-weeks = 2 Wochen
+new-plan-meals = Mahlzeiten
 
 # Delete Recipe
 delete-recipe = Rezept löschen

@@ -102,6 +102,19 @@ new-menu-path = Menupad
 new-menu-placeholder = Planningen/Week 12
 new-menu-hint = Formaat: map/menunaam
 new-menu-create = Menu Aanmaken
+new-plan = Nieuw Maaltijdplan
+new-plan-path = Pad van het plan
+new-plan-placeholder = Plannen/Oktober
+new-plan-hint = Gebruik het formaat map/plannaam
+new-plan-create = Maaltijdplan Aanmaken
+new-plan-start = Eerste dag
+new-plan-today = Vandaag
+new-plan-this-week = Deze week
+new-plan-next-week = Volgende week
+new-plan-days = Aantal dagen
+new-plan-one-week = 1 week
+new-plan-two-weeks = 2 weken
+new-plan-meals = Maaltijden
 
 # Delete Recipe
 delete-recipe = Recept Verwijderen

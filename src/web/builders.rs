@@ -175,6 +175,13 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         ),
         None => format!("{url_prefix}/new?kind=menu"),
     };
+    let new_plan_url = match sub_path {
+        Some(p) => format!(
+            "{url_prefix}/new?kind=plan&filename={}%2F",
+            urlencoding::encode(p)
+        ),
+        None => format!("{url_prefix}/new?kind=plan"),
+    };
 
     // The pick happens on the server (`/random`), so a static site has no
     // button; neither does a folder with nothing but menus in it.
@@ -192,6 +199,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         todays_menu,
         new_recipe_url,
         new_menu_url,
+        new_plan_url,
         random_recipe_url,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
@@ -1114,7 +1122,13 @@ fn build_menu_template_inner(
                 .all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
         });
 
-        if !lines.is_empty() {
+        // An empty dated section is still a day of a plan; it is dropped
+        // below if the menu is not one.
+        let dated = section_name
+            .as_deref()
+            .and_then(crate::web::plan::section_date)
+            .is_some();
+        if !lines.is_empty() || dated {
             sections.push(MenuSection {
                 name: section_name,
                 lines,
@@ -1182,6 +1196,12 @@ fn build_menu_template_inner(
                 .replace(".menu", "")
         });
 
+    // Sections on two days or more are laid out as a calendar.
+    let plan = crate::web::plan::build_plan_view(&sections, &lang);
+    if plan.is_none() {
+        sections.retain(|section| !section.lines.is_empty());
+    }
+
     Ok(MenuTemplate {
         active: "recipes".to_string(),
         name: menu_name,
@@ -1191,6 +1211,7 @@ fn build_menu_template_inner(
         servings,
         metadata,
         sections,
+        plan,
         image_path,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),

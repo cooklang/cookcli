@@ -102,6 +102,19 @@ new-menu-path = Menu path
 new-menu-placeholder = Plans/Week 12
 new-menu-hint = Use folder/menu-name format
 new-menu-create = Create Menu
+new-plan = New Meal Plan
+new-plan-path = Meal plan path
+new-plan-placeholder = Plans/October
+new-plan-hint = Use folder/plan-name format
+new-plan-create = Create Meal Plan
+new-plan-start = First day
+new-plan-today = Today
+new-plan-this-week = This week
+new-plan-next-week = Next week
+new-plan-days = Number of days
+new-plan-one-week = 1 week
+new-plan-two-weeks = 2 weeks
+new-plan-meals = Meals
 
 # Delete Recipe
 delete-recipe = Delete Recipe

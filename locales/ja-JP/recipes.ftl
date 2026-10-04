@@ -39,6 +39,9 @@ meta-description = 説明
 
 # Recipe Types
 recipe-type-menu = 献立
+recipe-type-plan = 食事計画
+plan-outside = この計画の期間外
+plan-nothing-planned = 予定なし
 
 # Today's Menu Banner
 todays-menu-title = 今日の献立

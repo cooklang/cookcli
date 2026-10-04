@@ -441,3 +441,302 @@ async fn the_form_and_the_listing_offer_menus() {
         "{listing}"
     );
 }
+
+// -- Meal plans (#385): a menu with sections on two days or more --
+
+/// The fields the new-plan form posts for a three-day plan from Wednesday
+/// 7 October 2026, with breakfast and dinner.
+fn plan_fields(filename: &str) -> Vec<(&str, &str)> {
+    vec![
+        ("filename", filename),
+        ("kind", "plan"),
+        ("start", "2026-10-07"),
+        ("days", "3"),
+        ("servings", "4"),
+        ("breakfast", "on"),
+        ("dinner", "on"),
+    ]
+}
+
+#[tokio::test]
+async fn a_plan_is_created_with_a_section_a_day() {
+    let server = start_server().await;
+
+    let resp = server.create(&plan_fields("Plans/Fortnight")).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&resp), "/edit/Plans/Fortnight.menu");
+    let content = std::fs::read_to_string(server.recipes().join("Plans/Fortnight.menu"))
+        .expect("the plan file must exist");
+    let day = |heading: &str| format!("\n== {heading} ==\n\nBreakfast: \\\n- \n\nDinner: \\\n- \n");
+    assert_eq!(
+        content,
+        format!(
+            "---\ntitle: Fortnight\nservings: 4\n---\n{}{}{}",
+            day("Wednesday (2026-10-07)"),
+            day("Thursday (2026-10-08)"),
+            day("Friday (2026-10-09)"),
+        )
+    );
+
+    // Its empty bullets show as empty meals on the planner.
+    let page = client()
+        .get(server.url("/recipe/Plans/Fortnight"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(page.matches("Nothing planned").count(), 6, "{page}");
+    assert!(!page.contains("Outside this plan"));
+}
+
+#[tokio::test]
+async fn a_plan_names_its_days_and_meals_in_the_page_language() {
+    let server = start_server().await;
+
+    let resp = client()
+        .post(server.url("/new"))
+        .header("origin", format!("http://127.0.0.1:{}", server.port))
+        .header("accept-language", "fr-FR")
+        .form(&plan_fields("Semaine"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    let content = std::fs::read_to_string(server.recipes().join("Semaine.menu")).unwrap();
+    assert!(
+        content.contains("\n== Mercredi (2026-10-07) ==\n\nPetit-déjeuner: \\\n- \n"),
+        "{content}"
+    );
+}
+
+#[tokio::test]
+async fn a_plan_the_form_got_wrong_goes_back_with_its_choices() {
+    let server = start_server().await;
+
+    for (field, value, error) in [
+        ("days", "1", "A%20plan%20lasts%20from%202%20to%2062%20days"),
+        ("days", "63", "A%20plan%20lasts%20from%202%20to%2062%20days"),
+        (
+            "start",
+            "2026-02-30",
+            "Pick%20the%20day%20the%20plan%20starts",
+        ),
+        (
+            "servings",
+            "0",
+            "Servings%20must%20be%20a%20whole%20number%20above%20zero",
+        ),
+    ] {
+        let mut fields = plan_fields("Wrong");
+        fields.retain(|(name, _)| *name != field);
+        fields.push((field, value));
+
+        let resp = server.create(&fields).await;
+
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        let to = location(&resp);
+        assert!(to.contains(error), "{field}={value}: {to}");
+        assert!(to.contains("&kind=plan"), "{to}");
+        assert!(to.contains(&format!("&{field}={value}")), "{to}");
+        assert!(
+            to.contains("&breakfast=on") && to.contains("&dinner=on"),
+            "{to}"
+        );
+        assert!(!to.contains("lunch"), "{to}");
+    }
+
+    let mut no_meals = plan_fields("Wrong");
+    no_meals.retain(|(name, _)| !matches!(*name, "breakfast" | "dinner"));
+    let to = location(&server.create(&no_meals).await);
+    assert!(to.contains("Pick%20at%20least%20one%20meal"), "{to}");
+
+    assert!(!server.recipes().join("Wrong.menu").exists());
+
+    // A taken name keeps the frame too, and leaves the file alone.
+    std::fs::write(server.recipes().join("Taken.menu"), "").unwrap();
+    let to = location(&server.create(&plan_fields("Taken")).await);
+    assert!(
+        to.contains("A%20plan%20with%20this%20name%20already%20exists"),
+        "{to}"
+    );
+    assert!(to.contains("&start=2026-10-07&days=3&servings=4"), "{to}");
+    assert_eq!(
+        std::fs::read_to_string(server.recipes().join("Taken.menu")).unwrap(),
+        ""
+    );
+
+    // And the form shows them again.
+    let form = client()
+        .get(server.url(&format!("/new{}", &to[to.find('?').unwrap()..])))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(
+        form.contains(r#"name="start" required value="2026-10-07""#),
+        "{form}"
+    );
+    assert!(form.contains(r#"value="3""#), "{form}");
+    assert!(form.contains(r#"name="dinner" checked"#), "{form}");
+    assert!(!form.contains(r#"name="lunch" checked"#), "{form}");
+}
+
+#[tokio::test]
+async fn the_planner_lays_a_plan_out_by_day() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join("Week.menu"),
+        "== Wednesday (2026-10-07) ==\n\nBreakfast: \\\n- \n\n\
+         == Thursday (2026-10-08) ==\n\nDinner: \\\n- @./Omelette{} \\\n- @salad{1%bowl}\n\n\
+         == Day 1 ==\n\nLunch: \\\n- @bread{}\n\n\
+         = 2026-10-09 Dinner\n\n- @soup{}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        server.recipes().join("Plain.menu"),
+        "== Thursday (2026-10-08) ==\n\nDinner: \\\n- @./Omelette{}\n",
+    )
+    .unwrap();
+
+    let page = client()
+        .get(server.url("/recipe/Week"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    assert!(page.contains(r#"id="plan""#), "{page}");
+    assert_eq!(
+        page.matches(r#"class="plan-day card p-3" data-date="#)
+            .count(),
+        3
+    );
+    // The page is in American English, where weeks start on Sunday:
+    // Wednesday is the fourth column.
+    let plan = &page[page.find(r#"id="plan""#).unwrap()..];
+    let cells: Vec<&str> = plan.split("<li class=").skip(1).collect();
+    assert!(cells[..3]
+        .iter()
+        .all(|cell| cell.starts_with(r#""hidden md:block""#)));
+    assert!(cells[3].contains(r#"data-date="2026-10-07""#));
+    let thursday = cells[4];
+    assert!(
+        thursday.contains(r#"<time datetime="2026-10-08">Thu 8 Oct</time>"#),
+        "{thursday}"
+    );
+    assert!(
+        thursday.contains(r#"href="/recipe/Omelette""#),
+        "{thursday}"
+    );
+    assert!(thursday.contains("salad"), "{thursday}");
+    // Every day offers the meals the plan names.
+    assert!(thursday.contains(">Breakfast</h3>"), "{thursday}");
+    assert!(cells[5].contains(r#"data-date="2026-10-09""#));
+    assert!(cells[5].contains(">Dinner</h3>") && cells[5].contains("soup"));
+    // Bullets are the file's layout, not something to show.
+    assert!(!thursday.contains(">- <"), "{thursday}");
+    // The undated section is not lost.
+    assert!(page.contains("Outside this plan"));
+    assert!(page.contains("Day 1"));
+    assert!(page.contains("Meal Plan</span>"));
+
+    // A menu with a single dated day still shows one card a section.
+    let page = client()
+        .get(server.url("/recipe/Plain"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!page.contains(r#"id="plan""#));
+    assert!(page.contains("Thursday (2026-10-08)"));
+    assert!(page.contains(r#"href="/recipe/Omelette""#));
+}
+
+#[tokio::test]
+async fn empty_dated_sections_are_days_of_the_plan() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join("Bare.menu"),
+        "== Wednesday (2026-10-07) ==\n\nDinner: \\\n- @./Omelette{}\n\n\
+         == Thursday (2026-10-08) ==\n\n== Friday (2026-10-09) ==\n",
+    )
+    .unwrap();
+    std::fs::write(
+        server.recipes().join("Party.menu"),
+        "== Party (2026-12-31) ==\n\n== Food ==\n\n- @./Omelette{}\n",
+    )
+    .unwrap();
+
+    let page = client()
+        .get(server.url("/recipe/Bare"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    // The plan runs to its last heading, even with nothing under it.
+    assert_eq!(
+        page.matches(r#"class="plan-day card p-3" data-date="#)
+            .count(),
+        3,
+        "{page}"
+    );
+    assert!(page.contains(r#"data-date="2026-10-09""#));
+
+    // In an ordinary menu an empty section still shows no card.
+    let page = client()
+        .get(server.url("/recipe/Party"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!page.contains(r#"id="plan""#));
+    assert!(!page.contains("Party (2026-12-31)"), "{page}");
+}
+
+#[tokio::test]
+async fn the_form_and_the_listing_offer_plans() {
+    let server = start_server().await;
+
+    let form = client()
+        .get(server.url("/new?kind=plan"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(form.contains(r#"name="kind" value="plan""#));
+    assert!(form.contains(".menu</span>"));
+    assert!(form.contains(r#"type="date" id="plan-start" name="start""#));
+    assert!(form.contains(r#"name="breakfast" checked"#));
+    assert!(form.contains(r#"name="dinner" checked"#));
+    assert!(!form.contains(r#"name="snacks" checked"#));
+
+    let listing = client()
+        .get(server.url("/directory/Plans"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(
+        listing.contains(r#"href="/new?kind=plan&amp;filename=Plans%2F""#)
+            || listing.contains(r#"href="/new?kind=plan&filename=Plans%2F""#),
+        "{listing}"
+    );
+}
