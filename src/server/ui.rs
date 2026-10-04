@@ -210,7 +210,19 @@ async fn recipe_page(
 
     match crate::web::builders::build_recipe_template(input) {
         Ok(crate::web::builders::RecipeBuildOutput::Recipe(template)) => template.into_response(),
-        Ok(crate::web::builders::RecipeBuildOutput::Menu(template)) => template.into_response(),
+        Ok(crate::web::builders::RecipeBuildOutput::Menu(mut template)) => {
+            // A plan's calendar can change the plan for those who may.
+            if viewer.can_edit_recipes() {
+                let servings = template
+                    .servings
+                    .as_ref()
+                    .map(|servings| servings.base.to_string());
+                if let Some(plan) = template.plan.as_mut() {
+                    super::handlers::plans::annotate(plan, &state.base_path, &path, servings).await;
+                }
+            }
+            template.into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to build recipe template: {:?}", e);
             error_page(lang, &state.url_prefix, &e, features, viewer)

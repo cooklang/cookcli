@@ -451,6 +451,45 @@ Response:
 }
 ```
 
+### `POST /api/plans/{*path}`
+
+Change a meal plan
+
+Makes one change to a meal plan — a `.menu` with sections on two days or more — as its calendar page does: `add` a recipe to the end of a day's meal, `remove` a line, or `move` / `copy` a line to another day's meal. Only the lines concerned change; the rest of the file keeps its bytes. A day is a section whose name holds its `YYYY-MM-DD` date, `== Wednesday (2026-10-07) ==` or `= 2026-10-07 Dinner`, and a meal starts at a line that is only `Name:`, or at the section's heading for the meal named after its date; a missing day or meal is created, days in date order, meals in the order the plan's days name them. A line is named by its day, meal and place among the meal's bullets (from 0), plus its text without the bullet, which must match the file. `version` is the SHA-256 of the file's text, in hex, as the plan's page carries it; a change to any other version, or to a line that is no longer there, is refused with 409 and the current `version`. `add` takes a recipe's path in the collection and writes `- @./Path{}`, or `- @./Path{2%servings}` with `servings`. Returns 400 for a menu dated on fewer than two days, a meal name that would not read back (`:`, brackets, …) or a recipe that does not exist, and 404 for a missing file. When sign-in is on, needs the `editor` role. The response carries the file's new `version`.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Plan path relative to the recipe directory, e.g. `Plans/October.menu`. |
+| `op` | body | `string` | yes | `add`, `remove`, `move` or `copy`. |
+| `version` | body | `string` | yes | The version of the plan the change was made to. |
+| `date, meal` | body | `string` | yes | The day (`YYYY-MM-DD`) and meal: where `add` adds, or the line's for the others. |
+| `index, text` | body | `number, string` | no | `remove`, `move`, `copy`: the line's place in the meal and its text. |
+| `to` | body | `object` | no | `move`, `copy`: `{ "date", "meal" }` the line goes to. |
+| `recipe, servings` | body | `string, number` | no | `add`: the recipe's path, e.g. `Salads/Caprese.cook`, and optional servings. |
+
+Request body:
+
+```json
+{
+  "version": "8e507b3bf24da02c9f3fa5c788eab55839e4ea7d37a1683ee8505ef177bde090",
+  "op": "move",
+  "date": "2026-10-07",
+  "meal": "Dinner",
+  "index": 0,
+  "text": "@./Risotto{}",
+  "to": { "date": "2026-10-09", "meal": "Breakfast" }
+}
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "version": "8bb83c4f83bc739a1c5ea480a71c182e7a92c86b57e6478e58b4cea1aba562c7"
+}
+```
+
 ## Shopping List
 
 Two distinct things live here. `POST /api/shopping_list` is stateless: send recipes, get an aggregated ingredient list back. Everything else operates on the server's persistent list, stored as `.shopping-list` and `.shopping-checked` in the recipe directory. Most of the endpoints that mutate the stored list respond `200 OK` with an empty body — only `GET /api/shopping_list/items`, `GET /api/shopping_list/checked`, and the stateless `POST /api/shopping_list` return JSON. (A third GET lives under this path in the router, `/api/shopping_list/events`, but it's a Server-Sent Events stream, not JSON — see the Realtime section.)
