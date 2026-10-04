@@ -231,13 +231,14 @@ impl ValidationReport {
 /// # Timer quantities
 ///
 /// The walk uses [`PARSER`](crate::PARSER), then warns when a timer's
-/// quantity is text — `~{a few%minutes}`, `~{overnight}` — but not a range or
-/// fraction the parser reads as text, `~{10-20%minutes}` or `~{½%hour}`. The
-/// unit is not checked, so `~{1%hr}` and `~{10%Minutes}` are not diagnostics,
-/// and neither is a textual ingredient quantity (`@salt{to taste}`). A named
-/// timer with no quantity (`~dough`) stays valid. The warning does not drop the
-/// recipe, so its references are still collected. Nothing else about a recipe
-/// changes: the parser is the one every other command uses.
+/// quantity is text — `~{a few%minutes}`, `~{overnight}`, `~{½%hour}` — but
+/// not a numeric range such as `~{10-20%minutes}`, which the parser reads as
+/// text only because range values are off. The unit is not checked, so
+/// `~{1%hr}` and `~{10%Minutes}` are not diagnostics, and neither is a textual
+/// ingredient quantity (`@salt{to taste}`). A named timer with no quantity
+/// (`~dough`) stays valid. The warning does not drop the recipe, so its
+/// references are still collected. Nothing else about a recipe changes: the
+/// parser is the one every other command uses.
 ///
 /// # Errors
 ///
@@ -383,14 +384,19 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
 /// The timers come from a [`PullParser`](cooklang::parser::PullParser) run
 /// with the extensions of [`PARSER`], so each value carries the exact span of
 /// its source, frontmatter included. The unit is irrelevant: `~{1%hr}` is a
-/// number and is not warned about. Text that is still a number, a range such
-/// as `~{10-20%minutes}` or a fraction such as `~{½%hour}`, is not warned
-/// about either.
+/// number and is not warned about. Range values are turned on for this pass
+/// only, so a range such as `~{10-20%minutes}` comes back as a range, by
+/// cooklang's own rules, and is not warned about either. Its errors are not
+/// collected: the shared parser has already reported on the recipe.
 fn textual_timer_warnings(source: &str, path: &Utf8Path) -> Vec<Diagnostic> {
-    use cooklang::parser::{Event, PullParser};
+    use cooklang::{
+        parser::{Event, PullParser},
+        Extensions,
+    };
 
     let mut warnings = Vec::new();
-    for event in PullParser::new(source, PARSER.extensions()) {
+    let extensions = PARSER.extensions() | Extensions::RANGE_VALUES;
+    for event in PullParser::new(source, extensions) {
         let Event::Timer(timer) = event else {
             continue;
         };
@@ -400,9 +406,6 @@ fn textual_timer_warnings(source: &str, path: &Utf8Path) -> Vec<Diagnostic> {
         let cooklang::Value::Text(text) = quantity.value.value.value() else {
             continue;
         };
-        if is_numeric_text(text) {
-            continue;
-        }
         let span = quantity.value.span();
         // The value runs up to `%`, so it can end in whitespace.
         let end = span.start() + source[span.range()].trim_end().len();
@@ -417,25 +420,6 @@ fn textual_timer_warnings(source: &str, path: &Utf8Path) -> Vec<Diagnostic> {
         warnings.push(diagnostic);
     }
     warnings
-}
-
-/// Whether a quantity the parser read as text is still a number: a range
-/// (`10-20`, `1.5 - 2`) or a Unicode fraction (`½`, `1½`).
-fn is_numeric_text(text: &str) -> bool {
-    let is_fraction = |c: char| matches!(c, '¼'..='¾' | '⅐'..='⅞');
-    let is_digit = |c: char| c.is_ascii_digit() || is_fraction(c);
-    let is_number = |part: &str| {
-        let part = part.trim();
-        part.starts_with(is_digit)
-            && part.ends_with(is_digit)
-            && part
-                .chars()
-                .all(|c| is_digit(c) || matches!(c, '.' | '/' | ' '))
-    };
-    match text.split_once('-') {
-        Some((start, end)) => is_number(start) && is_number(end),
-        None => is_number(text),
-    }
 }
 
 /// The parser's report, with timer warnings appended when the parser itself
@@ -1456,13 +1440,15 @@ mod tests {
         assert_eq!(report.total_warnings(), 1);
     }
 
-    /// A range or a Unicode fraction is text to the shared parser, which has
-    /// range values off, but it is still a number, so it is not reported.
-    /// Words beside them still are.
+    /// A range is text to the shared parser, which has range values off, but
+    /// it is still a number, so it is not reported. What cooklang does not
+    /// read as a number is: words, a Unicode fraction, and digits that only
+    /// look numeric.
     #[test]
-    fn a_numeric_range_or_fraction_is_not_a_warning() {
-        let source = "Knead for ~{10-20%minutes}, rest ~{½%hour} and ~{1 - 1½%hours}.\n\
-                      Prove ~{a few%minutes}, then leave it ~{overnight}.\n";
+    fn a_numeric_range_is_not_a_warning() {
+        let source = "Knead for ~{10-20%minutes}, then ~{1.5 - 2%hours} or ~{1 1/2-2%hours}.\n\
+                      Prove ~{a few%minutes}, leave it ~{overnight}, rest ~{½%hour}.\n\
+                      Wait ~{1 2%minutes}, ~{1.2.3%minutes} or ~{1/2/3%minutes}.\n";
         let dir = tempfile::TempDir::new().unwrap();
         write(&base(&dir).join("timer.cook"), source);
         let report = run(&base(&dir));
@@ -1475,7 +1461,12 @@ mod tests {
             .filter(|diagnostic| diagnostic.message.starts_with("Timer value is text"))
             .map(|diagnostic| underlined(diagnostic, source))
             .collect();
-        assert_eq!(text, ["a few", "overnight"], "{:?}", timer.diagnostics);
+        assert_eq!(
+            text,
+            ["a few", "overnight", "½", "1 2", "1.2.3", "1/2/3"],
+            "{:?}",
+            timer.diagnostics
+        );
         assert_eq!(timer.count(Severity::Error), 0);
     }
 
