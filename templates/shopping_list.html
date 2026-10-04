@@ -248,10 +248,11 @@ function renderSelectedRecipes() {
         if (item.recipes) {
             const recipesHtml = item.recipes.map(recipe => {
                 const refs = recipe.included_references || [];
+                const refNames = recipe.included_reference_names || [];
                 const refsHtml = refs.length > 0 ? `
                     <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
-                        ${refs.map(ref => {
-                            const refName = ref.split('/').pop();
+                        ${refs.map((ref, i) => {
+                            const refName = refNames[i] || ref.split('/').pop();
                             return `<li class="text-xs text-faint flex items-center gap-1">
                                 <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
@@ -287,10 +288,12 @@ function renderSelectedRecipes() {
 
         // Regular recipe entry
         const refs = item.included_references || [];
+        // The titles the server resolved, in the same order as `refs`.
+        const refNames = item.included_reference_names || [];
         const refsHtml = refs.length > 0 ? `
             <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
-                ${refs.map(ref => {
-                    const refName = ref.split('/').pop();
+                ${refs.map((ref, i) => {
+                    const refName = refNames[i] || ref.split('/').pop();
                     return `<li class="text-sm text-faint flex items-center gap-1">
                         <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
