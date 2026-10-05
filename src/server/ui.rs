@@ -45,6 +45,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
         .route("/pantry", get(pantry_page))
+        .route("/aisles", get(aisles_page))
         .route("/preferences", get(preferences_page))
         .route("/api-docs", get(api_docs_page))
         .route("/atom.xml", get(atom_feed))
@@ -194,11 +195,12 @@ async fn recipe_page(
 ) -> axum::response::Response {
     let scale = query.scale.unwrap_or(1.0);
 
+    let aisle_file = state.aisle_file();
     let input = crate::web::builders::RecipeBuildInput {
         base_path: &state.base_path,
         url_prefix: &state.url_prefix,
         recipe_path: &path,
-        aisle_path: state.aisle_path.as_ref(),
+        aisle_path: aisle_file.as_ref(),
         scale,
         servings: query.servings,
         lang: lang.clone(),
@@ -889,6 +891,40 @@ async fn pantry_page(
     })
 }
 
+async fn aisles_page(
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let aisles = match crate::server::handlers::aisles::load(&state).await {
+        Ok(aisles) => aisles,
+        Err((status, _)) => {
+            let mut response = error_page(
+                lang,
+                &state.url_prefix,
+                "Failed to read the aisle file",
+                features,
+                viewer,
+            );
+            *response.status_mut() = status;
+            return response;
+        }
+    };
+
+    AislesTemplate {
+        active: "shopping".to_string(),
+        aisles: serde_json::to_value(aisles).unwrap_or_default(),
+        tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
+        static_mode: false,
+        repo_url: None,
+        features,
+        viewer,
+    }
+    .into_response()
+}
+
 async fn preferences_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
@@ -918,7 +954,7 @@ async fn preferences_page(
 
     PreferencesTemplate {
         active: "preferences".to_string(),
-        aisle_path: path(state.aisle_path.as_ref()),
+        aisle_path: path(state.aisle_file().as_ref()),
         pantry_path: path(state.pantry_path.as_ref()),
         base_path: path(Some(&state.base_path)),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),

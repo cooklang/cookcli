@@ -35,6 +35,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 - [Menus](#menus)
 - [Shopping List](#shopping-list)
 - [Pantry](#pantry)
+- [Aisles](#aisles)
 - [Search & Stats](#search--stats)
 - [Realtime](#realtime)
 - [Sync](#sync)
@@ -1010,6 +1011,155 @@ Response:
 [
   { "section": "fridge", "name": "yogurt", "low": "2%l" }
 ]
+```
+
+## Aisles
+
+Reads and changes `aisle.conf`, which groups the shopping list by store aisle: an `[aisle]` line, then one ingredient per line with its other names after `|`. Changes edit only the lines concerned, so comments and blank lines elsewhere in the file are kept. Each response carries the file's `revision`; send it back with a change and the change is refused with `409` if the file has been changed since, along with the current `revision`. Leave it out to apply the change regardless. Changes need the `shopper` role when sign-in is on.
+
+### `GET /api/aisles`
+
+Read the aisles
+
+Aisles in file order, which is the order the shopping list uses. Each ingredient's first name is the one the shopping list shows; the others are merged into it. `warnings` lists the lines the parser skipped, such as a name listed twice. Without an aisle file, `configured` is `false`, `path` and `revision` are `null` and `aisles` is empty. The response below is trimmed to two of the seed's eight aisles and a few ingredients each.
+
+Response:
+
+```json
+{
+  "configured": true,
+  "path": "/path/to/recipes/config/aisle.conf",
+  "revision": "edbf1fd2579f964e",
+  "aisles": [
+    {
+      "name": "fruit and veg",
+      "ingredients": [
+        { "names": ["apples"] },
+        { "names": ["avocado", "avocados"] }
+      ]
+    },
+    {
+      "name": "milk and dairy",
+      "ingredients": [
+        { "names": ["milk"] },
+        { "names": ["butter"] }
+      ]
+    }
+  ],
+  "warnings": []
+}
+```
+
+### `POST /api/aisles`
+
+Create an aisle file
+
+Creates an empty `config/aisle.conf` in the recipe directory and answers `201` with the same shape as `GET /api/aisles`. `409` if an aisle file already exists, wherever it was found.
+
+### `POST /api/aisles/changes`
+
+Change the aisles
+
+One change per request, named by `action`; the other fields depend on it. `add_aisle` (`name`, optional `position`, counted from 0; last when omitted), `rename_aisle` (`name`, `new_name`), `remove_aisle` (`name`; its ingredients go with it), `move_aisle` (`name`, `position`), `add_ingredient` (`aisle`, `names`), `update_ingredient` (`name`, `names`, optional `aisle` to move it), `remove_ingredient` (`name`). An ingredient is found by any of its names, ignoring case. Answers with the aisles as `GET /api/aisles` does. `400` for a name the file cannot hold (empty, or containing `|` or `//`) or one already used — ingredient names ignoring case, as the shopping list matches them; `404` for an aisle or ingredient that does not exist, or when there is no aisle file; `409` for a stale `revision`.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `action` | body | `string` | yes | `add_aisle`, `rename_aisle`, `remove_aisle`, `move_aisle`, `add_ingredient`, `update_ingredient` or `remove_ingredient`. |
+| `revision` | body | `string` | no | The `revision` the change was made against. |
+| `name` | body | `string` | no | The aisle, or any one of the ingredient's names. |
+| `names` | body | `string[]` | no | An ingredient's names, the one to show first. |
+| `aisle` | body | `string` | no | The aisle to put it in. |
+| `new_name` | body | `string` | no | For `rename_aisle`. |
+| `position` | body | `integer` | no | Where the aisle goes among the aisles, from 0. |
+
+Request body:
+
+```json
+{
+  "revision": "edbf1fd2579f964e",
+  "action": "add_ingredient",
+  "aisle": "fruit and veg",
+  "names": ["leek", "leeks"]
+}
+```
+
+Response:
+
+```json
+{
+  "error": "\"Avocados\" is already in the \"fruit and veg\" aisle"
+}
+```
+
+### `GET /api/aisles/raw`
+
+Read the aisle file as text
+
+The file exactly as written, with its `revision`. `404` when there is no aisle file. The `content` below is cut short.
+
+Response:
+
+```json
+{
+  "path": "/path/to/recipes/config/aisle.conf",
+  "content": "[fruit and veg]\napples\nbananas\ngrapes\n",
+  "revision": "edbf1fd2579f964e"
+}
+```
+
+### `PUT /api/aisles/raw`
+
+Replace the aisle file
+
+Writes `content` as the whole file once the aisle parser accepts it, and answers as `GET /api/aisles` does. Otherwise `400` naming the line, and the file is left alone.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `content` | body | `string` | yes | The new file. |
+| `revision` | body | `string` | no | The `revision` the text was edited from. |
+
+Request body:
+
+```json
+{
+  "content": "[a]\nx\n[b]\nx\n"
+}
+```
+
+Response:
+
+```json
+{
+  "error": "Line 4: Duplicate ingredient: 'x'"
+}
+```
+
+### `GET /api/aisles/uncategorized`
+
+Ingredients without an aisle
+
+The ingredients the recipes and menus use that no aisle names — what `cook doctor aisle` reports — with the files using each. `link` is what follows `/recipe/` in that file's page address. Scans the whole collection, so it takes longer than the other reads. The response below is trimmed to two of the seed's eleven.
+
+Response:
+
+```json
+{
+  "total_recipes": 14,
+  "ingredients": [
+    {
+      "name": "San Marzano tomato sauce",
+      "recipes": [
+        { "path": "Neapolitan Pizza.cook", "link": "Neapolitan Pizza" }
+      ]
+    },
+    {
+      "name": "almonds",
+      "recipes": [
+        { "path": "Weekly Plan.menu", "link": "Weekly Plan.menu" }
+      ]
+    }
+  ]
+}
 ```
 
 ## Search & Stats

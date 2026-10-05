@@ -761,7 +761,11 @@ async fn each_role_can_do_only_what_it_allows() {
             let body: serde_json::Value = add.json().await.unwrap();
             assert_eq!(body["error"], "Your role does not allow this change");
         }
-        for path in ["/api/shopping_list/clear", "/api/pantry/add"] {
+        for path in [
+            "/api/shopping_list/clear",
+            "/api/pantry/add",
+            "/api/aisles/changes",
+        ] {
             let resp = post(path, serde_json::json!({})).await.unwrap();
             assert_eq!(refused_for_role(resp.status()), !lists, "{user} {path}");
         }

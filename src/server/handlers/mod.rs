@@ -1,3 +1,4 @@
+pub mod aisles;
 pub(super) mod common;
 pub mod menus;
 pub mod pantry;
@@ -11,6 +12,9 @@ pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
 
+pub use aisles::{
+    change_aisles, create_aisles, get_aisles, get_raw_aisles, get_uncategorized, put_raw_aisles,
+};
 pub use menus::{get_menu, list_menus};
 pub use pantry::{
     add_item as add_pantry_item, get_depleted, get_expiring, get_pantry,

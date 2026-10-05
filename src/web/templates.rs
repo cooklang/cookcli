@@ -665,6 +665,23 @@ pub struct PreferencesTemplate {
 
 #[cfg(feature = "server")]
 #[derive(Template)]
+#[template(path = "aisles.html")]
+pub struct AislesTemplate {
+    pub active: String,
+    /// What `GET /api/aisles` returns; the page draws itself from it and
+    /// from each change's answer.
+    pub aisles: serde_json::Value,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+#[cfg(feature = "server")]
+#[derive(Template)]
 #[template(path = "pantry.html")]
 pub struct PantryTemplate {
     pub active: String,
@@ -1064,6 +1081,7 @@ impl_into_response!(
     ShoppingListTemplate,
     PreferencesTemplate,
     PantryTemplate,
+    AislesTemplate,
     EditTemplate,
     NewTemplate,
     ApiDocsTemplate,

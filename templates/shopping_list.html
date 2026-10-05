@@ -75,6 +75,7 @@
                         </label>
                     </div>
                 </div>
+                <a href="{{ prefix }}/aisles" class="btn">{{ tr.t("aisles-manage") }}</a>
                 {% if viewer.can_edit_lists() %}
                 <button type="button" onclick="clearList()" class="btn">
                     {{ tr.t("shopping-clear-all") }}
@@ -544,6 +545,66 @@ function decimalToFraction(value) {
     return null;
 }
 
+// The aisle names, for placing an ingredient from the "other" group. Fetched
+// the first time such a group shows up, for someone who may change the
+// aisles.
+let aisleNames = null;
+let aisleNamesLoading = false;
+
+function assignAisleSelect(name) {
+    if (!window.__CAN_EDIT_LISTS__ || !aisleNames || aisleNames.length === 0) return '';
+    return `<select class="select h-8 text-sm ml-2 max-w-[10rem]" data-action="assign-aisle"
+                data-ingredient-name="${escHtml(name)}"
+                aria-label="${escHtml({{ tr.t("aisles-assign")|json|safe }} + ': ' + name)}">
+            <option value="">${escHtml({{ tr.t("aisles-assign")|json|safe }})}</option>
+            ${aisleNames.map(aisle => `<option value="${escHtml(aisle)}">${escHtml(aisle)}</option>`).join('')}
+        </select>`;
+}
+
+async function loadAisleNames() {
+    if (aisleNames || aisleNamesLoading) return;
+    aisleNamesLoading = true;
+    try {
+        const response = await fetch('{{ prefix }}/api/aisles');
+        if (!response.ok) return;
+        const data = await response.json();
+        aisleNames = data.aisles.map(aisle => aisle.name);
+        if (lastListData) displayShoppingList(lastListData);
+    } catch (error) {
+        console.error('Failed to load the aisles:', error);
+    } finally {
+        aisleNamesLoading = false;
+    }
+}
+
+document.addEventListener('change', async (event) => {
+    const select = event.target.closest('[data-action="assign-aisle"]');
+    if (!select || !select.value) return;
+    select.disabled = true;
+    try {
+        const response = await fetch('{{ prefix }}/api/aisles/changes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'add_ingredient',
+                aisle: select.value,
+                names: [select.dataset.ingredientName],
+            }),
+        });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || {{ tr.t("aisles-failed")|json|safe }});
+        }
+        // The list is the same; how it is grouped is not.
+        generatedFrom = null;
+        await requestRefresh('list');
+    } catch (error) {
+        showError(error.message);
+        select.disabled = false;
+        select.value = '';
+    }
+});
+
 // Render the generated list. The markup carries no ticks — those are applied
 // separately by applyCheckedStates() — so a list whose items haven't changed
 // renders to the same markup and setHtml() leaves it in place.
@@ -561,6 +622,10 @@ function displayShoppingList(data) {
     let html = '';
 
     // Display items to buy (organized by aisle)
+    if (window.__CAN_EDIT_LISTS__ && !aisleNames
+        && (data.categories || []).some(category => category.category === 'other')) {
+        loadAisleNames();
+    }
     if (data.categories && data.categories.length > 0) {
         html += data.categories.map((category, categoryIndex) => `
             <div class="aisle-section mb-6 card p-4">
@@ -583,6 +648,7 @@ function displayShoppingList(data) {
                                 <label for="${itemId}" class="cursor-pointer flex-1">
                                     <span class="item-name">${escHtml(item.name)}</span>
                                 </label>
+                                ${category.category === 'other' ? assignAisleSelect(item.name) : ''}
                             </div>
                             <span class="text-muted ml-4">
                                 ${escHtml(formatQuantities(item.quantities))}
