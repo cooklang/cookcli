@@ -47,8 +47,9 @@ pub struct StoredEntry {
     /// Path to the recipe or menu, relative to the collection root — e.g.
     /// `Breakfast/Easy Pancakes.cook`.
     pub path: String,
-    /// The display name, as [`recipe_display_name`] derives it from `path`.
-    /// Ignored when adding: it is always re-derived on load.
+    /// The display name. On load it is what [`recipe_display_name`] derives
+    /// from `path`; the server swaps in the title the recipe declares before
+    /// showing it. Ignored when adding: it is never stored.
     pub name: String,
     /// How much of it to make. `1.0` is stored as no multiplier at all.
     pub scale: f64,
@@ -56,6 +57,11 @@ pub struct StoredEntry {
     /// of them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub included_references: Option<Vec<String>>,
+    /// A display name for each of `included_references`, in the same order.
+    /// Never stored: `None` on load, filled in by the server before showing
+    /// the list, and ignored when adding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub included_reference_names: Option<Vec<String>>,
     /// The recipes in a menu entry, or `None` for a plain recipe entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipes: Option<Vec<StoredEntry>>,
@@ -454,6 +460,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                             name: recipe_display_name(&cr.path),
                             scale: cr.multiplier.unwrap_or(1.0),
                             included_references: Some(child_paths(cr)),
+                            included_reference_names: None,
                             recipes: None,
                         }),
                         _ => None,
@@ -464,6 +471,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     name: recipe_display_name(&r.path),
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: None,
+                    included_reference_names: None,
                     recipes: Some(recipes),
                 });
             } else {
@@ -473,6 +481,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     name: recipe_display_name(&r.path),
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: Some(child_paths(r)),
+                    included_reference_names: None,
                     recipes: None,
                 });
             }
@@ -482,6 +491,9 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
 }
 
 /// Derive a human-readable display name from a recipe or menu path.
+///
+/// The fallback for a recipe that declares no `title` of its own, or that
+/// cannot be read.
 ///
 /// E.g. `Breakfast/Easy Pancakes.cook` → `Easy Pancakes`, and
 /// `Meal Plans/Week 1.menu` → `Week 1`.

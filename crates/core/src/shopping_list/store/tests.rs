@@ -19,6 +19,7 @@ fn entry(path: &str, scale: f64) -> StoredEntry {
         path: path.to_string(),
         scale,
         included_references: None,
+        included_reference_names: None,
         recipes: None,
     }
 }

@@ -214,14 +214,73 @@ pub async fn get_shopping_list_items(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StoredEntry>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
-    let items = store.load().map_err(|e| {
+    let mut items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    let core_ctx = cookcli_core::Context::new(state.base_path.clone());
+    name_by_title(&core_ctx, &mut items);
     Ok(Json(items))
+}
+
+/// Name every entry — menus, the recipes in them, and the sub-recipes each
+/// pulls in — by the title its file declares rather than by its file name.
+///
+/// Done on the way out rather than stored, so a list written before this, or
+/// a recipe retitled since, still shows the current title.
+fn name_by_title(ctx: &cookcli_core::Context, entries: &mut [StoredEntry]) {
+    for entry in entries {
+        // `None` only when the stored path is not one to look up; keep the
+        // file name then, and read sub-references from the root.
+        let path = cookcli_core::resolve_reference(Utf8Path::new(""), &entry.path);
+        if let Some(title) = path.as_deref().and_then(|path| recipe_title(ctx, path)) {
+            entry.name = title;
+        }
+
+        if let Some(refs) = &entry.included_references {
+            // A reference that steps up does so from the directory of the
+            // recipe writing it — see `resolve_reference`.
+            let dir = path
+                .as_deref()
+                .and_then(Utf8Path::parent)
+                .unwrap_or(Utf8Path::new(""));
+            entry.included_reference_names = Some(
+                refs.iter()
+                    .map(|reference| {
+                        cookcli_core::resolve_reference(dir, reference)
+                            .and_then(|path| recipe_title(ctx, &path))
+                            .unwrap_or_else(|| recipe_display_name(reference))
+                    })
+                    .collect(),
+            );
+        }
+
+        if let Some(recipes) = &mut entry.recipes {
+            name_by_title(ctx, recipes);
+        }
+    }
+}
+
+/// The recipe's metadata `title`, or its file stem when it declares none.
+/// `None` when it cannot be read, so the caller keeps the name it has.
+///
+/// `path` must already be a safe relative path: `cooklang-find` joins it to
+/// the recipe directory and asks the filesystem.
+fn recipe_title(ctx: &cookcli_core::Context, path: &Utf8Path) -> Option<String> {
+    let request = cookcli_core::recipe::ReadRequest {
+        source: cookcli_core::RecipeSource::Path(path.to_owned()),
+        scale: 1.0,
+    };
+    match cookcli_core::recipe::read(ctx, request) {
+        Ok(outcome) => Some(outcome.value.title).filter(|title| !title.is_empty()),
+        Err(e) => {
+            tracing::debug!("No title for shopping list entry '{path}': {e}");
+            None
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -256,6 +315,7 @@ pub async fn add_to_shopping_list(
         path: payload.path,
         scale: payload.scale,
         included_references: payload.included_references,
+        included_reference_names: None,
         recipes: None,
     };
 
@@ -646,6 +706,7 @@ pub async fn add_menu_to_shopping_list(
                 path,
                 scale: final_scale,
                 included_references: Some(sub_refs),
+                included_reference_names: None,
                 recipes: None,
             });
         }

@@ -686,7 +686,7 @@ Response:
 
 Read the stored recipe list
 
-Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given.
+Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given. `name` is the `title` the recipe or menu declares, or its file name when it declares none or cannot be read; `included_reference_names` names each of `included_references` the same way, in the same order.
 
 Response:
 
@@ -696,7 +696,8 @@ Response:
     "path": "Salads/Caprese.cook",
     "name": "Caprese",
     "scale": 2.0,
-    "included_references": []
+    "included_references": [],
+    "included_reference_names": []
   },
   {
     "path": "2 Day Plan.menu",
@@ -707,22 +708,37 @@ Response:
         "path": "Breakfast/Easy Pancakes",
         "name": "Easy Pancakes",
         "scale": 5.0,
-        "included_references": []
+        "included_references": [],
+        "included_reference_names": []
       },
-      { "path": "lamb-chops", "name": "lamb-chops", "scale": 1.0, "included_references": [] },
+      {
+        "path": "lamb-chops",
+        "name": "Sicilian-style Scottadito Lamb Chops",
+        "scale": 1.0,
+        "included_references": [],
+        "included_reference_names": []
+      },
       {
         "path": "Neapolitan Pizza",
         "name": "Neapolitan Pizza",
         "scale": 1.0,
-        "included_references": ["Shared/Pizza Dough"]
+        "included_references": ["Shared/Pizza Dough"],
+        "included_reference_names": ["Pizza Dough"]
       },
       {
         "path": "Salads/Caprese",
         "name": "Caprese",
         "scale": 1.0,
-        "included_references": ["Shared/Vinaigrette"]
+        "included_references": ["Shared/Vinaigrette"],
+        "included_reference_names": ["Vinaigrette"]
       },
-      { "path": "Risotto", "name": "Risotto", "scale": 1.0, "included_references": [] }
+      {
+        "path": "Risotto",
+        "name": "Classic Risotto alla Milanese",
+        "scale": 1.0,
+        "included_references": [],
+        "included_reference_names": []
+      }
     ]
   }
 ]
