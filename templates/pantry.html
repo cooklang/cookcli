@@ -184,7 +184,12 @@
                     <option value="{{ section.name }}">{{ section.name }}</option>
                     {% endfor %}
                     {% endif %}
+                    <option value="__new__">{{ tr.t("pantry-section-new") }}</option>
                 </select>
+            </div>
+            <div id="add-new-section-field" class="mb-4 hidden">
+                <label for="add-new-section" class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-new-name") }}</label>
+                <input type="text" id="add-new-section" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-name") }}</label>
@@ -354,12 +359,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    const addSection = document.getElementById('add-section');
+    if (addSection) {
+        addSection.addEventListener('change', toggleNewSectionField);
+    }
+
     if (addForm) {
         addForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
+            const section = addSection.value === '__new__'
+                ? document.getElementById('add-new-section').value.trim()
+                : addSection.value.trim();
+            if (!section) {
+                showPantryError({{ tr.t("pantry-section-new-name")|json|safe }});
+                return;
+            }
+
             const data = {
-                section: document.getElementById('add-section').value.trim(),
+                section: section,
                 name: document.getElementById('add-name').value.trim(),
                 quantity: document.getElementById('add-quantity').value.trim() || null,
                 bought: document.getElementById('add-bought').value.trim() || null,
@@ -460,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             try {
-                const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -526,7 +544,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (confirm({{ tr.t("pantry-confirm-remove-template")|json|safe }}.replace('%s', name).replace('%s', section))) {
                     try {
-                        const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                        const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
                         });
 
@@ -537,8 +555,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(() => {
                                 item.remove();
                                 // Check if section is now empty and reload if needed
-                                const sectionContainer = document.querySelector(`[data-section="${section}"]`);
-                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${section}"]`)) {
+                                const sectionContainer = document.querySelector(`[data-section="${CSS.escape(section)}"]`);
+                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${CSS.escape(section)}"]`)) {
                                     window.location.reload();
                                 }
                             }, 200);
@@ -560,6 +578,18 @@ function closeAddModal() {
     addModal.classList.add('hidden');
     addModal.classList.remove('flex');
     document.getElementById('add-form').reset();
+    toggleNewSectionField();
+}
+
+// "New section…" in the section list reveals a field to name it.
+function toggleNewSectionField() {
+    const isNew = document.getElementById('add-section').value === '__new__';
+    const input = document.getElementById('add-new-section');
+    document.getElementById('add-new-section-field').classList.toggle('hidden', !isNew);
+    input.required = isNew;
+    if (isNew) {
+        input.focus();
+    }
 }
 
 function showPantryError(message) {
