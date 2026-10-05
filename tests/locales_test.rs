@@ -121,3 +121,59 @@ fn no_locale_defines_a_message_twice() {
         repeats.join("\n")
     );
 }
+
+/// Every `.html` file under `dir`, at any depth.
+fn template_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).unwrap_or_else(|err| panic!("read {dir:?}: {err}")) {
+        let path = entry.expect("read template entry").path();
+        if path.is_dir() {
+            files.extend(template_files(&path));
+        } else if path.extension().is_some_and(|ext| ext == "html") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    files
+}
+
+/// A message whose English text carries its own parentheses must not be
+/// wrapped in a second pair by the template. The pantry's add-item dialog did
+/// that with `pantry-optional`, and every language read "((optional))".
+#[test]
+fn no_template_wraps_a_parenthesised_message_in_parentheses() {
+    let mut parenthesised = Vec::new();
+    for file in ftl_files(&locales_dir().join("en-US")) {
+        let text = fs::read_to_string(&file).unwrap_or_default();
+        for line in text.lines() {
+            if !line.starts_with(|c: char| c.is_ascii_alphabetic()) {
+                continue;
+            }
+            if let Some((id, value)) = line.split_once('=') {
+                let value = value.trim();
+                if value.starts_with('(') && value.ends_with(')') {
+                    parenthesised.push(id.trim().to_string());
+                }
+            }
+        }
+    }
+
+    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let mut doubled = Vec::new();
+    for file in template_files(&templates) {
+        let text = fs::read_to_string(&file).unwrap_or_default();
+        for id in &parenthesised {
+            if text.contains(&format!("({{{{ tr.t(\"{id}\") }}}})")) {
+                doubled.push(format!(
+                    "{}: {id}",
+                    file.strip_prefix(&templates).unwrap().display()
+                ));
+            }
+        }
+    }
+    assert!(
+        doubled.is_empty(),
+        "templates wrapping an already parenthesised message in a second pair of parentheses:\n{}",
+        doubled.join("\n")
+    );
+}
