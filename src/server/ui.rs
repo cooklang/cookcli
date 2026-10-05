@@ -908,19 +908,19 @@ async fn preferences_page(
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
+    // A recipes-only visitor gets the language picker alone, so the page
+    // names no path on the server either.
+    let path = |path: Option<&camino::Utf8PathBuf>| match path {
+        _ if viewer.recipes_only() => String::new(),
+        Some(path) => path.to_string(),
+        None => "Not configured".to_string(),
+    };
+
     PreferencesTemplate {
         active: "preferences".to_string(),
-        aisle_path: state
-            .aisle_path
-            .as_ref()
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "Not configured".to_string()),
-        pantry_path: state
-            .pantry_path
-            .as_ref()
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "Not configured".to_string()),
-        base_path: state.base_path.to_string(),
+        aisle_path: path(state.aisle_path.as_ref()),
+        pantry_path: path(state.pantry_path.as_ref()),
+        base_path: path(Some(&state.base_path)),
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
         tr: Tr::new(lang),
         sync_enabled,

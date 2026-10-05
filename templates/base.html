@@ -21,6 +21,8 @@
         document.documentElement.classList.toggle('dark', theme === 'dark');
         // False for a guest, or a role below shopper, on a server that requires signing in.
         window.__CAN_EDIT_LISTS__ = {{ viewer.can_edit_lists()|json|safe }};
+        // `--recipes-only` and nobody signed in: no shopping list or pantry.
+        window.__RECIPES_ONLY__ = {{ viewer.recipes_only()|json|safe }};
     </script>
     <style>
         .viewport {

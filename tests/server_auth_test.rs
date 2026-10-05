@@ -220,8 +220,8 @@ async fn try_start(
         .stderr(Stdio::null());
     let mut child = cmd.spawn().expect("spawn cook server");
 
-    // A read: open to guests whether or not sign-in is on.
-    let probe = format!("http://127.0.0.1:{port}{prefix}/api/menus");
+    // A read open to guests whether or not sign-in or --recipes-only is on.
+    let probe = format!("http://127.0.0.1:{port}{prefix}/api/recipes");
     for _ in 0..600 {
         if child.try_wait().expect("poll server").is_some() {
             // The port was taken between reserving and binding it.
@@ -1220,4 +1220,190 @@ async fn a_running_server_picks_up_user_changes() {
         sign_in(&server, "bob", "bobpw", "/").await.status(),
         StatusCode::SEE_OTHER
     );
+}
+
+// --- --recipes-only -----------------------------------------------------------
+
+/// The fixture, plus a picture, a menu and a shopping list beside the recipe.
+fn recipes_only_fixture() -> Fixture {
+    let fixture = Fixture::new();
+    let recipes = fixture.recipes.path();
+    std::fs::write(recipes.join("Recipe.jpg"), b"not really a jpeg").unwrap();
+    std::fs::write(
+        recipes.join("Week.menu"),
+        "== Monday ==\n\nDinner:\n- @./Recipe{}\n",
+    )
+    .unwrap();
+    std::fs::write(recipes.join(".shopping-list"), "./Recipe.cook\n").unwrap();
+    fixture
+}
+
+async fn status(server: &ServerGuard, path: &str, cookie: Option<&str>) -> StatusCode {
+    get_page(server, path, cookie).await.status()
+}
+
+/// What a recipes-only visitor may still open.
+const RECIPE_PAGES: &[&str] = &[
+    "/",
+    "/recipe/Recipe.cook",
+    "/recipe/Week.menu",
+    "/preferences",
+    "/rss.xml",
+    "/static/css/output.css",
+    "/api/recipes",
+    "/api/recipes/Recipe.cook",
+    "/api/recipes/raw/Recipe.cook",
+    "/api/search?q=flour",
+    "/api/static/Recipe.jpg",
+];
+
+/// What they may not.
+const OTHER_PAGES: &[&str] = &[
+    "/shopping-list",
+    "/pantry",
+    "/edit/Recipe.cook",
+    "/new",
+    "/api-docs",
+    "/api/shopping_list/items",
+    "/api/pantry",
+    "/api/menus",
+    "/api/stats",
+    "/api/static/.shopping-list",
+    "/api/static/config/pantry.conf",
+];
+
+#[tokio::test]
+async fn recipes_only_without_users_shows_everyone_only_recipes() {
+    let server = start(recipes_only_fixture(), &["--recipes-only"], &[]).await;
+
+    for path in RECIPE_PAGES {
+        assert_eq!(status(&server, path, None).await, StatusCode::OK, "{path}");
+    }
+    // Nobody can sign in, so to the visitor the rest does not exist.
+    for path in OTHER_PAGES {
+        assert_eq!(
+            status(&server, path, None).await,
+            StatusCode::NOT_FOUND,
+            "{path}"
+        );
+    }
+    let add = client()
+        .post(server.url("/api/shopping_list/add"))
+        .json(&serde_json::json!([]))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(add.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        std::fs::read_to_string(server.fixture.recipes.path().join(".shopping-list")).unwrap(),
+        "./Recipe.cook\n"
+    );
+
+    // No way to the rest from the pages either.
+    for path in ["/", "/recipe/Recipe.cook", "/recipe/Week.menu"] {
+        let html = get_page(&server, path, None).await.text().await.unwrap();
+        for hidden in [
+            "<a href=\"/shopping-list\"",
+            "<a href=\"/pantry\"",
+            "href=\"/edit/",
+            "href=\"/new",
+            "onclick=\"addToShoppingList",
+        ] {
+            assert!(!html.contains(hidden), "{path} shows {hidden}");
+        }
+        assert!(html.contains("window.__RECIPES_ONLY__ = true"), "{path}");
+    }
+
+    // The preferences page is down to the language picker.
+    let preferences = get_page(&server, "/preferences", None)
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(preferences.contains("setLanguage("));
+    let base_path = server.fixture.recipes.path().to_str().unwrap();
+    for hidden in [
+        base_path,
+        "onclick=\"toggleFeature(",
+        "CookCloud",
+        "/api-docs",
+    ] {
+        assert!(!preferences.contains(hidden), "preferences show {hidden}");
+    }
+}
+
+#[tokio::test]
+async fn recipes_only_asks_guests_to_sign_in_for_the_rest() {
+    let fixture = recipes_only_fixture();
+    fixture.write_roles(&[("alice", "secret", "shopper")]);
+    let server = start(fixture, &["--recipes-only"], &[]).await;
+
+    for path in RECIPE_PAGES {
+        assert_eq!(status(&server, path, None).await, StatusCode::OK, "{path}");
+    }
+    let page = get_page(&server, "/shopping-list", None).await;
+    assert_eq!(page.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&page), "/login?next=%2Fshopping-list");
+    assert_eq!(
+        status(&server, "/api/shopping_list/items", None).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        status(&server, "/api/static/.shopping-list", None).await,
+        StatusCode::UNAUTHORIZED
+    );
+    let home = get_page(&server, "/", None).await.text().await.unwrap();
+    assert!(home.contains("Sign in"), "no sign-in link");
+    assert!(!home.contains("<a href=\"/shopping-list\""));
+
+    // Signed in, the role decides as usual.
+    let cookie = signed_in_cookie(&server, "alice", "secret").await;
+    for path in [
+        "/shopping-list",
+        "/pantry",
+        "/api/menus",
+        "/api/static/.shopping-list",
+    ] {
+        assert_eq!(
+            status(&server, path, Some(&cookie)).await,
+            StatusCode::OK,
+            "{path}"
+        );
+    }
+    let home = get_page(&server, "/", Some(&cookie))
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(home.contains("<a href=\"/shopping-list\""));
+    assert!(home.contains("window.__RECIPES_ONLY__ = false"));
+    let recipe = get_page(&server, "/recipe/Recipe.cook", Some(&cookie))
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(recipe.contains("onclick=\"addToShoppingList"));
+    // A shopper still may not edit.
+    assert_eq!(
+        status(&server, "/edit/Recipe.cook", Some(&cookie)).await,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn recipes_only_can_come_from_the_environment() {
+    let server = start(
+        recipes_only_fixture(),
+        &[],
+        &[("COOK_RECIPES_ONLY", "true")],
+    )
+    .await;
+    assert_eq!(
+        status(&server, "/pantry", None).await,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(status(&server, "/", None).await, StatusCode::OK);
+
+    let server = start(recipes_only_fixture(), &[], &[("COOK_RECIPES_ONLY", "")]).await;
+    assert_eq!(status(&server, "/pantry", None).await, StatusCode::OK);
 }
