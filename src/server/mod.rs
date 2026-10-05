@@ -644,7 +644,6 @@ pub struct AppState {
     pub shutdown_token: tokio_util::sync::CancellationToken,
 }
 
-#[cfg(feature = "sync")]
 impl AppState {
     /// The aisle file the shopping list uses: the one found at startup, or
     /// else `config/aisle.conf` in the recipe directory once it exists, so a
@@ -661,7 +660,10 @@ impl AppState {
     pub fn local_aisle_file(&self) -> Utf8PathBuf {
         self.base_path.join("config").join("aisle.conf")
     }
+}
 
+#[cfg(feature = "sync")]
+impl AppState {
     /// Check sync status: returns (logged_in, email, syncing, reason).
     /// `reason` explains why sync is off (e.g. `"payment_required"`), and is
     /// `None` while syncing or when the last stop wasn't a known condition.
