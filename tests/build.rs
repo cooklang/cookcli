@@ -678,20 +678,7 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
     // Use a non-hidden subdir; the image walker skips dotted directories,
     // and `TempDir::new()` creates `.tmpXXXX`.
     let source = tmp.path().join("recipes");
-    std::fs::create_dir_all(&source).unwrap();
-
-    // Copy the seed into a writable scratch dir so we can build into it.
-    let seed = seed_dir();
-    for entry in walkdir::WalkDir::new(&seed) {
-        let entry = entry.unwrap();
-        let rel = entry.path().strip_prefix(&seed).unwrap();
-        let dst = source.join(rel);
-        if entry.file_type().is_dir() {
-            std::fs::create_dir_all(&dst).unwrap();
-        } else {
-            std::fs::copy(entry.path(), &dst).unwrap();
-        }
-    }
+    copy_seed_to(&source);
 
     let out = source.join("_site");
     for _ in 0..3 {
@@ -715,6 +702,59 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
         !nested.exists(),
         "output should not contain a nested _site after repeated builds: {nested:?}"
     );
+}
+
+#[test]
+fn build_twice_does_not_list_output_dir() {
+    // Regression for #632: the previous run copies the .cook sources into
+    // `_site/recipe/`, so the listing pages used to show `_site` as a recipe
+    // folder, linking to a directory page that was never written.
+    let tmp = TempDir::new().unwrap();
+    let source = tmp.path().join("recipes");
+    copy_seed_to(&source);
+
+    let out = source.join("_site");
+    for _ in 0..2 {
+        Command::cargo_bin("cook")
+            .unwrap()
+            .args([
+                "build",
+                "web",
+                out.to_str().unwrap(),
+                "--base-path",
+                source.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+    }
+
+    let mut pages = vec![out.join("index.html")];
+    for entry in std::fs::read_dir(out.join("directory")).unwrap() {
+        pages.push(entry.unwrap().path());
+    }
+    assert!(pages.len() > 1, "seed should produce directory pages");
+    for page in pages {
+        let html = std::fs::read_to_string(&page).unwrap();
+        assert!(
+            !html.contains("_site"),
+            "{page:?} should not mention the output directory"
+        );
+    }
+}
+
+/// Copy the seed into a writable scratch dir so a test can build into it.
+fn copy_seed_to(dest: &std::path::Path) {
+    let seed = seed_dir();
+    for entry in walkdir::WalkDir::new(&seed) {
+        let entry = entry.unwrap();
+        let rel = entry.path().strip_prefix(&seed).unwrap();
+        let dst = dest.join(rel);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&dst).unwrap();
+        } else {
+            std::fs::copy(entry.path(), &dst).unwrap();
+        }
+    }
 }
 
 #[test]

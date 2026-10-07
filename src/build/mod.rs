@@ -212,8 +212,8 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     // strip the output subtree so we don't re-process the previous run's
     // generated files. Without this, every run would nest `_site/recipe/...`
     // and `_site/api/static/...` one level deeper until the OS rejects the
-    // path length.
-    prune_output_subtree(&mut tree, &output);
+    // path length. The listing pages prune it the same way.
+    crate::web::builders::prune_subtree(&mut tree, &output);
     walk_directories(
         &tree,
         &source,
@@ -302,14 +302,6 @@ fn validate_site_url(flag: &str, base: &str) -> Result<()> {
         bail!("{flag} must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
     }
     Ok(())
-}
-
-fn prune_output_subtree(tree: &mut cooklang_find::RecipeTree, output: &camino::Utf8Path) {
-    tree.children
-        .retain(|_, child| !child.path.starts_with(output));
-    for child in tree.children.values_mut() {
-        prune_output_subtree(child, output);
-    }
 }
 
 fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Result<usize> {

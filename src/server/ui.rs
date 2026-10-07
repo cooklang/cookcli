@@ -91,6 +91,7 @@ async fn recipes_handler(
         repo_url: None,
         features,
         viewer: viewer.clone(),
+        exclude: None,
     };
     match crate::web::builders::build_recipes_template(input) {
         Ok(template) => template.into_response(),

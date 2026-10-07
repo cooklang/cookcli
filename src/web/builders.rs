@@ -24,6 +24,18 @@ pub struct RecipesBuildInput<'a> {
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
     pub viewer: Viewer,
+    /// A directory under `base_path` to leave out of the listing: the output
+    /// of `cook build web`, which holds copies of the recipes it renders.
+    pub exclude: Option<&'a Utf8Path>,
+}
+
+/// Drop every subtree of `tree` that lives inside `dir`.
+pub fn prune_subtree(tree: &mut cooklang_find::RecipeTree, dir: &Utf8Path) {
+    tree.children
+        .retain(|_, child| !child.path.starts_with(dir));
+    for child in tree.children.values_mut() {
+        prune_subtree(child, dir);
+    }
 }
 
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
@@ -37,6 +49,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         repo_url,
         features,
         viewer,
+        exclude,
     } = input;
 
     let search_path = if let Some(p) = sub_path {
@@ -49,8 +62,11 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         base_path.to_path_buf()
     };
 
-    let tree = cooklang_find::build_tree(&search_path)
+    let mut tree = cooklang_find::build_tree(&search_path)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+    if let Some(dir) = exclude {
+        prune_subtree(&mut tree, dir);
+    }
 
     let mut items = Vec::new();
 
@@ -136,7 +152,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     });
 
     let todays_menu = if sub_path.is_none() {
-        crate::web::menus::find_todays_menu(base_path)
+        crate::web::menus::find_todays_menu(base_path, exclude)
     } else {
         None
     };
