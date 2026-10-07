@@ -42,6 +42,16 @@ pantry-section-spices = Kryddor
 pantry-section-other = Annat
 pantry-section-new = Ny sektion…
 pantry-section-new-name = Namn på den nya sektionen
+pantry-tab-items = Varor
+pantry-tab-text = Text
+pantry-text-intro = Redigera filen direkt: en [sektion]-rad, sedan en vara per rad, skriven namn = "mängd" eller namn = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Rader som börjar med # är kommentarer.
+pantry-text-save = Spara fil
+pantry-text-saved = Sparat
+pantry-text-conflict = Skafferifilen ändrades någon annanstans medan du redigerade. Din text finns kvar; spara igen för att ersätta den ändringen.
+pantry-rename-section = Byt namn på sektion
+pantry-section-name = Sektionens namn
+pantry-failed-rename = Det gick inte att byta namn på sektionen
+pantry-failed-save-file = Det gick inte att spara filen
 pantry-optional = (valfritt)
 pantry-failed-add = Kunde inte lägga till produkt
 pantry-failed-update = Kunde inte uppdatera produkt

@@ -47,11 +47,27 @@
         </div>
     </div>
     {% else %}
+    <div class="flex flex-wrap gap-1 mb-4" role="tablist" aria-label="{{ tr.t("pantry-title") }}">
+        <button type="button" role="tab" class="nav-pill" id="tab-items" aria-controls="panel-items" data-tab="items">{{ tr.t("pantry-tab-items") }}</button>
+        <button type="button" role="tab" class="nav-pill" id="tab-text" aria-controls="panel-text" data-tab="text">{{ tr.t("pantry-tab-text") }}</button>
+    </div>
+
+    <section id="panel-items" role="tabpanel" aria-labelledby="tab-items">
     <div class="space-y-6">
         {% for section in sections %}
         <div class="card pantry-section">
             <div class="p-6">
-                <h2 class="text-title font-semibold text-text mb-4 capitalize">{{ section.name }}</h2>
+                <div class="pantry-section-head flex items-center justify-between gap-2 mb-4" data-section="{{ section.name }}">
+                    <h2 class="pantry-section-title min-w-0 break-words text-title font-semibold text-text capitalize">{{ section.name }}</h2>
+                    {% if viewer.can_edit_lists() && section.name != "general" %}
+                    <button type="button" class="rename-section-btn icon-btn shrink-0"
+                            title="{{ tr.t("pantry-rename-section") }}" aria-label="{{ tr.t("pantry-rename-section") }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
                 {% if section.items.is_empty() %}
                 <p class="text-faint italic">{{ tr.t("pantry-no-items-section") }}</p>
                 {% else %}
@@ -161,6 +177,20 @@
             </a>
         </div>
     </div>
+    </section>
+
+    <section id="panel-text" role="tabpanel" aria-labelledby="tab-text" class="hidden">
+        <p class="text-muted mb-4">{{ tr.t("pantry-text-intro") }}</p>
+        <textarea id="pantry-text" spellcheck="false" aria-label="pantry.conf"
+                  class="w-full min-h-[24rem] p-3 font-mono text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                  {% if !viewer.can_edit_lists() %}readonly{% endif %}></textarea>
+        {% if viewer.can_edit_lists() %}
+        <div class="flex items-center justify-end gap-3 mt-3">
+            <span id="pantry-text-status" class="text-sm text-muted" aria-live="polite"></span>
+            <button type="button" id="pantry-text-save" class="btn btn-primary">{{ tr.t("pantry-text-save") }}</button>
+        </div>
+        {% endif %}
+    </section>
     {% endif %}
 </div>
 
@@ -598,5 +628,151 @@ function showPantryError(message) {
     banner.classList.remove('hidden');
     banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
+// ---- Section rename ---------------------------------------------------------
+
+// The pencil beside a section's name swaps the heading for a field holding
+// its name as written in the file — the heading itself is capitalised.
+document.addEventListener('click', function(e) {
+    const button = e.target.closest('.rename-section-btn');
+    if (!button) return;
+    const head = button.closest('.pantry-section-head');
+    const section = head.dataset.section;
+    const shown = [...head.children];
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = section;
+    input.setAttribute('aria-label', {{ tr.t("pantry-section-name")|json|safe }});
+    input.className = 'flex-1 min-w-[10rem] h-8 px-2 text-sm border border-line-strong rounded-[var(--radius-control)] bg-surface text-text focus:outline-none focus:border-accent';
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn btn-sm';
+    cancel.textContent = {{ tr.t("pantry-cancel")|json|safe }};
+
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn btn-primary btn-sm';
+    save.textContent = {{ tr.t("pantry-save")|json|safe }};
+
+    const form = document.createElement('div');
+    form.className = 'flex flex-wrap items-center gap-2 w-full';
+    form.append(input, cancel, save);
+
+    const restore = () => head.replaceChildren(...shown);
+    const submit = async () => {
+        try {
+            const response = await fetch('{{ prefix }}/api/pantry/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ section, new_name: input.value }),
+            });
+            if (response.ok) {
+                window.location.reload();
+                return;
+            }
+            const data = await response.json().catch(() => ({}));
+            showPantryError(data.error || {{ tr.t("pantry-failed-rename")|json|safe }});
+        } catch (error) {
+            showPantryError({{ tr.t("pantry-failed-rename")|json|safe }} + ': ' + error);
+        }
+    };
+    cancel.addEventListener('click', restore);
+    save.addEventListener('click', submit);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        if (e.key === 'Escape') restore();
+    });
+
+    head.replaceChildren(form);
+    input.focus();
+    input.select();
+});
+
+// ---- Items and Text tabs -----------------------------------------------------
+
+(function() {
+    const textarea = document.getElementById('pantry-text');
+    if (!textarea) return;
+    const T = {
+        saved: {{ tr.t("pantry-text-saved")|json|safe }},
+        conflict: {{ tr.t("pantry-text-conflict")|json|safe }},
+        failed: {{ tr.t("pantry-failed-save-file")|json|safe }},
+    };
+    // Set once the file is saved from the Text tab, so going back to Items
+    // shows the pantry the file now describes.
+    let itemsStale = false;
+
+    async function loadText() {
+        try {
+            const response = await fetch('{{ prefix }}/api/pantry/raw');
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || T.failed);
+            textarea.value = data.content;
+            textarea.dataset.revision = data.revision;
+            delete textarea.dataset.dirty;
+        } catch (error) {
+            showPantryError(error.message);
+        }
+    }
+
+    function selectTab(tab) {
+        if (tab === 'items' && itemsStale) {
+            window.location.href = window.location.pathname;
+            return;
+        }
+        for (const button of document.querySelectorAll('[role="tab"]')) {
+            const selected = button.dataset.tab === tab;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-selected', selected);
+            button.tabIndex = selected ? 0 : -1;
+            document.getElementById(button.getAttribute('aria-controls')).classList.toggle('hidden', !selected);
+        }
+        if (tab === 'text' && !textarea.dataset.revision) loadText();
+        try { history.replaceState(null, '', tab === 'items' ? location.pathname : '#' + tab); } catch (_) { /* ignore */ }
+    }
+
+    for (const button of document.querySelectorAll('[role="tab"]')) {
+        button.addEventListener('click', () => selectTab(button.dataset.tab));
+    }
+
+    textarea.addEventListener('input', () => { textarea.dataset.dirty = '1'; });
+
+    const saveText = document.getElementById('pantry-text-save');
+    if (saveText) {
+        saveText.addEventListener('click', async () => {
+            const status = document.getElementById('pantry-text-status');
+            document.getElementById('pantry-error-banner').classList.add('hidden');
+            status.textContent = '';
+            try {
+                const response = await fetch('{{ prefix }}/api/pantry/raw', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: textarea.value, revision: textarea.dataset.revision }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 409 && data.revision) {
+                    // Their text stays; saving again replaces the other change.
+                    textarea.dataset.revision = data.revision;
+                    showPantryError(T.conflict);
+                    return;
+                }
+                if (!response.ok) throw new Error(data.error || T.failed);
+                textarea.dataset.revision = data.revision;
+                delete textarea.dataset.dirty;
+                itemsStale = true;
+                status.textContent = T.saved;
+            } catch (error) {
+                showPantryError(error.message);
+            }
+        });
+    }
+
+    // `#text` opens the Text tab, on load or when followed from the page.
+    const tabFromHash = () => selectTab(location.hash === '#text' ? 'text' : 'items');
+    window.addEventListener('hashchange', tabFromHash);
+    tabFromHash();
+})();
 </script>
 {% endblock %}

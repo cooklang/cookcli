@@ -42,6 +42,16 @@ pantry-section-spices = Especias
 pantry-section-other = Otro
 pantry-section-new = Nueva sección…
 pantry-section-new-name = Nombre de la nueva sección
+pantry-tab-items = Artículos
+pantry-tab-text = Texto
+pantry-text-intro = Edita el archivo directamente: una línea [sección] y después un artículo por línea, escrito nombre = "cantidad" o nombre = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Las líneas que empiezan por # son comentarios.
+pantry-text-save = Guardar archivo
+pantry-text-saved = Guardado
+pantry-text-conflict = El archivo de la despensa se modificó en otro lugar mientras editabas. Tu texto se conserva; guarda de nuevo para reemplazar ese cambio.
+pantry-rename-section = Renombrar sección
+pantry-section-name = Nombre de la sección
+pantry-failed-rename = No se pudo renombrar la sección
+pantry-failed-save-file = No se pudo guardar el archivo
 pantry-optional = (opcional)
 pantry-failed-add = Error al agregar artículo
 pantry-failed-update = Error al actualizar artículo

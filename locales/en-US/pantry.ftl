@@ -42,6 +42,16 @@ pantry-section-spices = Spices
 pantry-section-other = Other
 pantry-section-new = New section…
 pantry-section-new-name = New section name
+pantry-tab-items = Items
+pantry-tab-text = Text
+pantry-text-intro = Edit the file directly: a [section] line, then one item per line, written name = "quantity" or name = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Lines starting with # are comments.
+pantry-text-save = Save file
+pantry-text-saved = Saved
+pantry-text-conflict = The pantry file was changed elsewhere while you were editing. Your text is kept; save again to replace that change with it.
+pantry-rename-section = Rename section
+pantry-section-name = Section name
+pantry-failed-rename = Failed to rename section
+pantry-failed-save-file = Could not save the file
 pantry-optional = (optional)
 pantry-failed-add = Failed to add item
 pantry-failed-update = Failed to update item

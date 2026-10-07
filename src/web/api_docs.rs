@@ -1601,7 +1601,9 @@ fn pantry() -> ApiSection {
         "Reads and writes `pantry.conf`, a TOML file of what you already have at home. \
          Quantities are typically `VALUE%UNIT`, e.g. `250%g`, but the field is just a string — \
          `unlim` and plain counts like `12` appear untouched in the seed data. Every endpoint \
-         here returns 404 when no pantry file is configured.",
+         here returns 404 when no pantry file is configured. Changes edit only the entry \
+         concerned, so comments, blank lines and formatting elsewhere in the file are kept; \
+         they need the `shopper` role when sign-in is on.",
         vec![
             ep(
                 "GET",
@@ -1642,13 +1644,10 @@ fn pantry() -> ApiSection {
                 "POST",
                 "/api/pantry/add",
                 "Add an item",
-                "Creates the section if it does not exist. The response claims success and \
-                 reports a distinct item was appended even when the section already has an \
-                 item of that name — but every write round-trips through a TOML serializer \
-                 that keys each section's items by name, so a second item sharing a name with \
-                 an existing one in the same section silently replaces it on disk rather than \
-                 coexisting. Verified: adding `dup` twice with different quantities to a fresh \
-                 section leaves exactly one `dup` item, with the second call's quantity.",
+                "Creates the section if it does not exist. Spaces around each field are \
+                 dropped. `400` when the section or name is blank, when the section already \
+                 has an item of that name (use `PUT` to change it), or when the pantry file \
+                 cannot be read as a pantry — it is never replaced by a new one.",
             )
             .params(vec![
                 param(
@@ -1714,11 +1713,8 @@ fn pantry() -> ApiSection {
                 "/api/pantry/{section}/{name}",
                 "Update an item",
                 "Only the fields present in the body are changed; omitted fields keep their \
-                 current values. Returns 404 if the section does not exist. A name that \
-                 matches nothing inside a valid section does not 404 — that case still \
-                 rewrites the file (a no-op) and responds `200` with a success message \
-                 naming the item that was never found. If more than one item in the section \
-                 shares the target name, only the first one is updated.",
+                 current values, and a body with none of them writes nothing. `404` if the \
+                 section or the item does not exist.",
             )
             .params(vec![
                 path_param("section", "Section containing the item."),
@@ -1745,10 +1741,8 @@ fn pantry() -> ApiSection {
                 "DELETE",
                 "/api/pantry/{section}/{name}",
                 "Remove an item",
-                "The section is deleted too if it becomes empty. Returns 404 if the section \
-                 does not exist, but — like `PUT` — responds `200` with a success message even \
-                 when no item in the section actually has that name; nothing is removed and the \
-                 file is rewritten unchanged.",
+                "The section is deleted too if it becomes empty. `404` if the section or the \
+                 item does not exist.",
             )
             .params(vec![
                 path_param("section", "Section containing the item."),
@@ -1759,6 +1753,82 @@ fn pantry() -> ApiSection {
 {
   "success": true,
   "message": "Removed butter from fridge"
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/pantry/rename",
+                "Rename a section",
+                "The section keeps its place in the file, its items and the comments around \
+                 it. Changing only the case of its own name is allowed. `400` when the new name \
+                 is blank, is the current one, is already used by another section or by an \
+                 item above the first section header (ignoring case), or when either name is \
+                 `general`; `404` if the section does not exist.",
+            )
+            .params(vec![
+                param("section", "body", "string", true, "The section to rename."),
+                param("new_name", "body", "string", true, "Its new name."),
+            ])
+            .request(
+                r#"
+{ "section": "fridge", "new_name": "Fridge" }
+"#,
+            )
+            .response(
+                r#"
+{
+  "success": true,
+  "message": "Renamed fridge to Fridge"
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/pantry/raw",
+                "Read the pantry file as text",
+                "The file exactly as written, with its `revision`. The `content` below is cut \
+                 short.",
+            )
+            .response(
+                r#"
+{
+  "content": "water = \"unlim\"\n\n[fridge]\nmilk = \"2%l\"\n",
+  "revision": "5f0c2b7d9a41e863"
+}
+"#,
+            ),
+            ep(
+                "PUT",
+                "/api/pantry/raw",
+                "Replace the pantry file",
+                "Writes `content` as the whole file once it reads as a pantry, and answers as \
+                 `GET /api/pantry/raw` does. Otherwise `400` quoting the parser, with the line, \
+                 and the file is left alone. Send the `revision` the text was edited from and \
+                 the change is refused with `409` and the current `revision` if the file has \
+                 changed since; leave it out to replace the file regardless.",
+            )
+            .params(vec![
+                param("content", "body", "string", true, "The new file."),
+                param(
+                    "revision",
+                    "body",
+                    "string",
+                    false,
+                    "The `revision` the text was edited from.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "content": "[fridge]\nmilk = \"1%l\"\nmilk = \"2%l\"\n"
+}
+"#,
+            )
+            .response(
+                r#"
+{
+  "error": "Not a valid pantry: Error parsing input: TOML parse error: TOML parse error at line 3, column 1 | 3 | milk = \"2%l\" | ^ duplicate key `milk` in table `fridge`"
 }
 "#,
             ),

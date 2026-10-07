@@ -68,7 +68,7 @@ test.describe('Pantry Management', () => {
 
       // Look for add item form
       const addButton = page.getByRole('button', { name: /Add/i });
-      const itemNameInput = page.getByLabel(/Item|Name|Ingredient/i);
+      const itemNameInput = page.locator('#add-modal').getByLabel(/Item|Name|Ingredient/i);
       const quantityInput = page.getByLabel(/Quantity|Amount/i);
       const unitInput = page.getByLabel(/Unit/i);
 

@@ -42,6 +42,16 @@ pantry-section-spices = Épices
 pantry-section-other = Autre
 pantry-section-new = Nouvelle section…
 pantry-section-new-name = Nom de la nouvelle section
+pantry-tab-items = Articles
+pantry-tab-text = Texte
+pantry-text-intro = Modifiez le fichier directement : une ligne [section], puis un article par ligne, écrit nom = "quantité" ou nom = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Les lignes commençant par # sont des commentaires.
+pantry-text-save = Enregistrer le fichier
+pantry-text-saved = Enregistré
+pantry-text-conflict = Le fichier du garde-manger a été modifié ailleurs pendant votre saisie. Votre texte est conservé ; enregistrez à nouveau pour remplacer cette modification.
+pantry-rename-section = Renommer la section
+pantry-section-name = Nom de la section
+pantry-failed-rename = Impossible de renommer la section
+pantry-failed-save-file = Impossible d'enregistrer le fichier
 pantry-optional = (optionnel)
 pantry-failed-add = Échec de l'ajout de l'article
 pantry-failed-update = Échec de la mise à jour de l'article

@@ -42,6 +42,16 @@ pantry-section-spices = Kruiden
 pantry-section-other = Overig
 pantry-section-new = Nieuwe sectie…
 pantry-section-new-name = Naam van de nieuwe sectie
+pantry-tab-items = Artikelen
+pantry-tab-text = Tekst
+pantry-text-intro = Bewerk het bestand direct: een [sectie]-regel, daarna één artikel per regel, geschreven als naam = "hoeveelheid" of naam = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Regels die met # beginnen zijn opmerkingen.
+pantry-text-save = Bestand opslaan
+pantry-text-saved = Opgeslagen
+pantry-text-conflict = Het voorraadbestand is elders gewijzigd terwijl je aan het bewerken was. Je tekst blijft bewaard; sla opnieuw op om die wijziging te vervangen.
+pantry-rename-section = Sectie hernoemen
+pantry-section-name = Naam van de sectie
+pantry-failed-rename = Sectie hernoemen mislukt
+pantry-failed-save-file = Bestand opslaan mislukt
 pantry-optional = (optioneel)
 pantry-failed-add = Artikel kon niet worden toegevoegd
 pantry-failed-update = Artikel kon niet worden bijgewerkt

@@ -42,6 +42,16 @@ pantry-section-spices = Gewürze
 pantry-section-other = Sonstiges
 pantry-section-new = Neuer Bereich…
 pantry-section-new-name = Name des neuen Bereichs
+pantry-tab-items = Artikel
+pantry-tab-text = Text
+pantry-text-intro = Bearbeite die Datei direkt: eine [Abschnitt]-Zeile, dann ein Artikel pro Zeile, geschrieben name = "menge" oder name = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Zeilen, die mit # beginnen, sind Kommentare.
+pantry-text-save = Datei speichern
+pantry-text-saved = Gespeichert
+pantry-text-conflict = Die Vorratsdatei wurde während deiner Bearbeitung anderswo geändert. Dein Text bleibt erhalten; speichere erneut, um diese Änderung damit zu ersetzen.
+pantry-rename-section = Abschnitt umbenennen
+pantry-section-name = Name des Abschnitts
+pantry-failed-rename = Abschnitt konnte nicht umbenannt werden
+pantry-failed-save-file = Datei konnte nicht gespeichert werden
 pantry-optional = (optional)
 pantry-failed-add = Artikel konnte nicht hinzugefügt werden
 pantry-failed-update = Artikel konnte nicht aktualisiert werden

@@ -42,6 +42,16 @@ pantry-section-spices = Spezie
 pantry-section-other = Altro
 pantry-section-new = Nuova sezione…
 pantry-section-new-name = Nome della nuova sezione
+pantry-tab-items = Articoli
+pantry-tab-text = Testo
+pantry-text-intro = Modifica direttamente il file: una riga [sezione], poi un articolo per riga, scritto nome = "quantità" oppure nome = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Le righe che iniziano con # sono commenti.
+pantry-text-save = Salva file
+pantry-text-saved = Salvato
+pantry-text-conflict = Il file della dispensa è stato modificato altrove mentre lo stavi modificando. Il tuo testo è conservato; salva di nuovo per sostituire quella modifica.
+pantry-rename-section = Rinomina sezione
+pantry-section-name = Nome della sezione
+pantry-failed-rename = Impossibile rinominare la sezione
+pantry-failed-save-file = Impossibile salvare il file
 pantry-optional = (facoltativo)
 pantry-failed-add = Impossibile aggiungere l'articolo
 pantry-failed-update = Impossibile aggiornare l'articolo

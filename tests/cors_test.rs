@@ -197,10 +197,20 @@ fn header(headers: &HeaderMap, name: &str) -> Option<String> {
 /// Sends a real (non-preflight) `POST /api/pantry/add`, optionally with an
 /// `Origin` header, and returns the response. This is what actually exercises
 /// the write guard — see the module doc comment for why a preflight cannot.
+/// A name no other add in this run has used: the pantry refuses a second item
+/// of the same name, and these tests are about who may write, not what.
+fn unique_item() -> String {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    format!(
+        "Test Item {}",
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )
+}
+
 async fn post_pantry_add(server: &ServerGuard, origin: Option<&str>) -> Response {
     let mut req = Client::new()
         .post(server.url("/api/pantry/add"))
-        .json(&serde_json::json!({ "section": "Test", "name": "Test Item" }));
+        .json(&serde_json::json!({ "section": "Test", "name": unique_item() }));
     if let Some(origin) = origin {
         req = req.header(ORIGIN, origin);
     }
@@ -368,7 +378,7 @@ async fn a_forwarded_host_header_cannot_fake_same_origin() {
     ] {
         let resp = Client::new()
             .post(server.url("/api/pantry/add"))
-            .json(&serde_json::json!({ "section": "Test", "name": "Test Item" }))
+            .json(&serde_json::json!({ "section": "Test", "name": unique_item() }))
             .header(ORIGIN, "http://evil.test")
             .header(spoof.0, spoof.1)
             .send()
@@ -831,7 +841,7 @@ impl ServerGuard {
 async fn post_pantry_add_as(server: &ServerGuard, host: &str, origin: &str) -> Response {
     Client::new()
         .post(server.url("/api/pantry/add"))
-        .json(&serde_json::json!({ "section": "Test", "name": "Test Item" }))
+        .json(&serde_json::json!({ "section": "Test", "name": unique_item() }))
         .header(reqwest::header::HOST, host)
         .header(ORIGIN, origin)
         .send()

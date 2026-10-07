@@ -1,4 +1,4 @@
-use super::common::json_error;
+use super::common::{json_error, ApiError};
 use axum::{
     extract::{Extension, Json, Path, Query, State},
     http::StatusCode,
@@ -6,10 +6,15 @@ use axum::{
 };
 use camino::Utf8PathBuf;
 use chrono::prelude::*;
+use cookcli_core::{
+    pantry::{self as core_pantry, PantryContents},
+    ConfigSource, CoreError, Outcome,
+};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
 
+use crate::server::aisle_file::revision;
 use crate::server::{activity, AppState};
 use crate::web::viewer::Viewer;
 
@@ -110,70 +115,111 @@ pub struct ApiResponse {
     pub message: String,
 }
 
+/// Apply a `cookcli-core` change to the server's pantry file.
+///
+/// Core edits the file as a TOML document, so the comments and layout written
+/// by hand — or on the page's Text tab — survive a change made from the page,
+/// and it writes atomically and through a symlink. Changes are made one at a
+/// time: two requests that each read the file and write back their own edit
+/// would otherwise lose one of them.
+async fn change_pantry<F>(state: &AppState, change: F) -> Result<(), ApiError>
+where
+    F: FnOnce(&cookcli_core::Context) -> Result<Outcome<PantryContents>, CoreError>
+        + Send
+        + 'static,
+{
+    let path = get_pantry_path(state)?.clone();
+    let _guard = state.pantry_lock.lock().await;
+    let ctx =
+        cookcli_core::Context::new(state.base_path.clone()).with_pantry(ConfigSource::Path(path));
+    tokio::task::spawn_blocking(move || change(&ctx))
+        .await
+        .map_err(|e| {
+            tracing::error!("Pantry change did not finish: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error("The pantry change did not finish"),
+            )
+        })?
+        .map(drop)
+        .map_err(core_error)
+}
+
+/// A core error as the API reports it, without the absolute path some of them
+/// carry.
+fn core_error(error: CoreError) -> ApiError {
+    match error {
+        CoreError::PantryEdit { message } => {
+            let status = if message.contains(" not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            (status, json_error(sentence(&message)))
+        }
+        CoreError::Config { message, .. } => (
+            StatusCode::BAD_REQUEST,
+            json_error(format!("Not a valid pantry: {message}")),
+        ),
+        CoreError::MissingConfig { .. } => (
+            StatusCode::NOT_FOUND,
+            json_error("Pantry configuration not found"),
+        ),
+        CoreError::Io { source, .. } if source.kind() == std::io::ErrorKind::NotFound => (
+            StatusCode::NOT_FOUND,
+            json_error("Pantry configuration not found"),
+        ),
+        other => {
+            tracing::error!("Pantry change failed: {other}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error("Failed to write the pantry file"),
+            )
+        }
+    }
+}
+
+/// `message` with its first letter capitalised, for display as it stands.
+fn sentence(message: &str) -> String {
+    let mut chars = message.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 pub async fn add_item(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
     Json(item): Json<AddPantryItem>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, ApiError> {
     let item = item
         .trimmed()
         .map_err(|e| (StatusCode::BAD_REQUEST, json_error(e)))?;
-    let pantry_path = get_pantry_path(&state)?;
-    let mut pantry_conf = load_pantry(&state).await.unwrap_or_default();
+    let (section, name) = (item.section.clone(), item.name.clone());
 
-    // Create new item
-    let new_item = if item.quantity.is_some()
-        || item.bought.is_some()
-        || item.expire.is_some()
-        || item.low.is_some()
-    {
-        cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
-            name: item.name.clone(),
-            quantity: item.quantity,
-            bought: item.bought,
-            expire: item.expire,
-            low: item.low,
-        })
-    } else {
-        cooklang::pantry::PantryItem::Simple(item.name.clone())
+    let request = core_pantry::AddRequest {
+        section: item.section,
+        name: item.name,
+        quantity: item.quantity,
+        bought: item.bought,
+        expire: item.expire,
+        low: item.low,
     };
-
-    // Add item to the specified section
-    pantry_conf
-        .sections
-        .entry(item.section.clone())
-        .or_insert_with(Vec::new)
-        .push(new_item);
-
-    // Rebuild index
-    pantry_conf.rebuild_index();
-
-    // Serialize back to regular TOML format (not array format)
-    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
-
-    // Write back to file
-    tokio::fs::write(pantry_path.as_std_path(), new_content)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to write pantry file: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                json_error(format!("Failed to write pantry file: {e}")),
-            )
-        })?;
+    change_pantry(&state, move |ctx| core_pantry::add(ctx, request)).await?;
 
     activity::record(
         &viewer,
         format_args!(
             "added {} to the {} section of the pantry",
-            activity::quoted(&item.name),
-            activity::quoted(&item.section)
+            activity::quoted(&name),
+            activity::quoted(&section)
         ),
     );
 
     Ok(Json(ApiResponse {
         success: true,
-        message: format!("Added {} to {}", item.name, item.section),
+        message: format!("Added {name} to {section}"),
     }))
 }
 
@@ -181,41 +227,12 @@ pub async fn remove_item(
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
     Path((section, name)): Path<(String, String)>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let pantry_path = get_pantry_path(&state)?;
-    let mut pantry_conf = load_pantry(&state).await?;
-
-    // Remove item from the specified section
-    if let Some(items) = pantry_conf.sections.get_mut(&section) {
-        items.retain(|item| item.name() != name);
-
-        // Remove section if empty
-        if items.is_empty() {
-            pantry_conf.sections.shift_remove(&section);
-        }
-    } else {
-        return Err((
-            StatusCode::NOT_FOUND,
-            json_error(format!("Section not found: {section}")),
-        ));
-    }
-
-    // Rebuild index
-    pantry_conf.rebuild_index();
-
-    // Serialize back to regular TOML format (not array format)
-    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
-
-    // Write back to file
-    tokio::fs::write(pantry_path.as_std_path(), new_content)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to write pantry file: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                json_error(format!("Failed to write pantry file: {e}")),
-            )
-        })?;
+) -> Result<impl IntoResponse, ApiError> {
+    let request = core_pantry::RemoveRequest {
+        section: section.clone(),
+        name: name.clone(),
+    };
+    change_pantry(&state, move |ctx| core_pantry::remove(ctx, request)).await?;
 
     activity::record(
         &viewer,
@@ -237,88 +254,176 @@ pub async fn update_item(
     Extension(viewer): Extension<Viewer>,
     Path((section, name)): Path<(String, String)>,
     Json(update): Json<UpdatePantryItem>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let pantry_path = get_pantry_path(&state)?;
-    let mut pantry_conf = load_pantry(&state).await?;
+) -> Result<impl IntoResponse, ApiError> {
+    // The edit dialog sends only the fields it changed, so saving it untouched
+    // sends nothing — which is not worth an error, nor a write.
+    let unchanged = update.quantity.is_none()
+        && update.bought.is_none()
+        && update.expire.is_none()
+        && update.low.is_none();
+    if !unchanged {
+        let request = core_pantry::UpdateRequest {
+            section: section.clone(),
+            name: name.clone(),
+            quantity: update.quantity,
+            bought: update.bought,
+            expire: update.expire,
+            low: update.low,
+        };
+        change_pantry(&state, move |ctx| core_pantry::update(ctx, request)).await?;
 
-    // Find and update the item
-    if let Some(items) = pantry_conf.sections.get_mut(&section) {
-        for item in items.iter_mut() {
-            if item.name() == name {
-                // Convert to WithAttributes if needed
-                let updated_item = match item {
-                    cooklang::pantry::PantryItem::Simple(item_name) => {
-                        if update.quantity.is_some()
-                            || update.bought.is_some()
-                            || update.expire.is_some()
-                            || update.low.is_some()
-                        {
-                            cooklang::pantry::PantryItem::WithAttributes(
-                                cooklang::pantry::ItemWithAttributes {
-                                    name: item_name.clone(),
-                                    quantity: update.quantity.clone(),
-                                    bought: update.bought.clone(),
-                                    expire: update.expire.clone(),
-                                    low: update.low,
-                                },
-                            )
-                        } else {
-                            cooklang::pantry::PantryItem::Simple(item_name.clone())
-                        }
-                    }
-                    cooklang::pantry::PantryItem::WithAttributes(attrs) => {
-                        cooklang::pantry::PantryItem::WithAttributes(
-                            cooklang::pantry::ItemWithAttributes {
-                                name: attrs.name.clone(),
-                                quantity: update.quantity.clone().or(attrs.quantity.clone()),
-                                bought: update.bought.clone().or(attrs.bought.clone()),
-                                expire: update.expire.clone().or(attrs.expire.clone()),
-                                low: update.low.clone().or(attrs.low.clone()),
-                            },
-                        )
-                    }
-                };
-                *item = updated_item;
-                break;
-            }
-        }
-    } else {
-        return Err((
-            StatusCode::NOT_FOUND,
-            json_error(format!("Section not found: {section}")),
-        ));
+        activity::record(
+            &viewer,
+            format_args!(
+                "updated {} in the {} section of the pantry",
+                activity::quoted(&name),
+                activity::quoted(&section)
+            ),
+        );
     }
-
-    // Rebuild index
-    pantry_conf.rebuild_index();
-
-    // Serialize back to regular TOML format (not array format)
-    let new_content = serialize_pantry_to_regular_toml(&pantry_conf);
-
-    // Write back to file
-    tokio::fs::write(pantry_path.as_std_path(), new_content)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to write pantry file: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                json_error(format!("Failed to write pantry file: {e}")),
-            )
-        })?;
-
-    activity::record(
-        &viewer,
-        format_args!(
-            "updated {} in the {} section of the pantry",
-            activity::quoted(&name),
-            activity::quoted(&section)
-        ),
-    );
 
     Ok(Json(ApiResponse {
         success: true,
         message: format!("Updated {name} in {section}"),
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RenamePantrySection {
+    pub section: String,
+    pub new_name: String,
+}
+
+/// `POST /api/pantry/rename`: gives a section a new name, keeping its place,
+/// its items and the comments around it.
+pub async fn rename_section(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(rename): Json<RenamePantrySection>,
+) -> Result<Json<ApiResponse>, ApiError> {
+    let section = rename.section;
+    let new_name = rename.new_name.trim().to_string();
+
+    let request = core_pantry::RenameSectionRequest {
+        section: section.clone(),
+        new_name: new_name.clone(),
+    };
+    change_pantry(&state, move |ctx| core_pantry::rename_section(ctx, request)).await?;
+
+    activity::record(
+        &viewer,
+        format_args!(
+            "renamed the pantry section {} to {}",
+            activity::quoted(&section),
+            activity::quoted(&new_name)
+        ),
+    );
+
+    Ok(Json(ApiResponse {
+        success: true,
+        message: format!("Renamed {section} to {new_name}"),
+    }))
+}
+
+/// The pantry file as written, and the revision a change to it must name.
+#[derive(Debug, Serialize)]
+pub struct RawPantry {
+    pub content: String,
+    pub revision: String,
+}
+
+impl RawPantry {
+    fn new(content: String) -> Self {
+        Self {
+            revision: revision(&content),
+            content,
+        }
+    }
+}
+
+async fn read_raw(state: &AppState) -> Result<String, ApiError> {
+    let path = get_pantry_path(state)?;
+    tokio::fs::read_to_string(path.as_std_path())
+        .await
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                return (
+                    StatusCode::NOT_FOUND,
+                    json_error("Pantry configuration not found"),
+                );
+            }
+            tracing::error!("Failed to read pantry file {path}: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error("Failed to read the pantry file"),
+            )
+        })
+}
+
+/// `GET /api/pantry/raw`: the file as written.
+pub async fn get_raw_pantry(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<RawPantry>, ApiError> {
+    Ok(Json(RawPantry::new(read_raw(&state).await?)))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RawPantryUpdate {
+    pub content: String,
+    pub revision: Option<String>,
+}
+
+/// `PUT /api/pantry/raw`: replaces the whole file, once it reads as a pantry.
+///
+/// A change made against another version of the file is refused with `409` and
+/// the current revision; one sent without a revision replaces whatever is
+/// there.
+pub async fn put_raw_pantry(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(update): Json<RawPantryUpdate>,
+) -> Result<Json<RawPantry>, ApiError> {
+    let path = get_pantry_path(&state)?.clone();
+    let _guard = state.pantry_lock.lock().await;
+
+    let current = revision(&read_raw(&state).await?);
+    if update
+        .revision
+        .as_deref()
+        .is_some_and(|sent| sent != current)
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "The pantry file changed since this page loaded it",
+                "revision": current,
+            })),
+        ));
+    }
+
+    let ctx = cookcli_core::Context::new(state.base_path.clone())
+        .with_pantry(ConfigSource::Path(path.clone()));
+    let content = update.content;
+    let written = content.clone();
+    tokio::task::spawn_blocking(move || core_pantry::replace(&ctx, &written))
+        .await
+        .map_err(|e| {
+            tracing::error!("Pantry file write did not finish: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error("The pantry change did not finish"),
+            )
+        })?
+        .map_err(core_error)?;
+
+    activity::record(
+        &viewer,
+        format_args!(
+            "rewrote the pantry file {}",
+            activity::file(&state.base_path, &path)
+        ),
+    );
+    Ok(Json(RawPantry::new(content)))
 }
 
 pub async fn get_pantry(
@@ -430,10 +535,6 @@ pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
     }
 
     None
-}
-
-fn serialize_pantry_to_regular_toml(pantry_conf: &cooklang::pantry::PantryConf) -> String {
-    cooklang::pantry::to_toml_string(pantry_conf)
 }
 
 #[cfg(test)]

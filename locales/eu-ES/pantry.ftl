@@ -42,6 +42,16 @@ pantry-section-spices = Espeziak
 pantry-section-other = Besteak
 pantry-section-new = Sail berria…
 pantry-section-new-name = Sail berriaren izena
+pantry-tab-items = Elementuak
+pantry-tab-text = Testua
+pantry-text-intro = Editatu fitxategia zuzenean: [atala] lerro bat, eta gero elementu bat lerro bakoitzeko, izena = "kantitatea" edo izena = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"} idatzita. # ikurrarekin hasten diren lerroak iruzkinak dira.
+pantry-text-save = Gorde fitxategia
+pantry-text-saved = Gordeta
+pantry-text-conflict = Jakitegiko fitxategia beste nonbait aldatu da editatzen ari zinen bitartean. Zure testua gorde da; gorde berriro aldaketa hori ordezkatzeko.
+pantry-rename-section = Aldatu atalaren izena
+pantry-section-name = Atalaren izena
+pantry-failed-rename = Ezin izan da atalaren izena aldatu
+pantry-failed-save-file = Ezin izan da fitxategia gorde
 pantry-optional = (aukerakoa)
 pantry-failed-add = Errorea elementua gehitzerakoan
 pantry-failed-update = Errorea elementua eguneratzerakoan

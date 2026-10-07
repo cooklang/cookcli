@@ -42,6 +42,16 @@ pantry-section-spices = スパイス
 pantry-section-other = その他
 pantry-section-new = 新しい保管場所…
 pantry-section-new-name = 新しい保管場所の名前
+pantry-tab-items = アイテム
+pantry-tab-text = テキスト
+pantry-text-intro = ファイルを直接編集します：[セクション] の行のあとに、1 行に 1 アイテムを 名前 = "数量" または 名前 = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"} の形で書きます。# で始まる行はコメントです。
+pantry-text-save = ファイルを保存
+pantry-text-saved = 保存しました
+pantry-text-conflict = 編集中にパントリーファイルが別の場所で変更されました。入力したテキストは残っています。もう一度保存すると、その変更を置き換えます。
+pantry-rename-section = セクション名を変更
+pantry-section-name = セクション名
+pantry-failed-rename = セクション名を変更できませんでした
+pantry-failed-save-file = ファイルを保存できませんでした
 pantry-optional = 任意
 pantry-failed-add = 品目を追加できませんでした
 pantry-failed-update = 品目を更新できませんでした

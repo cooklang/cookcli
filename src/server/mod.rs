@@ -549,6 +549,7 @@ fn build_state(
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         aisle_lock: tokio::sync::Mutex::new(()),
+        pantry_lock: tokio::sync::Mutex::new(()),
         shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
@@ -622,6 +623,8 @@ pub struct AppState {
     /// Serializes changes to the aisle file, each a read, an edit and a
     /// write that must not interleave with another.
     pub aisle_lock: tokio::sync::Mutex<()>,
+    /// The same for the pantry file.
+    pub pantry_lock: tokio::sync::Mutex<()>,
     /// Broadcasts filesystem changes to `.shopping-list` / `.shopping-checked`
     /// to every open SSE subscriber. `None` means watcher init failed; SSE
     /// clients can still connect but will never receive events.
@@ -729,6 +732,11 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/shopping_list/events", get(handlers::shopping_list_events))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
+        .route("/pantry/rename", post(handlers::rename_pantry_section))
+        .route(
+            "/pantry/raw",
+            get(handlers::get_raw_pantry).put(handlers::put_raw_pantry),
+        )
         .route("/pantry/expiring", get(handlers::get_expiring))
         .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
