@@ -60,3 +60,4 @@ aisles-select-all = Välj alla som visas
 aisles-add-to-aisle = Lägg till i gång
 aisles-add-as-names = Eller lägg till som andra namn på
 aisles-choose-ingredient = Ingrediens…
+aisles-move-to-aisle = Flytta till gång

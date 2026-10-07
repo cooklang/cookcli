@@ -60,3 +60,4 @@ aisles-select-all = Select all shown
 aisles-add-to-aisle = Add to aisle
 aisles-add-as-names = Or add as other names of
 aisles-choose-ingredient = Ingredient…
+aisles-move-to-aisle = Move to aisle

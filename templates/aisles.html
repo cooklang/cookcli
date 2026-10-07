@@ -154,6 +154,7 @@
         addToAisle: {{ tr.t("aisles-add-to-aisle")|json|safe }},
         addAsNames: {{ tr.t("aisles-add-as-names")|json|safe }},
         chooseIngredient: {{ tr.t("aisles-choose-ingredient")|json|safe }},
+        moveToAisle: {{ tr.t("aisles-move-to-aisle")|json|safe }},
     };
 
     let state = {{ aisles|json|safe }};
@@ -171,6 +172,13 @@
             node.append(child instanceof Node ? child : document.createTextNode(String(child)));
         }
         return node;
+    }
+
+    // `node.replaceChildren(...children)`, leaving out what `el` leaves out.
+    // The DOM method itself would write a `CAN_EDIT && …` that came out
+    // false as the text "false", and an absent part as "undefined".
+    function fill(node, ...children) {
+        node.replaceChildren(...children.flat(Infinity).filter(c => c != null && c !== false));
     }
 
     // A plain text field: `search-input` leaves room for a magnifier.
@@ -386,7 +394,10 @@
             input.value = '';
             drawTokens();
         };
+        // Moving is its own setting, apart from the names: it starts on the
+        // ingredient's aisle, and the ingredient moves only if it is changed.
         const select = aisleSelect(aisle.name);
+        select.setAttribute('aria-label', T.moveToAisle);
         const save = () => {
             takeTyped();
             const choice = aisleChoice(select);
@@ -399,19 +410,22 @@
             if (e.key === 'Escape') close();
         });
 
-        const panel = el('div', { class: 'aisle-editor flex flex-wrap items-center gap-2 px-[14px] py-3 border-t border-line bg-sunk' },
+        const panel = el('div', { class: 'aisle-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
             tokens,
-            input,
-            el('button', { type: 'button', class: 'btn btn-sm', onclick: takeTyped }, T.add),
-            select,
-            el('div', { class: 'flex items-center gap-2 ml-auto' },
+            el('div', { class: 'flex flex-wrap items-center gap-2' },
+                input,
+                el('button', { type: 'button', class: 'btn btn-sm', onclick: takeTyped }, T.add)),
+            el('div', { class: 'flex flex-wrap items-center gap-2 pt-3 border-t border-line' },
+                el('label', { class: 'aisles-move flex flex-wrap items-center gap-2 text-sm text-text' },
+                    el('span', { class: 'whitespace-nowrap' }, T.moveToAisle), select),
+                el('div', { class: 'flex items-center gap-2 ml-auto' },
                 el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: async () => {
                     if (confirm(T.removeIngredientConfirm.replace('%s', first))) {
                         await change({ action: 'remove_ingredient', name: first });
                     }
                 } }, T.remove),
                 el('button', { type: 'button', class: 'btn btn-sm', onclick: close }, T.cancel),
-                el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: save }, T.save)));
+                el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: save }, T.save))));
         setTimeout(() => input.focus());
         return panel;
     }
@@ -421,7 +435,7 @@
         const head = el('div', { class: 'card-head plain gap-2' });
 
         const showHead = () => {
-            head.replaceChildren(
+            fill(head,
                 el('h2', { class: 'min-w-0 break-words' }, aisle.name, ' ',
                     el('span', { class: 'count' }, String(aisle.ingredients.length))),
                 CAN_EDIT && el('div', { class: 'flex items-center gap-1 shrink-0' },
@@ -510,7 +524,8 @@
     }
 
     // The bar under the aisles in select mode: group the picked ingredients
-    // into one, or move them to an aisle.
+    // into one, or, separately, move them to an aisle. While the group panel
+    // is open, only its own choice shows.
     function renderBulk(grouping) {
         const bar = document.getElementById('aisles-bulk');
         if (!bar) return;
@@ -518,7 +533,8 @@
         if (!selecting) return;
         const entries = [...picked.values()];
 
-        const select = aisleSelect('', T.aisle);
+        const select = aisleSelect('', T.chooseAisle);
+        select.setAttribute('aria-label', T.moveToAisle);
         const move = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.move);
         select.addEventListener('change', () => { move.disabled = !select.value || !entries.length; });
         move.addEventListener('click', async () => {
@@ -533,12 +549,16 @@
             }
         });
 
-        bar.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-2' },
-            el('span', { class: 'aisles-selected-count text-sm text-muted mr-2' }, T.selected.replace('%n', entries.length)),
-            el('button', { type: 'button', class: 'btn btn-sm', disabled: entries.length < 2, onclick: () => renderBulk(true) }, T.group),
-            el('span', { class: 'flex items-center gap-2' }, select, move),
-            el('button', { type: 'button', class: 'btn btn-sm', disabled: !entries.length, onclick: () => { picked.clear(); render(); } }, T.clear)),
-            grouping && entries.length >= 2 && groupPanel(entries));
+        const groupOpen = grouping && entries.length >= 2;
+        fill(bar, el('div', { class: 'flex flex-wrap items-center gap-x-4 gap-y-2' },
+            el('span', { class: 'aisles-selected-count text-sm text-muted' }, T.selected.replace('%n', entries.length)),
+            el('button', { type: 'button', class: 'btn btn-sm', disabled: entries.length < 2, 'aria-expanded': groupOpen ? 'true' : 'false', onclick: () => renderBulk(true) }, T.group),
+            !groupOpen && el('div', { class: 'aisles-move flex flex-wrap items-center gap-2 w-full sm:w-auto sm:pl-4 sm:border-l border-line' },
+                el('label', { class: 'flex flex-wrap items-center gap-2 text-sm text-text' },
+                    el('span', { class: 'whitespace-nowrap' }, T.moveToAisle), select),
+                move),
+            !groupOpen && el('button', { type: 'button', class: 'btn btn-sm ml-auto', disabled: !entries.length, onclick: () => { picked.clear(); render(); } }, T.clear)),
+            groupOpen && groupPanel(entries));
     }
 
     // Asks which name the grouped ingredient goes by: the shortest main name

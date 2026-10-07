@@ -60,3 +60,4 @@ aisles-select-all = Hautatu erakutsitako guztiak
 aisles-add-to-aisle = Gehitu korridorera
 aisles-add-as-names = Edo gehitu honen beste izen gisa:
 aisles-choose-ingredient = Osagaia…
+aisles-move-to-aisle = Mugitu korridorera

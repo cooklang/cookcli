@@ -60,3 +60,4 @@ aisles-select-all = Alle getoonde selecteren
 aisles-add-to-aisle = Toevoegen aan gangpad
 aisles-add-as-names = Of toevoegen als andere namen van
 aisles-choose-ingredient = Ingrediënt…
+aisles-move-to-aisle = Verplaatsen naar gangpad

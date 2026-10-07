@@ -60,3 +60,4 @@ aisles-select-all = Tout sélectionner (affichés)
 aisles-add-to-aisle = Ajouter au rayon
 aisles-add-as-names = Ou ajouter comme autres noms de
 aisles-choose-ingredient = Ingrédient…
+aisles-move-to-aisle = Déplacer vers le rayon

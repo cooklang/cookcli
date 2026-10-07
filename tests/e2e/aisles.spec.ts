@@ -47,7 +47,7 @@ test.describe('Aisles', () => {
     // Open it, move it to another aisle.
     await page.locator('.aisle-ingredient[data-name="e2e leek"]').click();
     const editor = page.locator('.aisle-editor');
-    await editor.getByRole('combobox').selectOption('milk and dairy');
+    await editor.getByLabel('Move to aisle').selectOption('milk and dairy');
     await editor.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(card(page, 'milk and dairy').locator('.aisle-ingredient[data-name="e2e leek"]'))
       .toBeVisible();
@@ -144,6 +144,20 @@ test.describe('Aisles', () => {
     await page.locator('.aisle-ingredient[data-name="butter"]').click();
     const bar = page.locator('#aisles-bulk');
     await expect(bar).toContainText('2 selected');
+    // Nothing a missing part could print: "undefined", or "false".
+    const stray = /undefined|\bfalse\b/;
+    await expect(bar).not.toContainText(stray);
+    await expect(page.locator('#aisle-list')).not.toContainText(stray);
+
+    // Moving is apart from grouping, and out of the way while grouping.
+    const moving = bar.locator('.aisles-move');
+    await expect(moving).toBeVisible();
+    await expect(moving.getByLabel('Move to aisle')).toBeVisible();
+    await bar.getByRole('button', { name: 'Group…' }).click();
+    await expect(moving).toHaveCount(0);
+    await bar.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(moving).toBeVisible();
+    await expect(bar).not.toContainText(stray);
 
     await bar.getByRole('button', { name: 'Group…' }).click();
     // The shortest main name is offered first.
