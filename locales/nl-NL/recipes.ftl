@@ -31,6 +31,7 @@ recipe-print = Recept afdrukken
 recipe-added = Toegevoegd!
 recipe-main-section = Hoofdgedeelte
 recipe-preparation = voorbereiding
+recipe-optional = Optioneel
 
 # Recipe Metadata
 meta-course = Gang
