@@ -697,7 +697,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "cookcli"
-version = "0.37.0"
+version = "0.38.0"
 dependencies = [
  "accept-language",
  "anstream",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "cookcli-core"
-version = "0.37.0"
+version = "0.38.0"
 dependencies = [
  "anstream",
  "camino",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "cooklang-format"
-version = "0.37.0"
+version = "0.38.0"
 dependencies = [
  "anstream",
  "anstyle",

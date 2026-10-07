@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.38.0](https://github.com/cooklang/cookcli/compare/v0.37.0...v0.38.0) (2026-10-07)
+
+
+### Features
+
+* **i18n:** add Italian translation ([61a3a18](https://github.com/cooklang/cookcli/commit/61a3a18ce6f5bfb4ad4feeb046b2f44187fa6cdb))
+* **i18n:** add Italian translation ([2493e79](https://github.com/cooklang/cookcli/commit/2493e792d5392ddc177d14e745c3e5a6697caf8c))
+* **i18n:** add Japanese translation ([8a14482](https://github.com/cooklang/cookcli/commit/8a14482718bccf84bf70f1f7cb1283fc5eb7cc53))
+* **i18n:** translate the step picture strings into Japanese ([abdfbad](https://github.com/cooklang/cookcli/commit/abdfbad479454c0eba9b2c5873d484b95f42414a))
+* **packaging:** build .deb packages for Debian and Ubuntu ([#577](https://github.com/cooklang/cookcli/issues/577)) ([7932282](https://github.com/cooklang/cookcli/commit/79322824de48d9de02aac7a9fd8e46febf38c7fd))
+* **pantry:** don't count missing optional ingredients ([e5b6272](https://github.com/cooklang/cookcli/commit/e5b6272cd16585e274052189a664df058333209b))
+* **pantry:** don't count missing optional ingredients ([584e3e2](https://github.com/cooklang/cookcli/commit/584e3e2068d76a906e0ef954934622950efcf692))
+* recognise optional ingredients and cookware (cooklang 0.19) ([993766e](https://github.com/cooklang/cookcli/commit/993766e36c24463082fae757b051b49e094e1813))
+* recognise optional ingredients and cookware (cooklang 0.19) ([22ab899](https://github.com/cooklang/cookcli/commit/22ab8997cff4c6ecfaa96818f9bae652f40446ae))
+* **server:** --recipes-only shows guests only the recipes ([#621](https://github.com/cooklang/cookcli/issues/621)) ([d682b15](https://github.com/cooklang/cookcli/commit/d682b15d1b6aa79bbda315ac15942fbab9c086d8))
+* **server:** opt-in sign-in before anything can be changed ([#534](https://github.com/cooklang/cookcli/issues/534)) ([0e8dacf](https://github.com/cooklang/cookcli/commit/0e8dacff35ccdc8f9f01cf649062130a241ff1b6))
+* **server:** pages to manage aisles ([#631](https://github.com/cooklang/cookcli/issues/631)) ([637cc4d](https://github.com/cooklang/cookcli/commit/637cc4d4ec2e6be1a37823dc382c0f351ce332e4))
+* **server:** read --cors-origin from COOK_CORS_ORIGIN ([dc23f37](https://github.com/cooklang/cookcli/commit/dc23f37ac242164b1b3d3026da98456d184f51b4))
+* **server:** reader / shopper / editor / admin roles for signed-in users ([#563](https://github.com/cooklang/cookcli/issues/563)) ([2c82f28](https://github.com/cooklang/cookcli/commit/2c82f28c43e0442a9cd00eec44ac60c9a8c9ccd8))
+* **server:** rename a recipe or menu from the editor ([#623](https://github.com/cooklang/cookcli/issues/623)) ([2c6e839](https://github.com/cooklang/cookcli/commit/2c6e8395a1e00be0cd28da333cd7b8de05cecd11))
+* **server:** upload step pictures from the web editor ([#584](https://github.com/cooklang/cookcli/issues/584)) ([745b349](https://github.com/cooklang/cookcli/commit/745b34924ce690ecdc7d27b1451676623b9ad6bc)), closes [#562](https://github.com/cooklang/cookcli/issues/562)
+* **shopping-list:** leave optional ingredients out unless --include-optional ([e389b43](https://github.com/cooklang/cookcli/commit/e389b4345fe9a9ffd018d3a9badd84eacb0f73b7))
+* **shopping-list:** leave optional ingredients out unless --include-optional ([fa72db6](https://github.com/cooklang/cookcli/commit/fa72db6854c8e31a7ac1f0d6d7362f246c076062))
+* **ui:** change a meal plan from its calendar ([#610](https://github.com/cooklang/cookcli/issues/610)) ([0734d32](https://github.com/cooklang/cookcli/commit/0734d3210662dba469d36e4632b6f52a84432a94))
+* **ui:** Cooklang toolbar above the recipe editor ([#540](https://github.com/cooklang/cookcli/issues/540)) ([b6f77c9](https://github.com/cooklang/cookcli/commit/b6f77c962bc9106d90e92984dbc697c38df63f42))
+* **ui:** create and edit menus with a recipe picker ([#558](https://github.com/cooklang/cookcli/issues/558)) ([8acfd64](https://github.com/cooklang/cookcli/commit/8acfd648db7dd066a9c24a041838e2c2034b8d13))
+* **ui:** meal plans laid out as a calendar ([#596](https://github.com/cooklang/cookcli/issues/596)) ([27006e1](https://github.com/cooklang/cookcli/commit/27006e1d2cc19adbc3ee99113836f507a7cd59cd))
+* **ui:** open a menu's recipes at the scale the menu asks for ([#561](https://github.com/cooklang/cookcli/issues/561)) ([4c46135](https://github.com/cooklang/cookcli/commit/4c4613553eb027b0a15b982ed5bfb13e63c9709e))
+* **ui:** random recipe button scoped to the current folder ([#554](https://github.com/cooklang/cookcli/issues/554)) ([73b095b](https://github.com/cooklang/cookcli/commit/73b095b0ac5a305e43d46c10412a2fa201cb924b)), closes [#544](https://github.com/cooklang/cookcli/issues/544)
+* **ui:** scale a recipe by servings when it declares them ([#565](https://github.com/cooklang/cookcli/issues/565)) ([1e2978f](https://github.com/cooklang/cookcli/commit/1e2978f8c1ca618634dbc80cbba84917cdb26b07))
+* **web:** shrink title pictures in the browser, always re-encode on the server ([5d70e2e](https://github.com/cooklang/cookcli/commit/5d70e2e5d4f9b64133a1bdc98b72fde2b46bb887))
+
+
+### Bug Fixes
+
+* **build:** leave the output dir out of the listing pages ([#634](https://github.com/cooklang/cookcli/issues/634)) ([d324d5c](https://github.com/cooklang/cookcli/commit/d324d5c1cac5d1fe3ededb98354af11d868abfe1)), closes [#632](https://github.com/cooklang/cookcli/issues/632)
+* **ci:** stop CI and releases from failing silently ([#569](https://github.com/cooklang/cookcli/issues/569)) ([d7ddece](https://github.com/cooklang/cookcli/commit/d7ddecef89215e6ae770cfdec76d00e448056a75))
+* **deps:** bump rustls to 0.23.45 (GHSA-2mjx-qc3c-rqvc) ([#641](https://github.com/cooklang/cookcli/issues/641)) ([1bbbc73](https://github.com/cooklang/cookcli/commit/1bbbc73a1fbb9af3a4c0529ee2b6da2467fff736)), closes [#640](https://github.com/cooklang/cookcli/issues/640)
+* **i18n:** drop the error page strings defined twice ([#579](https://github.com/cooklang/cookcli/issues/579)) ([9e0fd06](https://github.com/cooklang/cookcli/commit/9e0fd06495a8c034a5b923801eb70f9c15ccbdf7))
+* **i18n:** translate the messages that only existed in English ([#567](https://github.com/cooklang/cookcli/issues/567)) ([347e0e2](https://github.com/cooklang/cookcli/commit/347e0e262f5fa510594098ffc55effdb995ab711))
+* **pantry:** don't wrap "optional" in a second pair of parentheses ([#627](https://github.com/cooklang/cookcli/issues/627)) ([6b9cff2](https://github.com/cooklang/cookcli/commit/6b9cff27375cd777fe5bb1957c424712ecb38ef8)), closes [#626](https://github.com/cooklang/cookcli/issues/626)
+* report non-numeric timer values in doctor ([#614](https://github.com/cooklang/cookcli/issues/614)) ([270c7e6](https://github.com/cooklang/cookcli/commit/270c7e65be63005321fe9c614709bf99d86b5edf))
+* **server:** keep search and menu on one line on mobile ([7cc2c4a](https://github.com/cooklang/cookcli/commit/7cc2c4a03285bcd077664d27b090b2f34d479de9))
+* **server:** limit the recipe file endpoints to .cook and .menu files ([#550](https://github.com/cooklang/cookcli/issues/550)) ([6ff6f9c](https://github.com/cooklang/cookcli/commit/6ff6f9c011c998005719fc79f7991f126c7e3a06)), closes [#545](https://github.com/cooklang/cookcli/issues/545)
+* **server:** name shopping list entries by their recipe title ([#625](https://github.com/cooklang/cookcli/issues/625)) ([5db3066](https://github.com/cooklang/cookcli/commit/5db3066a64cb345000c0d36910ef06205121dbe9))
+* **server:** never delete a folder when refusing a new recipe path ([#582](https://github.com/cooklang/cookcli/issues/582)) ([2b2b075](https://github.com/cooklang/cookcli/commit/2b2b0751b553c07da91d72381ec52c3690e06edd)), closes [#549](https://github.com/cooklang/cookcli/issues/549)
+* **server:** refuse cross-site WebSocket connections to the language server ([#524](https://github.com/cooklang/cookcli/issues/524)) ([c3c1b9e](https://github.com/cooklang/cookcli/commit/c3c1b9ebd9efdd5eedf8939957ec719deffe7515))
+* **server:** same-origin by default, and refuse unknown Host names ([#583](https://github.com/cooklang/cookcli/issues/583)) ([0ef9105](https://github.com/cooklang/cookcli/commit/0ef91059dbf9d6be6b03194640aee95a70e58678)), closes [#546](https://github.com/cooklang/cookcli/issues/546)
+* **server:** trust only localhost and IP addresses as the server's own origin ([d9eb064](https://github.com/cooklang/cookcli/commit/d9eb0640c08867f9a4f4369cbb17aa582079435d))
+* stop listing macOS ._ files as recipes ([#557](https://github.com/cooklang/cookcli/issues/557)) ([87c4f7b](https://github.com/cooklang/cookcli/commit/87c4f7bb27b3f08cb33dc0d855c7b73748943af0)), closes [#555](https://github.com/cooklang/cookcli/issues/555)
+* trim spaces around names typed for new files, pantry items and checks ([#616](https://github.com/cooklang/cookcli/issues/616)) ([d51584d](https://github.com/cooklang/cookcli/commit/d51584d5e197f17b0e32101baeb3be16103dc6cb))
+* **ui:** make Done the main action once a title picture is set ([#588](https://github.com/cooklang/cookcli/issues/588)) ([efea22d](https://github.com/cooklang/cookcli/commit/efea22daa8e7801627bd7a570ebeb3db2ecde79b)), closes [#587](https://github.com/cooklang/cookcli/issues/587)
+* **web:** stop step picture paths escaping cooking mode's img src ([f4cf875](https://github.com/cooklang/cookcli/commit/f4cf8754822b010e1ca9ca0e2b2630cf95a1cdfd))
+* **web:** stop step picture paths escaping cooking mode's img src ([73ac842](https://github.com/cooklang/cookcli/commit/73ac8422b54484bc000dc03212402dcb619e14b6)), closes [#548](https://github.com/cooklang/cookcli/issues/548)
+
 ## [0.37.0](https://github.com/cooklang/cookcli/compare/v0.36.0...v0.37.0) (2026-09-24)
 
 
