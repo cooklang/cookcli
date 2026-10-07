@@ -126,6 +126,8 @@ cook pantry expiring [OPTIONS]
 
 List recipes that can be made with items currently in pantry.
 
+Optional ingredients (`@?chives`) are not counted: a recipe whose only missing ingredients are optional is a full match.
+
 ```
 cook pantry recipes [OPTIONS]
 ```
@@ -138,6 +140,8 @@ cook pantry recipes [OPTIONS]
 ### `plan` (alias: `pl`)
 
 Analyze ingredient usage across recipes to help plan pantry items.
+
+Only required ingredients are planned for; optional ones (`@?chives`) never are.
 
 ```
 cook pantry plan [OPTIONS]

@@ -708,6 +708,48 @@ fn a_reference_to_another_recipe_is_not_counted() {
     );
 }
 
+/// A missing optional ingredient is not missing: a recipe whose only absent
+/// ingredients are optional is a full match, and a partial match's percentage
+/// and missing list are over what it requires.
+#[test]
+fn optional_ingredients_are_not_wanted() {
+    let dir = temp();
+    let base = base(&dir);
+    write(
+        &base.join("eggs on toast.cook"),
+        "Fry @eggs{2}, serve on @bread{2%slices} with @?chives.\n",
+    );
+    write(
+        &base.join("cake.cook"),
+        "Mix @flour{200%g} and @eggs{2}, dust with @?icing sugar{10%g}.\n",
+    );
+
+    let found = matches(&dir, STOCKED, 50);
+    assert_eq!(found.full, ["eggs on toast"]);
+    assert_eq!(
+        found.partial,
+        [PartialMatch {
+            name: "cake".to_string(),
+            percentage: 50,
+            missing: vec!["flour".to_string()],
+        }]
+    );
+}
+
+/// An ingredient used both ways is required.
+#[test]
+fn an_ingredient_also_used_optionally_is_still_wanted() {
+    let dir = temp();
+    write(
+        &base(&dir).join("risotto.cook"),
+        "Stir @parmesan{100%g} into @rice{300%g}, top with @?parmesan{50%g}.\n",
+    );
+
+    let found = matches(&dir, "[test]\nrice = \"1%kg\"\n", 50);
+    assert!(found.full.is_empty(), "{found:?}");
+    assert_eq!(found.partial[0].missing, ["parmesan"]);
+}
+
 /// With CookCLI's parser configuration there is no such thing as a hidden
 /// ingredient: `@-salt{}` parses as an ingredient *named* `-salt`, and counts
 /// like any other. Pinned because the code filters on `should_be_listed`,
@@ -865,6 +907,19 @@ fn plan_collection() -> tempfile::TempDir {
     );
     write(&base.join("tea.cook"), "Steep @tea{1}.\n");
     dir
+}
+
+/// Optional ingredients are never worth stocking to make a recipe cookable.
+#[test]
+fn the_plan_leaves_out_optional_ingredients() {
+    let dir = temp();
+    write(
+        &base(&dir).join("tea.cook"),
+        "Steep @tea{1}, add @?lemon{1%slice}.\n",
+    );
+
+    let plan = planned(&dir, PlanRequest::default());
+    assert_eq!(steps(&plan), [("tea", 1, 1)]);
 }
 
 #[test]

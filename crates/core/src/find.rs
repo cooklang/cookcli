@@ -301,6 +301,22 @@ pub(crate) fn listed_ingredients(recipe: &Recipe) -> BTreeSet<String> {
         .collect()
 }
 
+/// The ingredients a recipe cannot be cooked without: [`listed_ingredients`]
+/// less the ones only ever used optionally (`@?chives`).
+///
+/// An ingredient the recipe uses both ways (`@parmesan{100%g}` in the sauce,
+/// `@?parmesan{50%g}` on top) is required.
+pub(crate) fn required_ingredients(recipe: &Recipe) -> BTreeSet<String> {
+    recipe
+        .ingredients
+        .iter()
+        .filter(|ingredient| ingredient.reference.is_none())
+        .filter(|ingredient| ingredient.modifiers().should_be_listed())
+        .filter(|ingredient| !ingredient.modifiers().is_optional())
+        .map(|ingredient| ingredient.display_name().to_string())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
