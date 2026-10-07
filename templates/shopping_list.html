@@ -547,28 +547,31 @@ function decimalToFraction(value) {
 
 // The aisle names, for placing an ingredient from the "other" group. Fetched
 // the first time such a group shows up, for someone who may change the
-// aisles.
+// aisles; `false` when there is no aisle file to add to.
 let aisleNames = null;
 let aisleNamesLoading = false;
 
+// Ends with "+ New aisle…", which asks for a name and creates the aisle along
+// with the ingredient.
 function assignAisleSelect(name) {
-    if (!window.__CAN_EDIT_LISTS__ || !aisleNames || aisleNames.length === 0) return '';
+    if (!window.__CAN_EDIT_LISTS__ || !aisleNames) return '';
     return `<select class="select h-8 text-sm ml-2 max-w-[10rem]" data-action="assign-aisle"
                 data-ingredient-name="${escHtml(name)}"
                 aria-label="${escHtml({{ tr.t("aisles-assign")|json|safe }} + ': ' + name)}">
             <option value="">${escHtml({{ tr.t("aisles-assign")|json|safe }})}</option>
             ${aisleNames.map(aisle => `<option value="${escHtml(aisle)}">${escHtml(aisle)}</option>`).join('')}
+            <option value="" data-new-aisle>${escHtml({{ tr.t("aisles-new-aisle")|json|safe }})}</option>
         </select>`;
 }
 
 async function loadAisleNames() {
-    if (aisleNames || aisleNamesLoading) return;
+    if (aisleNames !== null || aisleNamesLoading) return;
     aisleNamesLoading = true;
     try {
         const response = await fetch('{{ prefix }}/api/aisles');
         if (!response.ok) return;
         const data = await response.json();
-        aisleNames = data.aisles.map(aisle => aisle.name);
+        aisleNames = data.configured ? data.aisles.map(aisle => aisle.name) : false;
         if (lastListData) displayShoppingList(lastListData);
     } catch (error) {
         console.error('Failed to load the aisles:', error);
@@ -579,22 +582,35 @@ async function loadAisleNames() {
 
 document.addEventListener('change', async (event) => {
     const select = event.target.closest('[data-action="assign-aisle"]');
-    if (!select || !select.value) return;
+    if (!select) return;
+    let aisle = select.value;
+    const changes = [];
+    if ('newAisle' in select.selectedOptions[0].dataset) {
+        aisle = (prompt({{ tr.t("aisles-new-aisle-prompt")|json|safe }}) || '').trim();
+        const same = (aisleNames || []).find(name => name.toLowerCase() === aisle.toLowerCase());
+        if (same) {
+            aisle = same;
+        } else if (aisle) {
+            changes.push({ action: 'add_aisle', name: aisle });
+        }
+    }
+    if (!aisle) {
+        select.value = '';
+        return;
+    }
+    changes.push({ action: 'add_ingredient', aisle, names: [select.dataset.ingredientName] });
     select.disabled = true;
     try {
         const response = await fetch('{{ prefix }}/api/aisles/changes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'add_ingredient',
-                aisle: select.value,
-                names: [select.dataset.ingredientName],
-            }),
+            body: JSON.stringify(changes.length === 1 ? changes[0] : { changes }),
         });
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
             throw new Error(data.error || {{ tr.t("aisles-failed")|json|safe }});
         }
+        if (changes.length > 1) aisleNames.push(aisle);
         // The list is the same; how it is grouped is not.
         generatedFrom = null;
         await requestRefresh('list');

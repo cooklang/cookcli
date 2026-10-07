@@ -1413,18 +1413,24 @@ fn aisles() -> ApiSection {
                 "POST",
                 "/api/aisles/changes",
                 "Change the aisles",
-                "One change per request, named by `action`; the other fields depend on it. \
+                "A change is named by `action`; the other fields depend on it. \
                  `add_aisle` (`name`, optional `position`, counted from 0; last when \
                  omitted), `rename_aisle` (`name`, `new_name`), `remove_aisle` (`name`; its \
                  ingredients go with it), `move_aisle` (`name`, `position`), \
                  `add_ingredient` (`aisle`, `names`), `update_ingredient` (`name`, `names`, \
-                 optional `aisle` to move it), `remove_ingredient` (`name`). An ingredient \
-                 is found by any of its names, ignoring case. Answers with the aisles as \
-                 `GET /api/aisles` does. `400` for a name the file cannot hold (empty, or \
-                 containing `|` or `//`) or one already used — ingredient names ignoring \
-                 case, as the shopping list matches them; `404` for an aisle or ingredient \
-                 that does not exist, or when there is no aisle file; `409` for a stale \
-                 `revision`.",
+                 optional `aisle` to move it), `remove_ingredient` (`name`), `add_names` \
+                 (`name`, `names`: more names for that ingredient, ones it has skipped) and \
+                 `merge_ingredients` (`names`, one per ingredient, and `main`: the one name \
+                 the shopping list will show; the result keeps the place, aisle and comment \
+                 of the ingredient `main` came from). An ingredient is found by any of its \
+                 names, ignoring case. Send one change with its fields beside `revision`, or \
+                 several as `changes`, a list: they are applied in order and written \
+                 together, or not at all, and an error names the change that failed \
+                 (`Change 4: …`). Answers with the aisles as `GET /api/aisles` does. `400` \
+                 for a name the file cannot hold (empty, or containing `|` or `//`) or one \
+                 already used — ingredient names ignoring case, as the shopping list \
+                 matches them; `404` for an aisle or ingredient that does not exist, or \
+                 when there is no aisle file; `409` for a stale `revision`.",
             )
             .params(vec![
                 param(
@@ -1433,7 +1439,15 @@ fn aisles() -> ApiSection {
                     "string",
                     true,
                     "`add_aisle`, `rename_aisle`, `remove_aisle`, `move_aisle`, \
-                     `add_ingredient`, `update_ingredient` or `remove_ingredient`.",
+                     `add_ingredient`, `update_ingredient`, `remove_ingredient`, `add_names` \
+                     or `merge_ingredients`. Not given when sending `changes`.",
+                ),
+                param(
+                    "changes",
+                    "body",
+                    "object[]",
+                    false,
+                    "Several changes, each with its own `action`, made together.",
                 ),
                 param(
                     "revision",
@@ -1454,7 +1468,15 @@ fn aisles() -> ApiSection {
                     "body",
                     "string[]",
                     false,
-                    "An ingredient's names, the one to show first.",
+                    "An ingredient's names, the one to show first; for `merge_ingredients`, \
+                     one name of each ingredient to group.",
+                ),
+                param(
+                    "main",
+                    "body",
+                    "string",
+                    false,
+                    "For `merge_ingredients`: the name the grouped ingredient goes by.",
                 ),
                 param("aisle", "body", "string", false, "The aisle to put it in."),
                 param("new_name", "body", "string", false, "For `rename_aisle`."),
@@ -1470,16 +1492,19 @@ fn aisles() -> ApiSection {
                 r#"
 {
   "revision": "edbf1fd2579f964e",
-  "action": "add_ingredient",
-  "aisle": "fruit and veg",
-  "names": ["leek", "leeks"]
+  "changes": [
+    { "action": "add_aisle", "name": "snacks" },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["almonds"] },
+    { "action": "add_names", "name": "butter", "names": ["Butter"] },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["Butter"] }
+  ]
 }
 "#,
             )
             .response(
                 r#"
 {
-  "error": "\"Avocados\" is already in the \"fruit and veg\" aisle"
+  "error": "Change 4: \"Butter\" is already in the \"milk and dairy\" aisle"
 }
 "#,
             ),

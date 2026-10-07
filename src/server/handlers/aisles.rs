@@ -274,6 +274,19 @@ pub enum Change {
     RemoveIngredient {
         name: String,
     },
+    /// Adds `names` to the ingredient called `name`, so the shopping list
+    /// merges them into its first name. Names it already has are skipped.
+    AddNames {
+        name: String,
+        names: Vec<String>,
+    },
+    /// Makes one ingredient of the ones `names` name, one name for each,
+    /// shown on the shopping list as `main`. It keeps the place, aisle and
+    /// comment of the entry `main` came from.
+    MergeIngredients {
+        names: Vec<String>,
+        main: String,
+    },
 }
 
 impl Change {
@@ -288,6 +301,8 @@ impl Change {
                 file.update_ingredient(name, names, aisle.as_deref())
             }
             Change::RemoveIngredient { name } => file.remove_ingredient(name),
+            Change::AddNames { name, names } => file.add_names(name, names),
+            Change::MergeIngredients { names, main } => file.merge_ingredients(names, main),
         }
     }
 
@@ -341,15 +356,59 @@ impl Change {
                 viewer,
                 format_args!("removed {} from the aisles", quoted(name)),
             ),
+            Change::AddNames { name, names } => activity::record(
+                viewer,
+                format_args!(
+                    "added {} as other names of {}",
+                    quoted(&names.join(" | ")),
+                    quoted(name)
+                ),
+            ),
+            Change::MergeIngredients { names, main } => activity::record(
+                viewer,
+                format_args!("grouped {} as {}", quoted(&names.join(" | ")), quoted(main)),
+            ),
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
+/// The body of `POST /api/aisles/changes`: one change, its fields beside
+/// `revision`, or several under `changes`, applied in order and all or none.
+#[derive(Debug)]
 pub struct ChangeRequest {
     pub revision: Option<String>,
-    #[serde(flatten)]
-    pub change: Change,
+    pub changes: Vec<Change>,
+}
+
+impl<'de> Deserialize<'de> for ChangeRequest {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Told apart by hand rather than with `#[serde(untagged)]`, which
+        // would answer every mistake with "did not match any variant".
+        #[derive(Deserialize)]
+        struct Many {
+            revision: Option<String>,
+            changes: Vec<Change>,
+        }
+        #[derive(Deserialize)]
+        struct One {
+            revision: Option<String>,
+            #[serde(flatten)]
+            change: Change,
+        }
+
+        use serde::de::Error;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        if value.get("changes").is_some() {
+            let Many { revision, changes } = Many::deserialize(value).map_err(D::Error::custom)?;
+            Ok(Self { revision, changes })
+        } else {
+            let One { revision, change } = One::deserialize(value).map_err(D::Error::custom)?;
+            Ok(Self {
+                revision,
+                changes: vec![change],
+            })
+        }
+    }
 }
 
 /// `POST /api/aisles/changes`
@@ -362,8 +421,25 @@ pub async fn change_aisles(
     let (path, text) = read_existing(&state).await?;
     check_revision(&text, request.revision.as_deref())?;
 
+    if request.changes.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, json_error("No changes to make")));
+    }
     let mut file = AisleFile::parse(&text);
-    request.change.apply(&mut file).map_err(edit_error)?;
+    let several = request.changes.len() > 1;
+    for (i, change) in request.changes.iter().enumerate() {
+        change.apply(&mut file).map_err(|error| {
+            let (status, Json(mut body)) = edit_error(error);
+            if several {
+                body["error"] = format!(
+                    "Change {}: {}",
+                    i + 1,
+                    body["error"].as_str().unwrap_or_default()
+                )
+                .into();
+            }
+            (status, Json(body))
+        })?;
+    }
     let changed = file.to_text();
 
     // The edits are written to keep the file readable; this is the backstop.
@@ -379,7 +455,9 @@ pub async fn change_aisles(
     }
 
     write(&path, changed.clone()).await?;
-    request.change.record(&viewer);
+    for change in &request.changes {
+        change.record(&viewer);
+    }
     Ok(Json(Aisles::from_text(&path, &changed)))
 }
 
@@ -529,6 +607,31 @@ mod tests {
         )
         .unwrap();
         assert_eq!(request.revision.as_deref(), Some("abc"));
-        assert!(matches!(request.change, Change::AddIngredient { .. }));
+        assert!(matches!(
+            request.changes[..],
+            [Change::AddIngredient { .. }]
+        ));
+    }
+
+    #[test]
+    fn several_changes_read_as_a_list() {
+        let request: ChangeRequest = serde_json::from_str(
+            r#"{"changes": [
+                {"action": "add_aisle", "name": "frozen"},
+                {"action": "merge_ingredients", "names": ["butter", "cold butter"], "main": "butter"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(request.revision, None);
+        assert!(matches!(
+            request.changes[..],
+            [Change::AddAisle { .. }, Change::MergeIngredients { .. }]
+        ));
+
+        // A mistake is still named.
+        let error = serde_json::from_str::<ChangeRequest>(r#"{"action": "add_aisle"}"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("missing field `name`"), "{error}");
     }
 }

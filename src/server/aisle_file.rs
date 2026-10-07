@@ -418,6 +418,88 @@ impl AisleFile {
         self.lines.remove(at);
         Ok(())
     }
+
+    /// The names on ingredient line `at`.
+    fn names_at(&self, at: usize) -> Vec<String> {
+        match kind(&self.lines[at]) {
+            Kind::Ingredient(names) => names,
+            _ => Vec::new(),
+        }
+    }
+
+    /// Adds `names` to the names of the ingredient called `name`, so the
+    /// shopping list merges them into its first name. Names it already has
+    /// are skipped.
+    pub fn add_names(&mut self, name: &str, names: &[String]) -> Result<(), EditError> {
+        let at = self.find_ingredient(name)?;
+        let added = ingredient_names(names)?;
+        let mut all = self.names_at(at);
+        for name in added {
+            let folded = name.to_lowercase();
+            if !all.iter().any(|n| n.to_lowercase() == folded) {
+                all.push(name);
+            }
+        }
+        self.check_names_free(&all, Some(at))?;
+        self.lines[at] = replace_code(&self.lines[at], &all.join(" | "));
+        Ok(())
+    }
+
+    /// Makes one ingredient of the ones `entries` name, one name for each,
+    /// with `main` as the name the shopping list shows. It stays where the
+    /// entry holding `main` was, in its aisle and with its comment; the other
+    /// entries' lines go, comments included. Their names follow `main`'s own,
+    /// in the order the entries were given.
+    pub fn merge_ingredients(&mut self, entries: &[String], main: &str) -> Result<(), EditError> {
+        let mut lines: Vec<usize> = Vec::new();
+        for entry in entries {
+            let at = self.find_ingredient(entry)?;
+            if !lines.contains(&at) {
+                lines.push(at);
+            }
+        }
+        if lines.len() < 2 {
+            return Err(EditError::InvalidName(
+                "Choose at least two ingredients to group".to_string(),
+            ));
+        }
+
+        let folded = main.trim().to_lowercase();
+        let (keep, main) = lines
+            .iter()
+            .find_map(|&at| {
+                self.names_at(at)
+                    .into_iter()
+                    .find(|n| n.to_lowercase() == folded)
+                    .map(|name| (at, name))
+            })
+            .ok_or_else(|| {
+                EditError::InvalidName(format!(
+                    "\"{}\" is not one of the names being grouped",
+                    main.trim()
+                ))
+            })?;
+
+        let mut merged = vec![main];
+        let others = std::iter::once(keep).chain(lines.iter().copied().filter(|&at| at != keep));
+        for at in others {
+            for name in self.names_at(at) {
+                let folded = name.to_lowercase();
+                if !merged.iter().any(|n| n.to_lowercase() == folded) {
+                    merged.push(name);
+                }
+            }
+        }
+        let merged = ingredient_names(&merged)?;
+
+        self.lines[keep] = replace_code(&self.lines[keep], &merged.join(" | "));
+        let mut gone: Vec<usize> = lines.into_iter().filter(|&at| at != keep).collect();
+        gone.sort_unstable_by(|a, b| b.cmp(a));
+        for at in gone {
+            self.lines.remove(at);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -650,5 +732,75 @@ bread
     fn the_revision_follows_the_text() {
         assert_eq!(revision(SAMPLE), revision(SAMPLE));
         assert_ne!(revision(SAMPLE), revision(&SAMPLE.replace("milk", "Milk")));
+    }
+
+    #[test]
+    fn other_names_join_an_ingredient_and_keep_its_comment() {
+        let text = edited(|f| f.add_names("AVOCADOS", &names(&["hass", " Avocados "])));
+        assert_eq!(
+            text,
+            SAMPLE.replace(
+                "avocado | avocados // ripe ones",
+                "avocado | avocados | hass // ripe ones"
+            )
+        );
+
+        let mut file = AisleFile::parse(SAMPLE);
+        assert!(matches!(
+            file.add_names("milk", &names(&["Apples"])),
+            Err(EditError::Taken(_))
+        ));
+        assert!(matches!(
+            file.add_names("cream", &names(&["double cream"])),
+            Err(EditError::NotFound(_))
+        ));
+        assert_eq!(file.to_text(), SAMPLE);
+    }
+
+    #[test]
+    fn grouping_keeps_the_main_entry_where_it_was() {
+        // Across aisles: everything ends up on the avocado line, in its
+        // aisle, with its comment, and the other lines go.
+        let text =
+            edited(|f| f.merge_ingredients(&names(&["butter", "avocados", "milk"]), "Avocado"));
+        assert_eq!(
+            text,
+            SAMPLE
+                .replace(
+                    "avocado | avocados // ripe ones",
+                    "avocado | avocados | butter | milk // ripe ones"
+                )
+                .replace("[dairy]\nmilk\nbutter\n", "[dairy]\n")
+        );
+
+        // The main name may come from any entry, even a later one.
+        let text = edited(|f| f.merge_ingredients(&names(&["milk", "butter"]), "butter"));
+        assert_eq!(
+            text,
+            SAMPLE.replace("[dairy]\nmilk\nbutter\n", "[dairy]\nbutter | milk\n")
+        );
+    }
+
+    #[test]
+    fn grouping_needs_two_entries_and_one_of_their_names() {
+        let mut file = AisleFile::parse(SAMPLE);
+        for (entries, main) in [
+            (names(&["milk"]), "milk"),
+            (names(&["milk", "MILK"]), "milk"),
+            (names(&["milk", "butter"]), "cream"),
+        ] {
+            assert!(
+                matches!(
+                    file.merge_ingredients(&entries, main),
+                    Err(EditError::InvalidName(_))
+                ),
+                "{entries:?} as {main}"
+            );
+        }
+        assert!(matches!(
+            file.merge_ingredients(&names(&["milk", "caviar"]), "milk"),
+            Err(EditError::NotFound(_))
+        ));
+        assert_eq!(file.to_text(), SAMPLE);
     }
 }

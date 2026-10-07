@@ -52,9 +52,16 @@
         </div>
 
         <section id="panel-aisles" role="tabpanel" aria-labelledby="tab-aisles">
+            {% if viewer.can_edit_lists() %}
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <p id="aisles-select-help" class="hidden text-sm text-muted">{{ tr.t("aisles-select-help") }}</p>
+                <button type="button" id="aisles-select-toggle" class="btn btn-sm ml-auto" aria-pressed="false">{{ tr.t("aisles-select") }}</button>
+            </div>
+            {% endif %}
             <div id="aisle-list" class="space-y-4"></div>
             <p id="aisles-empty" class="hidden text-faint italic">{{ tr.t("aisles-empty") }}</p>
             {% if viewer.can_edit_lists() %}
+            <div id="aisles-bulk" class="hidden sticky bottom-4 z-20 card p-3 mt-4 shadow-[var(--shadow-overlay)]"></div>
             <form id="add-aisle-form" class="card mt-4 p-4 flex flex-wrap items-end gap-2">
                 <label class="flex-1 min-w-[12rem]">
                     <span class="block text-sm text-muted mb-1">{{ tr.t("aisles-aisle-name") }}</span>
@@ -68,7 +75,22 @@
 
         <section id="panel-uncategorized" role="tabpanel" aria-labelledby="tab-uncategorized" class="hidden">
             <p class="text-muted mb-4">{{ tr.t("aisles-uncategorized-intro") }}</p>
+            <div id="uncategorized-controls" class="hidden flex flex-wrap items-center gap-3 mb-3">
+                <input type="search" id="uncategorized-filter" autocomplete="off"
+                       placeholder="{{ tr.t("aisles-filter") }}" aria-label="{{ tr.t("aisles-filter") }}"
+                       class="flex-1 min-w-[12rem] h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+                {% if viewer.can_edit_lists() %}
+                <label class="flex items-center gap-2 text-sm text-muted cursor-pointer">
+                    <input type="checkbox" id="uncategorized-all" class="w-4 h-4 accent-[var(--accent)]">
+                    {{ tr.t("aisles-select-all") }}
+                </label>
+                {% endif %}
+            </div>
             <div id="uncategorized-list" class="card"></div>
+            {% if viewer.can_edit_lists() %}
+            <div id="uncategorized-bulk" class="hidden sticky bottom-4 z-20 card p-3 mt-4 shadow-[var(--shadow-overlay)]"></div>
+            {% endif %}
+            <datalist id="aisle-ingredient-names"></datalist>
         </section>
 
         <section id="panel-text" role="tabpanel" aria-labelledby="tab-text" class="hidden">
@@ -104,11 +126,12 @@
         cancel: {{ tr.t("aisles-cancel")|json|safe }},
         add: {{ tr.t("aisles-add")|json|safe }},
         addIngredient: {{ tr.t("aisles-add-ingredient")|json|safe }},
-        names: {{ tr.t("aisles-ingredient-names")|json|safe }},
         namesPlaceholder: {{ tr.t("aisles-ingredient-placeholder")|json|safe }},
         aisle: {{ tr.t("aisles-move-to")|json|safe }},
         aisleName: {{ tr.t("aisles-aisle-name")|json|safe }},
         chooseAisle: {{ tr.t("aisles-choose-aisle")|json|safe }},
+        newAisle: {{ tr.t("aisles-new-aisle")|json|safe }},
+        newAislePrompt: {{ tr.t("aisles-new-aisle-prompt")|json|safe }},
         conflict: {{ tr.t("aisles-conflict")|json|safe }},
         failed: {{ tr.t("aisles-failed")|json|safe }},
         loading: {{ tr.t("aisles-uncategorized-loading")|json|safe }},
@@ -116,6 +139,21 @@
         usedIn: {{ tr.t("aisles-used-in")|json|safe }},
         saved: {{ tr.t("aisles-text-saved")|json|safe }},
         textConflict: {{ tr.t("aisles-text-conflict")|json|safe }},
+        select: {{ tr.t("aisles-select")|json|safe }},
+        done: {{ tr.t("aisles-select-done")|json|safe }},
+        selected: {{ tr.t("aisles-selected")|json|safe }},
+        group: {{ tr.t("aisles-group")|json|safe }},
+        groupHelp: {{ tr.t("aisles-group-help")|json|safe }},
+        groupConfirm: {{ tr.t("aisles-group-confirm")|json|safe }},
+        move: {{ tr.t("aisles-move")|json|safe }},
+        clear: {{ tr.t("aisles-clear")|json|safe }},
+        mainName: {{ tr.t("aisles-main-name")|json|safe }},
+        makeMain: {{ tr.t("aisles-make-main")|json|safe }},
+        removeName: {{ tr.t("aisles-remove-name")|json|safe }},
+        addName: {{ tr.t("aisles-add-name")|json|safe }},
+        addToAisle: {{ tr.t("aisles-add-to-aisle")|json|safe }},
+        addAsNames: {{ tr.t("aisles-add-as-names")|json|safe }},
+        chooseIngredient: {{ tr.t("aisles-choose-ingredient")|json|safe }},
     };
 
     let state = {{ aisles|json|safe }};
@@ -137,6 +175,7 @@
 
     // A plain text field: `search-input` leaves room for a magnifier.
     const INPUT = 'h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent';
+    const CHIP = 'aisle-ingredient inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm';
 
     const ICONS = {
         up: 'M5 15l7-7 7 7',
@@ -172,6 +211,17 @@
         return text.split('|').map(s => s.trim()).filter(Boolean);
     }
 
+    const folded = name => name.toLowerCase();
+
+    // `names` without the ones `list` already has, ignoring case.
+    function newNames(list, names) {
+        const out = [];
+        for (const name of names) {
+            if (![...list, ...out].some(n => folded(n) === folded(name))) out.push(name);
+        }
+        return out;
+    }
+
     async function request(method, url, body) {
         const response = await fetch(PREFIX + url, {
             method,
@@ -197,12 +247,15 @@
         render();
     }
 
-    // Sends one change and redraws from the file as it now is. Returns
-    // whether it went through.
-    async function change(body) {
+    // Sends one or more changes, made together or not at all, and redraws
+    // from the file as it now is. Returns whether they went through.
+    async function change(...changes) {
         hideError();
+        const body = changes.length === 1
+            ? Object.assign({ revision: state.revision }, changes[0])
+            : { revision: state.revision, changes };
         try {
-            state = await request('POST', '/api/aisles/changes', Object.assign({ revision: state.revision }, body));
+            state = await request('POST', '/api/aisles/changes', body);
             render();
             return true;
         } catch (e) {
@@ -211,43 +264,146 @@
         }
     }
 
+    // An aisle picker. It ends with "+ New aisle…", which asks for a name and
+    // selects it, marked to be created along with whatever it was picked for
+    // (see `aisleChoice`).
     function aisleSelect(selected, placeholder) {
-        const select = el('select', { class: 'select', 'aria-label': T.aisle });
+        const select = el('select', { class: 'select aisle-select', 'aria-label': placeholder || T.aisle });
         if (placeholder) select.append(el('option', { value: '' }, placeholder));
         for (const aisle of state.aisles) {
             select.append(el('option', { value: aisle.name, selected: aisle.name === selected }, aisle.name));
         }
+        if (!CAN_EDIT) return select;
+
+        const create = el('option', { value: '', 'data-new-aisle': true }, T.newAisle);
+        select.append(create);
+        let previous = select.selectedIndex;
+        // Added first, so listeners added later see the outcome.
+        select.addEventListener('change', () => {
+            if (select.selectedOptions[0] !== create) {
+                previous = select.selectedIndex;
+                return;
+            }
+            const name = (prompt(T.newAislePrompt) || '').trim();
+            if (!name) {
+                select.selectedIndex = previous;
+                return;
+            }
+            const same = [...select.options].find(o => o !== create && o.value && folded(o.value) === folded(name));
+            if (same) {
+                same.selected = true;
+            } else {
+                const option = el('option', { value: name, 'data-create': true }, name);
+                create.before(option);
+                option.selected = true;
+            }
+            previous = select.selectedIndex;
+        });
         return select;
     }
 
-    // An ingredient as a chip: its first name, then the others it is merged
-    // with. Editors click one to open the aisle's edit panel on it.
+    // What a picker holds: the aisle, and the change that creates it first
+    // when it is new. `null` when nothing is picked.
+    function aisleChoice(select) {
+        const option = select.selectedOptions[0];
+        if (!option || !option.value) return null;
+        return {
+            aisle: option.value,
+            before: 'create' in option.dataset ? [{ action: 'add_aisle', name: option.value }] : [],
+        };
+    }
+
+    // ---- Aisles tab ------------------------------------------------------
+
+    // In select mode a click on a chip picks it instead of opening it, so
+    // several can be grouped into one ingredient or moved together.
+    let selecting = false;
+    const picked = new Map(); // main name → { names, aisle }
+
+    function paintChip(chip, on) {
+        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+        chip.classList.toggle('border-accent', on);
+        chip.classList.toggle('bg-accent-soft', on);
+        chip.classList.toggle('border-line', !on);
+        chip.classList.toggle('bg-surface', !on);
+    }
+
+    // An ingredient as a chip: its main name, the one the shopping list shows,
+    // in bold, then the others merged into it.
     function ingredientChip(aisle, ingredient, openEditor) {
         const [first, ...others] = ingredient.names;
         const content = [
-            el('span', { class: 'text-text' }, first),
+            el('span', { class: 'font-semibold text-text' }, first),
             others.length ? el('span', { class: 'text-faint' }, '| ' + others.join(' | ')) : null,
         ];
-        const chip = CAN_EDIT
-            ? el('button', { type: 'button', class: 'aisle-ingredient inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-line bg-surface text-sm hover:bg-sunk hover:border-line-strong', 'data-name': first, 'aria-pressed': 'false', title: T.edit }, content)
-            : el('span', { class: 'aisle-ingredient inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-line bg-surface text-sm', 'data-name': first }, content);
-        if (CAN_EDIT) chip.addEventListener('click', () => openEditor(ingredient, chip));
+        if (!CAN_EDIT) {
+            return el('span', { class: CHIP + ' border-line bg-surface', 'data-name': first }, content);
+        }
+        const chip = el('button', { type: 'button', class: CHIP + ' hover:border-line-strong', 'data-name': first, title: selecting ? T.select : T.edit }, content);
+        paintChip(chip, selecting && picked.has(first));
+        chip.addEventListener('click', () => {
+            if (!selecting) {
+                openEditor(ingredient, chip);
+                return;
+            }
+            if (picked.has(first)) picked.delete(first);
+            else picked.set(first, { names: ingredient.names, aisle: aisle.name });
+            paintChip(chip, picked.has(first));
+            renderBulk();
+        });
         return chip;
     }
 
-    // The panel under an aisle's chips for changing one ingredient: its
-    // names, its aisle, or removing it.
+    // The panel under an aisle's chips for one ingredient: its names, the
+    // first being the one the shopping list shows, and its aisle.
     function ingredientEditor(aisle, ingredient, close) {
-        const [first] = ingredient.names;
-        const input = el('input', { type: 'text', class: INPUT + ' flex-1 min-w-[12rem]', value: ingredient.names.join(' | '), 'aria-label': T.names });
+        const first = ingredient.names[0];
+        const names = ingredient.names.slice();
+
+        const tokens = el('div', { class: 'flex flex-wrap items-center gap-2 w-full' });
+        const drawTokens = () => tokens.replaceChildren(...names.map((name, i) => el('span', {
+                class: 'aisle-name inline-flex items-center gap-1 pl-3 pr-1 py-0.5 rounded-full border text-sm '
+                    + (i === 0 ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-surface text-text'),
+                'data-name': name,
+            },
+            el('span', { class: i === 0 ? 'font-semibold' : '' }, name),
+            i === 0
+                ? el('span', { class: 'text-xs px-1' }, '★ ' + T.mainName)
+                : el('button', { type: 'button', class: 'make-main w-6 h-6 rounded-full hover:bg-sunk', title: T.makeMain, 'aria-label': T.makeMain + ': ' + name, onclick: () => {
+                    names.splice(i, 1);
+                    names.unshift(name);
+                    drawTokens();
+                } }, '☆'),
+            names.length > 1 && el('button', { type: 'button', class: 'remove-name w-6 h-6 rounded-full hover:bg-sunk text-faint', title: T.removeName, 'aria-label': T.removeName + ': ' + name, onclick: () => {
+                names.splice(i, 1);
+                drawTokens();
+            } }, '×'))));
+        drawTokens();
+
+        const input = el('input', { type: 'text', class: INPUT + ' flex-1 min-w-[10rem]', placeholder: T.addName, 'aria-label': T.addName });
+        const takeTyped = () => {
+            names.push(...newNames(names, splitNames(input.value)));
+            input.value = '';
+            drawTokens();
+        };
         const select = aisleSelect(aisle.name);
-        const save = () => change({ action: 'update_ingredient', name: first, names: splitNames(input.value), aisle: select.value });
+        const save = () => {
+            takeTyped();
+            const choice = aisleChoice(select);
+            return change(...(choice ? choice.before : []), {
+                action: 'update_ingredient', name: first, names, aisle: choice ? choice.aisle : aisle.name,
+            });
+        };
         input.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { e.preventDefault(); save(); }
+            if (e.key === 'Enter') { e.preventDefault(); takeTyped(); }
             if (e.key === 'Escape') close();
         });
+
         const panel = el('div', { class: 'aisle-editor flex flex-wrap items-center gap-2 px-[14px] py-3 border-t border-line bg-sunk' },
-            input, select,
+            tokens,
+            input,
+            el('button', { type: 'button', class: 'btn btn-sm', onclick: takeTyped }, T.add),
+            select,
             el('div', { class: 'flex items-center gap-2 ml-auto' },
                 el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: async () => {
                     if (confirm(T.removeIngredientConfirm.replace('%s', first))) {
@@ -301,17 +457,17 @@
             chips.append(el('p', { class: 'text-faint italic text-sm' }, T.emptyAisle));
         }
         let editor = null;
-        let pressed = null;
+        let open = null;
         const closeEditor = () => {
             if (editor) editor.remove();
-            if (pressed) pressed.setAttribute('aria-pressed', 'false');
-            editor = pressed = null;
+            if (open) open.setAttribute('aria-pressed', 'false');
+            editor = open = null;
         };
         const openEditor = (ingredient, chip) => {
-            const again = pressed === chip;
+            const again = open === chip;
             closeEditor();
             if (again) return;
-            pressed = chip;
+            open = chip;
             chip.setAttribute('aria-pressed', 'true');
             editor = ingredientEditor(aisle, ingredient, closeEditor);
             chips.after(editor);
@@ -321,7 +477,7 @@
         }
         card.append(chips);
 
-        if (CAN_EDIT) {
+        if (CAN_EDIT && !selecting) {
             const input = el('input', { type: 'text', class: INPUT + ' flex-1 min-w-[10rem]', placeholder: T.namesPlaceholder, 'aria-label': T.addIngredient + ' (' + aisle.name + ')' });
             const form = el('form', { class: 'row border-t border-line flex-wrap py-3' },
                 input,
@@ -340,17 +496,190 @@
         return card;
     }
 
+    function setSelecting(on) {
+        selecting = on;
+        picked.clear();
+        const toggle = document.getElementById('aisles-select-toggle');
+        if (toggle) {
+            toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+            toggle.textContent = on ? T.done : T.select;
+            toggle.classList.toggle('btn-primary', on);
+        }
+        document.getElementById('aisles-select-help')?.classList.toggle('hidden', !on);
+        render();
+    }
+
+    // The bar under the aisles in select mode: group the picked ingredients
+    // into one, or move them to an aisle.
+    function renderBulk(grouping) {
+        const bar = document.getElementById('aisles-bulk');
+        if (!bar) return;
+        bar.classList.toggle('hidden', !selecting);
+        if (!selecting) return;
+        const entries = [...picked.values()];
+
+        const select = aisleSelect('', T.aisle);
+        const move = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.move);
+        select.addEventListener('change', () => { move.disabled = !select.value || !entries.length; });
+        move.addEventListener('click', async () => {
+            const choice = aisleChoice(select);
+            if (!choice) return;
+            const moves = entries.map(entry => ({
+                action: 'update_ingredient', name: entry.names[0], names: entry.names, aisle: choice.aisle,
+            }));
+            if (await change(...choice.before, ...moves)) {
+                picked.clear();
+                render();
+            }
+        });
+
+        bar.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-2' },
+            el('span', { class: 'aisles-selected-count text-sm text-muted mr-2' }, T.selected.replace('%n', entries.length)),
+            el('button', { type: 'button', class: 'btn btn-sm', disabled: entries.length < 2, onclick: () => renderBulk(true) }, T.group),
+            el('span', { class: 'flex items-center gap-2' }, select, move),
+            el('button', { type: 'button', class: 'btn btn-sm', disabled: !entries.length, onclick: () => { picked.clear(); render(); } }, T.clear)),
+            grouping && entries.length >= 2 && groupPanel(entries));
+    }
+
+    // Asks which name the grouped ingredient goes by: the shortest main name
+    // is offered first, being usually the plain one ("butter").
+    function groupPanel(entries) {
+        const all = [];
+        for (const entry of entries) all.push(...newNames(all, entry.names));
+        const mains = entries.map(e => e.names[0]);
+        const suggested = mains.slice().sort((a, b) => a.length - b.length)[0];
+        const radios = all.map(name => el('label', { class: 'inline-flex items-center gap-2 px-3 py-1 rounded-full border border-line bg-surface text-sm cursor-pointer' },
+            el('input', { type: 'radio', name: 'group-main', value: name, checked: name === suggested, class: 'accent-[var(--accent)]' }),
+            name));
+        return el('div', { class: 'aisles-group mt-3 pt-3 border-t border-line' },
+            el('p', { id: 'aisles-group-help', class: 'text-sm text-muted mb-2' }, T.groupHelp),
+            el('div', { class: 'flex flex-wrap gap-2', role: 'radiogroup', 'aria-labelledby': 'aisles-group-help' }, radios),
+            el('div', { class: 'flex justify-end gap-2 mt-3' },
+                el('button', { type: 'button', class: 'btn btn-sm', onclick: () => renderBulk(false) }, T.cancel),
+                el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: async () => {
+                    const main = document.querySelector('input[name="group-main"]:checked');
+                    if (!main) return;
+                    if (await change({ action: 'merge_ingredients', names: mains, main: main.value })) {
+                        picked.clear();
+                        render();
+                    }
+                } }, T.groupConfirm)));
+    }
+
+    // ---- Uncategorized tab -------------------------------------------------
+
+    const uncategorizedPicked = new Set();
+
+    function matchesFilter(name) {
+        const filter = document.getElementById('uncategorized-filter').value.trim().toLowerCase();
+        return !filter || name.toLowerCase().includes(filter);
+    }
+
+    function applyFilter() {
+        for (const row of document.querySelectorAll('.uncategorized-ingredient')) {
+            row.classList.toggle('hidden', !matchesFilter(row.dataset.name));
+        }
+        syncSelectAll();
+        renderUncategorizedBulk();
+    }
+
+    function shownRows() {
+        return [...document.querySelectorAll('.uncategorized-ingredient:not(.hidden)')];
+    }
+
+    function syncSelectAll() {
+        const all = document.getElementById('uncategorized-all');
+        if (!all) return;
+        const shown = shownRows();
+        const on = shown.filter(row => uncategorizedPicked.has(row.dataset.name)).length;
+        all.checked = shown.length > 0 && on === shown.length;
+        all.indeterminate = on > 0 && on < shown.length;
+    }
+
+    // Takes ingredients the aisles now hold off the list: the rest of the
+    // scan still holds, so it is not run again.
+    function filed(names) {
+        const gone = new Set(names.map(folded));
+        uncategorized.ingredients = uncategorized.ingredients.filter(i => !gone.has(folded(i.name)));
+        for (const name of [...uncategorizedPicked]) {
+            if (gone.has(folded(name))) uncategorizedPicked.delete(name);
+        }
+        renderUncategorized();
+    }
+
+    // The picked names the filter shows: what is acted on is what is in
+    // sight. Picks it hides are kept for when it is cleared.
+    function shownPicks() {
+        return [...uncategorizedPicked].filter(matchesFilter);
+    }
+
+    // `names` with one spelling of each: the shopping list matches ignoring
+    // case, so `Salt` and `salt` are the one ingredient.
+    function oneSpellingEach(names) {
+        return newNames([], names);
+    }
+
+    function renderUncategorizedBulk() {
+        const bar = document.getElementById('uncategorized-bulk');
+        if (!bar) return;
+        const picks = shownPicks();
+        const count = picks.length;
+        bar.classList.toggle('hidden', count === 0);
+        if (!count) return;
+
+        const select = aisleSelect('', T.chooseAisle);
+        const toAisle = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.add);
+        select.addEventListener('change', () => { toAisle.disabled = !select.value; });
+        toAisle.addEventListener('click', async () => {
+            const choice = aisleChoice(select);
+            if (!choice) return;
+            const keep = uncategorized;
+            const adds = oneSpellingEach(picks).map(name => ({ action: 'add_ingredient', aisle: choice.aisle, names: [name] }));
+            if (await change(...choice.before, ...adds)) {
+                uncategorized = keep;
+                filed(picks);
+            }
+        });
+
+        const target = el('input', { type: 'text', list: 'aisle-ingredient-names', class: INPUT + ' w-48', placeholder: T.chooseIngredient, 'aria-label': T.addAsNames });
+        const asNames = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.add);
+        target.addEventListener('input', () => { asNames.disabled = !target.value.trim(); });
+        asNames.addEventListener('click', async () => {
+            const keep = uncategorized;
+            if (await change({ action: 'add_names', name: target.value.trim(), names: oneSpellingEach(picks) })) {
+                uncategorized = keep;
+                filed(picks);
+            }
+        });
+
+        bar.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-x-4 gap-y-2' },
+            el('span', { class: 'uncategorized-selected-count text-sm text-muted' }, T.selected.replace('%n', count)),
+            el('span', { class: 'flex flex-wrap items-center gap-2' },
+                el('span', { class: 'text-sm text-text' }, T.addToAisle), select, toAisle),
+            el('span', { class: 'flex flex-wrap items-center gap-2' },
+                el('span', { class: 'text-sm text-text' }, T.addAsNames), target, asNames),
+            el('button', { type: 'button', class: 'btn btn-sm ml-auto', onclick: () => {
+                for (const name of picks) uncategorizedPicked.delete(name);
+                renderUncategorized();
+            } }, T.clear)));
+    }
+
     function renderUncategorized() {
         const list = document.getElementById('uncategorized-list');
         const count = document.getElementById('uncategorized-count');
+        const controls = document.getElementById('uncategorized-controls');
         if (!uncategorized) {
             count.textContent = '';
+            controls.classList.add('hidden');
             list.replaceChildren(el('p', { class: 'row text-muted' }, T.loading));
+            renderUncategorizedBulk();
             return;
         }
         count.textContent = '(' + uncategorized.ingredients.length + ')';
+        controls.classList.toggle('hidden', !uncategorized.ingredients.length);
         if (!uncategorized.ingredients.length) {
             list.replaceChildren(el('p', { class: 'row text-muted' }, T.none));
+            renderUncategorizedBulk();
             return;
         }
         list.replaceChildren(...uncategorized.ingredients.map(ingredient => {
@@ -358,28 +687,40 @@
                 i ? ', ' : '',
                 el('a', { href: PREFIX + '/recipe/' + recipe.link.split('/').map(encodeURIComponent).join('/'), class: 'text-accent-text hover:underline' }, recipe.path),
             ]);
-            const row = el('div', { class: 'row flex-wrap uncategorized-ingredient', 'data-name': ingredient.name },
-                el('div', { class: 'row-name' },
-                    el('div', { class: 'font-medium text-text' }, ingredient.name),
-                    el('div', { class: 'text-sm text-faint' }, T.usedIn + ' ', recipes)));
-            if (CAN_EDIT && state.aisles.length) {
+            const row = el('div', { class: 'row flex-wrap uncategorized-ingredient', 'data-name': ingredient.name });
+            row.classList.toggle('hidden', !matchesFilter(ingredient.name));
+            if (CAN_EDIT) {
+                const box = el('input', { type: 'checkbox', class: 'w-4 h-4 accent-[var(--accent)] shrink-0', 'aria-label': ingredient.name, checked: uncategorizedPicked.has(ingredient.name) });
+                box.addEventListener('change', () => {
+                    if (box.checked) uncategorizedPicked.add(ingredient.name);
+                    else uncategorizedPicked.delete(ingredient.name);
+                    syncSelectAll();
+                    renderUncategorizedBulk();
+                });
+                row.append(box);
+            }
+            row.append(el('div', { class: 'row-name' },
+                el('div', { class: 'font-medium text-text' }, ingredient.name),
+                el('div', { class: 'text-sm text-faint' }, T.usedIn + ' ', recipes)));
+            if (CAN_EDIT) {
                 const select = aisleSelect('', T.chooseAisle);
                 const button = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.add);
                 select.addEventListener('change', () => { button.disabled = !select.value; });
                 button.addEventListener('click', async () => {
-                    if (!select.value) return;
+                    const choice = aisleChoice(select);
+                    if (!choice) return;
                     const keep = uncategorized;
-                    if (await change({ action: 'add_ingredient', aisle: select.value, names: [ingredient.name] })) {
-                        // The rest of the scan still holds; only this one moved.
+                    if (await change(...choice.before, { action: 'add_ingredient', aisle: choice.aisle, names: [ingredient.name] })) {
                         uncategorized = keep;
-                        uncategorized.ingredients = uncategorized.ingredients.filter(i => i !== ingredient);
-                        renderUncategorized();
+                        filed([ingredient.name]);
                     }
                 });
                 row.append(el('div', { class: 'flex items-center gap-2' }, select, button));
             }
             return row;
         }));
+        syncSelectAll();
+        renderUncategorizedBulk();
     }
 
     async function loadUncategorized() {
@@ -393,6 +734,8 @@
         }
         renderUncategorized();
     }
+
+    // ---- Text tab, and the page as a whole ----------------------------------
 
     async function loadText() {
         const textarea = document.getElementById('aisles-text');
@@ -417,9 +760,25 @@
         document.getElementById('aisles-warning-list')
             .replaceChildren(...state.warnings.map(w => el('li', {}, w)));
 
+        // Picks of ingredients that are gone, or have changed, are dropped.
+        const entries = new Map();
+        for (const aisle of state.aisles) {
+            for (const ingredient of aisle.ingredients) {
+                entries.set(ingredient.names[0], { names: ingredient.names, aisle: aisle.name });
+            }
+        }
+        for (const name of [...picked.keys()]) {
+            if (entries.has(name)) picked.set(name, entries.get(name));
+            else picked.delete(name);
+        }
+
         document.getElementById('aisle-list')
             .replaceChildren(...state.aisles.map((aisle, index) => aisleCard(aisle, index)));
         document.getElementById('aisles-empty').classList.toggle('hidden', state.aisles.length > 0);
+        renderBulk();
+
+        document.getElementById('aisle-ingredient-names').replaceChildren(
+            ...[...entries.values()].flatMap(entry => entry.names).map(name => el('option', { value: name })));
 
         if (uncategorized) renderUncategorized();
         // The text tab shows the file as loaded; reload it once it changes,
@@ -449,6 +808,18 @@
     for (const button of document.querySelectorAll('[role="tab"]')) {
         button.addEventListener('click', () => selectTab(button.dataset.tab));
     }
+
+    document.getElementById('aisles-select-toggle')?.addEventListener('click', () => setSelecting(!selecting));
+
+    document.getElementById('uncategorized-filter').addEventListener('input', applyFilter);
+
+    document.getElementById('uncategorized-all')?.addEventListener('change', e => {
+        for (const row of shownRows()) {
+            if (e.target.checked) uncategorizedPicked.add(row.dataset.name);
+            else uncategorizedPicked.delete(row.dataset.name);
+        }
+        renderUncategorized();
+    });
 
     const addAisle = document.getElementById('add-aisle-form');
     if (addAisle) {
@@ -505,9 +876,16 @@
         });
     }
 
+    // `#uncategorized` and `#text` open those tabs, on load or when followed
+    // from the page itself.
+    const tabFromHash = () => {
+        const tab = location.hash.slice(1);
+        selectTab(['uncategorized', 'text'].includes(tab) ? tab : 'aisles');
+    };
+    window.addEventListener('hashchange', tabFromHash);
+
     render();
-    const initial = location.hash.slice(1);
-    selectTab(['uncategorized', 'text'].includes(initial) ? initial : 'aisles');
+    tabFromHash();
 })();
 </script>
 {% endblock %}

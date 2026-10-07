@@ -393,6 +393,86 @@ async fn an_aisle_file_can_be_started_from_nothing() {
 }
 
 #[tokio::test]
+async fn several_changes_are_made_together_or_not_at_all() {
+    let server = start_server(Some(AISLES)).await;
+
+    let (status, body) = server
+        .change(json!({ "changes": [
+            { "action": "add_aisle", "name": "frozen" },
+            { "action": "add_ingredient", "aisle": "frozen", "names": ["peas"] },
+            { "action": "add_ingredient", "aisle": "dairy", "names": ["Apples"] },
+        ] }))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        "Change 3: \"Apples\" is already in the \"fruit and veg\" aisle"
+    );
+    assert_eq!(server.aisle_text(), AISLES);
+
+    // A new aisle and what goes in it, as the pages send them.
+    let (status, body) = server
+        .change(json!({ "changes": [
+            { "action": "add_aisle", "name": "herbs" },
+            { "action": "add_ingredient", "aisle": "herbs", "names": ["chives"] },
+        ] }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(server.aisle_text(), format!("{AISLES}\n[herbs]\nchives\n"));
+    assert!(server
+        .list_categories()
+        .await
+        .contains(&("chives".to_string(), "herbs".to_string())));
+
+    let (status, _) = server.change(json!({ "changes": [] })).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn grouped_names_show_on_the_list_as_the_main_one() {
+    let server = start_server(Some(AISLES)).await;
+
+    let (status, body) = server
+        .change(json!({ "action": "add_names", "name": "leek", "names": ["chives"] }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        server.aisle_text(),
+        AISLES.replace("\nleek\n", "\nleek | chives\n")
+    );
+    assert!(server
+        .list_categories()
+        .await
+        .contains(&("leek".to_string(), "fruit and veg".to_string())));
+
+    let (status, body) = server
+        .change(json!({
+            "action": "merge_ingredients",
+            "names": ["chives", "onions"],
+            "main": "onion",
+        }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        server.aisle_text(),
+        AISLES.replace("\nleek\n", "\n").replace(
+            "onion | onions // red or white",
+            "onion | onions | leek | chives // red or white"
+        )
+    );
+    assert_eq!(
+        body["aisles"][0]["ingredients"][1]["names"],
+        json!(["onion", "onions", "leek", "chives"])
+    );
+    let list = server.list_categories().await;
+    assert!(
+        list.contains(&("onion".to_string(), "fruit and veg".to_string())),
+        "{list:?}"
+    );
+    assert!(!list.iter().any(|(name, _)| name == "chives"), "{list:?}");
+}
+
+#[tokio::test]
 async fn uncategorized_lists_what_no_aisle_names() {
     let server = start_server(Some(AISLES)).await;
 
