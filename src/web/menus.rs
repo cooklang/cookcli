@@ -14,13 +14,19 @@ static MEAL_HEADER_RE: LazyLock<Regex> =
 /// cooklang-find's `list_menus_for_date`. A section header containing the date
 /// anywhere (e.g. `= Day 1 (2026-06-24)` or `= 2026-06-24 Dinner`) counts as a
 /// match. Returns the menu name, path, and a human-friendly date for display.
-pub fn find_todays_menu(base_path: &camino::Utf8Path) -> Option<TodaysMenu> {
+pub fn find_todays_menu(
+    base_path: &camino::Utf8Path,
+    exclude: Option<&camino::Utf8Path>,
+) -> Option<TodaysMenu> {
     let now = chrono::Local::now();
     let today = now.format("%Y-%m-%d").to_string();
     let today_display = now.format("%A, %B %-d").to_string();
 
     let menus = cooklang_find::list_menus_for_date(&[base_path], &today).unwrap_or_default();
-    let entry = menus.first()?;
+    let entry = menus.iter().find(|menu| match (exclude, menu.path()) {
+        (Some(dir), Some(path)) => !path.starts_with(dir),
+        _ => true,
+    })?;
 
     let full_path = entry.path()?;
     let relative = full_path
@@ -90,7 +96,7 @@ mod tests {
         let content = format!("= Day 1 ({today})\n\nBreakfast:\n- @eggs{{}}\n");
         fs::write(dir.join("week.menu"), content).unwrap();
 
-        let result = find_todays_menu(dir);
+        let result = find_todays_menu(dir, None);
 
         assert!(result.is_some());
         assert_eq!(result.unwrap().menu_path, "week");
@@ -106,7 +112,7 @@ mod tests {
         let content = format!("= {today} Dinner\n\nBreakfast:\n- @eggs{{}}\n");
         fs::write(dir.join("week.menu"), content).unwrap();
 
-        let result = find_todays_menu(dir);
+        let result = find_todays_menu(dir, None);
 
         assert!(result.is_some());
         assert_eq!(result.unwrap().menu_path, "week");
@@ -119,8 +125,23 @@ mod tests {
         let content = "= Day 1 (1999-01-01)\n\nBreakfast:\n- @eggs{}\n";
         fs::write(dir.join("week.menu"), content).unwrap();
 
-        let result = find_todays_menu(dir);
+        let result = find_todays_menu(dir, None);
 
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_todays_menu_skips_excluded_dir() {
+        // `cook build web` copies menus into its output; the copy must not
+        // become today's menu on the next build.
+        let temp = TempDir::new().unwrap();
+        let dir = camino::Utf8Path::from_path(temp.path()).unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let out = dir.join("_site/menu");
+        fs::create_dir_all(&out).unwrap();
+        fs::write(out.join("week.menu"), format!("= Day 1 ({today})\n")).unwrap();
+
+        assert!(find_todays_menu(dir, None).is_some());
+        assert!(find_todays_menu(dir, Some(&dir.join("_site"))).is_none());
     }
 }

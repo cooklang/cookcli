@@ -29,6 +29,7 @@ pub fn render_index(
         repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
         viewer: Default::default(),
+        exclude: Some(output),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
@@ -54,6 +55,7 @@ pub fn render_directory(
         repo_url: repo_url.map(String::from),
         features: FeatureFlags::default(),
         viewer: Default::default(),
+        exclude: Some(output),
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
