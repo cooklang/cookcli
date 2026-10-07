@@ -21,8 +21,9 @@ export function referencePath(path) {
 }
 
 // Every recipe in a `GET /api/recipes` tree, as `{ name, path }` with the path
-// relative to the collection root, sorted by path. The tree carries absolute
-// paths; the root node's own path is the collection root.
+// relative to the collection root, sorted by path. The server sends relative
+// paths, the root's being ""; older servers sent absolute ones, with the
+// collection root as the root's path, which is stripped here.
 export function flattenTree(tree) {
   const root = normalisePath(tree.path || "").replace(/\/+$/, "");
   const recipes = [];
