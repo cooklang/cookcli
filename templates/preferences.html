@@ -125,6 +125,9 @@
                 <div>
                     <span class="font-medium">{{ tr.t("pref-aisle-path") }}:</span>
                     <span class="text-muted ml-2">{{ aisle_path }}</span>
+                    {% if !viewer.recipes_only() %}
+                    <a href="{{ prefix }}/aisles" class="ml-2 text-accent-text hover:underline">{{ tr.t("aisles-manage") }} →</a>
+                    {% endif %}
                 </div>
                 <div>
                     <span class="font-medium">{{ tr.t("pref-pantry-path") }}:</span>

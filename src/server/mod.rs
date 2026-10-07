@@ -47,6 +47,7 @@ use tower_http::{services::ServeDir, set_header::SetResponseHeader};
 use tracing::{error, info};
 
 mod activity;
+mod aisle_file;
 pub mod auth;
 mod cors;
 mod fs_atomic;
@@ -547,6 +548,7 @@ fn build_state(
         recipes_only,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
+        aisle_lock: tokio::sync::Mutex::new(()),
         shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
@@ -617,6 +619,9 @@ pub struct AppState {
     /// so we need an in-process mutex on top. All check / uncheck / compact
     /// handlers acquire this before touching the checked log.
     pub checked_log_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes changes to the aisle file, each a read, an edit and a
+    /// write that must not interleave with another.
+    pub aisle_lock: tokio::sync::Mutex<()>,
     /// Broadcasts filesystem changes to `.shopping-list` / `.shopping-checked`
     /// to every open SSE subscriber. `None` means watcher init failed; SSE
     /// clients can still connect but will never receive events.
@@ -637,6 +642,24 @@ pub struct AppState {
     pub session_path: std::path::PathBuf,
     #[cfg(feature = "sync")]
     pub shutdown_token: tokio_util::sync::CancellationToken,
+}
+
+impl AppState {
+    /// The aisle file the shopping list uses: the one found at startup, or
+    /// else `config/aisle.conf` in the recipe directory once it exists, so a
+    /// file created from the aisles page, or by hand, counts without a
+    /// restart.
+    pub fn aisle_file(&self) -> Option<Utf8PathBuf> {
+        self.aisle_path.clone().or_else(|| {
+            let local = self.local_aisle_file();
+            local.is_file().then_some(local)
+        })
+    }
+
+    /// Where the aisles page creates an aisle file when there is none.
+    pub fn local_aisle_file(&self) -> Utf8PathBuf {
+        self.base_path.join("config").join("aisle.conf")
+    }
 }
 
 #[cfg(feature = "sync")]
@@ -716,6 +739,16 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             "/pantry/{section}/{name}",
             axum::routing::put(handlers::update_pantry_item),
         )
+        .route(
+            "/aisles",
+            get(handlers::get_aisles).post(handlers::create_aisles),
+        )
+        .route("/aisles/changes", post(handlers::change_aisles))
+        .route(
+            "/aisles/raw",
+            get(handlers::get_raw_aisles).put(handlers::put_raw_aisles),
+        )
+        .route("/aisles/uncategorized", get(handlers::get_uncategorized))
         .route("/recipes", get(handlers::all_recipes))
         .route("/recipes/raw/{*path}", get(handlers::recipe_raw)) // More specific route must come first
         .route(

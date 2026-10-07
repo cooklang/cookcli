@@ -219,6 +219,7 @@ pub fn sections() -> Vec<ApiSection> {
         menus(),
         shopping_list(),
         pantry(),
+        aisles(),
         search_and_stats(),
         realtime(),
         sync(),
@@ -1346,6 +1347,245 @@ fn shopping_list() -> ApiSection {
                  longer in it. Refuses to compact (500) if any recipe fails to parse, rather \
                  than wiping checks based on a partial ingredient set. Responds `200 OK` with \
                  an empty body.",
+            ),
+        ],
+    )
+}
+
+fn aisles() -> ApiSection {
+    section(
+        "aisles",
+        "Aisles",
+        "Reads and changes `aisle.conf`, which groups the shopping list by store aisle: an \
+         `[aisle]` line, then one ingredient per line with its other names after `|`. \
+         Changes edit only the lines concerned, so comments and blank lines elsewhere in the \
+         file are kept. Each response carries the file's `revision`; send it back with a \
+         change and the change is refused with `409` if the file has been changed since, \
+         along with the current `revision`. Leave it out to apply the change regardless. \
+         Changes need the `shopper` role when sign-in is on.",
+        vec![
+            ep(
+                "GET",
+                "/api/aisles",
+                "Read the aisles",
+                "Aisles in file order, which is the order the shopping list uses. Each \
+                 ingredient's first name is the one the shopping list shows; the others are \
+                 merged into it. `warnings` lists the lines the parser skipped, such as a \
+                 name listed twice. Without an aisle file, `configured` is `false`, \
+                 `path` and `revision` are `null` and `aisles` is empty. The response below \
+                 is trimmed to two of the seed's eight aisles and a few ingredients each.",
+            )
+            .response(
+                r#"
+{
+  "configured": true,
+  "path": "/path/to/recipes/config/aisle.conf",
+  "revision": "edbf1fd2579f964e",
+  "aisles": [
+    {
+      "name": "fruit and veg",
+      "ingredients": [
+        { "names": ["apples"] },
+        { "names": ["avocado", "avocados"] }
+      ]
+    },
+    {
+      "name": "milk and dairy",
+      "ingredients": [
+        { "names": ["milk"] },
+        { "names": ["butter"] }
+      ]
+    }
+  ],
+  "warnings": []
+}
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/aisles",
+                "Create an aisle file",
+                "Creates an empty `config/aisle.conf` in the recipe directory and answers \
+                 `201` with the same shape as `GET /api/aisles`. `409` if an aisle file \
+                 already exists, wherever it was found.",
+            ),
+            ep(
+                "POST",
+                "/api/aisles/changes",
+                "Change the aisles",
+                "A change is named by `action`; the other fields depend on it. \
+                 `add_aisle` (`name`, optional `position`, counted from 0; last when \
+                 omitted), `rename_aisle` (`name`, `new_name`), `remove_aisle` (`name`; its \
+                 ingredients go with it), `move_aisle` (`name`, `position`), \
+                 `add_ingredient` (`aisle`, `names`), `update_ingredient` (`name`, `names`, \
+                 optional `aisle` to move it), `remove_ingredient` (`name`), `add_names` \
+                 (`name`, `names`: more names for that ingredient, ones it has skipped) and \
+                 `merge_ingredients` (`names`, one per ingredient, and `main`: the one name \
+                 the shopping list will show; the result keeps the place, aisle and comment \
+                 of the ingredient `main` came from). An ingredient is found by any of its \
+                 names, ignoring case. Send one change with its fields beside `revision`, or \
+                 several as `changes`, a list: they are applied in order and written \
+                 together, or not at all, and an error names the change that failed \
+                 (`Change 4: …`). Answers with the aisles as `GET /api/aisles` does. `400` \
+                 for a name the file cannot hold (empty, or containing `|` or `//`) or one \
+                 already used — ingredient names ignoring case, as the shopping list \
+                 matches them; `404` for an aisle or ingredient that does not exist, or \
+                 when there is no aisle file; `409` for a stale `revision`.",
+            )
+            .params(vec![
+                param(
+                    "action",
+                    "body",
+                    "string",
+                    true,
+                    "`add_aisle`, `rename_aisle`, `remove_aisle`, `move_aisle`, \
+                     `add_ingredient`, `update_ingredient`, `remove_ingredient`, `add_names` \
+                     or `merge_ingredients`. Not given when sending `changes`.",
+                ),
+                param(
+                    "changes",
+                    "body",
+                    "object[]",
+                    false,
+                    "Several changes, each with its own `action`, made together.",
+                ),
+                param(
+                    "revision",
+                    "body",
+                    "string",
+                    false,
+                    "The `revision` the change was made against.",
+                ),
+                param(
+                    "name",
+                    "body",
+                    "string",
+                    false,
+                    "The aisle, or any one of the ingredient's names.",
+                ),
+                param(
+                    "names",
+                    "body",
+                    "string[]",
+                    false,
+                    "An ingredient's names, the one to show first; for `merge_ingredients`, \
+                     one name of each ingredient to group.",
+                ),
+                param(
+                    "main",
+                    "body",
+                    "string",
+                    false,
+                    "For `merge_ingredients`: the name the grouped ingredient goes by.",
+                ),
+                param("aisle", "body", "string", false, "The aisle to put it in."),
+                param("new_name", "body", "string", false, "For `rename_aisle`."),
+                param(
+                    "position",
+                    "body",
+                    "integer",
+                    false,
+                    "Where the aisle goes among the aisles, from 0.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "revision": "edbf1fd2579f964e",
+  "changes": [
+    { "action": "add_aisle", "name": "snacks" },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["almonds"] },
+    { "action": "add_names", "name": "butter", "names": ["Butter"] },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["Butter"] }
+  ]
+}
+"#,
+            )
+            .response(
+                r#"
+{
+  "error": "Change 4: \"Butter\" is already in the \"milk and dairy\" aisle"
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/aisles/raw",
+                "Read the aisle file as text",
+                "The file exactly as written, with its `revision`. `404` when there is no \
+                 aisle file. The `content` below is cut short.",
+            )
+            .response(
+                r#"
+{
+  "path": "/path/to/recipes/config/aisle.conf",
+  "content": "[fruit and veg]\napples\nbananas\ngrapes\n",
+  "revision": "edbf1fd2579f964e"
+}
+"#,
+            ),
+            ep(
+                "PUT",
+                "/api/aisles/raw",
+                "Replace the aisle file",
+                "Writes `content` as the whole file once the aisle parser accepts it, and \
+                 answers as `GET /api/aisles` does. Otherwise `400` naming the line, and the \
+                 file is left alone.",
+            )
+            .params(vec![
+                param("content", "body", "string", true, "The new file."),
+                param(
+                    "revision",
+                    "body",
+                    "string",
+                    false,
+                    "The `revision` the text was edited from.",
+                ),
+            ])
+            .request(
+                r#"
+{
+  "content": "[a]\nx\n[b]\nx\n"
+}
+"#,
+            )
+            .response(
+                r#"
+{
+  "error": "Line 4: Duplicate ingredient: 'x'"
+}
+"#,
+            ),
+            ep(
+                "GET",
+                "/api/aisles/uncategorized",
+                "Ingredients without an aisle",
+                "The ingredients the recipes and menus use that no aisle names — what \
+                 `cook doctor aisle` reports — with the files using each. `link` is what \
+                 follows `/recipe/` in that file's page address. Scans the whole \
+                 collection, so it takes longer than the other reads. The response below is \
+                 trimmed to two of the seed's eleven.",
+            )
+            .response(
+                r#"
+{
+  "total_recipes": 14,
+  "ingredients": [
+    {
+      "name": "San Marzano tomato sauce",
+      "recipes": [
+        { "path": "Neapolitan Pizza.cook", "link": "Neapolitan Pizza" }
+      ]
+    },
+    {
+      "name": "almonds",
+      "recipes": [
+        { "path": "Weekly Plan.menu", "link": "Weekly Plan.menu" }
+      ]
+    }
+  ]
+}
+"#,
             ),
         ],
     )

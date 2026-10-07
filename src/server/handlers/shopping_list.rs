@@ -74,7 +74,7 @@ pub async fn shopping_list(
     let mut list = merged(ingredients);
 
     // Load aisle configuration with lenient parsing
-    let aisle_content = if let Some(path) = &state.aisle_path {
+    let aisle_content = if let Some(path) = &state.aisle_file() {
         match std::fs::read_to_string(path) {
             Ok(content) => {
                 tracing::debug!("Loaded aisle file from: {:?}", path);

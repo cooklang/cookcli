@@ -41,6 +41,7 @@ const PROTECTED_READS: &[(&str, Capability)] = &[
 const WRITES: &[(&str, Capability)] = &[
     ("/api/shopping_list", Capability::EditLists),
     ("/api/pantry", Capability::EditLists),
+    ("/api/aisles", Capability::EditLists),
     ("/api/recipes", Capability::EditRecipes),
     ("/api/recipe_image", Capability::EditRecipes),
     ("/api/recipe_rename", Capability::EditRecipes),
@@ -265,6 +266,9 @@ mod tests {
             (Method::POST, "/api/pantry/add"),
             (Method::PUT, "/api/pantry/dairy/milk"),
             (Method::DELETE, "/api/pantry/dairy/milk"),
+            (Method::POST, "/api/aisles"),
+            (Method::POST, "/api/aisles/changes"),
+            (Method::PUT, "/api/aisles/raw"),
         ] {
             assert_eq!(
                 needs(method.clone(), path),
@@ -304,6 +308,7 @@ mod tests {
             (Method::POST, "/api/recipes-bulk"),
             (Method::POST, "/api/recipe_renamex/Soup.cook"),
             (Method::POST, "/api/pantryx"),
+            (Method::POST, "/api/aislesx"),
             (Method::POST, "/edit/Soup.cook"),
             (Method::POST, "/loginx"),
         ] {
@@ -343,12 +348,16 @@ mod tests {
             "/directory/Mains",
             "/shopping-list",
             "/pantry",
+            "/aisles",
             "/preferences",
             "/login",
             "/api/recipes",
             "/api/recipes/Soup.cook",
             "/api/shopping_list/items",
             "/api/pantry",
+            "/api/aisles",
+            "/api/aisles/raw",
+            "/api/aisles/uncategorized",
             "/api/static/Soup.jpg",
             // Look-alikes of protected paths.
             "/newsletter",
