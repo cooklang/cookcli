@@ -5,12 +5,13 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
-use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
+use crate::util::recipe_info::{ref_info_or_default, RecipeInfo};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use crate::web::viewer::Viewer;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang_find::MenuItem;
 use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
 
@@ -334,16 +335,11 @@ fn timer_duration_seconds(quantity: &cooklang::quantity::Quantity) -> Option<i64
 /// half-a-serving floor is for what people type, while a menu can link to 0.4
 /// of a 4-serving recipe.
 fn resolve_servings(
-    recipe: &cooklang::Recipe,
+    base: Option<u32>,
     servings: Option<f64>,
     scale: f64,
 ) -> (f64, Option<ServingsScale>) {
-    let Some(base) = recipe
-        .metadata
-        .servings()
-        .and_then(|s| s.as_number())
-        .filter(|&n| n > 0)
-    else {
+    let Some(base) = base.filter(|&n| n > 0) else {
         return (scale, None);
     };
     let base_f = f64::from(base);
@@ -415,7 +411,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
     let mut recipe = crate::util::parse_unscaled_recipe_from_entry(&entry)
         .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {e}"))?;
-    let (scale, servings) = resolve_servings(&recipe, servings, scale);
+    let (scale, servings) = resolve_servings(
+        recipe.metadata.servings().and_then(|s| s.as_number()),
+        servings,
+        scale,
+    );
     recipe.scale(scale, crate::util::PARSER.converter());
 
     // Load aisle config for cooking mode ingredient sorting
@@ -962,20 +962,27 @@ fn build_menu_template_inner(
     features: FeatureFlags,
     viewer: Viewer,
 ) -> Result<MenuTemplate> {
-    // Recipe references need the quantity *as authored*, not the scaled one:
-    // the parser normalises units while scaling (750 ml x 3 becomes 2.25 l),
-    // which would break the yield-unit comparison in `reference_scale_factor`.
-    // Loose ingredients still come from the scaled copy below. Ingredient
-    // indices are identical between the two - scaling rewrites quantities in
-    // place without touching the ingredient list.
-    let unscaled = crate::util::parse_unscaled_recipe_from_entry(&entry)
+    let menu_path = Utf8Path::new(&path);
+    // The menu's own `servings` decide the scale when the stepper counts
+    // servings; the references' factors are then resolved at that scale.
+    let menu_servings = |menu: &cooklang_find::Menu| {
+        menu.metadata.get("servings").and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+                .and_then(|n| u32::try_from(n).ok())
+        })
+    };
+    let mut menu = crate::util::menu::parse_menu(&entry, menu_path)
         .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
-    let (scale, servings) = resolve_servings(&unscaled, servings, scale);
-    let mut recipe = unscaled.clone();
-    recipe.scale(scale, crate::util::PARSER.converter());
+    // The planner needs the meals a plan names but has not filled yet.
+    if let Ok(content) = entry.content() {
+        crate::util::menu::keep_empty_meals(&mut menu, &content);
+    }
+    let (scale, servings) = resolve_servings(menu_servings(&menu), servings, scale);
+    menu.resolve_scales(&[base_path], scale);
 
-    // Referenced recipes are resolved from disk to read their `servings` /
-    // `yield` metadata. Menus repeat references, so memoise per build.
+    // Referenced recipes are read from disk for their default `servings`.
+    // Menus repeat references, so memoise per build.
     let mut ref_info_cache: std::collections::HashMap<String, RecipeInfo> =
         std::collections::HashMap::new();
 
@@ -990,144 +997,71 @@ fn build_menu_template_inner(
     // Parse sections and content
     let mut sections = Vec::new();
 
-    for section in &recipe.sections {
-        let section_name = section.name.clone();
-        let mut lines = Vec::new();
+    for section in &menu.sections {
+        let mut lines: Vec<Vec<MenuSectionItem>> = Vec::new();
 
-        for content in &section.content {
-            use cooklang::Content;
-            if let Content::Step(step) = content {
-                // Build the full step content first
-                let mut step_items = Vec::new();
-                let mut current_text = String::new();
+        for meal in &section.meals {
+            // The page shows a meal header as the line it was written as.
+            if let Some(meal_type) = &meal.meal_type {
+                let header = match &meal.time {
+                    Some(time) => format!("{meal_type} ({time}):"),
+                    None => format!("{meal_type}:"),
+                };
+                lines.push(vec![MenuSectionItem::Text(header)]);
+            }
 
-                for item in &step.items {
-                    use crate::web::templates::MenuSectionItem;
-                    use cooklang::Item;
+            let mut line = Vec::new();
+            for item in &meal.items {
+                match item {
+                    MenuItem::RecipeReference {
+                        path,
+                        scale: factor,
+                        ..
+                    } => {
+                        let factor = factor.unwrap_or(1.0);
+                        let info = ref_info_cache
+                            .entry(path.clone())
+                            .or_insert_with(|| ref_info_or_default(base_path, path, path));
 
-                    match item {
-                        Item::Text { value } => {
-                            // Check if this is an isolated dash (bullet marker)
-                            if value == "-" {
-                                // Bullet marker - complete current line and start new one
-                                if !current_text.is_empty() {
-                                    step_items.push(MenuSectionItem::Text(current_text.clone()));
-                                    current_text.clear();
-                                }
-                                if !step_items.is_empty() {
-                                    lines.push(step_items.clone());
-                                    step_items.clear();
-                                }
-                            } else {
-                                // Split on newlines to preserve line breaks
-                                let parts: Vec<&str> = value.split('\n').collect();
-                                for (i, part) in parts.iter().enumerate() {
-                                    if i > 0 {
-                                        // Newline encountered - flush current text and line
-                                        if !current_text.is_empty() {
-                                            step_items
-                                                .push(MenuSectionItem::Text(current_text.clone()));
-                                            current_text.clear();
-                                        }
-                                        if !step_items.is_empty() {
-                                            lines.push(step_items.clone());
-                                            step_items.clear();
-                                        }
-                                    }
-                                    if !part.is_empty() {
-                                        current_text.push_str(part);
-                                    }
-                                }
-                            }
-                        }
-                        Item::Ingredient { index } => {
-                            // First, add any pending text
-                            if !current_text.is_empty() {
-                                step_items.push(MenuSectionItem::Text(current_text.clone()));
-                                current_text.clear();
-                            }
-
-                            if let Some(ing) = recipe.ingredients.get(*index) {
-                                // Check if this is a recipe reference using the reference field
-                                if let Some(ref recipe_ref) = ing.reference {
-                                    // Build the full path from components
-                                    // For web URLs - always use forward slash
-                                    let name = if recipe_ref.components.is_empty() {
-                                        recipe_ref.name.clone()
-                                    } else {
-                                        format!(
-                                            "{}/{}",
-                                            recipe_ref.components.join("/"),
-                                            recipe_ref.name
-                                        )
-                                    };
-
-                                    let authored_quantity = unscaled
-                                        .ingredients
-                                        .get(*index)
-                                        .and_then(|i| i.quantity.as_ref());
-
-                                    let lookup = recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
-                                    let info =
-                                        ref_info_cache.entry(lookup.clone()).or_insert_with(|| {
-                                            ref_info_or_default(base_path, &lookup, &name)
-                                        });
-
-                                    // Same resolution the menu JSON API and
-                                    // `add_menu` use, so all three agree. No
-                                    // target means x1, whatever the recipe says.
-                                    let factor = match authored_quantity {
-                                        Some(quantity) => {
-                                            reference_scale_factor(Some(quantity), info, &name)
-                                                * scale
-                                        }
-                                        None => scale,
-                                    };
-
-                                    // Display-only: a x1 badge on every
-                                    // unscaled reference would be pure noise,
-                                    // so suppress it. The number shown, when
-                                    // shown, is the same one the API reports.
-                                    // A recipe with servings is linked by its
-                                    // servings, as its page counts them.
-                                    let scaled = factor != 1.0;
-                                    step_items.push(MenuSectionItem::RecipeReference {
-                                        name,
-                                        scale: scaled.then_some(factor),
-                                        servings: info
-                                            .default_servings
-                                            .filter(|&n| n > 0 && scaled)
-                                            .map(|n| f64::from(n) * factor),
-                                    });
-                                } else {
-                                    // Regular ingredient
-                                    let quantity = ing.quantity.as_ref().and_then(|q| {
-                                        crate::util::format::number::format_quantity(q.value())
-                                    });
-                                    let unit = ing
-                                        .quantity
-                                        .as_ref()
-                                        .and_then(|q| q.unit().as_ref().map(|u| u.to_string()));
-
-                                    step_items.push(MenuSectionItem::Ingredient {
-                                        name: ing.name.to_string(),
-                                        quantity,
-                                        unit,
-                                    });
-                                }
-                            }
-                        }
-                        _ => {} // Ignore other items in menu files
+                        // Display-only: a x1 badge on every unscaled reference
+                        // would be pure noise, so suppress it. The number
+                        // shown, when shown, is the same one the API reports.
+                        // A recipe with servings is linked by its servings, as
+                        // its page counts them.
+                        let scaled = factor != 1.0;
+                        line.push(MenuSectionItem::RecipeReference {
+                            name: path.clone(),
+                            scale: scaled.then_some(factor),
+                            servings: info
+                                .default_servings
+                                .filter(|&n| n > 0 && scaled)
+                                .map(|n| f64::from(n) * factor),
+                        });
                     }
+                    MenuItem::Ingredient {
+                        name,
+                        quantity,
+                        unit,
+                    } => {
+                        let (quantity, unit) = crate::util::menu::scaled_quantity(
+                            quantity.as_deref(),
+                            unit.as_deref(),
+                            scale,
+                        );
+                        line.push(MenuSectionItem::Ingredient {
+                            name: name.clone(),
+                            quantity,
+                            unit,
+                        });
+                    }
+                    MenuItem::Text { text } => line.push(MenuSectionItem::Text(text.clone())),
+                    MenuItem::LineBreak => lines.push(std::mem::take(&mut line)),
+                    // Notes are for the author, not the page.
+                    _ => {}
                 }
-
-                // Add any remaining content as a line
-                if !current_text.is_empty() {
-                    step_items.push(MenuSectionItem::Text(current_text));
-                }
-                if !step_items.is_empty() {
-                    lines.push(step_items);
-                }
+            }
+            if !line.is_empty() {
+                lines.push(line);
             }
         }
 
@@ -1140,24 +1074,25 @@ fn build_menu_template_inner(
 
         // An empty dated section is still a day of a plan; it is dropped
         // below if the menu is not one.
-        let dated = section_name
+        let dated = section
+            .name
             .as_deref()
             .and_then(crate::web::plan::section_date)
             .is_some();
         if !lines.is_empty() || dated {
             sections.push(MenuSection {
-                name: section_name,
+                name: section.name.clone(),
                 lines,
             });
         }
     }
 
     // Get metadata
-    let metadata = if recipe.metadata.map.is_empty() {
+    let metadata = if menu.metadata == cooklang_find::Metadata::default() {
         None
     } else {
         let get_field = |key: &str| -> Option<String> {
-            recipe.metadata.get(key).and_then(|v| {
+            menu.metadata.get(key).and_then(|v| {
                 if let Some(s) = v.as_str() {
                     Some(s.to_string())
                 } else if let Some(n) = v.as_i64() {
@@ -1168,12 +1103,18 @@ fn build_menu_template_inner(
             })
         };
 
-        let mut custom_metadata = Vec::new();
-        for (key, value) in recipe.metadata.map_filtered() {
-            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
-                custom_metadata.push((key_str.to_string(), val_str.to_string()));
-            }
-        }
+        // `Metadata` keeps its entries in a `HashMap` and offers no iterator,
+        // so custom fields come from its serialised form, sorted by key to
+        // keep the page stable from one load to the next.
+        let raw = serde_json::to_value(&menu.metadata).unwrap_or_default();
+        let mut custom_metadata: Vec<(String, String)> = raw
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(key, _)| key.parse::<cooklang::metadata::StdKey>().is_err())
+            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .collect();
+        custom_metadata.sort();
 
         Some(RecipeMetadata {
             // As on the recipe page: `scale` rounds `servings` to a whole number.
@@ -1200,17 +1141,7 @@ fn build_menu_template_inner(
         })
     };
 
-    let menu_name = recipe
-        .metadata
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            path.split('/')
-                .next_back()
-                .unwrap_or(&path)
-                .replace(".menu", "")
-        });
+    let menu_name = menu.name.clone();
 
     // Sections on two days or more are laid out as a calendar.
     let plan = crate::web::plan::build_plan_view(&sections, &lang);
