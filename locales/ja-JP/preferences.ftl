@@ -11,6 +11,7 @@ pref-aisle-path = 売り場の設定
 pref-pantry-path = 在庫の設定
 pref-base-path = レシピのフォルダ
 pref-not-configured = 未設定
+pref-global-config = 共通の設定
 
 # Version
 pref-version = バージョン
