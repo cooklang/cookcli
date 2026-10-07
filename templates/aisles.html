@@ -26,7 +26,7 @@
             <a href="{{ prefix }}/shopping-list" class="btn btn-sm">{{ tr.t("aisles-back-to-list") }}</a>
         </div>
         <p class="mt-2 text-muted max-w-3xl">{{ tr.t("aisles-intro") }}</p>
-        <p id="aisles-path" class="mt-1 text-sm text-faint font-mono break-all"></p>
+        <p id="aisles-path" class="mt-1 text-sm text-faint break-all"></p>
     </div>
 
     <div id="aisles-unconfigured" class="hidden card">
@@ -155,6 +155,7 @@
         addAsNames: {{ tr.t("aisles-add-as-names")|json|safe }},
         chooseIngredient: {{ tr.t("aisles-choose-ingredient")|json|safe }},
         moveToAisle: {{ tr.t("aisles-move-to-aisle")|json|safe }},
+        sharedFile: {{ tr.t("aisles-shared-file")|json|safe }},
     };
 
     let state = {{ aisles|json|safe }};
@@ -772,7 +773,11 @@
     function render() {
         document.getElementById('aisles-unconfigured').classList.toggle('hidden', state.configured);
         document.getElementById('aisles-configured').classList.toggle('hidden', !state.configured);
-        document.getElementById('aisles-path').textContent = state.path || '';
+        // Only where it is in the recipe folder, or that it is the global
+        // one: the server sends nothing more.
+        const where = document.getElementById('aisles-path');
+        where.textContent = state.file || (state.shared ? T.sharedFile : '');
+        where.classList.toggle('font-mono', !!state.file);
         if (!state.configured) return;
 
         const warnings = document.getElementById('aisles-warnings');

@@ -61,3 +61,4 @@ aisles-add-to-aisle = Añadir al pasillo
 aisles-add-as-names = O añadir como otros nombres de
 aisles-choose-ingredient = Ingrediente…
 aisles-move-to-aisle = Mover al pasillo
+aisles-shared-file = Es el archivo de pasillos global, compartido con tus otras carpetas de recetas.
