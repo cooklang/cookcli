@@ -945,21 +945,35 @@ async fn preferences_page(
     #[cfg(not(feature = "sync"))]
     let (sync_logged_in, sync_email, sync_syncing) = (false, None, false);
 
-    // A recipes-only visitor gets the language picker alone, so the page
-    // names no path on the server either.
+    // Full paths tell the server's directory layout and, usually, the
+    // account it runs as, so only admins get them. Everyone else sees where
+    // a file is inside the recipe directory, and a recipes-only visitor, who
+    // gets the language picker alone, sees nothing.
+    let tr = Tr::new(lang);
     let path = |path: Option<&camino::Utf8PathBuf>| match path {
         _ if viewer.recipes_only() => String::new(),
-        Some(path) => path.to_string(),
-        None => "Not configured".to_string(),
+        None => tr.t("pref-not-configured"),
+        Some(path) if viewer.can_admin() => path.to_string(),
+        Some(path) => match path.strip_prefix(&state.base_path) {
+            Ok(relative) => relative.to_string(),
+            Err(_) => tr.t("pref-global-config"),
+        },
+    };
+    let aisle_path = path(state.aisle_file().as_ref());
+    let pantry_path = path(state.pantry_path.as_ref());
+    let base_path = if viewer.can_admin() {
+        state.base_path.to_string()
+    } else {
+        String::new()
     };
 
     PreferencesTemplate {
         active: "preferences".to_string(),
-        aisle_path: path(state.aisle_file().as_ref()),
-        pantry_path: path(state.pantry_path.as_ref()),
-        base_path: path(Some(&state.base_path)),
+        aisle_path,
+        pantry_path,
+        base_path,
         version: format!("{} - in food we trust", env!("CARGO_PKG_VERSION")),
-        tr: Tr::new(lang),
+        tr,
         sync_enabled,
         sync_logged_in,
         sync_email,

@@ -320,6 +320,25 @@ async fn get_page(server: &ServerGuard, path: &str, cookie: Option<&str>) -> Res
     req.send().await.expect("page request")
 }
 
+/// What the Preferences page tells `cookie`'s viewer about where things are
+/// on the server: whether it names the recipe directory, and whether it
+/// shows the pantry file as `config/pantry.conf`, relative to it.
+async fn preferences_paths(server: &ServerGuard, cookie: Option<&str>) -> (bool, bool) {
+    let page = get_page(server, "/preferences", cookie)
+        .await
+        .text()
+        .await
+        .unwrap();
+    // The directory's own name rather than its full path, which the server
+    // may spell differently once it has resolved it.
+    let name = server.fixture.recipes.path().file_name().unwrap();
+    let relative = Path::new("config").join("pantry.conf");
+    (
+        page.contains(name.to_str().unwrap()),
+        page.contains(&format!(">{}<", relative.display())),
+    )
+}
+
 fn location(resp: &Response) -> &str {
     resp.headers()
         .get(LOCATION)
@@ -349,6 +368,9 @@ async fn without_users_the_server_stays_open() {
     let login = get_page(&server, "/login", None).await;
     assert_eq!(login.status(), StatusCode::SEE_OTHER);
     assert_eq!(location(&login), "/");
+
+    // Everyone runs the server here, so Preferences keeps the full paths.
+    assert_eq!(preferences_paths(&server, None).await, (true, false));
 }
 
 #[tokio::test]
@@ -366,6 +388,8 @@ async fn an_empty_users_file_variable_counts_as_unset() {
 async fn guests_can_browse_but_not_change_anything() {
     let fixture = Fixture::new();
     fixture.write_users(&[("alice", "secret")]);
+    // Outside the recipe directory, for Preferences below.
+    std::fs::write(fixture.config_dir().join("aisle.conf"), "[baking]\nflour\n").unwrap();
     let server = start(fixture, &[], &[]).await;
     let http = client();
 
@@ -475,6 +499,18 @@ async fn guests_can_browse_but_not_change_anything() {
         "Edit shown to a guest"
     );
     assert!(recipe_page.contains("window.__CAN_EDIT_LISTS__ = false"));
+
+    // Preferences says where the files are without naming the server's
+    // directories.
+    assert_eq!(preferences_paths(&server, None).await, (false, true));
+    let preferences = get_page(&server, "/preferences", None)
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(preferences.contains(">Global configuration<"));
+    let config_root = server.fixture.config_root.path().file_name().unwrap();
+    assert!(!preferences.contains(config_root.to_str().unwrap()));
 }
 
 #[tokio::test]
@@ -838,8 +874,13 @@ async fn each_role_can_do_only_what_it_allows() {
                 .unwrap();
             assert_eq!(preferences.contains("id=\"sync-section\""), admin, "{user}");
         }
-        #[cfg(not(feature = "sync"))]
-        let _ = admin;
+
+        // Only an admin is told where the server keeps its files.
+        assert_eq!(
+            preferences_paths(&server, Some(&cookie)).await,
+            (admin, !admin),
+            "{user} preferences paths"
+        );
 
         // Pages show exactly the controls the role can use.
         let page = get_page(&server, "/recipe/Recipe.cook", Some(&cookie))

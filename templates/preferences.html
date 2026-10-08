@@ -136,6 +136,7 @@
             </div>
         </div>
 
+        {% if !base_path.is_empty() %}
         <div class="card p-6">
             <h2 class="text-title font-semibold mb-3 text-text">Recipe Directory</h2>
             <div class="text-sm">
@@ -143,6 +144,7 @@
                 <span class="text-muted ml-2">{{ base_path }}</span>
             </div>
         </div>
+        {% endif %}
 
         <div class="card p-6">
             <h2 class="text-title font-semibold mb-3 text-text">About</h2>

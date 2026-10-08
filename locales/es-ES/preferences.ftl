@@ -11,6 +11,7 @@ pref-aisle-path = Configuración de Pasillos
 pref-pantry-path = Configuración de Despensa
 pref-base-path = Directorio de Recetas
 pref-not-configured = No configurado
+pref-global-config = Configuración global
 
 # Version
 pref-version = Versión

@@ -11,6 +11,7 @@ pref-aisle-path = Korridoreen konfigurazioa
 pref-pantry-path = Jaki-tokiaren konfigurazioa
 pref-base-path = Errezeten direktorioa
 pref-not-configured = Konfiguratu gabe
+pref-global-config = Konfigurazio orokorra
 
 # Version
 pref-version = Bertsioa
