@@ -240,7 +240,10 @@ fn recipes() -> ApiSection {
                 "Returns the recipe tree rooted at the server's base path. Every node — \
                  root, directory, and file alike — carries the same four keys: `children`, \
                  `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null \
-                 for a file; that is the discriminator, not the key's presence. Menus \
+                 for a file; that is the discriminator, not the key's presence. Every \
+                 `path`, and a recipe's `source.path`, is relative to the recipe directory, \
+                 the root's being `\"\"`; it is what `GET /api/recipes/{*path}` takes. \
+                 Where the directory is on the server is never sent. Menus \
                  (`.menu`) appear in the same tree as recipes. A recipe's `metadata` keeps \
                  the types its frontmatter used, except `tags`, which is always an array of \
                  strings: the comma-separated spelling `tags: breakfast, quick` is split \
@@ -255,7 +258,7 @@ fn recipes() -> ApiSection {
         "Easy Pancakes": {
           "children": {},
           "name": "Easy Pancakes",
-          "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+          "path": "Breakfast/Easy Pancakes.cook",
           "recipe": {
             "metadata": {
               "author": "CookCLI Team",
@@ -264,19 +267,19 @@ fn recipes() -> ApiSection {
               "description": "Simple crepes that are perfect for a lazy weekend breakfast."
             },
             "source": {
-              "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+              "path": "Breakfast/Easy Pancakes.cook",
               "source_type": "Path"
             }
           }
         }
       },
       "name": "Breakfast",
-      "path": "/absolute/path/to/seed/Breakfast",
+      "path": "Breakfast",
       "recipe": null
     }
   },
   "name": "seed",
-  "path": "/absolute/path/to/seed",
+  "path": "",
   "recipe": null
 }
 "#,

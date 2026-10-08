@@ -15,7 +15,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -49,8 +49,42 @@ pub async fn all_recipes(
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
     normalize_tree_tags(&mut recipes);
+    relative_tree_paths(&mut recipes, &state.base_path);
 
     Ok(Json(recipes))
+}
+
+/// Rewrites each node's `path`, and its recipe's `source.path`, relative to
+/// the recipe directory; the root's becomes `""`.
+///
+/// `cooklang_find` hands them over absolute. This answer goes to anyone who
+/// may read, signed in or not, and where the collection sits on the server,
+/// under which account, is none of their business; a client only needs the
+/// path within the collection.
+fn relative_tree_paths(node: &mut serde_json::Value, base: &Utf8Path) {
+    for pointer in ["/path", "/recipe/source/path"] {
+        if let Some(path) = node.pointer_mut(pointer) {
+            if let Some(text) = path.as_str() {
+                *path = relative_path(text, base).into();
+            }
+        }
+    }
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_object_mut()) {
+        for child in children.values_mut() {
+            relative_tree_paths(child, base);
+        }
+    }
+}
+
+/// `path` relative to `base`, with `/` between components on every platform.
+/// A path outside `base`, which `cooklang_find` does not produce, comes back
+/// as its file name alone rather than as where it is.
+fn relative_path(path: &str, base: &Utf8Path) -> String {
+    let path = Utf8Path::new(path);
+    match path.strip_prefix(base) {
+        Ok(inside) => inside.as_str().replace('\\', "/"),
+        Err(_) => path.file_name().unwrap_or_default().to_string(),
+    }
 }
 
 /// Normalises `tags` on every recipe node of a serialised recipe tree.
@@ -302,4 +336,65 @@ pub async fn recipe_delete(
         "status": "success",
         "path": path
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn tree_paths_become_relative_to_the_collection() {
+        let base = Utf8Path::new("/srv/cook/recipes");
+        let mut tree = json!({
+            "name": "recipes",
+            "path": "/srv/cook/recipes",
+            "recipe": null,
+            "children": {
+                "Breakfast": {
+                    "name": "Breakfast",
+                    "path": "/srv/cook/recipes/Breakfast",
+                    "recipe": null,
+                    "children": {
+                        "Pancakes": {
+                            "name": "Pancakes",
+                            "path": "/srv/cook/recipes/Breakfast/Pancakes.cook",
+                            "recipe": {
+                                "metadata": {},
+                                "source": {
+                                    "path": "/srv/cook/recipes/Breakfast/Pancakes.cook",
+                                    "source_type": "Path"
+                                }
+                            },
+                            "children": {}
+                        }
+                    }
+                }
+            }
+        });
+
+        relative_tree_paths(&mut tree, base);
+
+        assert_eq!(tree["path"], "");
+        let breakfast = &tree["children"]["Breakfast"];
+        assert_eq!(breakfast["path"], "Breakfast");
+        let pancakes = &breakfast["children"]["Pancakes"];
+        assert_eq!(pancakes["path"], "Breakfast/Pancakes.cook");
+        assert_eq!(
+            pancakes["recipe"]["source"]["path"],
+            "Breakfast/Pancakes.cook"
+        );
+        assert_eq!(pancakes["recipe"]["source"]["source_type"], "Path");
+        assert!(!tree.to_string().contains("/srv/cook"), "{tree}");
+    }
+
+    #[test]
+    fn a_path_outside_the_collection_keeps_only_its_name() {
+        let base = Utf8Path::new("/srv/cook/recipes");
+        assert_eq!(relative_path("/home/someone/Soup.cook", base), "Soup.cook");
+        assert_eq!(
+            relative_path("/srv/cook/recipes-old/Soup.cook", base),
+            "Soup.cook"
+        );
+    }
 }
