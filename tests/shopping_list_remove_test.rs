@@ -6,6 +6,9 @@
 //! first. The page now sends the entry's position along with its path; the
 //! server removes that entry only while its path still matches, and answers
 //! `409` rather than guess when the list changed underneath.
+//!
+//! A remove also drops the ticks of ingredients no longer on the list. It
+//! must keep the ones the page shows under an aisle file's common name.
 
 #![cfg(feature = "server")]
 
@@ -43,16 +46,28 @@ fn free_port() -> u16 {
     listener.local_addr().expect("local addr").port()
 }
 
-/// `<tmp>/recipes/` is what the server serves: a soup that may pull in a stock.
+/// `<tmp>/recipes/` is what the server serves: a soup that may pull in a stock,
+/// and two recipes using `eggs`, which the aisle file lists as `egg`.
 fn write_fixture(dir: &TempDir) {
     let recipes = dir.path().join("recipes");
-    std::fs::create_dir_all(&recipes).unwrap();
+    std::fs::create_dir_all(recipes.join("config")).unwrap();
     std::fs::write(
         recipes.join("soup.cook"),
         "Simmer @leeks{2} in @./stock{1%l}.\n",
     )
     .unwrap();
     std::fs::write(recipes.join("stock.cook"), "Boil @bones{1%kg}.\n").unwrap();
+    std::fs::write(
+        recipes.join("pancakes.cook"),
+        "Whisk @eggs{2} into @milk{300%ml}.\n",
+    )
+    .unwrap();
+    std::fs::write(recipes.join("omelette.cook"), "Beat @eggs{3}.\n").unwrap();
+    std::fs::write(
+        recipes.join("config/aisle.conf"),
+        "[dairy]\negg | eggs\nmilk\n",
+    )
+    .unwrap();
 }
 
 /// `free_port` only reserves a port long enough to learn its number, so with
@@ -206,4 +221,60 @@ async fn remove_without_an_index_still_takes_the_first_entry() {
     let items = items(&server).await;
     assert_eq!(items.len(), 1, "one soup left: {items:#?}");
     assert_eq!(items[0]["scale"], 2.0, "the second soup stays: {items:#?}");
+}
+
+async fn checked(server: &ServerGuard) -> Vec<String> {
+    reqwest::get(server.url("/api/shopping_list/checked"))
+        .await
+        .expect("get checked")
+        .json()
+        .await
+        .expect("checked is a list of names")
+}
+
+/// Pancakes then an omelette on the list, `ticks` ticked, then the pancakes
+/// removed: what is still ticked.
+async fn ticks_after_removing_the_pancakes(ticks: &[&str]) -> Vec<String> {
+    let server = start_server().await;
+    for path in ["pancakes.cook", "omelette.cook"] {
+        let status = post(
+            &server,
+            "/api/shopping_list/add",
+            json!({ "path": path, "scale": 1.0 }),
+        )
+        .await;
+        assert!(status.is_success(), "add {path} → {status}");
+    }
+    for name in ticks {
+        let status = post(&server, "/api/shopping_list/check", json!({ "name": name })).await;
+        assert!(status.is_success(), "check {name} → {status}");
+    }
+
+    let status = post(
+        &server,
+        "/api/shopping_list/remove",
+        json!({ "path": "pancakes.cook", "index": 0 }),
+    )
+    .await;
+    assert!(status.is_success(), "remove → {status}");
+    checked(&server).await
+}
+
+#[tokio::test]
+async fn remove_keeps_a_tick_on_the_aisle_name_of_an_ingredient_still_listed() {
+    // The page shows the omelette's `eggs` as `egg`, and that is what it ticks.
+    assert_eq!(ticks_after_removing_the_pancakes(&["egg"]).await, ["egg"]);
+}
+
+#[tokio::test]
+async fn remove_keeps_a_tick_on_the_recipe_name_of_an_ingredient_still_listed() {
+    assert_eq!(ticks_after_removing_the_pancakes(&["eggs"]).await, ["eggs"]);
+}
+
+#[tokio::test]
+async fn remove_drops_the_tick_of_an_ingredient_no_longer_listed() {
+    assert_eq!(
+        ticks_after_removing_the_pancakes(&["egg", "milk"]).await,
+        ["egg"]
+    );
 }
