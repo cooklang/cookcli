@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.38.1](https://github.com/cooklang/cookcli/compare/v0.38.0...v0.38.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **server:** keep the ticks on aisle names when a recipe is removed ([#655](https://github.com/cooklang/cookcli/issues/655)) ([ae06d8f](https://github.com/cooklang/cookcli/commit/ae06d8f636ebfa628bd6769c76bca0ff6ba3276c))
+* **server:** name recipes relative to the collection in GET /api/recipes ([#639](https://github.com/cooklang/cookcli/issues/639)) ([457e3f7](https://github.com/cooklang/cookcli/commit/457e3f7c0e59eedee882c54a2be1eb4311b26db1)), closes [#638](https://github.com/cooklang/cookcli/issues/638)
+* **server:** remove the shopping list entry that was clicked ([#646](https://github.com/cooklang/cookcli/issues/646)) ([da0da75](https://github.com/cooklang/cookcli/commit/da0da75cd1d592261a181dc3c8d2ce6e56365f92)), closes [#645](https://github.com/cooklang/cookcli/issues/645)
+* **server:** show the server's paths on Preferences to admins only ([#642](https://github.com/cooklang/cookcli/issues/642)) ([4983af0](https://github.com/cooklang/cookcli/commit/4983af0ba1fb34a3b1233204498cec8e7fa5e7ee)), closes [#637](https://github.com/cooklang/cookcli/issues/637)
+* **web:** keep the shopping list ticks when the aisle picker appears ([#648](https://github.com/cooklang/cookcli/issues/648)) ([811c42f](https://github.com/cooklang/cookcli/commit/811c42ff707ce97b5ab8da52d0cfa61fcf2a9c97)), closes [#647](https://github.com/cooklang/cookcli/issues/647)
+
 ## [0.38.0](https://github.com/cooklang/cookcli/compare/v0.37.0...v0.38.0) (2026-10-07)
 
 
