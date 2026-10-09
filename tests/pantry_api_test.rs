@@ -346,3 +346,27 @@ async fn preferences_link_to_the_pantry_page() {
     assert_eq!(page.status(), StatusCode::OK);
     assert!(page.text().await.unwrap().contains("href=\"/pantry\""));
 }
+
+#[tokio::test]
+async fn the_items_above_the_first_section_are_listed_under_a_translated_name() {
+    let server = start_server(PANTRY).await;
+    let page = |lang: &'static str| {
+        let url = server.url("/pantry");
+        async move {
+            reqwest::Client::new()
+                .get(url)
+                .header("Cookie", format!("lang={lang}"))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+        }
+    };
+
+    let english = page("en-US").await;
+    assert!(english.contains(">General</h2>"), "{english}");
+    assert!(english.contains(">fridge</h2>"), "names stay as written");
+    assert!(page("fr-FR").await.contains(">Général</h2>"));
+}

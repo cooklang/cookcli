@@ -8,20 +8,22 @@ pantry-configure = 在庫を設定する →
 pantry-no-items-section = この保管場所には品目がありません
 pantry-show-out-of-stock = 在庫切れだけを表示
 pantry-no-out-of-stock = この保管場所に在庫切れの品目はありません
+pantry-out-of-stock-count = 在庫切れ: %t 品中 %o 品
 pantry-total-sections = 保管場所の数:
-pantry-edit-config = 設定を編集
 pantry-manage = 在庫を管理
 
 # Pantry Item Fields
 pantry-item-name = 品名
 pantry-item-quantity = 数量
-pantry-item-quantity-short = 数量:
+pantry-item-quantity-label = 数量:
 pantry-item-bought = 購入:
 pantry-item-bought-date = 購入日
 pantry-item-expire = 期限:
 pantry-item-expire-date = 賞味・消費期限
 pantry-item-low = 残り少ない目安:
 pantry-item-low-threshold = 残り少ないとみなす量
+pantry-placeholder-quantity = 例: 500%g、2%L
+pantry-placeholder-low = 例: 100%g、2
 
 # Pantry Actions
 pantry-add-item = 品目を追加
@@ -41,6 +43,7 @@ pantry-section-fridge = 冷蔵庫
 pantry-section-pantry = 常温
 pantry-section-spices = スパイス
 pantry-section-other = その他
+pantry-section-general = 全般
 pantry-section-new = 新しい保管場所…
 pantry-section-new-name = 新しい保管場所の名前
 pantry-tab-items = アイテム
@@ -55,5 +58,8 @@ pantry-failed-rename = セクション名を変更できませんでした
 pantry-failed-save-file = ファイルを保存できませんでした
 pantry-optional = 任意
 pantry-failed-add = 品目を追加できませんでした
+pantry-item-name-required = 品名を入力してください
+pantry-item-exists = %s はすでに %s にあります
+pantry-section-name-taken = %s という名前の保管場所または品目がすでにあります
 pantry-failed-update = 品目を更新できませんでした
 pantry-failed-remove = 品目を削除できませんでした

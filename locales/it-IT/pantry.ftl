@@ -8,20 +8,22 @@ pantry-configure = Configura la dispensa →
 pantry-no-items-section = Nessun articolo in questa sezione
 pantry-show-out-of-stock = Mostra solo gli esauriti
 pantry-no-out-of-stock = Nessun articolo esaurito in questa sezione
+pantry-out-of-stock-count = Esauriti: %o su %t
 pantry-total-sections = Sezioni totali:
-pantry-edit-config = Modifica configurazione
 pantry-manage = Gestisci dispensa
 
 # Pantry Item Fields
 pantry-item-name = Nome dell'articolo
 pantry-item-quantity = Quantità
-pantry-item-quantity-short = Qtà:
+pantry-item-quantity-label = Quantità:
 pantry-item-bought = Acquistato:
 pantry-item-bought-date = Data di acquisto
 pantry-item-expire = Scade:
 pantry-item-expire-date = Data di scadenza
 pantry-item-low = In esaurimento a:
 pantry-item-low-threshold = Soglia di scorta minima
+pantry-placeholder-quantity = es. 500%g o 2%L
+pantry-placeholder-low = es. 100%g o 2
 
 # Pantry Actions
 pantry-add-item = Aggiungi articolo
@@ -41,6 +43,7 @@ pantry-section-fridge = Frigorifero
 pantry-section-pantry = Dispensa
 pantry-section-spices = Spezie
 pantry-section-other = Altro
+pantry-section-general = Generale
 pantry-section-new = Nuova sezione…
 pantry-section-new-name = Nome della nuova sezione
 pantry-tab-items = Articoli
@@ -55,5 +58,8 @@ pantry-failed-rename = Impossibile rinominare la sezione
 pantry-failed-save-file = Impossibile salvare il file
 pantry-optional = (facoltativo)
 pantry-failed-add = Impossibile aggiungere l'articolo
+pantry-item-name-required = Dai un nome all'articolo
+pantry-item-exists = %s è già in %s
+pantry-section-name-taken = Esiste già una sezione o un articolo chiamato %s
 pantry-failed-update = Impossibile aggiornare l'articolo
 pantry-failed-remove = Impossibile rimuovere l'articolo

@@ -58,7 +58,7 @@
         <div class="card pantry-section">
             <div class="p-6">
                 <div class="pantry-section-head flex items-center justify-between gap-2 mb-4" data-section="{{ section.name }}">
-                    <h2 class="pantry-section-title min-w-0 break-words text-title font-semibold text-text capitalize">{{ section.name }}</h2>
+                    <h2 class="pantry-section-title min-w-0 break-words text-title font-semibold text-text">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</h2>
                     {% if viewer.can_edit_lists() && section.name != "general" %}
                     <button type="button" class="rename-section-btn icon-btn shrink-0"
                             title="{{ tr.t("pantry-rename-section") }}" aria-label="{{ tr.t("pantry-rename-section") }}">
@@ -88,7 +88,7 @@
                                 <div class="item-display">
                                     <div class="space-y-1 text-sm">
                                         <div class="quantity-display flex items-center">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-quantity-short") }}</span>
+                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-quantity-label") }}</span>
                                             <span class="item-quantity">{% if let Some(quantity) = item.quantity %}{{ quantity }}{% else %}-{% endif %}</span>
                                             <svg class="out-of-stock-icon w-4 h-4 ml-1 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -111,19 +111,29 @@
 
                                 <!-- Edit form (hidden by default) -->
                                 <div class="item-edit hidden">
-                                    <div class="space-y-2">
-                                        <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Quantity (e.g., 500%g)"
-                                               value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
-                                        <input type="text" class="edit-bought w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Bought (DD.MM.YYYY)"
-                                               value="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
-                                        <input type="text" class="edit-expire w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Expires (DD.MM.YYYY)"
-                                               value="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
-                                        <input type="text" class="edit-low w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Low threshold (e.g., 100%g)"
-                                               value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
+                                    <div class="space-y-2 text-sm">
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-quantity") }}</span>
+                                            <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   placeholder="{{ tr.t("pantry-placeholder-quantity") }}"
+                                                   value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-bought-date") }}</span>
+                                            <input type="date" class="edit-bought pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   data-raw="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-expire-date") }}</span>
+                                            <input type="date" class="edit-expire pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   data-raw="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-low-threshold") }}</span>
+                                            <input type="text" class="edit-low w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   placeholder="{{ tr.t("pantry-placeholder-low") }}"
+                                                   value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
+                                        </label>
                                         <div class="flex flex-wrap items-center justify-end gap-2 mt-2">
                                             <button type="button" class="cancel-btn btn btn-sm">{{ tr.t("pantry-cancel") }}</button>
                                             <button type="button" class="save-btn btn btn-primary btn-sm">{{ tr.t("pantry-save") }}</button>
@@ -172,9 +182,6 @@
                 {{ tr.t("pantry-add-item") }}
             </button>
             {% endif %}
-            <a href="{{ prefix }}/preferences" class="btn">
-                {{ tr.t("pantry-edit-config") }}
-            </a>
         </div>
     </div>
     </section>
@@ -211,7 +218,7 @@
                     <option value="other">{{ tr.t("pantry-section-other") }}</option>
                     {% else %}
                     {% for section in sections %}
-                    <option value="{{ section.name }}">{{ section.name }}</option>
+                    <option value="{{ section.name }}">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</option>
                     {% endfor %}
                     {% endif %}
                     <option value="__new__">{{ tr.t("pantry-section-new") }}</option>
@@ -227,19 +234,19 @@
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-quantity") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-quantity" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="e.g., 500%g or 2%L">
+                <input type="text" id="add-quantity" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-quantity") }}">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-bought-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-bought" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="DD.MM.YYYY">
+                <input type="date" id="add-bought" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-expire-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-expire" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="DD.MM.YYYY">
+                <input type="date" id="add-expire" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-low-threshold") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-low" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="e.g., 100%g or 2">
+                <input type="text" id="add-low" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-low") }}">
             </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="closeAddModal()" class="btn">{{ tr.t("pantry-cancel") }}</button>
@@ -257,7 +264,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const outOfStockItems = document.querySelectorAll('.pantry-item.out-of-stock').length;
         const outOfStockCountSpan = document.getElementById('out-of-stock-count');
         if (outOfStockCountSpan) {
-            outOfStockCountSpan.textContent = `(${outOfStockItems} out of stock / ${totalItems} total)`;
+            outOfStockCountSpan.textContent = {{ tr.t("pantry-out-of-stock-count")|json|safe }}
+                .replace('%o', outOfStockItems).replace('%t', totalItems);
         }
     }
 
@@ -405,10 +413,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 showPantryError({{ tr.t("pantry-section-new-name")|json|safe }});
                 return;
             }
+            const itemName = document.getElementById('add-name').value.trim();
+            if (!itemName) {
+                showPantryError({{ tr.t("pantry-item-name-required")|json|safe }});
+                return;
+            }
+            // The server refuses a second item of the same name in a section;
+            // say so here, in the page's language.
+            const taken = [...document.querySelectorAll('.pantry-item')]
+                .some(item => item.dataset.section === section && item.dataset.name === itemName);
+            if (taken) {
+                showPantryError({{ tr.t("pantry-item-exists")|json|safe }}.replace('%s', itemName).replace('%s', sectionLabel(section)));
+                return;
+            }
 
             const data = {
                 section: section,
-                name: document.getElementById('add-name').value.trim(),
+                name: itemName,
                 quantity: document.getElementById('add-quantity').value.trim() || null,
                 bought: document.getElementById('add-bought').value.trim() || null,
                 expire: document.getElementById('add-expire').value.trim() || null,
@@ -431,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showPantryError(data.error || {{ tr.t("pantry-failed-add")|json|safe }});
                 }
             } catch (error) {
-                showPantryError('Error adding item: ' + error);
+                showPantryError({{ tr.t("pantry-failed-add")|json|safe }} + ': ' + error);
             }
         });
     }
@@ -451,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (editBtn) {
             editBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
+                item.querySelectorAll('.pantry-date').forEach(showDate);
                 displayDiv.classList.add('hidden');
                 editDiv.classList.remove('hidden');
             });
@@ -476,8 +498,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get original values from display
             const originalQuantity = item.querySelector('.item-quantity').textContent;
-            const originalBought = item.querySelector('.item-bought').textContent;
-            const originalExpire = item.querySelector('.item-expire').textContent;
             const originalLow = item.querySelector('.item-low').textContent;
 
             // Only include fields that have changed
@@ -489,16 +509,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 data.quantity = newQuantity || null;
             }
 
-            const newBought = boughtInput.value.trim();
-            const displayBought = originalBought === '-' ? '' : originalBought;
-            if (newBought !== displayBought) {
-                data.bought = newBought || null;
+            if (dateChanged(boughtInput)) {
+                data.bought = boughtInput.value.trim() || null;
             }
-
-            const newExpire = expireInput.value.trim();
-            const displayExpire = originalExpire === '-' ? '' : originalExpire;
-            if (newExpire !== displayExpire) {
-                data.expire = newExpire || null;
+            if (dateChanged(expireInput)) {
+                data.expire = expireInput.value.trim() || null;
             }
 
             const newLow = lowInput.value.trim();
@@ -524,9 +539,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     if (data.hasOwnProperty('bought')) {
                         item.querySelector('.item-bought').textContent = data.bought || '-';
+                        boughtInput.dataset.raw = data.bought || '';
                     }
                     if (data.hasOwnProperty('expire')) {
                         item.querySelector('.item-expire').textContent = data.expire || '-';
+                        expireInput.dataset.raw = data.expire || '';
                     }
                     if (data.hasOwnProperty('low')) {
                         item.querySelector('.item-low').textContent = data.low || '-';
@@ -543,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showPantryError(data.error || {{ tr.t("pantry-failed-update")|json|safe }});
                 }
             } catch (error) {
-                showPantryError('Error updating item: ' + error);
+                showPantryError({{ tr.t("pantry-failed-update")|json|safe }} + ': ' + error);
             }
         }
 
@@ -595,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             showPantryError(data.error || {{ tr.t("pantry-failed-remove")|json|safe }});
                         }
                     } catch (error) {
-                        showPantryError('Error removing item: ' + error);
+                        showPantryError({{ tr.t("pantry-failed-remove")|json|safe }} + ': ' + error);
                     }
                 }
             });
@@ -622,6 +639,58 @@ function toggleNewSectionField() {
     }
 }
 
+// How a section is named on the page: `general`, the items above the first
+// [header], under its translated name, every other one as the file writes it.
+function sectionLabel(section) {
+    return section === 'general' ? {{ tr.t("pantry-section-general")|json|safe }} : section;
+}
+
+// ---- Dates -------------------------------------------------------------------
+
+// The spellings the pantry reads as dates, tried in the same order as
+// `DATE_FORMATS` in cookcli-core, so the picker shows the day the server sees.
+const DATE_SPELLINGS = [
+    [/^(\d{4})-(\d{1,2})-(\d{1,2})$/, 'ymd'],
+    [/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, 'dmy'],
+    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'dmy'],
+    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'mdy'],
+    [/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, 'ymd'],
+    [/^(\d{1,2})-(\d{1,2})-(\d{4})$/, 'dmy'],
+];
+
+// `text` as the YYYY-MM-DD a date input takes, or null if it is no date.
+function toIsoDate(text) {
+    for (const [pattern, order] of DATE_SPELLINGS) {
+        const m = pattern.exec(text.trim());
+        if (!m) continue;
+        const [y, mo, d] = order === 'ymd' ? [m[1], m[2], m[3]]
+            : order === 'dmy' ? [m[3], m[2], m[1]]
+            : [m[3], m[1], m[2]];
+        const date = new Date(Date.UTC(+y, +mo - 1, +d));
+        if (date.getUTCFullYear() === +y && date.getUTCMonth() === +mo - 1 && date.getUTCDate() === +d) {
+            return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+    }
+    return null;
+}
+
+// Fill a date field from the value the file holds (`data-raw`). One that is
+// not a date stays a text field showing it, so opening the editor loses nothing.
+function showDate(input) {
+    const raw = input.dataset.raw || '';
+    const iso = raw ? toIsoDate(raw) : '';
+    input.type = iso === null ? 'text' : 'date';
+    input.value = iso === null ? raw : iso;
+}
+
+// Whether a date field now says something other than the file, so an item
+// whose date is untouched keeps the spelling the file uses.
+function dateChanged(input) {
+    const raw = input.dataset.raw || '';
+    const before = input.type === 'date' ? (toIsoDate(raw) || '') : raw;
+    return input.value.trim() !== before;
+}
+
 function showPantryError(message) {
     const banner = document.getElementById('pantry-error-banner');
     document.getElementById('pantry-error-message').textContent = message;
@@ -632,7 +701,7 @@ function showPantryError(message) {
 // ---- Section rename ---------------------------------------------------------
 
 // The pencil beside a section's name swaps the heading for a field holding
-// its name as written in the file — the heading itself is capitalised.
+// its name as written in the file.
 document.addEventListener('click', function(e) {
     const button = e.target.closest('.rename-section-btn');
     if (!button) return;
@@ -662,6 +731,23 @@ document.addEventListener('click', function(e) {
 
     const restore = () => head.replaceChildren(...shown);
     const submit = async () => {
+        const newName = input.value.trim();
+        if (newName === section) {
+            restore();
+            return;
+        }
+        // Another section, or an item above the first [header], already
+        // answering to this name ignoring case: the server would refuse it.
+        const lower = newName.toLowerCase();
+        const taken = [...document.querySelectorAll('.pantry-section-head')]
+            .map(other => other.dataset.section)
+            .filter(name => name !== 'general')
+            .concat([...document.querySelectorAll('.pantry-item[data-section="general"]')].map(item => item.dataset.name))
+            .find(name => name !== section && name.toLowerCase() === lower);
+        if (taken !== undefined) {
+            showPantryError({{ tr.t("pantry-section-name-taken")|json|safe }}.replace('%s', taken));
+            return;
+        }
         try {
             const response = await fetch('{{ prefix }}/api/pantry/rename', {
                 method: 'POST',

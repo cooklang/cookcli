@@ -50,6 +50,58 @@ test.describe('Pantry file', () => {
     expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toBe(original);
   });
 
+  test('closes a rename that keeps the name, without asking the server', async ({ page }) => {
+    await page.goto('/pantry');
+
+    await head(page, 'garden').getByRole('button', { name: 'Rename section' }).click();
+    const input = page.getByRole('textbox', { name: 'Section name' });
+    await input.fill(' garden ');
+    await input.press('Enter');
+
+    await expect(input).toHaveCount(0);
+    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText('garden');
+    await expect(page.locator('#pantry-error-banner')).toBeHidden();
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toBe(original);
+  });
+
+  test('writes a date picked in the Add item dialog', async ({ page }) => {
+    await page.goto('/pantry');
+
+    await page.getByRole('button', { name: 'Add Item' }).click();
+    await page.locator('#add-section').selectOption('fridge');
+    await page.locator('#add-name').fill('cream');
+    await page.locator('#add-expire').fill('2026-11-02');
+    await page.locator('#add-form').getByRole('button', { name: 'Save' }).click();
+
+    await expect(page.locator('.pantry-item[data-name="cream"]')).toHaveCount(1);
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toMatch(/cream = \{[^}]*expire = "2026-11-02"/);
+  });
+
+  test('shows a date in the picker and keeps its spelling unless it changes', async ({ page }) => {
+    fs.writeFileSync(PANTRY_FILE, original.replace('bought = "2026-03-07"', 'bought = "07.03.2026"'));
+    await page.goto('/pantry');
+
+    const eggs = page.locator('.pantry-item[data-section="fridge"][data-name="eggs"]');
+    await eggs.locator('.edit-btn').click();
+    await expect(eggs.locator('.edit-bought')).toHaveValue('2026-03-07');
+    await eggs.locator('.edit-quantity').fill('10');
+    await eggs.locator('.save-btn').click();
+
+    await expect(eggs.locator('.item-quantity')).toHaveText('10');
+    const written = fs.readFileSync(PANTRY_FILE, 'utf8');
+    expect(written).toContain('eggs = { quantity = "10", bought = "07.03.2026" }');
+  });
+
+  test('speaks the page language for its own words', async ({ context, page }) => {
+    await context.addCookies([{ name: 'lang', value: 'fr-FR', url: 'http://localhost:9080' }]);
+    await page.goto('/pantry');
+
+    await expect(head(page, 'general').locator('.pantry-section-title')).toHaveText('Général');
+    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText('garden');
+    await expect(page.locator('#out-of-stock-count')).toHaveText(/^En rupture de stock : \d+ sur \d+$/);
+    await expect(page.getByText('Qté')).toHaveCount(0);
+  });
+
   test('shows the file as text and refuses text that is not a pantry', async ({ page }) => {
     await page.goto('/pantry#text');
 

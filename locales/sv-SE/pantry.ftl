@@ -8,20 +8,22 @@ pantry-configure = Konfigurera skafferi →
 pantry-no-items-section = Inga produkter i denna sektion
 pantry-show-out-of-stock = Visa bara utgångna
 pantry-no-out-of-stock = Inga utgångna produkter i denna sektion
+pantry-out-of-stock-count = Slut i lager: %o av %t
 pantry-total-sections = Totala sektioner:
-pantry-edit-config = Redigera konfiguration
 pantry-manage = Hantera skafferi
 
 # Pantry Item Fields
 pantry-item-name = Produkt namn
 pantry-item-quantity = Antal
-pantry-item-quantity-short = Ant:
+pantry-item-quantity-label = Antal:
 pantry-item-bought = Köpt:
 pantry-item-bought-date = Köpt Datum
 pantry-item-expire = Går ut:
 pantry-item-expire-date = Utgångsdatum
 pantry-item-low = Lite vid:
 pantry-item-low-threshold = Litet Lager Tröskel
+pantry-placeholder-quantity = t.ex. 500%g eller 2%L
+pantry-placeholder-low = t.ex. 100%g eller 2
 
 # Pantry Actions
 pantry-add-item = Lägg till produkt
@@ -41,6 +43,7 @@ pantry-section-fridge = Kyl
 pantry-section-pantry = Skafferi
 pantry-section-spices = Kryddor
 pantry-section-other = Annat
+pantry-section-general = Allmänt
 pantry-section-new = Ny sektion…
 pantry-section-new-name = Namn på den nya sektionen
 pantry-tab-items = Varor
@@ -55,5 +58,8 @@ pantry-failed-rename = Det gick inte att byta namn på sektionen
 pantry-failed-save-file = Det gick inte att spara filen
 pantry-optional = (valfritt)
 pantry-failed-add = Kunde inte lägga till produkt
+pantry-item-name-required = Ge produkten ett namn
+pantry-item-exists = %s finns redan i %s
+pantry-section-name-taken = Det finns redan en sektion eller produkt som heter %s
 pantry-failed-update = Kunde inte uppdatera produkt
 pantry-failed-remove = Kunde inte radera produkt
