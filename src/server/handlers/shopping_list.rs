@@ -343,6 +343,12 @@ fn scaled(scale: f64) -> String {
 #[derive(Debug, Deserialize)]
 pub struct RemoveItemRequest {
     pub path: String,
+    /// The entry's position in `GET /api/shopping_list/items`. The same
+    /// recipe can be on the list twice, at another scale or with other
+    /// sub-recipes, and the path alone cannot say which one to take. `None`
+    /// takes the first entry with `path`.
+    #[serde(default)]
+    pub index: Option<usize>,
 }
 
 pub async fn remove_from_shopping_list(
@@ -351,13 +357,27 @@ pub async fn remove_from_shopping_list(
     Json(payload): Json<RemoveItemRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
-    store.remove(&payload.path).map_err(|e| {
+    let removed = match payload.index {
+        Some(index) => store.remove_at(index, &payload.path),
+        None => store.remove(&payload.path).map(|()| true),
+    }
+    .map_err(|e| {
         tracing::error!("Failed to remove from shopping list: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
         )
     })?;
+    if !removed {
+        // The list changed since the page read it. Taking another entry with
+        // the same path is what removed the wrong one, so refuse instead.
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "The shopping list changed; reload it and try again."
+            })),
+        ));
+    }
     activity::record(
         &viewer,
         format_args!(

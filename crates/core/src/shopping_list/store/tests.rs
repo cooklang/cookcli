@@ -196,6 +196,74 @@ fn removing_something_that_is_not_there_changes_nothing() {
     assert_eq!(paths, ["Soup.cook"]);
 }
 
+/// The same recipe twice, the first with its stock and the second without —
+/// what a page that adds a recipe, unticks a sub-recipe and adds it again
+/// stores.
+fn soup_twice(store: &ShoppingListStore) {
+    store
+        .add(StoredEntry {
+            included_references: Some(vec!["./Stock.cook".into()]),
+            ..entry("Soup.cook", 1.0)
+        })
+        .unwrap();
+    store
+        .add(StoredEntry {
+            included_references: Some(vec![]),
+            ..entry("Soup.cook", 2.0)
+        })
+        .unwrap();
+}
+
+#[test]
+fn remove_at_takes_that_entry_and_not_the_first_with_its_path() {
+    let dir = temp();
+    let store = store(&dir);
+    soup_twice(&store);
+
+    assert!(store.remove_at(1, "Soup.cook").expect("removes"));
+
+    let items = store.load().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].scale, 1.0, "the first entry stays");
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Stock.cook".to_string()][..]),
+        "with its sub-recipe"
+    );
+}
+
+#[test]
+fn remove_at_changes_nothing_when_the_entry_is_not_there_any_more() {
+    let dir = temp();
+    let store = store(&dir);
+    soup_twice(&store);
+    store.add(entry("Cake.cook", 1.0)).unwrap();
+    let before = list_file(&dir);
+
+    // Another path at that position: the list changed under the caller.
+    assert!(!store.remove_at(2, "Soup.cook").unwrap());
+    // Past the end.
+    assert!(!store.remove_at(3, "Soup.cook").unwrap());
+
+    assert_eq!(list_file(&dir), before);
+}
+
+#[test]
+fn remove_at_counts_the_entries_load_lists() {
+    let dir = temp();
+    let store = store(&dir);
+    // A free-hand ingredient, written by one of the apps, comes first in the
+    // file but is not one of the entries `load` returns.
+    write(
+        &base(&dir).join(".shopping-list"),
+        "salt\n./Soup.cook\n./Cake.cook\n",
+    );
+
+    assert!(store.remove_at(1, "Cake.cook").expect("removes"));
+
+    assert_eq!(list_file(&dir), "salt\n./Soup.cook\n");
+}
+
 #[test]
 fn clear_empties_the_list_and_the_checked_log() {
     let dir = temp();

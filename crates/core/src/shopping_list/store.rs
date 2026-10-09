@@ -304,6 +304,10 @@ impl ShoppingListStore {
     /// Remove the first entry whose path is `path`, and do nothing if there is
     /// none.
     ///
+    /// With the same recipe on the list twice — at another scale, or with other
+    /// sub-recipes — this cannot tell the two apart; use
+    /// [`remove_at`](Self::remove_at) to take a particular one.
+    ///
     /// Compaction of the checked log (which drops entries for ingredients
     /// no longer in any remaining recipe) is the caller's responsibility.
     /// The store has no parser context to expand recipe references into
@@ -319,6 +323,36 @@ impl ShoppingListStore {
             list.items.remove(pos);
         }
         self.save_list(&list)
+    }
+
+    /// Remove the entry at `index` in what [`load`](Self::load) returns, as
+    /// long as its path is still `path`.
+    ///
+    /// Answers `false` and changes nothing when it is not — the list changed
+    /// since the caller read it, so the entry it meant may be elsewhere or
+    /// gone, and taking another one with the same path would remove the wrong
+    /// one. The same compaction note as [`remove`](Self::remove) applies.
+    pub fn remove_at(&self, index: usize, path: &str) -> Result<bool, CoreError> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        // `load` lists recipe items only, so count those to find the item.
+        let pos = list
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(pos, item)| match item {
+                ShoppingListItem::Recipe(r) => Some((pos, r)),
+                _ => None,
+            })
+            .nth(index)
+            .filter(|(_, r)| r.path == path)
+            .map(|(pos, _)| pos);
+        let Some(pos) = pos else {
+            return Ok(false);
+        };
+        list.items.remove(pos);
+        self.save_list(&list)?;
+        Ok(true)
     }
 
     /// Empty the shopping list and forget everything that was ticked off.

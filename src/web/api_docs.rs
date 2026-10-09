@@ -1261,18 +1261,31 @@ fn shopping_list() -> ApiSection {
                 "Remove one recipe from the stored list",
                 "Also compacts the checked log, dropping checks for ingredients no longer \
                  referenced by any remaining recipe — best-effort; a compaction failure does \
-                 not fail the remove itself. Responds `200 OK` with an empty body.",
+                 not fail the remove itself. Responds `200 OK` with an empty body, or \
+                 `409 Conflict` when the entry at `index` is no longer `path` — the list \
+                 changed since it was read, and nothing was removed.",
             )
-            .params(vec![param(
-                "path",
-                "body",
-                "string",
-                true,
-                "Recipe path exactly as stored.",
-            )])
+            .params(vec![
+                param(
+                    "path",
+                    "body",
+                    "string",
+                    true,
+                    "Recipe path exactly as stored.",
+                ),
+                param(
+                    "index",
+                    "body",
+                    "integer",
+                    false,
+                    "Position of the entry in `GET /api/shopping_list/items`, counting from 0. \
+                     The same recipe can be on the list more than once; without `index` the \
+                     first entry with `path` is removed.",
+                ),
+            ])
             .request(
                 r#"
-{ "path": "Salads/Caprese.cook" }
+{ "path": "Salads/Caprese.cook", "index": 1 }
 "#,
             ),
             ep(

@@ -791,16 +791,17 @@ Request body:
 
 Remove one recipe from the stored list
 
-Also compacts the checked log, dropping checks for ingredients no longer referenced by any remaining recipe — best-effort; a compaction failure does not fail the remove itself. Responds `200 OK` with an empty body.
+Also compacts the checked log, dropping checks for ingredients no longer referenced by any remaining recipe — best-effort; a compaction failure does not fail the remove itself. Responds `200 OK` with an empty body, or `409 Conflict` when the entry at `index` is no longer `path` — the list changed since it was read, and nothing was removed.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `path` | body | `string` | yes | Recipe path exactly as stored. |
+| `index` | body | `integer` | no | Position of the entry in `GET /api/shopping_list/items`, counting from 0. The same recipe can be on the list more than once; without `index` the first entry with `path` is removed. |
 
 Request body:
 
 ```json
-{ "path": "Salads/Caprese.cook" }
+{ "path": "Salads/Caprese.cook", "index": 1 }
 ```
 
 ### `POST /api/shopping_list/clear`
