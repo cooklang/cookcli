@@ -10,6 +10,7 @@ pantry-show-out-of-stock = 在庫切れだけを表示
 pantry-no-out-of-stock = この保管場所に在庫切れの品目はありません
 pantry-total-sections = 保管場所の数:
 pantry-edit-config = 設定を編集
+pantry-manage = 在庫を管理
 
 # Pantry Item Fields
 pantry-item-name = 品名

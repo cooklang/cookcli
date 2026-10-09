@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Show only out of stock
 pantry-no-out-of-stock = No out-of-stock items in this section
 pantry-total-sections = Total sections:
 pantry-edit-config = Edit Configuration
+pantry-manage = Manage pantry
 
 # Pantry Item Fields
 pantry-item-name = Item Name

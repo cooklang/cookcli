@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Alleen niet-voorradige artikelen tonen
 pantry-no-out-of-stock = Geen niet-voorradige artikelen in deze sectie
 pantry-total-sections = Totaal aantal secties:
 pantry-edit-config = Configuratie bewerken
+pantry-manage = Voorraadkast beheren
 
 # Pantry Item Fields
 pantry-item-name = Artikelnaam

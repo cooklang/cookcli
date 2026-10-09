@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Visa bara utgångna
 pantry-no-out-of-stock = Inga utgångna produkter i denna sektion
 pantry-total-sections = Totala sektioner:
 pantry-edit-config = Redigera konfiguration
+pantry-manage = Hantera skafferi
 
 # Pantry Item Fields
 pantry-item-name = Produkt namn

@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Nur nicht vorrätige Artikel anzeigen
 pantry-no-out-of-stock = Keine nicht vorrätigen Artikel in diesem Bereich
 pantry-total-sections = Gesamte Bereiche:
 pantry-edit-config = Konfiguration bearbeiten
+pantry-manage = Vorrat verwalten
 
 # Pantry Item Fields
 pantry-item-name = Artikelname

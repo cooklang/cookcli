@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Erakutsi bukatutako elementuak bakarrik
 pantry-no-out-of-stock = Ez dago bukatutako elementurik sail honetan
 pantry-total-sections = Sailak guztira:
 pantry-edit-config = Editatu konfigurazioa
+pantry-manage = Kudeatu jaki-tokia
 
 # Pantry Item Fields
 pantry-item-name = Elementuaren izena

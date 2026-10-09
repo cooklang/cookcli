@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Mostrar solo artículos agotados
 pantry-no-out-of-stock = No hay artículos agotados en esta sección
 pantry-total-sections = Total de secciones:
 pantry-edit-config = Editar configuración
+pantry-manage = Gestionar despensa
 
 # Pantry Item Fields
 pantry-item-name = Nombre del artículo

@@ -132,6 +132,9 @@
                 <div>
                     <span class="font-medium">{{ tr.t("pref-pantry-path") }}:</span>
                     <span class="text-muted ml-2">{{ pantry_path }}</span>
+                    {% if !viewer.recipes_only() %}
+                    <a href="{{ prefix }}/pantry" class="ml-2 text-accent-text hover:underline">{{ tr.t("pantry-manage") }} →</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

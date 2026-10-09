@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Mostra solo gli esauriti
 pantry-no-out-of-stock = Nessun articolo esaurito in questa sezione
 pantry-total-sections = Sezioni totali:
 pantry-edit-config = Modifica configurazione
+pantry-manage = Gestisci dispensa
 
 # Pantry Item Fields
 pantry-item-name = Nome dell'articolo

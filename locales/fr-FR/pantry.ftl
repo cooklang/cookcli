@@ -10,6 +10,7 @@ pantry-show-out-of-stock = Afficher uniquement les articles en rupture de stock
 pantry-no-out-of-stock = Aucun article en rupture de stock dans cette section
 pantry-total-sections = Total des sections :
 pantry-edit-config = Modifier la configuration
+pantry-manage = Gérer le garde-manger
 
 # Pantry Item Fields
 pantry-item-name = Nom de l'article

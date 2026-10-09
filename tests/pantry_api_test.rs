@@ -337,3 +337,12 @@ async fn text_edited_from_an_old_revision_is_refused() {
     assert_eq!(body["revision"], now["revision"], "the current revision");
     assert_eq!(server.pantry_text(), changed, "nothing may be written");
 }
+
+#[tokio::test]
+async fn preferences_link_to_the_pantry_page() {
+    let server = start_server(PANTRY).await;
+
+    let page = reqwest::get(server.url("/preferences")).await.unwrap();
+    assert_eq!(page.status(), StatusCode::OK);
+    assert!(page.text().await.unwrap().contains("href=\"/pantry\""));
+}
