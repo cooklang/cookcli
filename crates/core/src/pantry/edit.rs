@@ -379,8 +379,24 @@ impl Attributes {
             ("expire", &self.expire),
             ("low", &self.low),
         ] {
-            if let Some(value) = value {
+            let Some(value) = value else { continue };
+            if table.contains_key(key) {
                 table.insert(key, value.as_str().into());
+                continue;
+            }
+            // A key added after the last one takes over the space that
+            // closed the table, `{ quantity = "1%l" }` becoming
+            // `{ quantity = "1%l", expire = "…" }` and not `"1%l" , expire`.
+            let closing = table.iter_mut().last().and_then(|(_, last)| {
+                let suffix = last.decor().suffix()?.as_str()?.to_string();
+                suffix.trim().is_empty().then(|| {
+                    last.decor_mut().set_suffix("");
+                    suffix
+                })
+            });
+            table.insert(key, value.as_str().into());
+            if let (Some(closing), Some(added)) = (closing, table.get_mut(key)) {
+                added.decor_mut().set_suffix(closing);
             }
         }
     }
@@ -464,6 +480,29 @@ mod tests {
         let out = d.to_string();
         assert!(out.contains("quantity = \"2%l\""), "{out}");
         assert!(out.contains("shelf = \"top\""), "{out}");
+    }
+
+    /// An attribute added to an item written inline is spaced like the ones
+    /// already there, whichever way the file spaces them.
+    #[test]
+    fn an_added_attribute_is_spaced_like_its_neighbours() {
+        let expire = Attributes {
+            expire: Some("2026-11-02".to_string()),
+            ..Default::default()
+        };
+        let mut d = doc("[fridge]\nmilk = { quantity = \"2%l\" }\ncream = {quantity=\"1\"}\n");
+        apply(&mut d, "fridge", "milk", &expire).expect("applies");
+        apply(&mut d, "fridge", "cream", &expire).expect("applies");
+
+        let out = d.to_string();
+        assert!(
+            out.contains("milk = { quantity = \"2%l\", expire = \"2026-11-02\" }"),
+            "{out}"
+        );
+        assert!(
+            out.contains("cream = {quantity=\"1\", expire = \"2026-11-02\"}"),
+            "{out}"
+        );
     }
 
     /// Changing only the quantity of a short-form item leaves it short form,
