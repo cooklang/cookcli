@@ -153,6 +153,22 @@ Serving recipe files from: "/Users/chefalexey/recipes"
 
 Download the latest release for your platform from the [releases page](https://github.com/cooklang/CookCLI/releases) and add it to your PATH.
 
+Archives are named `cook-<version>-<os>-<arch>[-<libc>]`, with a `.sha256`
+next to each:
+
+| Platform | Archive |
+|---|---|
+| Linux x86_64 (static, any distribution) | `cook-<version>-linux-x86_64-musl.tar.gz` |
+| Linux x86_64 (glibc) | `cook-<version>-linux-x86_64-gnu.tar.gz` |
+| Linux x86 (32-bit) | `cook-<version>-linux-i686-musl.tar.gz` |
+| Linux ARM 64-bit (Raspberry Pi 3+ on a 64-bit OS) | `cook-<version>-linux-aarch64-musl.tar.gz` |
+| Linux ARM 32-bit hard-float (Raspberry Pi OS 32-bit) | `cook-<version>-linux-armhf-musl.tar.gz` |
+| macOS Apple Silicon / Intel | `cook-<version>-macos-aarch64.tar.gz` / `cook-<version>-macos-x86_64.tar.gz` |
+| Windows x86_64 / x86 / ARM64 | `cook-<version>-windows-x86_64.zip` / `-windows-i686.zip` / `-windows-aarch64.zip` |
+| FreeBSD x86_64 | `cook-<version>-freebsd-x86_64.tar.gz` |
+
+Once installed, `cook update` keeps it current.
+
 ### macOS/Linux
 
 Using Homebrew:
@@ -196,7 +212,7 @@ cargo install cookcli --locked
 
 `--locked` builds against the dependency versions we tested and released with, rather than re-resolving to the newest compatible ones.
 
-Note that this compiles CookCLI and all its dependencies from source, which needs a few GB of RAM and disk. If you are on a Raspberry Pi, an Armbian board, or anything else memory-constrained, prefer the [prebuilt binaries](https://github.com/cooklang/CookCLI/releases) — we publish `aarch64` and `armv7` Linux builds.
+Note that this compiles CookCLI and all its dependencies from source, which needs a few GB of RAM and disk. If you are on a Raspberry Pi, an Armbian board, or anything else memory-constrained, prefer the [prebuilt binaries](https://github.com/cooklang/CookCLI/releases) — we publish `aarch64` and `armhf` Linux builds.
 
 <details>
 <summary>Building on a low-memory single-board computer</summary>
