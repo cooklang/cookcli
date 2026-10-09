@@ -281,7 +281,7 @@ function renderSelectedRecipes() {
                         <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                         <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
-                    ${removeButton(item.path)}
+                    ${removeButton(item.path, index)}
                 </div>
                 <ul class="mt-2 ml-4 space-y-1">${recipesHtml}</ul>
             </div>`;
@@ -311,7 +311,7 @@ function renderSelectedRecipes() {
                     <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                     <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
-                ${removeButton(item.path)}
+                ${removeButton(item.path, index)}
             </div>
             ${refsHtml}
         </div>`;
@@ -320,9 +320,11 @@ function renderSelectedRecipes() {
 
 // Guests may look at the list but not change it, so they get no Remove
 // buttons and the ticks are read-only. The server refuses them regardless.
-function removeButton(path) {
+// The entry's position goes along with its path: the same recipe can be on the
+// list twice, and the path alone would take the first copy.
+function removeButton(path, index) {
     if (!window.__CAN_EDIT_LISTS__) return '';
-    return `<button type="button" data-action="remove-recipe" data-path="${escHtml(path)}" class="text-danger hover:underline font-medium text-sm">
+    return `<button type="button" data-action="remove-recipe" data-path="${escHtml(path)}" data-index="${index}" class="text-danger hover:underline font-medium text-sm">
         {{ tr.t("shopping-remove") }}
     </button>`;
 }
@@ -333,7 +335,7 @@ function removeButton(path) {
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-action="remove-recipe"]');
     if (!btn) return;
-    removeRecipe(btn.dataset.path);
+    removeRecipe(btn.dataset.path, Number(btn.dataset.index));
 });
 
 // Same delegation trick for ingredient checkboxes — inline `onchange` with
@@ -345,14 +347,14 @@ document.addEventListener('change', (event) => {
     toggleItem(input);
 });
 
-async function removeRecipe(path) {
+async function removeRecipe(path, index) {
     try {
         const response = await fetch('{{ prefix }}/api/shopping_list/remove', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ path })
+            body: JSON.stringify({ path, index })
         });
 
         if (response.ok) {
@@ -360,6 +362,12 @@ async function removeRecipe(path) {
             await requestRefresh('list');
         } else {
             const data = await response.json().catch(() => ({}));
+            // 409: the list changed since it was drawn, so nothing was
+            // removed. Draw it again so the next click names the right entry —
+            // first, as regenerating the list hides the error.
+            if (response.status === 409) {
+                await requestRefresh('list');
+            }
             showError(data.error || 'Failed to remove recipe');
         }
     } catch (error) {
