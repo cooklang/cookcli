@@ -118,6 +118,49 @@ test.describe('Aisles', () => {
     expect(fs.readFileSync(AISLE_FILE, 'utf8')).toContain('\ndry white wine\n');
   });
 
+  test('keeps the ticks when the aisle picker shows up', async ({ page }) => {
+    await page.route('**/api/shopping_list/items', route => route.fulfill({
+      json: [{ path: 'Risotto.cook', name: 'Risotto', scale: 1, included_references: [] }],
+    }));
+    // Ticked: one item in an aisle, one in "other", where the picker goes. They
+    // come back with the generated list, and again when the event stream opens
+    // and the page re-reads them.
+    const checked = ['onion', 'dry white wine'];
+    await page.route('**/api/shopping_list', async route => {
+      const response = await route.fetch();
+      const json = await response.json();
+      await route.fulfill({ response, json: { ...json, checked } });
+    });
+    let reread!: () => void;
+    const rereadDone = new Promise<void>(resolve => { reread = resolve; });
+    await page.route('**/api/shopping_list/checked', async route => {
+      await route.fulfill({ json: checked });
+      reread();
+    });
+    // The aisles answer only once the ticks are on screen, as on a reload
+    // where the list comes back first.
+    let release!: () => void;
+    const released = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/aisles', async route => {
+      await released;
+      await route.continue();
+    });
+    await page.goto('/shopping-list');
+
+    const box = (name: string) =>
+      page.locator(`[data-action="toggle-item"][data-ingredient-name="${name}"]`);
+    await expect(box('onion')).toBeChecked();
+    await expect(box('dry white wine')).toBeChecked();
+    // Whatever re-reads the ticks has done so before the pickers arrive.
+    await rereadDone;
+
+    release();
+    await expect(page.locator('[data-action="assign-aisle"][data-ingredient-name="dry white wine"]'))
+      .toBeVisible();
+    await expect(box('onion')).toBeChecked();
+    await expect(box('dry white wine')).toBeChecked();
+  });
+
   test('creates an aisle from the shopping list picker', async ({ page }) => {
     await page.route('**/api/shopping_list/items', route => route.fulfill({
       json: [{ path: 'Risotto.cook', name: 'Risotto', scale: 1, included_references: [] }],

@@ -630,8 +630,10 @@ document.addEventListener('change', async (event) => {
 });
 
 // Render the generated list. The markup carries no ticks — those are applied
-// separately by applyCheckedStates() — so a list whose items haven't changed
-// renders to the same markup and setHtml() leaves it in place.
+// from `checkedItems` by applyCheckedStates() at the end — so a list whose
+// items haven't changed renders to the same markup and setHtml() leaves it in
+// place. One that does change (the aisle pickers arriving after the list, say)
+// gets fresh boxes, which have to be ticked again.
 function displayShoppingList(data) {
     const resultsDiv = document.getElementById('shopping-list-results');
     const contentDiv = document.getElementById('list-content');
@@ -717,6 +719,7 @@ function displayShoppingList(data) {
     } else {
         setHtml(contentDiv, html);
     }
+    applyCheckedStates();
 }
 
 // Helper function to format quantities
