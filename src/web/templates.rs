@@ -728,6 +728,11 @@ pub struct PantryTemplate {
     pub active: String,
     pub configured: bool,
     pub sections: Vec<PantrySection>,
+    /// How many items each filter above the list would show.
+    pub counts: PantryCounts,
+    /// Why the pantry file could not be read, when it could not; the page
+    /// shows it rather than an empty pantry someone might start filling.
+    pub load_error: Option<String>,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
@@ -838,6 +843,27 @@ pub struct PantryItem {
     pub bought: Option<String>,
     pub expire: Option<String>,
     pub low: Option<String>,
+    /// `quantity` as the page shows it, `250 g` for `250%g`; empty without one.
+    pub quantity_text: String,
+    /// `low` shown the same way.
+    pub low_text: String,
+    /// `"out"`, `"low"` or `"ok"`, judged as `cook pantry depleted` judges it.
+    pub stock: &'static str,
+    /// `"expired"`, `"today"`, `"soon"` (within the week `cook pantry
+    /// expiring` looks ahead), `"later"`, or `""` with no readable date.
+    pub expiry: &'static str,
+    /// Days until it expires, or since it did; 0 without a date.
+    pub expiry_days: usize,
+}
+
+/// The number of items behind each filter on the pantry page.
+#[cfg(feature = "server")]
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PantryCounts {
+    pub all: usize,
+    pub low: usize,
+    pub out: usize,
+    pub expiring: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

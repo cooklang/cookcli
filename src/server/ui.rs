@@ -861,43 +861,32 @@ async fn pantry_page(
     Extension(features): Extension<FeatureFlags>,
     Extension(viewer): Extension<Viewer>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Load pantry configuration
-    let pantry_path = state.pantry_path.as_ref();
-
     let mut sections = Vec::new();
+    let mut counts = PantryCounts::default();
+    let mut load_error = None;
 
-    if let Some(path) = pantry_path {
-        if let Ok(content) = tokio::fs::read_to_string(path).await {
-            let result = cooklang::pantry::parse_lenient(&content);
-
-            if let Some(pantry_conf) = result.output() {
-                // Convert pantry data to template format
-                for (section_name, items) in &pantry_conf.sections {
-                    let mut pantry_items = Vec::new();
-
-                    for item in items {
-                        pantry_items.push(crate::web::templates::PantryItem {
-                            name: item.name().to_string(),
-                            quantity: item.quantity().map(|q| q.to_string()),
-                            bought: item.bought().map(|b| b.to_string()),
-                            expire: item.expire().map(|e| e.to_string()),
-                            low: item.low().map(|l| l.to_string()),
-                        });
-                    }
-
-                    sections.push(crate::web::templates::PantrySection {
-                        name: section_name.clone(),
-                        items: pantry_items,
-                    });
-                }
+    if let Some(path) = state.pantry_path.clone() {
+        let ctx = cookcli_core::Context::new(state.base_path.clone())
+            .with_pantry(cookcli_core::ConfigSource::Path(path));
+        match tokio::task::spawn_blocking(move || cookcli_core::pantry::load(&ctx)).await {
+            Ok(Ok(outcome)) => {
+                (sections, counts) =
+                    pantry_sections(&outcome.value, chrono::Local::now().date_naive());
+            }
+            Ok(Err(error)) => load_error = Some(error.to_string()),
+            Err(error) => {
+                tracing::error!("Reading the pantry did not finish: {error}");
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
     }
 
     Ok(PantryTemplate {
         active: "pantry".to_string(),
-        configured: pantry_path.is_some(),
+        configured: state.pantry_path.is_some(),
         sections,
+        counts,
+        load_error,
         tr: Tr::new(lang),
         prefix: state.url_prefix.clone(),
         static_mode: false,
@@ -905,6 +894,79 @@ async fn pantry_page(
         features,
         viewer,
     })
+}
+
+/// The pantry as the page lists it: each item with its stock and expiry
+/// already judged, by the same rules as `cook pantry depleted` and `cook
+/// pantry expiring`, and the counts behind the filters.
+fn pantry_sections(
+    contents: &cookcli_core::pantry::PantryContents,
+    today: chrono::NaiveDate,
+) -> (Vec<PantrySection>, PantryCounts) {
+    let soon = i64::from(cookcli_core::pantry::ExpiringRequest::default().days);
+    let mut counts = PantryCounts::default();
+    let sections = contents
+        .sections
+        .iter()
+        .map(|section| PantrySection {
+            name: section.name.clone(),
+            items: section
+                .items
+                .iter()
+                .map(|item| {
+                    let stock = if item.is_out() {
+                        "out"
+                    } else if item.is_depleted() {
+                        "low"
+                    } else {
+                        "ok"
+                    };
+                    let days = item.days_until_expiry(today);
+                    let expiry = match days {
+                        None => "",
+                        Some(days) if days < 0 => "expired",
+                        Some(0) => "today",
+                        Some(days) if days <= soon => "soon",
+                        Some(_) => "later",
+                    };
+                    counts.all += 1;
+                    counts.low += usize::from(stock == "low");
+                    counts.out += usize::from(stock == "out");
+                    counts.expiring += usize::from(matches!(expiry, "expired" | "today" | "soon"));
+                    PantryItem {
+                        name: item.name.clone(),
+                        quantity: item.quantity.clone(),
+                        bought: item.bought.clone(),
+                        expire: item.expire.clone(),
+                        low: item.low.clone(),
+                        quantity_text: item
+                            .quantity
+                            .as_deref()
+                            .map(shown_quantity)
+                            .unwrap_or_default(),
+                        low_text: item.low.as_deref().map(shown_quantity).unwrap_or_default(),
+                        stock,
+                        expiry,
+                        expiry_days: days.map_or(0, |days| {
+                            usize::try_from(days.unsigned_abs()).unwrap_or(usize::MAX)
+                        }),
+                    }
+                })
+                .collect(),
+        })
+        .collect();
+    (sections, counts)
+}
+
+/// A pantry quantity as people read it: `250 g` for `250%g`, the `%` that
+/// separates number and unit in the file becoming a space.
+fn shown_quantity(quantity: &str) -> String {
+    quantity
+        .split('%')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 async fn aisles_page(

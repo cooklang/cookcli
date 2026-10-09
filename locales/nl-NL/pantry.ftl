@@ -1,21 +1,31 @@
 # Pantry
 pantry-title = Voorraadkast
+pantry-intro = Wat er in huis is, per bewaarplek. De boodschappenlijst laat weg wat je al hebt.
+pantry-unreadable = Het voorraadbestand kon niet worden gelezen
 pantry-empty = Uw voorraadkast is leeg
+pantry-filters = Tonen
+pantry-filter-all = Alles
+pantry-filter-low = Bijna op
+pantry-filter-out = Niet op voorraad
+pantry-filter-expiring = Verloopt binnenkort
+pantry-filter-empty = Geen artikel past bij dit filter.
+pantry-stock-ok = Op voorraad
+pantry-expired = Verlopen
+pantry-expires-today = Verloopt vandaag
+pantry-expires-in =
+    { $count ->
+        [one] Over { $count } dag
+       *[other] Over { $count } dagen
+    }
 pantry-section = { $name }
 pantry-no-config = Geen voorraadkast-configuratie gevonden
 pantry-create-config = Maak een pantry.conf-bestand om uw voorraad bij te houden
 pantry-configure = Voorraadkast configureren →
-pantry-no-items-section = Geen artikelen in deze sectie
-pantry-show-out-of-stock = Alleen niet-voorradige artikelen tonen
-pantry-no-out-of-stock = Geen niet-voorradige artikelen in deze sectie
-pantry-out-of-stock-count = Niet op voorraad: %o van %t
-pantry-total-sections = Totaal aantal secties:
 pantry-manage = Voorraadkast beheren
 
 # Pantry Item Fields
 pantry-item-name = Artikelnaam
 pantry-item-quantity = Hoeveelheid
-pantry-item-quantity-label = Hoeveelheid:
 pantry-item-bought = Gekocht:
 pantry-item-bought-date = Aankoopdatum
 pantry-item-expire = Verloopt:
@@ -27,7 +37,7 @@ pantry-placeholder-low = bijv. 100%g of 2
 
 # Pantry Actions
 pantry-add-item = Artikel toevoegen
-pantry-add-pantry-item = Voorraad-artikel toevoegen
+pantry-add = Toevoegen
 pantry-edit-item = Artikel bewerken
 pantry-remove-item = Artikel verwijderen
 pantry-remove-confirm = { $name } verwijderen uit { $section }?
@@ -37,15 +47,13 @@ pantry-restock = Aanvullen
 pantry-save = Opslaan
 pantry-cancel = Annuleren
 pantry-section-label = Sectie
-pantry-section-select = Selecteer sectie...
+pantry-section-required = Geef de sectie een naam
+pantry-general-quantity-only = Artikelen vóór de eerste sectie kunnen alleen een hoeveelheid hebben. Verplaats het naar een sectie om data of een minimum op te geven.
 pantry-section-freezer = Vriezer
 pantry-section-fridge = Koelkast
 pantry-section-pantry = Voorraadkast
 pantry-section-spices = Kruiden
-pantry-section-other = Overig
 pantry-section-general = Algemeen
-pantry-section-new = Nieuwe sectie…
-pantry-section-new-name = Naam van de nieuwe sectie
 pantry-tab-items = Artikelen
 pantry-tab-text = Tekst
 pantry-text-intro = Bewerk het bestand direct: een [sectie]-regel, daarna één artikel per regel, geschreven als naam = "hoeveelheid" of naam = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Regels die met # beginnen zijn opmerkingen.

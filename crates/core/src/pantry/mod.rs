@@ -137,6 +137,36 @@ impl PantryItem {
         .is_low()
     }
 
+    /// True when the stock has run out: a quantity whose number is zero,
+    /// whatever its unit.
+    ///
+    /// False for an item with no quantity and for one that is not a number
+    /// (`"unlim"`), since neither says the item is gone.
+    pub fn is_out(&self) -> bool {
+        self.quantity
+            .as_deref()
+            .and_then(|quantity| QUANTITY.captures(quantity))
+            .and_then(|captures| captures[1].parse::<f64>().ok())
+            .is_some_and(|amount| amount == 0.0)
+    }
+
+    /// True when [`depleted`] lists this item without
+    /// [`DepletedRequest::all`]: low by its own threshold, or by the built-in
+    /// ones when it sets none that can be compared with its stock.
+    pub fn is_depleted(&self) -> bool {
+        is_depleted(self, false)
+    }
+
+    /// Days from `today` until this item expires — `0` on the day, negative
+    /// once it has passed — or `None` when it has no expiry date that reads as
+    /// one. See [`expiring`] for the spellings read.
+    pub fn days_until_expiry(&self, today: NaiveDate) -> Option<i64> {
+        self.expire
+            .as_deref()
+            .and_then(parse_date)
+            .map(|date| (date - today).num_days())
+    }
+
     fn from_cooklang(section: &str, item: &cooklang::pantry::PantryItem) -> Self {
         Self {
             name: item.name().to_string(),

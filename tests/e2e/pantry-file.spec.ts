@@ -59,46 +59,110 @@ test.describe('Pantry file', () => {
     await input.press('Enter');
 
     await expect(input).toHaveCount(0);
-    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText('garden');
+    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText(/^garden \d+$/);
     await expect(page.locator('#pantry-error-banner')).toBeHidden();
     expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toBe(original);
   });
 
-  test('writes a date picked in the Add item dialog', async ({ page }) => {
+  const row = (page: Page, section: string, name: string) =>
+    page.locator(`.pantry-row[data-section="${section}"][data-name="${name}"]`);
+
+  test('writes a date picked in the item editor', async ({ page }) => {
     await page.goto('/pantry');
 
-    await page.getByRole('button', { name: 'Add Item' }).click();
-    await page.locator('#add-section').selectOption('fridge');
-    await page.locator('#add-name').fill('cream');
-    await page.locator('#add-expire').fill('2026-11-02');
-    await page.locator('#add-form').getByRole('button', { name: 'Save' }).click();
+    await row(page, 'fridge', 'milk').getByRole('button', { name: /Edit item/ }).click();
+    const editor = page.locator('.pantry-editor');
+    await editor.getByLabel('Expiry Date').fill('2026-11-02');
+    await editor.getByRole('button', { name: 'Save' }).click();
 
-    await expect(page.locator('.pantry-item[data-name="cream"]')).toHaveCount(1);
-    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toMatch(/cream = \{[^}]*expire = "2026-11-02"/);
+    await expect(editor).toHaveCount(0);
+    await expect(row(page, 'fridge', 'milk').locator('.pantry-meta')).toContainText('2026-11-02');
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toContain('milk = { quantity = "2%l", expire = "2026-11-02" }');
   });
 
   test('shows a date in the picker and keeps its spelling unless it changes', async ({ page }) => {
     fs.writeFileSync(PANTRY_FILE, original.replace('bought = "2026-03-07"', 'bought = "07.03.2026"'));
     await page.goto('/pantry');
 
-    const eggs = page.locator('.pantry-item[data-section="fridge"][data-name="eggs"]');
-    await eggs.locator('.edit-btn').click();
-    await expect(eggs.locator('.edit-bought')).toHaveValue('2026-03-07');
-    await eggs.locator('.edit-quantity').fill('10');
-    await eggs.locator('.save-btn').click();
+    const eggs = row(page, 'fridge', 'eggs');
+    await eggs.getByRole('button', { name: /Edit item/ }).click();
+    const editor = page.locator('.pantry-editor');
+    await expect(editor.getByLabel('Bought Date')).toHaveValue('2026-03-07');
+    await editor.getByLabel('Quantity').fill('10');
+    await editor.getByLabel('Quantity').press('Enter');
 
-    await expect(eggs.locator('.item-quantity')).toHaveText('10');
+    await expect(eggs.locator('.pantry-quantity')).toHaveText('10');
     const written = fs.readFileSync(PANTRY_FILE, 'utf8');
     expect(written).toContain('eggs = { quantity = "10", bought = "07.03.2026" }');
+  });
+
+  test('adds an item from its section, and keeps the field for the next', async ({ page }) => {
+    await page.goto('/pantry');
+
+    const add = page.locator('.pantry-add[data-section="fridge"]');
+    await add.getByLabel('Item Name').fill('cream');
+    await add.getByLabel('Quantity').fill('200%ml');
+    await add.getByRole('button', { name: 'Add' }).click();
+
+    await expect(row(page, 'fridge', 'cream').locator('.pantry-quantity')).toHaveText('200 ml');
+    await expect(page.locator('.pantry-add[data-section="fridge"]').getByLabel('Item Name')).toBeFocused();
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toMatch(/\[fridge\][^[]*cream = "200%ml"/);
+  });
+
+  test('refuses an item the section already has, before asking the server', async ({ page }) => {
+    await page.goto('/pantry');
+
+    const add = page.locator('.pantry-add[data-section="fridge"]');
+    await add.getByLabel('Item Name').fill('milk');
+    await add.getByRole('button', { name: 'Add' }).click();
+
+    await expect(page.locator('#pantry-error-message')).toHaveText('milk is already in fridge');
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toBe(original);
+  });
+
+  test('adds an item to a new section, or to one named the same', async ({ page }) => {
+    await page.goto('/pantry');
+
+    const form = page.locator('#pantry-new-item');
+    await form.getByLabel('Section').fill('cellar');
+    await form.getByLabel('Item Name').fill('wine');
+    await form.getByRole('button', { name: 'Add Item' }).click();
+    await expect(head(page, 'cellar')).toHaveCount(1);
+    await expect(row(page, 'cellar', 'wine')).toHaveCount(1);
+
+    // `Fridge` reads as the fridge already there, not a second one.
+    await form.getByLabel('Section').fill('Fridge');
+    await form.getByLabel('Item Name').fill('yoghurt');
+    await form.getByRole('button', { name: 'Add Item' }).click();
+    await expect(row(page, 'fridge', 'yoghurt')).toHaveCount(1);
+    await expect(head(page, 'Fridge')).toHaveCount(0);
+
+    const written = fs.readFileSync(PANTRY_FILE, 'utf8');
+    expect(written).toMatch(/\[cellar\]\s*wine = ""/);
+  });
+
+  test('filters the list by stock', async ({ page }) => {
+    await page.goto('/pantry');
+
+    await page.locator('.pantry-filter[data-filter="out"]').click();
+    await expect(page.locator('.pantry-filter[data-filter="out"]')).toHaveAttribute('aria-pressed', 'true');
+    // The seed's tinned tomatoes are at 0.
+    await expect(row(page, 'pantry', 'tinned tomatoes')).toBeVisible();
+    await expect(row(page, 'fridge', 'milk')).toBeHidden();
+    await expect(head(page, 'garden')).toBeHidden();
+    await expect(page.locator('#pantry-new-item')).toBeHidden();
+
+    await page.locator('.pantry-filter[data-filter="all"]').click();
+    await expect(row(page, 'fridge', 'milk')).toBeVisible();
   });
 
   test('speaks the page language for its own words', async ({ context, page }) => {
     await context.addCookies([{ name: 'lang', value: 'fr-FR', url: 'http://localhost:9080' }]);
     await page.goto('/pantry');
 
-    await expect(head(page, 'general').locator('.pantry-section-title')).toHaveText('Général');
-    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText('garden');
-    await expect(page.locator('#out-of-stock-count')).toHaveText(/^En rupture de stock : \d+ sur \d+$/);
+    await expect(head(page, 'general').locator('.pantry-section-title')).toHaveText(/^Général \d+$/);
+    await expect(head(page, 'garden').locator('.pantry-section-title')).toHaveText(/^garden \d+$/);
+    await expect(page.locator('.pantry-filter[data-filter="out"]')).toContainText('En rupture de stock');
     await expect(page.getByText('Qté')).toHaveCount(0);
   });
 

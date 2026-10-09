@@ -36,15 +36,15 @@ test.describe('Pantry Management', () => {
       await page.waitForLoadState('networkidle');
 
       // Check for pantry items display
-      const pantryItems = page.locator('.pantry-item, [data-pantry-item]');
+      const pantryItems = page.locator('.pantry-row');
 
       if (await pantryItems.count() > 0) {
         await expect(pantryItems.first()).toBeVisible();
 
         // Check item structure
         const firstItem = pantryItems.first();
-        const itemName = firstItem.locator('.item-name, h3, h4');
-        const itemQuantity = firstItem.locator('.quantity, .amount');
+        const itemName = firstItem.locator('.pantry-item-name');
+        const itemQuantity = firstItem.locator('.pantry-quantity');
 
         if (await itemName.isVisible()) {
           const name = await itemName.textContent();
@@ -66,11 +66,16 @@ test.describe('Pantry Management', () => {
       await pantryLink.click();
       await page.waitForLoadState('networkidle');
 
-      // Look for add item form
-      const addButton = page.getByRole('button', { name: /Add/i });
-      const itemNameInput = page.locator('#add-modal').getByLabel(/Item|Name|Ingredient/i);
-      const quantityInput = page.getByLabel(/Quantity|Amount/i);
-      const unitInput = page.getByLabel(/Unit/i);
+      // The form below the sections adds to any of them, or to a new one.
+      const form = page.locator('#pantry-new-item');
+      const addButton = form.getByRole('button', { name: /Add/i });
+      const itemNameInput = form.getByLabel(/Item|Name|Ingredient/i);
+      const quantityInput = form.getByLabel(/Quantity|Amount/i);
+      const unitInput = form.getByLabel(/Unit/i);
+
+      if (await form.isVisible()) {
+        await form.getByLabel(/Section/i).fill('pantry');
+      }
 
       if (await addButton.isVisible() && await itemNameInput.isVisible()) {
         // Fill form
@@ -102,7 +107,7 @@ test.describe('Pantry Management', () => {
       await pantryLink.click();
       await page.waitForLoadState('networkidle');
 
-      const pantryItems = page.locator('.pantry-item, [data-pantry-item]');
+      const pantryItems = page.locator('.pantry-row');
 
       if (await pantryItems.count() > 0) {
         const firstItem = pantryItems.first();
@@ -113,15 +118,16 @@ test.describe('Pantry Management', () => {
         if (await editButton.isVisible()) {
           await editButton.click();
 
-          // Edit form should appear
-          const quantityInput = firstItem.getByLabel(/Quantity|Amount/i);
+          // The edit panel opens under the row
+          const editor = page.locator('.pantry-editor');
+          const quantityInput = editor.getByLabel(/Quantity|Amount/i);
 
           if (await quantityInput.isVisible()) {
             await quantityInput.clear();
             await quantityInput.fill('200');
 
             // Save changes
-            const saveButton = firstItem.getByRole('button', { name: /Save/i });
+            const saveButton = editor.getByRole('button', { name: /Save/i });
 
             if (await saveButton.isVisible()) {
               await saveButton.click();
@@ -144,14 +150,14 @@ test.describe('Pantry Management', () => {
       await pantryLink.click();
       await page.waitForLoadState('networkidle');
 
-      const pantryItems = page.locator('.pantry-item, [data-pantry-item]');
+      const pantryItems = page.locator('.pantry-row');
       const initialCount = await pantryItems.count();
 
       if (initialCount > 0) {
         const firstItem = pantryItems.first();
 
         // Get item name for verification
-        const itemName = await firstItem.locator('.item-name, h3, h4').textContent();
+        const itemName = await firstItem.locator('.pantry-item-name').textContent();
 
         // Look for remove button
         const removeButton = firstItem.getByRole('button', { name: /Remove|Delete/i });
@@ -184,7 +190,7 @@ test.describe('Pantry Management', () => {
     await page.goto('/pantry');
     await page.waitForLoadState('networkidle');
 
-    const pantryItems = page.locator('.pantry-item, [data-pantry-item]');
+    const pantryItems = page.locator('.pantry-row');
 
     if (await pantryItems.count() > 0) {
       // Go to recipes and add to shopping list
@@ -338,7 +344,7 @@ eggs = { amount = "12", unit = "pieces" }
       const searchInput = page.getByPlaceholder(/Search pantry/i);
 
       if (await searchInput.isVisible()) {
-        const pantryItems = page.locator('.pantry-item, [data-pantry-item]');
+        const pantryItems = page.locator('.pantry-row');
         const initialCount = await pantryItems.count();
 
         // Perform search
@@ -363,10 +369,10 @@ eggs = { amount = "12", unit = "pieces" }
   test('marks zero-quantity items out of stock with the danger colour', async ({ page }) => {
     await page.goto('/pantry');
     await page.waitForLoadState('networkidle');
-    const item = page.locator('.pantry-item.out-of-stock').first();
+    const item = page.locator('.pantry-row[data-stock="out"]').first();
     await expect(item).toBeVisible();
     const [qtyColor, dangerColor] = await item.evaluate((el) => {
-      const qty = el.querySelector('.item-quantity') as HTMLElement;
+      const qty = el.querySelector('.pantry-quantity') as HTMLElement;
       const probe = document.createElement('span');
       probe.style.color = 'var(--danger)';
       document.body.appendChild(probe);

@@ -1,21 +1,31 @@
 # Pantry
 pantry-title = Garde-Manger
+pantry-intro = Ce que vous avez à la maison, par endroit de rangement. La liste de courses laisse de côté ce que vous avez déjà.
+pantry-unreadable = Le fichier du garde-manger n'a pas pu être lu
 pantry-empty = Votre garde-manger est vide
+pantry-filters = Afficher
+pantry-filter-all = Tout
+pantry-filter-low = Bientôt épuisé
+pantry-filter-out = En rupture de stock
+pantry-filter-expiring = Expire bientôt
+pantry-filter-empty = Aucun article ne correspond à ce filtre.
+pantry-stock-ok = En stock
+pantry-expired = Expiré
+pantry-expires-today = Expire aujourd'hui
+pantry-expires-in =
+    { $count ->
+        [one] Dans { $count } jour
+       *[other] Dans { $count } jours
+    }
 pantry-section = { $name }
 pantry-no-config = Aucune configuration de garde-manger trouvée
 pantry-create-config = Créez un fichier pantry.conf pour suivre votre inventaire
 pantry-configure = Configurer le garde-manger →
-pantry-no-items-section = Aucun article dans cette section
-pantry-show-out-of-stock = Afficher uniquement les articles en rupture de stock
-pantry-no-out-of-stock = Aucun article en rupture de stock dans cette section
-pantry-out-of-stock-count = En rupture de stock : %o sur %t
-pantry-total-sections = Total des sections :
 pantry-manage = Gérer le garde-manger
 
 # Pantry Item Fields
 pantry-item-name = Nom de l'article
 pantry-item-quantity = Quantité
-pantry-item-quantity-label = Quantité :
 pantry-item-bought = Acheté :
 pantry-item-bought-date = Date d'achat
 pantry-item-expire = Expire :
@@ -27,7 +37,7 @@ pantry-placeholder-low = ex. 100%g ou 2
 
 # Pantry Actions
 pantry-add-item = Ajouter un article
-pantry-add-pantry-item = Ajouter un article au garde-manger
+pantry-add = Ajouter
 pantry-edit-item = Modifier l'article
 pantry-remove-item = Retirer l'article
 pantry-remove-confirm = Retirer { $name } de { $section } ?
@@ -37,15 +47,13 @@ pantry-restock = Réapprovisionner
 pantry-save = Enregistrer
 pantry-cancel = Annuler
 pantry-section-label = Section
-pantry-section-select = Sélectionner une section...
+pantry-section-required = Donnez un nom à la section
+pantry-general-quantity-only = Les articles placés avant la première section ne peuvent avoir qu'une quantité. Déplacez-le dans une section pour lui donner des dates ou un seuil bas.
 pantry-section-freezer = Congélateur
 pantry-section-fridge = Réfrigérateur
 pantry-section-pantry = Garde-manger
 pantry-section-spices = Épices
-pantry-section-other = Autre
 pantry-section-general = Général
-pantry-section-new = Nouvelle section…
-pantry-section-new-name = Nom de la nouvelle section
 pantry-tab-items = Articles
 pantry-tab-text = Texte
 pantry-text-intro = Modifiez le fichier directement : une ligne [section], puis un article par ligne, écrit nom = "quantité" ou nom = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Les lignes commençant par # sont des commentaires.

@@ -708,52 +708,44 @@
     }
 
     /* ---------- Pantry ---------- */
-    /* main's four-line stat block. The transparent border keeps the box from
-       shifting when a state border appears. */
-    .pantry-item {
-        background: var(--surface-sunk);
-        border: 1px solid transparent;
-        border-radius: var(--radius-control);
-        padding: 1rem;
-    }
+    /* One row per item. The quantity is plain text while there is enough,
+       and takes the stock colour once the item runs low or out. */
+    .pantry-row .row-value { color: var(--text); font-weight: 500; }
+    .pantry-row[data-stock="low"] .row-value { color: var(--accent-text); font-weight: 600; }
+    .pantry-row[data-stock="out"] .row-value { color: var(--danger); font-weight: 600; }
 
-    .pantry-item:hover { border-color: var(--border); }
+    /* A filter hides rows; the first one left shown sits under the heading's
+       own rule, and the row after an open editor gets one back. */
+    .pantry-row.first-shown { border-top: 0; }
+    .pantry-editor + .row { border-top: 1px solid var(--border); }
+    .pantry-row.editing { background: var(--surface-sunk); }
 
-    .pantry-item .quantity-display { color: var(--text-muted); }
-    .pantry-item .item-quantity { font-weight: 500; }
+    .pantry-meta { font-size: var(--text-meta); color: var(--text-faint); }
 
-    .pantry-item.out-of-stock {
-        background: var(--danger-soft);
-        border-color: var(--danger);
-    }
+    /* Expiry: tinted only as it nears, so a pantry of far-off dates stays calm. */
+    .pantry-expiry { white-space: nowrap; }
 
-    .pantry-item.out-of-stock .quantity-display,
-    .pantry-item.out-of-stock .out-of-stock-icon {
-        color: var(--danger);
-    }
-
-    .pantry-item.out-of-stock .item-quantity { font-weight: 600; }
-
-    .pantry-item.low-stock {
+    .pantry-expiry.soon,
+    .pantry-expiry.today {
         background: var(--accent-soft);
         border-color: var(--accent);
-    }
-
-    .pantry-item.low-stock .quantity-display,
-    .pantry-item.low-stock .out-of-stock-icon {
         color: var(--accent-text);
     }
 
-    .pantry-item.low-stock .item-quantity { font-weight: 600; }
+    .pantry-expiry.expired {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
 
-    /* Row actions appear on hover or focus, as main's group-hover did. */
+    /* Row actions appear on hover or focus. */
     .pantry-actions { opacity: 0; }
 
-    .pantry-item:hover .pantry-actions,
-    .pantry-item:focus-within .pantry-actions { opacity: 1; }
+    .pantry-row:hover .pantry-actions,
+    .pantry-row:focus-within .pantry-actions,
+    .pantry-row.editing .pantry-actions { opacity: 1; }
 
-    /* Row icons stay compact so the text column keeps its width at narrower
-       breakpoints (main's icons here were 24px, not the 36px default). */
+    /* Row icons stay compact so the name keeps its width on narrow screens. */
     .pantry-actions .icon-btn { width: 28px; height: 28px; }
     .pantry-actions .icon-btn svg { width: 16px; height: 16px; }
 

@@ -219,8 +219,7 @@ body {
     .nav-card,
     .recipe-card,
     .step-box,
-    .ingredient-row,
-    .pantry-item {
+    .ingredient-row {
         border: 1px solid var(--border) !important;
         box-shadow: none !important;
     }

@@ -1,21 +1,31 @@
 # Pantry
 pantry-title = Despensa
+pantry-intro = Lo que hay en casa, según dónde se guarda. La lista de la compra deja fuera lo que ya tienes.
+pantry-unreadable = No se pudo leer el archivo de la despensa
 pantry-empty = Su despensa está vacía
+pantry-filters = Mostrar
+pantry-filter-all = Todo
+pantry-filter-low = Queda poco
+pantry-filter-out = Agotado
+pantry-filter-expiring = Caduca pronto
+pantry-filter-empty = Ningún artículo coincide con este filtro.
+pantry-stock-ok = Disponible
+pantry-expired = Caducado
+pantry-expires-today = Caduca hoy
+pantry-expires-in =
+    { $count ->
+        [one] En { $count } día
+       *[other] En { $count } días
+    }
 pantry-section = { $name }
 pantry-no-config = No se encontró configuración de despensa
 pantry-create-config = Cree un archivo pantry.conf para rastrear su inventario
 pantry-configure = Configurar despensa →
-pantry-no-items-section = No hay artículos en esta sección
-pantry-show-out-of-stock = Mostrar solo artículos agotados
-pantry-no-out-of-stock = No hay artículos agotados en esta sección
-pantry-out-of-stock-count = Agotados: %o de %t
-pantry-total-sections = Total de secciones:
 pantry-manage = Gestionar despensa
 
 # Pantry Item Fields
 pantry-item-name = Nombre del artículo
 pantry-item-quantity = Cantidad
-pantry-item-quantity-label = Cantidad:
 pantry-item-bought = Comprado:
 pantry-item-bought-date = Fecha de compra
 pantry-item-expire = Expira:
@@ -27,7 +37,7 @@ pantry-placeholder-low = p. ej. 100%g o 2
 
 # Pantry Actions
 pantry-add-item = Agregar artículo
-pantry-add-pantry-item = Agregar artículo a la despensa
+pantry-add = Añadir
 pantry-edit-item = Editar artículo
 pantry-remove-item = Eliminar artículo
 pantry-remove-confirm = ¿Eliminar { $name } de { $section }?
@@ -37,15 +47,13 @@ pantry-restock = Reabastecer
 pantry-save = Guardar
 pantry-cancel = Cancelar
 pantry-section-label = Sección
-pantry-section-select = Seleccionar sección...
+pantry-section-required = Ponle un nombre a la sección
+pantry-general-quantity-only = Los artículos antes de la primera sección solo pueden tener una cantidad. Muévelo a una sección para darle fechas o un mínimo.
 pantry-section-freezer = Congelador
 pantry-section-fridge = Refrigerador
 pantry-section-pantry = Despensa
 pantry-section-spices = Especias
-pantry-section-other = Otro
 pantry-section-general = General
-pantry-section-new = Nueva sección…
-pantry-section-new-name = Nombre de la nueva sección
 pantry-tab-items = Artículos
 pantry-tab-text = Texto
 pantry-text-intro = Edita el archivo directamente: una línea [sección] y después un artículo por línea, escrito nombre = "cantidad" o nombre = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Las líneas que empiezan por # son comentarios.
