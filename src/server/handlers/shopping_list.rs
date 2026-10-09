@@ -73,24 +73,8 @@ pub async fn shopping_list(
 
     let mut list = merged(ingredients);
 
-    // Load aisle configuration with lenient parsing
-    let aisle_content = if let Some(path) = &state.aisle_file() {
-        match std::fs::read_to_string(path) {
-            Ok(content) => {
-                tracing::debug!("Loaded aisle file from: {:?}", path);
-                content
-            }
-            Err(e) => {
-                tracing::warn!("Failed to read aisle file from {:?}: {}", path, e);
-                String::new()
-            }
-        }
-    } else {
-        tracing::debug!("No aisle file configured");
-        String::new()
-    };
-
     // Parse aisle with lenient parsing
+    let aisle_content = read_aisle_file(&state);
     let aisle_result = cooklang::aisle::parse_lenient(&aisle_content);
 
     if aisle_result.report().has_warnings() {
@@ -544,8 +528,10 @@ pub async fn compact_checked(
 /// and expands it through `extract_ingredients`, honoring any
 /// `included_references` and recipe scale factors.
 ///
-/// Returns names in their raw (non-common) form — `compact_checked` does a
-/// case-insensitive comparison so that's fine for the stale-check step.
+/// Returns each name both as the recipes write it and as the aisle file's
+/// common name, which is the one the page shows and ticks: comparing only the
+/// raw names dropped the tick on `egg` when the recipes said `eggs`.
+/// `compact_checked` compares case-insensitively.
 ///
 /// Returns `Err(..)` if any recipe fails to parse. The caller should refuse
 /// to compact in that case — a partial ingredient set would mark otherwise-
@@ -604,7 +590,42 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         }
     }
 
-    Ok(merged(list).iter().map(|(name, _)| name.clone()).collect())
+    // The page lists, and so ticks, each ingredient under the name the aisle
+    // file gives it (`egg` for a recipe's `eggs`). Keep the recipes' own names
+    // as well: a tick made under one, before the aisle file grouped it, still
+    // stands for an ingredient on the list.
+    let list = merged(list);
+    let mut names: Vec<String> = list.iter().map(|(name, _)| name.clone()).collect();
+    let aisle_content = read_aisle_file(state);
+    let aisle = cooklang::aisle::parse_lenient(&aisle_content)
+        .output()
+        .cloned()
+        .unwrap_or_default();
+    names.extend(
+        list.use_common_names(&aisle, PARSER.converter())
+            .iter()
+            .map(|(name, _)| name.clone()),
+    );
+    Ok(names)
+}
+
+/// The aisle file's text; empty when there is none or it can't be read, which
+/// the lenient aisle parser reads as no aisles at all.
+fn read_aisle_file(state: &AppState) -> String {
+    let Some(path) = state.aisle_file() else {
+        tracing::debug!("No aisle file configured");
+        return String::new();
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            tracing::debug!("Loaded aisle file from: {:?}", path);
+            content
+        }
+        Err(e) => {
+            tracing::warn!("Failed to read aisle file from {:?}: {}", path, e);
+            String::new()
+        }
+    }
 }
 
 /// Fold the optional ingredients into the required ones, the way the web list
