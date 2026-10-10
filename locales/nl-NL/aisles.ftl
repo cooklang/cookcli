@@ -61,3 +61,4 @@ aisles-add-to-aisle = Toevoegen aan gangpad
 aisles-add-as-names = Of toevoegen als andere namen van
 aisles-choose-ingredient = Ingrediënt…
 aisles-move-to-aisle = Verplaatsen naar gangpad
+aisles-shared-file = Dit is het algemene gangpadenbestand, gedeeld met je andere receptenmappen.

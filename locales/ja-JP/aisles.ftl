@@ -61,3 +61,4 @@ aisles-add-to-aisle = 売り場に追加
 aisles-add-as-names = または次の材料の別名として追加:
 aisles-choose-ingredient = 材料…
 aisles-move-to-aisle = 売り場を移動
+aisles-shared-file = これは共通の売り場ファイルで、ほかのレシピフォルダーでも使われます。

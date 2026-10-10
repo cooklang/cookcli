@@ -246,7 +246,6 @@
 <script src="{{ prefix }}/static/js/editor.bundle.js"></script>
 <script>
 const recipePath = {{ recipe_path|json|safe }};
-const basePath = {{ base_path|json|safe }};
 let originalContent = {{ content|json|safe }};
 let editorView = null;
 let autosaveTimer = null;
@@ -1015,7 +1014,8 @@ function connectLsp() {
         // Send initialize request
         sendLspRequest('initialize', {
             processId: null,
-            rootUri: 'file://' + basePath,
+            // The server puts its recipe directory here on the way through.
+            rootUri: null,
             capabilities: {
                 textDocument: {
                     completion: {

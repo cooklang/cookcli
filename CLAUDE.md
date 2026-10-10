@@ -176,6 +176,11 @@ Configuration search order:
   the change succeeded, calls `server::activity::record` — one stdout line
   saying who did what. Quote request text with `activity::quoted` /
   `activity::file` so it cannot forge a line.
+- Error text sent to a client goes through `handlers::common::json_error` or
+  `ui::error_page`, which pass it to `server::private_paths::hide`: paths come
+  out relative to the recipe directory, or as `…/file` for a config folder.
+  Never put `e.to_string()` in a response body by hand, and never put the
+  recipe directory's absolute path in a page or API answer.
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)

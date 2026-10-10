@@ -27,6 +27,8 @@ test.describe('Aisles', () => {
     await page.goto('/aisles');
 
     await expect(page.locator('h1')).toHaveText('Aisles');
+    // Where the file is in the recipe folder, not where that is on the server.
+    await expect(page.locator('#aisles-path')).toHaveText('config/aisle.conf');
     const names = await page.locator('.aisle-card').evaluateAll(cards =>
       cards.map(card => card.getAttribute('data-aisle')));
     expect(names.slice(0, 2)).toEqual(['fruit and veg', 'milk and dairy']);

@@ -11,7 +11,7 @@ use axum::{
     extract::{Extension, Json, State},
     http::StatusCode,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -25,7 +25,13 @@ pub struct Aisles {
     /// Whether there is an aisle file at all. Without one, everything lands
     /// in the shopping list's "other" group.
     pub configured: bool,
-    pub path: Option<String>,
+    /// Where the file is, relative to the recipe directory, when it is inside
+    /// it. Never the full path: these answers go to anyone who may read, and
+    /// the server's directories and account name are none of their business.
+    pub file: Option<String>,
+    /// Whether it is the global aisle file, outside the recipe directory,
+    /// which other recipe directories use too.
+    pub shared: bool,
     /// Hands back with a change; see the module note.
     pub revision: Option<String>,
     pub aisles: Vec<Aisle>,
@@ -51,14 +57,19 @@ impl Aisles {
     fn unconfigured() -> Self {
         Self {
             configured: false,
-            path: None,
+            file: None,
+            shared: false,
             revision: None,
             aisles: Vec::new(),
             warnings: Vec::new(),
         }
     }
 
-    fn from_text(path: &Utf8PathBuf, text: &str) -> Self {
+    fn from_text(base: &Utf8Path, path: &Utf8Path, text: &str) -> Self {
+        let file = path
+            .strip_prefix(base)
+            .ok()
+            .map(|file| file.as_str().replace('\\', "/"));
         let parsed = cooklang::aisle::parse_lenient(text);
         let aisles = parsed
             .output()
@@ -86,7 +97,8 @@ impl Aisles {
             .unwrap_or_default();
         Self {
             configured: true,
-            path: Some(path.to_string()),
+            shared: file.is_none(),
+            file,
             revision: Some(revision(text)),
             aisles,
             warnings: parsed
@@ -176,7 +188,7 @@ fn parse_problem(text: &str) -> Option<String> {
 /// The aisles, for the API and for the aisles page alike.
 pub async fn load(state: &AppState) -> Result<Aisles, ApiError> {
     Ok(match read(state).await? {
-        Some((path, text)) => Aisles::from_text(&path, &text),
+        Some((path, text)) => Aisles::from_text(&state.base_path, &path, &text),
         None => Aisles::unconfigured(),
     })
 }
@@ -194,9 +206,11 @@ pub async fn create_aisles(
 ) -> Result<(StatusCode, Json<Aisles>), ApiError> {
     let _guard = state.aisle_lock.lock().await;
     if let Some(path) = state.aisle_file() {
+        // Where it is goes to the server's log only, not to the client.
+        tracing::info!("Not creating an aisle file: there is one at {path}");
         return Err((
             StatusCode::CONFLICT,
-            json_error(format!("There is already an aisle file at {path}")),
+            json_error("There is already an aisle file"),
         ));
     }
 
@@ -232,7 +246,10 @@ pub async fn create_aisles(
             activity::file(&state.base_path, &path)
         ),
     );
-    Ok((StatusCode::CREATED, Json(Aisles::from_text(&path, ""))))
+    Ok((
+        StatusCode::CREATED,
+        Json(Aisles::from_text(&state.base_path, &path, "")),
+    ))
 }
 
 /// One change to the aisles. `name` is an aisle's name, or any one of an
@@ -458,12 +475,11 @@ pub async fn change_aisles(
     for change in &request.changes {
         change.record(&viewer);
     }
-    Ok(Json(Aisles::from_text(&path, &changed)))
+    Ok(Json(Aisles::from_text(&state.base_path, &path, &changed)))
 }
 
 #[derive(Debug, Serialize)]
 pub struct RawAisles {
-    pub path: String,
     pub content: String,
     pub revision: String,
 }
@@ -472,9 +488,8 @@ pub struct RawAisles {
 pub async fn get_raw_aisles(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RawAisles>, ApiError> {
-    let (path, text) = read_existing(&state).await?;
+    let (_, text) = read_existing(&state).await?;
     Ok(Json(RawAisles {
-        path: path.to_string(),
         revision: revision(&text),
         content: text,
     }))
@@ -509,7 +524,11 @@ pub async fn put_raw_aisles(
             activity::file(&state.base_path, &path)
         ),
     );
-    Ok(Json(Aisles::from_text(&path, &update.content)))
+    Ok(Json(Aisles::from_text(
+        &state.base_path,
+        &path,
+        &update.content,
+    )))
 }
 
 #[derive(Debug, Serialize)]
