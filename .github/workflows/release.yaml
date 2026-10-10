@@ -145,6 +145,20 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cross build --release --locked --target ${{ matrix.target }}
 
+      # Keep the glibc binary installable on older distributions (issue #420):
+      # fail when it needs a newer glibc than the image in Cross.toml provides.
+      - name: Build | Check glibc floor [Linux gnu]
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          FLOOR=2.28
+          NEEDED=$(objdump -T "target/${{ matrix.target }}/release/cook" \
+            | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
+          echo "cook needs glibc $NEEDED (floor $FLOOR)"
+          if [ "$(printf '%s\n%s\n' "$NEEDED" "$FLOOR" | sort -V | tail -n 1)" != "$FLOOR" ]; then
+            echo "::error::cook needs glibc $NEEDED, newer than the $FLOOR floor"
+            exit 1
+          fi
+
       # Sign and notarize macOS binaries before packaging
       - name: Notarize | Sign and Notarize [macOS]
         if: matrix.notarize == true
