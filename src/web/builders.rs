@@ -513,7 +513,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 .into_iter()
                 .map(|q| {
                     let qty_str =
-                        crate::util::format::number::format_quantity(q.value()).unwrap_or_default();
+                        crate::util::format::number::format_quantity_value(q).unwrap_or_default();
                     let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                     if unit_str.is_empty() {
                         qty_str
@@ -592,7 +592,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                     step_ingredients.push(StepIngredient {
                                         name: ing.name.to_string(),
                                         quantity: ing.quantity.as_ref().and_then(|q| {
-                                            crate::util::format::number::format_quantity(q.value())
+                                            crate::util::format::number::format_quantity_value(q)
                                         }),
                                         unit: ing
                                             .quantity
@@ -615,8 +615,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                     // Add timer quantity and unit
                                     if let Some(quantity) = &timer.quantity {
                                         if let Some(formatted) =
-                                            crate::util::format::number::format_quantity(
-                                                quantity.value(),
+                                            crate::util::format::number::format_quantity_value(
+                                                quantity,
                                             )
                                         {
                                             timer_text.push_str(&formatted);
@@ -644,7 +644,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             Item::InlineQuantity { index } => {
                                 if let Some(q) = recipe.inline_quantities.get(*index) {
                                     let mut qty =
-                                        crate::util::format::number::format_quantity(q.value())
+                                        crate::util::format::number::format_quantity_value(q)
                                             .unwrap_or_default();
                                     if let Some(unit) = q.unit() {
                                         if !qty.is_empty() {
@@ -764,9 +764,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                         crate::util::format::quantity::ordered_components(&quantity)
                             .into_iter()
                             .map(|q| {
-                                let qty_str =
-                                    crate::util::format::number::format_quantity(q.value())
-                                        .unwrap_or_default();
+                                let qty_str = crate::util::format::number::format_quantity_value(q)
+                                    .unwrap_or_default();
                                 let unit_str =
                                     q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                                 if unit_str.is_empty() {
@@ -802,7 +801,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
                     let (formatted_quantity, formatted_unit) = if let Some(q) = &ingredient.quantity
                     {
-                        let qty_str = crate::util::format::number::format_quantity(q.value());
+                        let qty_str = crate::util::format::number::format_quantity_value(q);
                         let unit_str = q.unit().as_ref().map(|u| u.to_string());
                         (qty_str, unit_str)
                     } else {

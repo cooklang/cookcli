@@ -47,11 +47,7 @@ use yansi::Paint;
 ///
 /// `"200 g"` with a unit, `"3"` without one.
 pub(crate) fn quantity_fmt(qty: &Quantity) -> String {
-    if let Some(unit) = qty.unit() {
-        format!("{} {}", qty.value(), unit)
-    } else {
-        format!("{}", qty.value())
-    }
+    cooklang_format::number::format_quantity_with_unit(qty)
 }
 
 /// The name as the human and markdown output show it, with optional items

@@ -453,11 +453,11 @@ async function generateList() {
 }
 
 // Format a Cooklang Number tagged enum ({type: "regular"|"fraction", value: ...})
-function formatCooklangNumber(num) {
+function formatCooklangNumber(num, fractions = true) {
     if (!num || typeof num !== 'object') return '';
     switch (num.type) {
         case 'regular':
-            return formatNumber(num.value);
+            return formatNumber(num.value, fractions);
         case 'fraction': {
             const f = num.value;
             const whole = f.whole || 0;
@@ -478,14 +478,14 @@ function formatCooklangNumber(num) {
 }
 
 // Format a Cooklang Value tagged enum ({type: "number"|"range"|"text", value: ...})
-function formatCooklangValue(value) {
+function formatCooklangValue(value, fractions = true) {
     if (!value || typeof value !== 'object') return '';
     switch (value.type) {
         case 'number':
-            return formatCooklangNumber(value.value);
+            return formatCooklangNumber(value.value, fractions);
         case 'range': {
-            const start = formatCooklangNumber(value.value.start);
-            const end = formatCooklangNumber(value.value.end);
+            const start = formatCooklangNumber(value.value.start, fractions);
+            const end = formatCooklangNumber(value.value.end, fractions);
             return `${start} - ${end}`;
         }
         case 'text':
@@ -495,8 +495,10 @@ function formatCooklangValue(value) {
     }
 }
 
-// Format numbers with fractions
-function formatNumber(value) {
+// Format numbers with fractions: the rules of `format_number` and
+// `unit_uses_fractions` in crates/format/src/number.rs, which every other page
+// and output uses. Change both together.
+function formatNumber(value, fractions = true) {
     // Round to reasonable precision
     const rounded = Math.round(value * 1000000) / 1000000;
 
@@ -506,7 +508,7 @@ function formatNumber(value) {
     }
 
     // Try to convert to common fraction
-    const fraction = decimalToFraction(rounded);
+    const fraction = fractions ? decimalToFraction(rounded) : null;
     if (fraction) {
         return fraction;
     }
@@ -521,6 +523,28 @@ function formatNumber(value) {
     }
 
     return result;
+}
+
+// Metric, time and temperature units read in decimals: `100.625 g`, not
+// `100 5/8 g`. A bare `c` or `f` is not here: `c` is also a cup.
+const DECIMAL_UNITS = new Set([
+    'mg', 'milligram', 'milligrams', 'milligramme', 'milligrammes',
+    'g', 'gr', 'gram', 'grams', 'gramme', 'grammes',
+    'kg', 'kilo', 'kilos', 'kilogram', 'kilograms', 'kilogramme', 'kilogrammes',
+    'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres',
+    'cl', 'centiliter', 'centiliters', 'centilitre', 'centilitres',
+    'dl', 'deciliter', 'deciliters', 'decilitre', 'decilitres',
+    'l', 'liter', 'liters', 'litre', 'litres',
+    's', 'sec', 'secs', 'second', 'seconds',
+    'min', 'mins', 'minute', 'minutes',
+    'h', 'hr', 'hrs', 'hour', 'hours',
+    'day', 'days',
+    '°c', '°f', 'celsius', 'fahrenheit',
+]);
+
+function unitUsesFractions(unit) {
+    if (!unit) return true;
+    return !DECIMAL_UNITS.has(unit.trim().replace(/\.$/, '').toLowerCase());
 }
 
 function decimalToFraction(value) {
@@ -731,7 +755,7 @@ function formatQuantities(quantities) {
         let val = '';
 
         if (q.value) {
-            val = formatCooklangValue(q.value);
+            val = formatCooklangValue(q.value, unitUsesFractions(q.unit));
         }
 
         let unit = q.unit || '';

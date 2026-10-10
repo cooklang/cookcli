@@ -3,6 +3,7 @@
 //! This is the shape search engines read, so the field names are fixed by the
 //! vocabulary rather than chosen here.
 
+use crate::number::format_quantity_with_unit;
 use crate::quantity::grouped_quantity_fmt;
 use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
@@ -351,7 +352,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
                     step_text.push_str(&format!("{name} for "));
                 }
                 if let Some(quantity) = &t.quantity {
-                    step_text.push_str(&quantity.to_string());
+                    step_text.push_str(&format_quantity_with_unit(quantity));
 
                     // Accumulate timer duration for timeRequired.
                     // Range values are averaged (e.g. 15-30 min → 22.5 min).
@@ -382,7 +383,7 @@ fn build_step(recipe: &Recipe, step: &cooklang::model::Step, step_number: usize)
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
-                step_text.push_str(&q.to_string());
+                step_text.push_str(&format_quantity_with_unit(q));
             }
         }
     }
