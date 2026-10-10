@@ -249,7 +249,7 @@ pub fn scaled_quantity(
             let ingredient = recipe.ingredients.into_iter().next()?;
             let quantity = ingredient.quantity?;
             Some((
-                crate::util::format::number::format_quantity(quantity.value()),
+                crate::util::format::number::format_quantity_value(&quantity),
                 quantity.unit().as_ref().map(|u| u.to_string()),
             ))
         });

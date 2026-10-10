@@ -3,7 +3,7 @@
 //! The web UI showed `5/8 cup` where `cook recipe` printed `0.625 cup`, and
 //! both printed `1.625 cup` for `1 5/8 cup`. Every text output now goes
 //! through `cooklang_format::number`, so these are the numbers each shows; the
-//! JSON keeps the plain number.
+//! JSON keeps the plain number. Grams and litres stay in decimals.
 
 #[path = "common/mod.rs"]
 mod common;
@@ -77,6 +77,33 @@ fn the_shopping_list_shows_exact_fractions() {
 
     assert!(out.contains("1 5/8 cup"), "{out}");
     assert!(out.contains("5/8 cup"), "{out}");
+}
+
+/// Fractions are for cups and spoons: grams and litres read in decimals, in
+/// the terminal and on the shopping list alike.
+#[test]
+fn grams_and_litres_stay_decimals() {
+    let dir = tempfile::TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("metric.cook"),
+        "Mix @flour{100.625%g}, @butter{0.5%kg} and @milk{1.5%l}.\n",
+    )
+    .unwrap();
+
+    let recipe = stdout(cook_in(dir.path()).args(["recipe", "read", "metric.cook"]));
+    let list = stdout(cook_in(dir.path()).args([
+        "shopping-list",
+        "--ignore-pantry",
+        "--plain",
+        "metric.cook",
+    ]));
+    for out in [recipe, list] {
+        for expected in ["100.625 g", "0.5 kg", "1.5 l"] {
+            assert!(out.contains(expected), "missing {expected:?} in:\n{out}");
+        }
+        assert!(!out.contains("5/8"), "{out}");
+        assert!(!out.contains("1/2"), "{out}");
+    }
 }
 
 #[test]

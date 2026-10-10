@@ -36,7 +36,7 @@
 //! by the escapes.
 
 use crate::{
-    number::format_quantity,
+    number::format_quantity_value,
     quantity::{grouped_quantity_fmt, ordered_components},
     Style,
 };
@@ -689,7 +689,7 @@ fn write_igr_count(
 }
 
 fn quantity_fmt(qty: &Quantity) -> String {
-    let value = format_quantity(qty.value()).unwrap_or_default();
+    let value = format_quantity_value(qty).unwrap_or_default();
     if let Some(unit) = qty.unit() {
         format!("{} {}", value, unit.italic())
     } else {
