@@ -49,52 +49,63 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: cook-x86_64-unknown-linux-gnu.tar.gz
+            platform: linux-x86_64-gnu
+            ext: tar.gz
 
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            name: cook-x86_64-unknown-linux-musl.tar.gz
+            platform: linux-x86_64-musl
+            ext: tar.gz
 
           - target: i686-unknown-linux-musl
             os: ubuntu-latest
-            name: cook-i686-unknown-linux-musl.tar.gz
+            platform: linux-i686-musl
+            ext: tar.gz
 
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-            name: cook-aarch64-unknown-linux-musl.tar.gz
+            platform: linux-aarch64-musl
+            ext: tar.gz
 
           - target: arm-unknown-linux-musleabihf
             os: ubuntu-latest
-            name: cook-arm-unknown-linux-musleabihf.tar.gz
+            platform: linux-armhf-musl
+            ext: tar.gz
 
           - target: x86_64-apple-darwin
             os: macos-15-intel
-            name: cook-x86_64-apple-darwin.tar.gz
+            platform: macos-x86_64
+            ext: tar.gz
             notarize: true
 
           - target: aarch64-apple-darwin
             os: macos-14
-            name: cook-aarch64-apple-darwin.tar.gz
+            platform: macos-aarch64
+            ext: tar.gz
             notarize: true
 
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: cook-x86_64-pc-windows-msvc.zip
+            platform: windows-x86_64
+            ext: zip
             rustflags: -C target-feature=+crt-static
 
           - target: i686-pc-windows-msvc
             os: windows-latest
-            name: cook-i686-pc-windows-msvc.zip
+            platform: windows-i686
+            ext: zip
             rustflags: -C target-feature=+crt-static
 
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            name: cook-aarch64-pc-windows-msvc.zip
+            platform: windows-aarch64
+            ext: zip
             rustflags: -C target-feature=+crt-static
 
           - target: x86_64-unknown-freebsd
             os: ubuntu-latest
-            name: cook-x86_64-unknown-freebsd.tar.gz
+            platform: freebsd-x86_64
+            ext: tar.gz
 
     runs-on: ${{ matrix.os }}
     # Notarization alone may wait up to 30 min.
@@ -264,25 +275,38 @@ jobs:
           # Clean up keychain
           security delete-keychain "$KEYCHAIN_PATH"
 
+      # cook-<version>-<platform>.<ext>, next to cook-<version>-source.tar.gz.
+      # `cook update` (src/update.rs) looks for exactly this name, and its
+      # tests check that this matrix still builds the platform they run on.
+      - name: Post Build | Name the archive
+        shell: bash
+        env:
+          TAG: ${{ needs.release_please.outputs.tag_name }}
+          PLATFORM: ${{ matrix.platform }}
+          EXT: ${{ matrix.ext }}
+        run: echo "ARCHIVE=cook-${TAG#v}-${PLATFORM}.${EXT}" >> "$GITHUB_ENV"
+
       - name: Post Build | Prepare artifacts [Windows]
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../${{ matrix.name }} cook.exe
+          7z a "../../../$env:ARCHIVE" cook.exe
           cd -
 
       - name: Post Build | Prepare artifacts [-nix]
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czvf ../../../${{ matrix.name }} cook
+          tar czvf "../../../$ARCHIVE" cook
           cd -
 
+      # The artifact is named without the version, which the completeness
+      # check in upload_artifacts would otherwise have to work out.
       - name: Release | Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
+          name: cook-${{ matrix.platform }}
+          path: ${{ env.ARCHIVE }}
 
   # A source tarball that already contains the npm-generated front-end assets
   # (issue #445). GitHub's auto-generated tag archives omit them — they are
@@ -502,17 +526,17 @@ jobs:
         run: |
           missing=()
           for artifact in \
-            cook-x86_64-unknown-linux-gnu.tar.gz \
-            cook-x86_64-unknown-linux-musl.tar.gz \
-            cook-i686-unknown-linux-musl.tar.gz \
-            cook-aarch64-unknown-linux-musl.tar.gz \
-            cook-arm-unknown-linux-musleabihf.tar.gz \
-            cook-x86_64-apple-darwin.tar.gz \
-            cook-aarch64-apple-darwin.tar.gz \
-            cook-x86_64-pc-windows-msvc.zip \
-            cook-i686-pc-windows-msvc.zip \
-            cook-aarch64-pc-windows-msvc.zip \
-            cook-x86_64-unknown-freebsd.tar.gz \
+            cook-linux-x86_64-gnu \
+            cook-linux-x86_64-musl \
+            cook-linux-i686-musl \
+            cook-linux-aarch64-musl \
+            cook-linux-armhf-musl \
+            cook-macos-x86_64 \
+            cook-macos-aarch64 \
+            cook-windows-x86_64 \
+            cook-windows-i686 \
+            cook-windows-aarch64 \
+            cook-freebsd-x86_64 \
             cook-source.tar.gz \
             cook-rpm-fedora-43-x86_64 \
             cook-rpm-fedora-latest-x86_64 \

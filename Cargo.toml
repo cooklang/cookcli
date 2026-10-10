@@ -40,7 +40,7 @@ import = ["dep:cooklang-import", "dep:reqwest"]
 # `cook lsp` - language server for editor integrations.
 lsp = ["dep:cooklang-language-server", "dep:tower-lsp"]
 
-self-update = ["dep:self_update", "dep:reqwest"]
+self-update = ["dep:self_update", "dep:reqwest", "dep:sha2"]
 # The sync loop only runs inside the web server, so sync implies server.
 sync = [
     "server",
