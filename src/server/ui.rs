@@ -25,7 +25,7 @@ pub(crate) fn error_page(
 ) -> axum::response::Response {
     let template = ErrorTemplate {
         active: String::new(),
-        error_message: msg.to_string(),
+        error_message: super::private_paths::hide(&msg.to_string()),
         tr: Tr::new(lang),
         prefix: prefix.to_string(),
         static_mode: false,
@@ -333,7 +333,6 @@ async fn edit_page(
         is_menu,
         recipe_path: path,
         content,
-        base_path: state.base_path.to_string(),
         max_image_bytes: super::title_image::MAX_UPLOAD_BYTES,
         max_image_edge: super::title_image::MAX_EDGE,
         tr: crate::web::templates::Tr::new(lang),
@@ -873,7 +872,7 @@ async fn pantry_page(
                 (sections, counts) =
                     pantry_sections(&outcome.value, chrono::Local::now().date_naive());
             }
-            Ok(Err(error)) => load_error = Some(error.to_string()),
+            Ok(Err(error)) => load_error = Some(super::private_paths::hide(&error.to_string())),
             Err(error) => {
                 tracing::error!("Reading the pantry did not finish: {error}");
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);

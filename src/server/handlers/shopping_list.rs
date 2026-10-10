@@ -1,4 +1,4 @@
-use crate::server::handlers::common::check_path;
+use crate::server::handlers::common::{check_path, json_error};
 use crate::server::{activity, AppState};
 use crate::util::recipe_info::{resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
@@ -60,10 +60,7 @@ pub async fn shopping_list(
         )
         .map_err(|e| {
             tracing::error!("Error processing recipe: {}", e);
-            (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({ "error": e.to_string() })),
-            )
+            (StatusCode::BAD_REQUEST, json_error(e))
         })?;
 
         for diagnostic in diagnostics {
@@ -200,10 +197,7 @@ pub async fn get_shopping_list_items(
     let store = ShoppingListStore::new(&state.base_path);
     let mut items = store.load().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
     name_by_title(&core_ctx, &mut items);
@@ -305,10 +299,7 @@ pub async fn add_to_shopping_list(
 
     store.add(item).map_err(|e| {
         tracing::error!("Failed to add to shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(&viewer, added);
 
@@ -347,10 +338,7 @@ pub async fn remove_from_shopping_list(
     }
     .map_err(|e| {
         tracing::error!("Failed to remove from shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     if !removed {
         // The list changed since the page read it. Taking another entry with
@@ -401,10 +389,7 @@ pub async fn clear_shopping_list(
     let store = ShoppingListStore::new(&state.base_path);
     store.clear().map_err(|e| {
         tracing::error!("Failed to clear shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(&viewer, "cleared the shopping list");
 
@@ -445,10 +430,7 @@ pub async fn check_shopping_item(
     let store = ShoppingListStore::new(&state.base_path);
     store.check(name).map_err(|e| {
         tracing::error!("Failed to check item: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(
         &viewer,
@@ -470,10 +452,7 @@ pub async fn uncheck_shopping_item(
     let store = ShoppingListStore::new(&state.base_path);
     store.uncheck(name).map_err(|e| {
         tracing::error!("Failed to uncheck item: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(
         &viewer,
@@ -488,10 +467,7 @@ pub async fn get_checked_items(
     let store = ShoppingListStore::new(&state.base_path);
     let checked = store.checked_set().map_err(|e| {
         tracing::error!("Failed to get checked items: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     Ok(Json(checked.into_iter().collect()))
 }
@@ -504,17 +480,11 @@ pub async fn compact_checked(
     let store = ShoppingListStore::new(&state.base_path);
     let names = aggregate_current_ingredient_names(&state).map_err(|e| {
         tracing::error!("Failed to aggregate ingredients for compact: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     store.compact(names).map_err(|e| {
         tracing::error!("Failed to compact checked list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(
         &viewer,
@@ -663,9 +633,7 @@ pub async fn add_menu_to_shopping_list(
         tracing::error!("Menu not found: {}", payload.path);
         (
             StatusCode::NOT_FOUND,
-            Json(
-                serde_json::json!({ "error": format!("Menu not found: {}: {}", payload.path, e) }),
-            ),
+            json_error(format!("Menu not found: {}: {}", payload.path, e)),
         )
     })?;
 
@@ -676,7 +644,7 @@ pub async fn add_menu_to_shopping_list(
             tracing::error!("Failed to parse menu: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": format!("Failed to parse menu: {e}") })),
+                json_error(format!("Failed to parse menu: {e}")),
             )
         })?;
 
@@ -753,10 +721,7 @@ pub async fn add_menu_to_shopping_list(
         .add_menu(payload.path, menu_scale, recipes)
         .map_err(|e| {
             tracing::error!("Failed to add menu to shopping list: {:?}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": e.to_string() })),
-            )
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
         })?;
     activity::record(&viewer, added);
 
