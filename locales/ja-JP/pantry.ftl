@@ -1,21 +1,30 @@
 # Pantry
 pantry-title = 在庫一覧
+pantry-intro = 家にある物を保管場所ごとに。買い物リストはすでにある物を除きます。
+pantry-unreadable = パントリーファイルを読み込めませんでした
 pantry-empty = 在庫はありません
+pantry-filters = 表示
+pantry-filter-all = すべて
+pantry-filter-low = 残りわずか
+pantry-filter-out = 在庫切れ
+pantry-filter-expiring = 期限間近
+pantry-filter-empty = この条件に合う品目はありません。
+pantry-stock-ok = 在庫あり
+pantry-expired = 期限切れ
+pantry-expires-today = 今日まで
+pantry-expires-in =
+    { $count ->
+       *[other] あと { $count } 日
+    }
 pantry-section = { $name }
 pantry-no-config = 在庫の設定が見つかりません
 pantry-create-config = 在庫を管理するには pantry.conf を作成してください
 pantry-configure = 在庫を設定する →
-pantry-no-items-section = この保管場所には品目がありません
-pantry-show-out-of-stock = 在庫切れだけを表示
-pantry-no-out-of-stock = この保管場所に在庫切れの品目はありません
-pantry-out-of-stock-count = 在庫切れ: %t 品中 %o 品
-pantry-total-sections = 保管場所の数:
 pantry-manage = 在庫を管理
 
 # Pantry Item Fields
 pantry-item-name = 品名
 pantry-item-quantity = 数量
-pantry-item-quantity-label = 数量:
 pantry-item-bought = 購入:
 pantry-item-bought-date = 購入日
 pantry-item-expire = 期限:
@@ -27,7 +36,7 @@ pantry-placeholder-low = 例: 100%g、2
 
 # Pantry Actions
 pantry-add-item = 品目を追加
-pantry-add-pantry-item = 在庫に品目を追加
+pantry-add = 追加
 pantry-edit-item = 品目を編集
 pantry-remove-item = 品目を削除
 pantry-remove-confirm = { $section } から { $name } を削除しますか？
@@ -37,15 +46,13 @@ pantry-restock = 補充
 pantry-save = 保存
 pantry-cancel = キャンセル
 pantry-section-label = 保管場所
-pantry-section-select = 保管場所を選択…
+pantry-section-required = 保管場所の名前を入力してください
+pantry-general-quantity-only = 最初の保管場所より前の品目には数量しか設定できません。日付や下限を設定するには保管場所に移してください。
 pantry-section-freezer = 冷凍庫
 pantry-section-fridge = 冷蔵庫
 pantry-section-pantry = 常温
 pantry-section-spices = スパイス
-pantry-section-other = その他
 pantry-section-general = 全般
-pantry-section-new = 新しい保管場所…
-pantry-section-new-name = 新しい保管場所の名前
 pantry-tab-items = アイテム
 pantry-tab-text = テキスト
 pantry-text-intro = ファイルを直接編集します：[セクション] の行のあとに、1 行に 1 アイテムを 名前 = "数量" または 名前 = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"} の形で書きます。# で始まる行はコメントです。

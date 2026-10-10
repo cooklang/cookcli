@@ -398,6 +398,52 @@ fn is_low_reads_only_the_quantity_and_the_threshold() {
     );
 }
 
+#[test]
+fn an_item_reports_its_own_stock_and_expiry() {
+    let item = |quantity: Option<&str>, low: Option<&str>, expire: Option<&str>| PantryItem {
+        name: "x".to_string(),
+        section: "s".to_string(),
+        quantity: quantity.map(ToOwned::to_owned),
+        bought: None,
+        expire: expire.map(ToOwned::to_owned),
+        low: low.map(ToOwned::to_owned),
+    };
+
+    assert!(item(Some("0"), None, None).is_out());
+    assert!(item(Some("0%kg"), None, None).is_out(), "whatever the unit");
+    assert!(item(Some("0.0 l"), None, None).is_out());
+    assert!(!item(Some("0.5%kg"), None, None).is_out());
+    assert!(!item(None, None, None).is_out(), "no quantity says nothing");
+    assert!(!item(Some("unlim"), None, None).is_out());
+
+    assert!(item(Some("50%ml"), Some("200%ml"), None).is_depleted());
+    assert!(
+        item(Some("50%g"), None, None).is_depleted(),
+        "built-in threshold"
+    );
+    assert!(!item(Some("500%g"), Some("100%g"), None).is_depleted());
+    assert!(!item(None, None, None).is_depleted());
+
+    let today = on(10);
+    assert_eq!(
+        item(None, None, Some("2025-06-12")).days_until_expiry(today),
+        Some(2)
+    );
+    assert_eq!(
+        item(None, None, Some("10.06.2025")).days_until_expiry(today),
+        Some(0)
+    );
+    assert_eq!(
+        item(None, None, Some("2025-06-07")).days_until_expiry(today),
+        Some(-3)
+    );
+    assert_eq!(
+        item(None, None, Some("soon")).days_until_expiry(today),
+        None
+    );
+    assert_eq!(item(None, None, None).days_until_expiry(today), None);
+}
+
 // ---------------------------------------------------------------------------
 // expiring
 // ---------------------------------------------------------------------------

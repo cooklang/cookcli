@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div>
-    <div id="pantry-error-banner" class="hidden mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
+<div id="pantry-page">
+    <div id="pantry-error-banner" role="alert" class="{% if load_error.is_none() %}hidden {% endif %}mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
         <div class="flex items-start gap-3">
             <div class="shrink-0 text-danger">
                 <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
             </div>
-            <p id="pantry-error-message" class="flex-1 text-text text-sm font-mono whitespace-pre-wrap"></p>
+            <p id="pantry-error-message" class="flex-1 text-text text-sm font-mono whitespace-pre-wrap">{% if let Some(error) = load_error %}{{ tr.t("pantry-unreadable") }}: {{ error }}{% endif %}</p>
             <button type="button" onclick="document.getElementById('pantry-error-banner').classList.add('hidden')" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -18,27 +18,14 @@
         </div>
     </div>
 
-    <div class="mb-8">
-        <div class="flex items-center justify-between">
-            <h1 class="text-display font-bold text-text">{{ tr.t("pantry-title") }}</h1>
-            {% if !sections.is_empty() %}
-            <div class="flex items-center gap-4">
-                <span id="out-of-stock-count" class="text-sm text-faint"></span>
-                <label class="flex items-center cursor-pointer group">
-                    <input type="checkbox" id="filter-out-of-stock" class="mr-2 w-4 h-4 accent-[var(--accent)]">
-                    <span class="text-sm text-muted group-hover:text-text">{{ tr.t("pantry-show-out-of-stock") }}</span>
-                </label>
-            </div>
-            {% endif %}
-        </div>
+    <div class="mb-6">
+        <h1 class="text-display font-bold text-text">{{ tr.t("pantry-title") }}</h1>
+        <p class="mt-2 text-muted max-w-3xl">{{ tr.t("pantry-intro") }}</p>
     </div>
 
     {% if !configured %}
     <div class="card">
         <div class="p-8 text-center">
-            <svg class="mx-auto h-12 w-12 text-faint mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-            </svg>
             <h2 class="text-title font-medium text-text mb-2">{{ tr.t("pantry-no-config") }}</h2>
             <p class="text-muted">{{ tr.t("pantry-create-config") }}</p>
             <a href="{{ prefix }}/preferences" class="mt-4 inline-block text-accent-text hover:underline">
@@ -53,136 +40,128 @@
     </div>
 
     <section id="panel-items" role="tabpanel" aria-labelledby="tab-items">
-    <div class="space-y-6">
-        {% for section in sections %}
-        <div class="card pantry-section">
-            <div class="p-6">
-                <div class="pantry-section-head flex items-center justify-between gap-2 mb-4" data-section="{{ section.name }}">
-                    <h2 class="pantry-section-title min-w-0 break-words text-title font-semibold text-text">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</h2>
+    {# Everything the server works out lives in here, so a change made from the
+       page fetches the page again and swaps this one element. #}
+    <div id="pantry-items">
+        {% if counts.all > 0 %}
+        <div class="flex flex-wrap gap-1 mb-4" role="group" aria-label="{{ tr.t("pantry-filters") }}">
+            <button type="button" class="pantry-filter nav-pill" data-filter="all" aria-pressed="true">{{ tr.t("pantry-filter-all") }} <span class="text-faint tabular-nums">{{ counts.all }}</span></button>
+            <button type="button" class="pantry-filter nav-pill" data-filter="low" aria-pressed="false">{{ tr.t("pantry-filter-low") }} <span class="text-faint tabular-nums">{{ counts.low }}</span></button>
+            <button type="button" class="pantry-filter nav-pill" data-filter="out" aria-pressed="false">{{ tr.t("pantry-filter-out") }} <span class="text-faint tabular-nums">{{ counts.out }}</span></button>
+            <button type="button" class="pantry-filter nav-pill" data-filter="expiring" aria-pressed="false">{{ tr.t("pantry-filter-expiring") }} <span class="text-faint tabular-nums">{{ counts.expiring }}</span></button>
+        </div>
+        {% endif %}
+
+        <div class="space-y-4">
+            {% for section in sections %}
+            <div class="card pantry-section" data-section="{{ section.name }}">
+                <div class="card-head plain gap-2 pantry-section-head" data-section="{{ section.name }}">
+                    <h2 class="pantry-section-title min-w-0 break-words">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %} <span class="count">{{ section.items.len() }}</span></h2>
                     {% if viewer.can_edit_lists() && section.name != "general" %}
                     <button type="button" class="rename-section-btn icon-btn shrink-0"
                             title="{{ tr.t("pantry-rename-section") }}" aria-label="{{ tr.t("pantry-rename-section") }}">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536 9 17l.464-3.536z"></path>
                         </svg>
                     </button>
                     {% endif %}
                 </div>
-                {% if section.items.is_empty() %}
-                <p class="text-faint italic">{{ tr.t("pantry-no-items-section") }}</p>
-                {% else %}
-                <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {% for item in section.items %}
-                    <div class="pantry-item group"
-                         data-section="{{ section.name }}"
-                         data-name="{{ item.name }}"
-                         data-quantity="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}"
-                         data-low="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
-                        <!-- Main content with aligned name and attributes -->
-                        <div class="flex items-start justify-between">
-                            <div class="grow min-w-0">
-                                <!-- Name aligned with attributes -->
-                                <h3 class="font-medium text-text mb-2">{{ item.name }}</h3>
-
-                                <!-- Attributes section -->
-                                <div class="item-display">
-                                    <div class="space-y-1 text-sm">
-                                        <div class="quantity-display flex items-center">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-quantity-label") }}</span>
-                                            <span class="item-quantity">{% if let Some(quantity) = item.quantity %}{{ quantity }}{% else %}-{% endif %}</span>
-                                            <svg class="out-of-stock-icon w-4 h-4 ml-1 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                                            </svg>
-                                        </div>
-                                        <div class="flex items-center text-muted">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-bought") }}</span>
-                                            <span class="item-bought">{% if let Some(bought) = item.bought %}{{ bought }}{% else %}-{% endif %}</span>
-                                        </div>
-                                        <div class="flex items-center text-muted">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-expire") }}</span>
-                                            <span class="item-expire">{% if let Some(expire) = item.expire %}{{ expire }}{% else %}-{% endif %}</span>
-                                        </div>
-                                        <div class="flex items-center text-muted">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-low") }}</span>
-                                            <span class="item-low">{% if let Some(low) = item.low %}{{ low }}{% else %}-{% endif %}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Edit form (hidden by default) -->
-                                <div class="item-edit hidden">
-                                    <div class="space-y-2 text-sm">
-                                        <label class="block">
-                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-quantity") }}</span>
-                                            <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                                   placeholder="{{ tr.t("pantry-placeholder-quantity") }}"
-                                                   value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
-                                        </label>
-                                        <label class="block">
-                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-bought-date") }}</span>
-                                            <input type="date" class="edit-bought pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                                   data-raw="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
-                                        </label>
-                                        <label class="block">
-                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-expire-date") }}</span>
-                                            <input type="date" class="edit-expire pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                                   data-raw="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
-                                        </label>
-                                        <label class="block">
-                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-low-threshold") }}</span>
-                                            <input type="text" class="edit-low w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                                   placeholder="{{ tr.t("pantry-placeholder-low") }}"
-                                                   value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
-                                        </label>
-                                        <div class="flex flex-wrap items-center justify-end gap-2 mt-2">
-                                            <button type="button" class="cancel-btn btn btn-sm">{{ tr.t("pantry-cancel") }}</button>
-                                            <button type="button" class="save-btn btn btn-primary btn-sm">{{ tr.t("pantry-save") }}</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Action buttons and status indicator -->
-                            <div class="flex items-start space-x-2 ml-4">
-                                <div class="item-status-dot in-stock mt-1"></div>
-                                {% if viewer.can_edit_lists() %}
-                                <div class="pantry-actions flex items-center space-x-1">
-                                    <button type="button" class="edit-btn icon-btn"
-                                            title="{{ tr.t("pantry-edit-item") }}">
-                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                        </svg>
-                                    </button>
-                                    <button type="button" class="delete-btn icon-btn text-danger"
-                                            title="{{ tr.t("pantry-remove-item") }}">
-                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                                {% endif %}
-                            </div>
+                {% for item in section.items %}
+                <div class="row pantry-row"
+                     data-section="{{ section.name }}"
+                     data-name="{{ item.name }}"
+                     data-quantity="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}"
+                     data-bought="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}"
+                     data-expire="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}"
+                     data-low="{% if let Some(low) = item.low %}{{ low }}{% endif %}"
+                     data-stock="{{ item.stock }}"
+                     data-expiry="{{ item.expiry }}">
+                    {% if item.stock == "out" %}
+                    <span class="item-status-dot out-of-stock" role="img" aria-label="{{ tr.t("pantry-filter-out") }}" title="{{ tr.t("pantry-filter-out") }}"></span>
+                    {% else if item.stock == "low" %}
+                    <span class="item-status-dot low-stock" role="img" aria-label="{{ tr.t("pantry-filter-low") }}" title="{{ tr.t("pantry-filter-low") }}"></span>
+                    {% else %}
+                    <span class="item-status-dot in-stock" role="img" aria-label="{{ tr.t("pantry-stock-ok") }}" title="{{ tr.t("pantry-stock-ok") }}"></span>
+                    {% endif %}
+                    <div class="row-name">
+                        <div class="pantry-item-name font-medium text-text break-words">{{ item.name }}</div>
+                        {% if item.bought.is_some() || item.low.is_some() || (item.expire.is_some() && (item.expiry == "" || item.expiry == "later")) %}
+                        <div class="metaline pantry-meta">
+                            {% if let Some(bought) = item.bought %}<span>{{ tr.t("pantry-item-bought") }} {{ bought }}</span>{% endif %}
+                            {% if item.expiry == "" || item.expiry == "later" %}{% if let Some(expire) = item.expire %}<span>{{ tr.t("pantry-item-expire") }} {{ expire }}</span>{% endif %}{% endif %}
+                            {% if item.low.is_some() %}<span>{{ tr.t("pantry-item-low") }} {{ item.low_text }}</span>{% endif %}
                         </div>
+                        {% endif %}
                     </div>
-                    {% endfor %}
+                    {% if item.expiry == "expired" %}
+                    <span class="tag pantry-expiry expired" title="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">{{ tr.t("pantry-expired") }}</span>
+                    {% else if item.expiry == "today" %}
+                    <span class="tag pantry-expiry today" title="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">{{ tr.t("pantry-expires-today") }}</span>
+                    {% else if item.expiry == "soon" %}
+                    <span class="tag pantry-expiry soon" title="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">{{ tr.tn("pantry-expires-in", item.expiry_days) }}</span>
+                    {% endif %}
+                    <span class="row-value pantry-quantity">{{ item.quantity_text }}</span>
+                    {% if viewer.can_edit_lists() %}
+                    <div class="pantry-actions flex items-center gap-1 shrink-0">
+                        <button type="button" class="edit-item icon-btn" title="{{ tr.t("pantry-edit-item") }}" aria-label="{{ tr.t("pantry-edit-item") }}: {{ item.name }}">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536 9 17l.464-3.536z"></path>
+                            </svg>
+                        </button>
+                        <button type="button" class="remove-item icon-btn" title="{{ tr.t("pantry-remove-item") }}" aria-label="{{ tr.t("pantry-remove-item") }}: {{ item.name }}">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    {% endif %}
                 </div>
+                {% endfor %}
+                {% if viewer.can_edit_lists() %}
+                <form class="row pantry-add py-3" data-section="{{ section.name }}">
+                    <input type="text" name="name" autocomplete="off" aria-label="{{ tr.t("pantry-item-name") }}" placeholder="{{ tr.t("pantry-item-name") }}"
+                           class="flex-1 min-w-0 h-8 px-2 text-sm rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+                    <input type="text" name="quantity" autocomplete="off" aria-label="{{ tr.t("pantry-item-quantity") }}" placeholder="{{ tr.t("pantry-item-quantity") }}" title="{{ tr.t("pantry-placeholder-quantity") }}"
+                           class="w-24 sm:w-32 shrink-0 h-8 px-2 text-sm rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+                    <button type="submit" class="btn btn-sm">{{ tr.t("pantry-add") }}</button>
+                </form>
                 {% endif %}
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
 
-    <div class="mt-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div class="text-sm text-faint">
-            {{ tr.t("pantry-total-sections") }} {{ sections.len() }}
-        </div>
-        <div class="flex flex-wrap gap-2">
-            {% if viewer.can_edit_lists() %}
-            <button type="button" id="add-item-btn" class="btn btn-primary">
-                {{ tr.t("pantry-add-item") }}
-            </button>
-            {% endif %}
-        </div>
+        {% if sections.is_empty() %}
+        <p class="text-faint italic">{{ tr.t("pantry-empty") }}</p>
+        {% endif %}
+        <p id="pantry-filter-empty" class="hidden text-faint italic">{{ tr.t("pantry-filter-empty") }}</p>
+
+        {% if viewer.can_edit_lists() %}
+        <form id="pantry-new-item" class="card mt-4 p-4 flex flex-wrap items-end gap-2">
+            <label class="flex-1 min-w-[10rem]">
+                <span class="block text-sm text-muted mb-1">{{ tr.t("pantry-section-label") }}</span>
+                <input type="text" name="section" list="pantry-section-names" autocomplete="off"
+                       class="w-full h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+            </label>
+            <label class="flex-1 min-w-[10rem]">
+                <span class="block text-sm text-muted mb-1">{{ tr.t("pantry-item-name") }}</span>
+                <input type="text" name="name" autocomplete="off"
+                       class="w-full h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+            </label>
+            <label class="w-40">
+                <span class="block text-sm text-muted mb-1">{{ tr.t("pantry-item-quantity") }} {{ tr.t("pantry-optional") }}</span>
+                <input type="text" name="quantity" autocomplete="off" placeholder="{{ tr.t("pantry-placeholder-quantity") }}"
+                       class="w-full h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
+            </label>
+            <button type="submit" class="btn btn-primary">{{ tr.t("pantry-add-item") }}</button>
+            <datalist id="pantry-section-names">
+                {% for section in sections %}{% if section.name != "general" %}<option value="{{ section.name }}"></option>{% endif %}{% endfor %}
+                <option value="{{ tr.t("pantry-section-fridge") }}"></option>
+                <option value="{{ tr.t("pantry-section-freezer") }}"></option>
+                <option value="{{ tr.t("pantry-section-pantry") }}"></option>
+                <option value="{{ tr.t("pantry-section-spices") }}"></option>
+            </datalist>
+        </form>
+        {% endif %}
     </div>
     </section>
 
@@ -201,612 +180,372 @@
     {% endif %}
 </div>
 
-<!-- Add Item Modal -->
-<div id="add-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-    <div class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-md mx-4">
-        <h2 class="text-title font-bold text-text mb-4">{{ tr.t("pantry-add-pantry-item") }}</h2>
-        <form id="add-form">
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-label") }}</label>
-                <select id="add-section" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" required>
-                    <option value="">{{ tr.t("pantry-section-select") }}</option>
-                    {% if sections.is_empty() %}
-                    <option value="freezer">{{ tr.t("pantry-section-freezer") }}</option>
-                    <option value="fridge">{{ tr.t("pantry-section-fridge") }}</option>
-                    <option value="pantry">{{ tr.t("pantry-section-pantry") }}</option>
-                    <option value="spices">{{ tr.t("pantry-section-spices") }}</option>
-                    <option value="other">{{ tr.t("pantry-section-other") }}</option>
-                    {% else %}
-                    {% for section in sections %}
-                    <option value="{{ section.name }}">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</option>
-                    {% endfor %}
-                    {% endif %}
-                    <option value="__new__">{{ tr.t("pantry-section-new") }}</option>
-                </select>
-            </div>
-            <div id="add-new-section-field" class="mb-4 hidden">
-                <label for="add-new-section" class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-new-name") }}</label>
-                <input type="text" id="add-new-section" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-name") }}</label>
-                <input type="text" id="add-name" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" required>
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-quantity") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-quantity" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-quantity") }}">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-bought-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="date" id="add-bought" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-expire-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="date" id="add-expire" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-low-threshold") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-low" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-low") }}">
-            </div>
-            <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeAddModal()" class="btn">{{ tr.t("pantry-cancel") }}</button>
-                <button type="submit" class="btn btn-primary">{{ tr.t("pantry-save") }}</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Define all functions first
-    function updateOutOfStockCount() {
-        const totalItems = document.querySelectorAll('.pantry-item').length;
-        const outOfStockItems = document.querySelectorAll('.pantry-item.out-of-stock').length;
-        const outOfStockCountSpan = document.getElementById('out-of-stock-count');
-        if (outOfStockCountSpan) {
-            outOfStockCountSpan.textContent = {{ tr.t("pantry-out-of-stock-count")|json|safe }}
-                .replace('%o', outOfStockItems).replace('%t', totalItems);
+(function() {
+    const PREFIX = {{ prefix|json|safe }};
+    const T = {
+        general: {{ tr.t("pantry-section-general")|json|safe }},
+        quantity: {{ tr.t("pantry-item-quantity")|json|safe }},
+        bought: {{ tr.t("pantry-item-bought-date")|json|safe }},
+        expire: {{ tr.t("pantry-item-expire-date")|json|safe }},
+        low: {{ tr.t("pantry-item-low-threshold")|json|safe }},
+        quantityHint: {{ tr.t("pantry-placeholder-quantity")|json|safe }},
+        lowHint: {{ tr.t("pantry-placeholder-low")|json|safe }},
+        generalOnlyQuantity: {{ tr.t("pantry-general-quantity-only")|json|safe }},
+        save: {{ tr.t("pantry-save")|json|safe }},
+        cancel: {{ tr.t("pantry-cancel")|json|safe }},
+        remove: {{ tr.t("pantry-remove-item")|json|safe }},
+        removeConfirm: {{ tr.t("pantry-confirm-remove-template")|json|safe }},
+        sectionName: {{ tr.t("pantry-section-name")|json|safe }},
+        sectionRequired: {{ tr.t("pantry-section-required")|json|safe }},
+        sectionTaken: {{ tr.t("pantry-section-name-taken")|json|safe }},
+        nameRequired: {{ tr.t("pantry-item-name-required")|json|safe }},
+        itemExists: {{ tr.t("pantry-item-exists")|json|safe }},
+        failedAdd: {{ tr.t("pantry-failed-add")|json|safe }},
+        failedUpdate: {{ tr.t("pantry-failed-update")|json|safe }},
+        failedRemove: {{ tr.t("pantry-failed-remove")|json|safe }},
+        failedRename: {{ tr.t("pantry-failed-rename")|json|safe }},
+        saved: {{ tr.t("pantry-text-saved")|json|safe }},
+        conflict: {{ tr.t("pantry-text-conflict")|json|safe }},
+        failedSaveFile: {{ tr.t("pantry-failed-save-file")|json|safe }},
+    };
+    const INPUT = 'w-full h-10 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent';
+
+    const panel = document.getElementById('panel-items');
+    if (!panel) return;
+
+    function el(tag, attrs, ...children) {
+        const node = document.createElement(tag);
+        for (const [key, value] of Object.entries(attrs || {})) {
+            if (key === 'class') node.className = value;
+            else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+            else if (value !== false && value != null) node.setAttribute(key, value === true ? '' : value);
         }
+        for (const child of children.flat(Infinity)) {
+            if (child == null || child === false) continue;
+            node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+        }
+        return node;
     }
 
-    function applyFilter() {
-        const filterCheckbox = document.getElementById('filter-out-of-stock');
-        const showOnlyOutOfStock = filterCheckbox && filterCheckbox.checked;
-        const sections = document.querySelectorAll('.pantry-section');
+    function showError(message) {
+        document.getElementById('pantry-error-message').textContent = message;
+        const banner = document.getElementById('pantry-error-banner');
+        banner.classList.remove('hidden');
+        banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 
-        sections.forEach(section => {
-            const items = section.querySelectorAll('.pantry-item');
-            let visibleItems = 0;
+    function hideError() {
+        document.getElementById('pantry-error-banner').classList.add('hidden');
+    }
 
-            items.forEach(item => {
-                if (showOnlyOutOfStock && !item.classList.contains('out-of-stock')) {
-                    item.style.display = 'none';
-                } else {
-                    item.style.display = '';
-                    visibleItems++;
-                }
-            });
+    // How a section is named on the page: `general`, the items above the
+    // first [header], under its translated name, every other one as written.
+    const sectionLabel = section => section === 'general' ? T.general : section;
 
-            // Hide entire section if no items are visible
-            const sectionContainer = section.querySelector('.grid');
-            const emptyMessage = section.querySelector('.empty-section-message');
+    const rows = () => [...document.querySelectorAll('.pantry-row')];
+    const rowFor = (section, name) => rows().find(row => row.dataset.section === section && row.dataset.name === name);
+    const sectionNames = () => [...document.querySelectorAll('.pantry-section')].map(card => card.dataset.section);
+    const addFormFor = section => [...document.querySelectorAll('.pantry-add')].find(form => form.dataset.section === section);
 
-            if (sectionContainer) {
-                if (visibleItems === 0 && showOnlyOutOfStock) {
-                    // Hide the grid and show empty message
-                    sectionContainer.style.display = 'none';
-                    if (!emptyMessage) {
-                        const message = document.createElement('p');
-                        message.className = 'empty-section-message text-faint italic';
-                        message.textContent = {{ tr.t("pantry-no-out-of-stock")|json|safe }};
-                        sectionContainer.parentNode.appendChild(message);
-                    }
-                } else {
-                    // Show the grid and hide empty message
-                    sectionContainer.style.display = '';
-                    if (emptyMessage) {
-                        emptyMessage.remove();
-                    }
-                }
+    // ---- Dates ---------------------------------------------------------------
+
+    // The spellings the pantry reads as dates, tried in the same order as
+    // `DATE_FORMATS` in cookcli-core, so the picker shows the day the server sees.
+    const DATE_SPELLINGS = [
+        [/^(\d{4})-(\d{1,2})-(\d{1,2})$/, 'ymd'],
+        [/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, 'dmy'],
+        [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'dmy'],
+        [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'mdy'],
+        [/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, 'ymd'],
+        [/^(\d{1,2})-(\d{1,2})-(\d{4})$/, 'dmy'],
+    ];
+
+    // `text` as the YYYY-MM-DD a date input takes, or null if it is no date.
+    function toIsoDate(text) {
+        for (const [pattern, order] of DATE_SPELLINGS) {
+            const m = pattern.exec(text.trim());
+            if (!m) continue;
+            const [y, mo, d] = order === 'ymd' ? [m[1], m[2], m[3]]
+                : order === 'dmy' ? [m[3], m[2], m[1]]
+                : [m[3], m[1], m[2]];
+            const date = new Date(Date.UTC(+y, +mo - 1, +d));
+            if (date.getUTCFullYear() === +y && date.getUTCMonth() === +mo - 1 && date.getUTCDate() === +d) {
+                return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
             }
-        });
-    }
-
-    // Parse quantity to extract numeric value and unit
-    function parseQuantity(quantity) {
-        if (!quantity) return null;
-        const cleaned = quantity.replace('%', ' ').trim();
-        const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-        if (match) {
-            return {
-                value: parseFloat(match[1]),
-                unit: match[2] || ''
-            };
         }
         return null;
     }
 
-    // Check for out-of-stock and low-stock items and apply styling
-    function checkOutOfStock() {
-        const items = document.querySelectorAll('.pantry-item');
-
-        items.forEach(item => {
-            const quantity = item.dataset.quantity || '';
-            const lowThreshold = item.dataset.low || '';
-            const isOutOfStock = quantity === '0' || quantity === '0%g' || quantity === '0%kg' ||
-                                quantity === '0%ml' || quantity === '0%L' || quantity === '';
-
-            // Check if low on stock
-            let isLowStock = false;
-            if (quantity && lowThreshold) {
-                const currentQty = parseQuantity(quantity);
-                const lowQty = parseQuantity(lowThreshold);
-                if (currentQty && lowQty && currentQty.unit === lowQty.unit) {
-                    isLowStock = currentQty.value <= lowQty.value;
-                }
-            }
-
-            // State lives on the item as one class; components.css styles
-            // the block, dot, quantity and icon from it.
-            item.classList.remove('out-of-stock', 'low-stock');
-
-            const statusDot = item.querySelector('.item-status-dot');
-            if (statusDot) {
-                statusDot.classList.remove('in-stock', 'out-of-stock', 'low-stock', 'animate-pulse');
-            }
-
-            const warningIcon = item.querySelector('.out-of-stock-icon');
-            if (warningIcon) {
-                warningIcon.classList.add('hidden');
-            }
-
-            if (isOutOfStock) {
-                item.classList.add('out-of-stock');
-                if (statusDot) statusDot.classList.add('out-of-stock', 'animate-pulse');
-                if (warningIcon) warningIcon.classList.remove('hidden');
-            } else if (isLowStock) {
-                item.classList.add('low-stock');
-                if (statusDot) statusDot.classList.add('low-stock', 'animate-pulse');
-                if (warningIcon) warningIcon.classList.remove('hidden');
-            } else {
-                if (statusDot) statusDot.classList.add('in-stock');
-            }
-        });
-
-        // Update count after checking stock status
-        updateOutOfStockCount();
+    // A date field holding the value the file has. One that is not a date
+    // stays a text field showing it, so opening the editor loses nothing.
+    function dateField(raw, label) {
+        const iso = raw ? toIsoDate(raw) : '';
+        const input = el('input', { type: iso === null ? 'text' : 'date', class: INPUT, 'aria-label': label });
+        input.value = iso === null ? raw : iso;
+        input.dataset.raw = raw;
+        return input;
     }
 
-    // Initialize: Run check on page load
-    checkOutOfStock();
-
-    // Add filter event listener
-    const filterCheckbox = document.getElementById('filter-out-of-stock');
-    if (filterCheckbox) {
-        filterCheckbox.addEventListener('change', applyFilter);
-    }
-    
-    const addBtn = document.getElementById('add-item-btn');
-    const addModal = document.getElementById('add-modal');
-    const addForm = document.getElementById('add-form');
-    
-    if (addBtn) {
-        addBtn.addEventListener('click', function() {
-            addModal.classList.remove('hidden');
-            addModal.classList.add('flex');
-        });
-    }
-    
-    const addSection = document.getElementById('add-section');
-    if (addSection) {
-        addSection.addEventListener('change', toggleNewSectionField);
+    // Whether a date field now says something other than the file, so an
+    // item whose date is untouched keeps the spelling the file uses.
+    function dateChanged(input) {
+        const raw = input.dataset.raw;
+        const before = input.type === 'date' ? (toIsoDate(raw) || '') : raw;
+        return input.value.trim() !== before;
     }
 
-    if (addForm) {
-        addForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
+    // ---- Filters -------------------------------------------------------------
 
-            const section = addSection.value === '__new__'
-                ? document.getElementById('add-new-section').value.trim()
-                : addSection.value.trim();
-            if (!section) {
-                showPantryError({{ tr.t("pantry-section-new-name")|json|safe }});
-                return;
-            }
-            const itemName = document.getElementById('add-name').value.trim();
-            if (!itemName) {
-                showPantryError({{ tr.t("pantry-item-name-required")|json|safe }});
-                return;
-            }
-            // The server refuses a second item of the same name in a section;
-            // say so here, in the page's language.
-            const taken = [...document.querySelectorAll('.pantry-item')]
-                .some(item => item.dataset.section === section && item.dataset.name === itemName);
-            if (taken) {
-                showPantryError({{ tr.t("pantry-item-exists")|json|safe }}.replace('%s', itemName).replace('%s', sectionLabel(section)));
-                return;
-            }
+    let filter = 'all';
+    const MATCHES = {
+        all: () => true,
+        low: row => row.dataset.stock === 'low',
+        out: row => row.dataset.stock === 'out',
+        expiring: row => ['expired', 'today', 'soon'].includes(row.dataset.expiry),
+    };
 
-            const data = {
-                section: section,
-                name: itemName,
-                quantity: document.getElementById('add-quantity').value.trim() || null,
-                bought: document.getElementById('add-bought').value.trim() || null,
-                expire: document.getElementById('add-expire').value.trim() || null,
-                low: document.getElementById('add-low').value.trim() || null
-            };
-            
-            try {
-                const response = await fetch('{{ prefix }}/api/pantry/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-                
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    const data = await response.json().catch(() => ({}));
-                    showPantryError(data.error || {{ tr.t("pantry-failed-add")|json|safe }});
-                }
-            } catch (error) {
-                showPantryError({{ tr.t("pantry-failed-add")|json|safe }} + ': ' + error);
+    function applyFilter() {
+        for (const pill of document.querySelectorAll('.pantry-filter')) {
+            const on = pill.dataset.filter === filter;
+            pill.classList.toggle('active', on);
+            pill.setAttribute('aria-pressed', on);
+        }
+        let anyShown = false;
+        for (const card of document.querySelectorAll('.pantry-section')) {
+            let first = true;
+            for (const row of card.querySelectorAll('.pantry-row')) {
+                const shown = MATCHES[filter](row);
+                row.classList.toggle('hidden', !shown);
+                // The rule between rows sits on the later one; the first one
+                // shown sits under the heading's own rule.
+                row.classList.toggle('first-shown', shown && first);
+                if (shown) first = false;
             }
-        });
+            card.classList.toggle('hidden', first && filter !== 'all');
+            anyShown = anyShown || !first;
+            card.querySelector('.pantry-add')?.classList.toggle('hidden', filter !== 'all');
+        }
+        document.getElementById('pantry-filter-empty')?.classList.toggle('hidden', anyShown || filter === 'all');
+        document.getElementById('pantry-new-item')?.classList.toggle('hidden', filter !== 'all');
     }
-    
-    // Add inline editing and delete functionality to items
-    document.querySelectorAll('.pantry-item').forEach(item => {
-        const section = item.dataset.section;
-        const name = item.dataset.name;
-        const editBtn = item.querySelector('.edit-btn');
-        const deleteBtn = item.querySelector('.delete-btn');
-        const saveBtn = item.querySelector('.save-btn');
-        const cancelBtn = item.querySelector('.cancel-btn');
-        const displayDiv = item.querySelector('.item-display');
-        const editDiv = item.querySelector('.item-edit');
-        
-        // Edit button handler
-        if (editBtn) {
-            editBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                item.querySelectorAll('.pantry-date').forEach(showDate);
-                displayDiv.classList.add('hidden');
-                editDiv.classList.remove('hidden');
-            });
-        }
-        
-        // Cancel button handler
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                displayDiv.classList.remove('hidden');
-                editDiv.classList.add('hidden');
-            });
-        }
-        
-        // Save function that can be called from button click or Enter key
-        async function saveItem(e) {
-            if (e) e.stopPropagation();
 
-            const quantityInput = item.querySelector('.edit-quantity');
-            const boughtInput = item.querySelector('.edit-bought');
-            const expireInput = item.querySelector('.edit-expire');
-            const lowInput = item.querySelector('.edit-low');
+    // ---- Talking to the server ----------------------------------------------
 
-            // Get original values from display
-            const originalQuantity = item.querySelector('.item-quantity').textContent;
-            const originalLow = item.querySelector('.item-low').textContent;
-
-            // Only include fields that have changed
-            const data = {};
-
-            const newQuantity = quantityInput.value.trim();
-            const displayQuantity = originalQuantity === '-' ? '' : originalQuantity;
-            if (newQuantity !== displayQuantity) {
-                data.quantity = newQuantity || null;
-            }
-
-            if (dateChanged(boughtInput)) {
-                data.bought = boughtInput.value.trim() || null;
-            }
-            if (dateChanged(expireInput)) {
-                data.expire = expireInput.value.trim() || null;
-            }
-
-            const newLow = lowInput.value.trim();
-            const displayLow = originalLow === '-' ? '' : originalLow;
-            if (newLow !== displayLow) {
-                data.low = newLow || null;
-            }
-
-            try {
-                const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (response.ok) {
-                    // Update display with new values, preserving unchanged fields
-                    if (data.hasOwnProperty('quantity')) {
-                        item.querySelector('.item-quantity').textContent = data.quantity || '-';
-                        item.dataset.quantity = data.quantity || '';
-                    }
-                    if (data.hasOwnProperty('bought')) {
-                        item.querySelector('.item-bought').textContent = data.bought || '-';
-                        boughtInput.dataset.raw = data.bought || '';
-                    }
-                    if (data.hasOwnProperty('expire')) {
-                        item.querySelector('.item-expire').textContent = data.expire || '-';
-                        expireInput.dataset.raw = data.expire || '';
-                    }
-                    if (data.hasOwnProperty('low')) {
-                        item.querySelector('.item-low').textContent = data.low || '-';
-                        item.dataset.low = data.low || '';
-                    }
-
-                    displayDiv.classList.remove('hidden');
-                    editDiv.classList.add('hidden');
-
-                    // Re-check out-of-stock status after update
-                    checkOutOfStock();
-                } else {
-                    const data = await response.json().catch(() => ({}));
-                    showPantryError(data.error || {{ tr.t("pantry-failed-update")|json|safe }});
-                }
-            } catch (error) {
-                showPantryError({{ tr.t("pantry-failed-update")|json|safe }} + ': ' + error);
-            }
-        }
-
-        // Save button handler
-        if (saveBtn) {
-            saveBtn.addEventListener('click', saveItem);
-        }
-
-        // Add Enter key support for all edit inputs
-        const editInputs = item.querySelectorAll('.edit-quantity, .edit-bought, .edit-expire, .edit-low');
-        editInputs.forEach(input => {
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveItem(e);
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    displayDiv.classList.remove('hidden');
-                    editDiv.classList.add('hidden');
-                }
-            });
-        });
-        
-        // Delete button handler
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', async function(e) {
-                e.stopPropagation();
-
-                if (confirm({{ tr.t("pantry-confirm-remove-template")|json|safe }}.replace('%s', name).replace('%s', section))) {
-                    try {
-                        const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
-                            method: 'DELETE'
-                        });
-
-                        if (response.ok) {
-                            // Smoothly remove the item
-                            item.style.opacity = '0';
-                            item.style.transform = 'scale(0.95)';
-                            setTimeout(() => {
-                                item.remove();
-                                // Check if section is now empty and reload if needed
-                                const sectionContainer = document.querySelector(`[data-section="${CSS.escape(section)}"]`);
-                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${CSS.escape(section)}"]`)) {
-                                    window.location.reload();
-                                }
-                            }, 200);
-                        } else {
-                            const data = await response.json().catch(() => ({}));
-                            showPantryError(data.error || {{ tr.t("pantry-failed-remove")|json|safe }});
-                        }
-                    } catch (error) {
-                        showPantryError({{ tr.t("pantry-failed-remove")|json|safe }} + ': ' + error);
-                    }
-                }
-            });
-        }
-    });
-});
-
-function closeAddModal() {
-    const addModal = document.getElementById('add-modal');
-    addModal.classList.add('hidden');
-    addModal.classList.remove('flex');
-    document.getElementById('add-form').reset();
-    toggleNewSectionField();
-}
-
-// "New section…" in the section list reveals a field to name it.
-function toggleNewSectionField() {
-    const isNew = document.getElementById('add-section').value === '__new__';
-    const input = document.getElementById('add-new-section');
-    document.getElementById('add-new-section-field').classList.toggle('hidden', !isNew);
-    input.required = isNew;
-    if (isNew) {
-        input.focus();
-    }
-}
-
-// How a section is named on the page: `general`, the items above the first
-// [header], under its translated name, every other one as the file writes it.
-function sectionLabel(section) {
-    return section === 'general' ? {{ tr.t("pantry-section-general")|json|safe }} : section;
-}
-
-// ---- Dates -------------------------------------------------------------------
-
-// The spellings the pantry reads as dates, tried in the same order as
-// `DATE_FORMATS` in cookcli-core, so the picker shows the day the server sees.
-const DATE_SPELLINGS = [
-    [/^(\d{4})-(\d{1,2})-(\d{1,2})$/, 'ymd'],
-    [/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, 'dmy'],
-    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'dmy'],
-    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'mdy'],
-    [/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, 'ymd'],
-    [/^(\d{1,2})-(\d{1,2})-(\d{4})$/, 'dmy'],
-];
-
-// `text` as the YYYY-MM-DD a date input takes, or null if it is no date.
-function toIsoDate(text) {
-    for (const [pattern, order] of DATE_SPELLINGS) {
-        const m = pattern.exec(text.trim());
-        if (!m) continue;
-        const [y, mo, d] = order === 'ymd' ? [m[1], m[2], m[3]]
-            : order === 'dmy' ? [m[3], m[2], m[1]]
-            : [m[3], m[1], m[2]];
-        const date = new Date(Date.UTC(+y, +mo - 1, +d));
-        if (date.getUTCFullYear() === +y && date.getUTCMonth() === +mo - 1 && date.getUTCDate() === +d) {
-            return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
-        }
-    }
-    return null;
-}
-
-// Fill a date field from the value the file holds (`data-raw`). One that is
-// not a date stays a text field showing it, so opening the editor loses nothing.
-function showDate(input) {
-    const raw = input.dataset.raw || '';
-    const iso = raw ? toIsoDate(raw) : '';
-    input.type = iso === null ? 'text' : 'date';
-    input.value = iso === null ? raw : iso;
-}
-
-// Whether a date field now says something other than the file, so an item
-// whose date is untouched keeps the spelling the file uses.
-function dateChanged(input) {
-    const raw = input.dataset.raw || '';
-    const before = input.type === 'date' ? (toIsoDate(raw) || '') : raw;
-    return input.value.trim() !== before;
-}
-
-function showPantryError(message) {
-    const banner = document.getElementById('pantry-error-banner');
-    document.getElementById('pantry-error-message').textContent = message;
-    banner.classList.remove('hidden');
-    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// ---- Section rename ---------------------------------------------------------
-
-// The pencil beside a section's name swaps the heading for a field holding
-// its name as written in the file.
-document.addEventListener('click', function(e) {
-    const button = e.target.closest('.rename-section-btn');
-    if (!button) return;
-    const head = button.closest('.pantry-section-head');
-    const section = head.dataset.section;
-    const shown = [...head.children];
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = section;
-    input.setAttribute('aria-label', {{ tr.t("pantry-section-name")|json|safe }});
-    input.className = 'flex-1 min-w-[10rem] h-8 px-2 text-sm border border-line-strong rounded-[var(--radius-control)] bg-surface text-text focus:outline-none focus:border-accent';
-
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.className = 'btn btn-sm';
-    cancel.textContent = {{ tr.t("pantry-cancel")|json|safe }};
-
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.className = 'btn btn-primary btn-sm';
-    save.textContent = {{ tr.t("pantry-save")|json|safe }};
-
-    const form = document.createElement('div');
-    form.className = 'flex flex-wrap items-center gap-2 w-full';
-    form.append(input, cancel, save);
-
-    const restore = () => head.replaceChildren(...shown);
-    const submit = async () => {
-        const newName = input.value.trim();
-        if (newName === section) {
-            restore();
-            return;
-        }
-        // Another section, or an item above the first [header], already
-        // answering to this name ignoring case: the server would refuse it.
-        const lower = newName.toLowerCase();
-        const taken = [...document.querySelectorAll('.pantry-section-head')]
-            .map(other => other.dataset.section)
-            .filter(name => name !== 'general')
-            .concat([...document.querySelectorAll('.pantry-item[data-section="general"]')].map(item => item.dataset.name))
-            .find(name => name !== section && name.toLowerCase() === lower);
-        if (taken !== undefined) {
-            showPantryError({{ tr.t("pantry-section-name-taken")|json|safe }}.replace('%s', taken));
-            return;
-        }
+    // Send a change; true once it is made, otherwise the banner says why.
+    async function send(method, url, body, failed) {
+        hideError();
         try {
-            const response = await fetch('{{ prefix }}/api/pantry/rename', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ section, new_name: input.value }),
+            const response = await fetch(PREFIX + url, {
+                method,
+                headers: body ? { 'Content-Type': 'application/json' } : {},
+                body: body ? JSON.stringify(body) : undefined,
             });
-            if (response.ok) {
-                window.location.reload();
-                return;
-            }
+            if (response.ok) return true;
             const data = await response.json().catch(() => ({}));
-            showPantryError(data.error || {{ tr.t("pantry-failed-rename")|json|safe }});
+            showError(data.error ? `${failed}: ${data.error}` : failed);
         } catch (error) {
-            showPantryError({{ tr.t("pantry-failed-rename")|json|safe }} + ': ' + error);
+            showError(`${failed}: ${error.message || error}`);
         }
-    };
-    cancel.addEventListener('click', restore);
-    save.addEventListener('click', submit);
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); submit(); }
-        if (e.key === 'Escape') restore();
+        return false;
+    }
+
+    // Fetch the page again and put its list in place of this one: the server
+    // judges stock and expiry, so the page never works them out a second way.
+    async function refresh(then) {
+        try {
+            const response = await fetch(location.pathname, { headers: { Accept: 'text/html' } });
+            if (!response.ok) throw new Error(response.statusText);
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const fresh = page.getElementById('pantry-items');
+            if (!fresh) throw new Error('no pantry on the page');
+            document.getElementById('pantry-items').replaceWith(fresh);
+        } catch (_) {
+            location.reload();
+            return;
+        }
+        textStale();
+        applyFilter();
+        if (then) then();
+    }
+
+    // ---- Adding --------------------------------------------------------------
+
+    async function addItem(form, typedSection) {
+        // `Fridge` typed next to an existing `fridge` goes to that section,
+        // rather than starting a second one that reads the same.
+        const typed = typedSection.trim();
+        const section = sectionNames().find(name => name.toLowerCase() === typed.toLowerCase()) ?? typed;
+        const name = form.elements.name.value.trim();
+        const quantity = form.elements.quantity.value.trim();
+        if (!section) { showError(T.sectionRequired); form.elements.section?.focus(); return; }
+        if (!name) { showError(T.nameRequired); form.elements.name.focus(); return; }
+        if (rowFor(section, name)) {
+            showError(T.itemExists.replace('%s', name).replace('%s', sectionLabel(section)));
+            return;
+        }
+        const added = await send('POST', '/api/pantry/add',
+            { section, name, quantity: quantity || null, bought: null, expire: null, low: null }, T.failedAdd);
+        if (added) {
+            // Keep typing into the section the item went to.
+            await refresh(() => addFormFor(section)?.elements.name.focus());
+        }
+    }
+
+    // ---- Editing -------------------------------------------------------------
+
+    function closeEditors() {
+        for (const editor of document.querySelectorAll('.pantry-editor')) editor.remove();
+        for (const row of document.querySelectorAll('.pantry-row.editing')) row.classList.remove('editing');
+    }
+
+    function openEditor(row) {
+        const wasOpen = row.classList.contains('editing');
+        closeEditors();
+        if (wasOpen) return;
+
+        const { section, name } = row.dataset;
+        // An item above the first [header] can only be written with a quantity.
+        const general = section === 'general';
+        const field = (label, input) => el('label', { class: 'block' },
+            el('span', { class: 'block text-sm text-muted mb-1' }, label), input);
+
+        const quantity = el('input', { type: 'text', class: INPUT, placeholder: T.quantityHint, value: row.dataset.quantity });
+        const bought = dateField(row.dataset.bought, T.bought);
+        const expire = dateField(row.dataset.expire, T.expire);
+        const low = el('input', { type: 'text', class: INPUT, placeholder: T.lowHint, value: row.dataset.low });
+
+        const close = () => { closeEditors(); row.querySelector('.edit-item')?.focus(); };
+        const save = async () => {
+            const changes = {};
+            if (quantity.value.trim() !== row.dataset.quantity) changes.quantity = quantity.value.trim() || null;
+            if (!general) {
+                if (dateChanged(bought)) changes.bought = bought.value.trim() || null;
+                if (dateChanged(expire)) changes.expire = expire.value.trim() || null;
+                if (low.value.trim() !== row.dataset.low) changes.low = low.value.trim() || null;
+            }
+            if (Object.keys(changes).length === 0) { close(); return; }
+            const url = `/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`;
+            if (await send('PUT', url, changes, T.failedUpdate)) await refresh();
+        };
+
+        const editor = el('div', { class: 'pantry-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
+            el('div', { class: 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4' },
+                field(T.quantity, quantity),
+                !general && field(T.bought, bought),
+                !general && field(T.expire, expire),
+                !general && field(T.low, low)),
+            general && el('p', { class: 'text-sm text-faint' }, T.generalOnlyQuantity),
+            el('div', { class: 'flex flex-wrap items-center justify-end gap-2' },
+                el('button', { type: 'button', class: 'btn btn-danger btn-sm mr-auto', onclick: () => removeItem(row) }, T.remove),
+                el('button', { type: 'button', class: 'btn btn-sm', onclick: close }, T.cancel),
+                el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: save }, T.save)));
+        editor.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); save(); }
+            if (e.key === 'Escape') { e.preventDefault(); close(); }
+        });
+
+        row.classList.add('editing');
+        row.after(editor);
+        quantity.focus();
+        quantity.select();
+    }
+
+    async function removeItem(row) {
+        const { section, name } = row.dataset;
+        if (!confirm(T.removeConfirm.replace('%s', name).replace('%s', sectionLabel(section)))) return;
+        const url = `/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`;
+        if (await send('DELETE', url, null, T.failedRemove)) await refresh();
+    }
+
+    // ---- Section rename ------------------------------------------------------
+
+    // The pencil beside a section's name swaps the heading for a field holding
+    // its name as written in the file.
+    function renameSection(head) {
+        const section = head.dataset.section;
+        const shown = [...head.children];
+        const restore = () => head.replaceChildren(...shown);
+
+        const input = el('input', { type: 'text', class: INPUT + ' flex-1 min-w-[10rem] h-8', value: section, 'aria-label': T.sectionName });
+        const submit = async () => {
+            const newName = input.value.trim();
+            if (newName === section) { restore(); return; }
+            // Another section, or an item above the first [header], already
+            // answering to this name ignoring case: the server would refuse it.
+            const lower = newName.toLowerCase();
+            const taken = sectionNames()
+                .filter(name => name !== 'general')
+                .concat(rows().filter(row => row.dataset.section === 'general').map(row => row.dataset.name))
+                .find(name => name !== section && name.toLowerCase() === lower);
+            if (taken !== undefined) { showError(T.sectionTaken.replace('%s', taken)); return; }
+            if (await send('POST', '/api/pantry/rename', { section, new_name: newName }, T.failedRename)) await refresh();
+        };
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            if (e.key === 'Escape') restore();
+        });
+
+        head.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-2 w-full' },
+            input,
+            el('button', { type: 'button', class: 'btn btn-sm', onclick: restore }, T.cancel),
+            el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: submit }, T.save)));
+        input.focus();
+        input.select();
+    }
+
+    // The list is swapped whole after each change, so its controls answer
+    // here rather than on each element.
+    panel.addEventListener('click', e => {
+        const pill = e.target.closest('.pantry-filter');
+        if (pill) { filter = pill.dataset.filter; closeEditors(); applyFilter(); return; }
+        const edit = e.target.closest('.edit-item');
+        if (edit) { openEditor(edit.closest('.pantry-row')); return; }
+        const remove = e.target.closest('.remove-item');
+        if (remove) { removeItem(remove.closest('.pantry-row')); return; }
+        const rename = e.target.closest('.rename-section-btn');
+        if (rename) renameSection(rename.closest('.pantry-section-head'));
     });
 
-    head.replaceChildren(form);
-    input.focus();
-    input.select();
-});
+    panel.addEventListener('submit', e => {
+        const form = e.target;
+        if (form.classList.contains('pantry-add')) { e.preventDefault(); addItem(form, form.dataset.section); }
+        if (form.id === 'pantry-new-item') { e.preventDefault(); addItem(form, form.elements.section.value); }
+    });
 
-// ---- Items and Text tabs -----------------------------------------------------
+    applyFilter();
 
-(function() {
+    // ---- Items and Text tabs -------------------------------------------------
+
     const textarea = document.getElementById('pantry-text');
-    if (!textarea) return;
-    const T = {
-        saved: {{ tr.t("pantry-text-saved")|json|safe }},
-        conflict: {{ tr.t("pantry-text-conflict")|json|safe }},
-        failed: {{ tr.t("pantry-failed-save-file")|json|safe }},
-    };
-    // Set once the file is saved from the Text tab, so going back to Items
-    // shows the pantry the file now describes.
-    let itemsStale = false;
+
+    // A change made on the Items tab makes the text loaded earlier out of
+    // date; unless it is being edited, load it again when the tab is opened.
+    function textStale() {
+        if (textarea && !textarea.dataset.dirty) delete textarea.dataset.revision;
+    }
 
     async function loadText() {
         try {
-            const response = await fetch('{{ prefix }}/api/pantry/raw');
+            const response = await fetch(PREFIX + '/api/pantry/raw');
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.error || T.failed);
+            if (!response.ok) throw new Error(data.error || T.failedSaveFile);
             textarea.value = data.content;
             textarea.dataset.revision = data.revision;
             delete textarea.dataset.dirty;
         } catch (error) {
-            showPantryError(error.message);
+            showError(error.message);
         }
     }
 
+    // Set once the file is saved from the Text tab, so going back to Items
+    // shows the pantry the file now describes.
+    let itemsStale = false;
+
     function selectTab(tab) {
         if (tab === 'items' && itemsStale) {
-            window.location.href = window.location.pathname;
-            return;
+            itemsStale = false;
+            refresh();
         }
         for (const button of document.querySelectorAll('[role="tab"]')) {
             const selected = button.dataset.tab === tab;
@@ -829,10 +568,10 @@ document.addEventListener('click', function(e) {
     if (saveText) {
         saveText.addEventListener('click', async () => {
             const status = document.getElementById('pantry-text-status');
-            document.getElementById('pantry-error-banner').classList.add('hidden');
+            hideError();
             status.textContent = '';
             try {
-                const response = await fetch('{{ prefix }}/api/pantry/raw', {
+                const response = await fetch(PREFIX + '/api/pantry/raw', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: textarea.value, revision: textarea.dataset.revision }),
@@ -841,16 +580,16 @@ document.addEventListener('click', function(e) {
                 if (response.status === 409 && data.revision) {
                     // Their text stays; saving again replaces the other change.
                     textarea.dataset.revision = data.revision;
-                    showPantryError(T.conflict);
+                    showError(T.conflict);
                     return;
                 }
-                if (!response.ok) throw new Error(data.error || T.failed);
+                if (!response.ok) throw new Error(data.error || T.failedSaveFile);
                 textarea.dataset.revision = data.revision;
                 delete textarea.dataset.dirty;
                 itemsStale = true;
                 status.textContent = T.saved;
             } catch (error) {
-                showPantryError(error.message);
+                showError(error.message);
             }
         });
     }

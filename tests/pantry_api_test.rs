@@ -365,8 +365,74 @@ async fn the_items_above_the_first_section_are_listed_under_a_translated_name() 
         }
     };
 
+    let heading = |name: &str| format!(">{name} <span class=\"count\">");
     let english = page("en-US").await;
-    assert!(english.contains(">General</h2>"), "{english}");
-    assert!(english.contains(">fridge</h2>"), "names stay as written");
-    assert!(page("fr-FR").await.contains(">Général</h2>"));
+    assert!(english.contains(&heading("General")), "{english}");
+    assert!(
+        english.contains(&heading("fridge")),
+        "names stay as written"
+    );
+    assert!(page("fr-FR").await.contains(&heading("Général")));
+}
+
+#[tokio::test]
+async fn the_page_marks_stock_and_expiry_as_the_cli_judges_them() {
+    let day = |offset: i64| {
+        (chrono::Local::now().date_naive() + chrono::Duration::days(offset))
+            .format("%Y-%m-%d")
+            .to_string()
+    };
+    let pantry = format!(
+        "[fridge]\n\
+         butter = \"0%g\"\n\
+         cream = {{ quantity = \"50%ml\", low = \"200%ml\" }}\n\
+         milk = {{ quantity = \"2%l\", expire = \"{}\" }}\n\
+         eggs = {{ quantity = \"6\", expire = \"{}\" }}\n\
+         jam = {{ quantity = \"1%jar\", expire = \"{}\" }}\n",
+        day(-1),
+        day(3),
+        day(30),
+    );
+    let server = start_server(&pantry).await;
+    let page = reqwest::get(server.url("/pantry"))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    // Each item's row, from its opening tag to the next one.
+    let row = |name: &str| {
+        page.split("class=\"row pantry-row\"")
+            .find(|row| row.contains(&format!("data-name=\"{name}\"")))
+            .unwrap_or_else(|| panic!("no row for {name}"))
+            .to_string()
+    };
+
+    assert!(row("butter").contains("data-stock=\"out\""));
+    assert!(
+        row("butter").contains(">0 g</span>"),
+        "the quantity reads as words"
+    );
+    assert!(
+        row("cream").contains("data-stock=\"low\""),
+        "below its own mark"
+    );
+    assert!(row("milk").contains("data-stock=\"ok\""));
+    assert!(row("milk").contains("pantry-expiry expired"));
+    assert!(row("eggs").contains(">In 3 days</span>"));
+    assert!(
+        !row("jam").contains("pantry-expiry"),
+        "a month away is not flagged"
+    );
+    // `1%jar` is at the built-in threshold for a count.
+    assert!(row("jam").contains("data-stock=\"low\""));
+
+    let pill = |label: &str, count: usize| {
+        format!("{label} <span class=\"text-faint tabular-nums\">{count}</span>")
+    };
+    assert!(page.contains(&pill("All", 5)), "{page}");
+    assert!(page.contains(&pill("Running low", 2)));
+    assert!(page.contains(&pill("Out of stock", 1)));
+    assert!(page.contains(&pill("Expiring soon", 2)));
 }

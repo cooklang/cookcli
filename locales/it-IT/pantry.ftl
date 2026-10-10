@@ -1,21 +1,31 @@
 # Pantry
 pantry-title = Inventario della dispensa
+pantry-intro = Quello che hai in casa, per luogo di conservazione. La lista della spesa lascia fuori quello che hai già.
+pantry-unreadable = Impossibile leggere il file della dispensa
 pantry-empty = La tua dispensa è vuota
+pantry-filters = Mostra
+pantry-filter-all = Tutto
+pantry-filter-low = In esaurimento
+pantry-filter-out = Esaurito
+pantry-filter-expiring = Scade presto
+pantry-filter-empty = Nessun articolo corrisponde a questo filtro.
+pantry-stock-ok = Disponibile
+pantry-expired = Scaduto
+pantry-expires-today = Scade oggi
+pantry-expires-in =
+    { $count ->
+        [one] Tra { $count } giorno
+       *[other] Tra { $count } giorni
+    }
 pantry-section = { $name }
 pantry-no-config = Nessuna configurazione della dispensa trovata
 pantry-create-config = Crea un file pantry.conf per tenere traccia del tuo inventario
 pantry-configure = Configura la dispensa →
-pantry-no-items-section = Nessun articolo in questa sezione
-pantry-show-out-of-stock = Mostra solo gli esauriti
-pantry-no-out-of-stock = Nessun articolo esaurito in questa sezione
-pantry-out-of-stock-count = Esauriti: %o su %t
-pantry-total-sections = Sezioni totali:
 pantry-manage = Gestisci dispensa
 
 # Pantry Item Fields
 pantry-item-name = Nome dell'articolo
 pantry-item-quantity = Quantità
-pantry-item-quantity-label = Quantità:
 pantry-item-bought = Acquistato:
 pantry-item-bought-date = Data di acquisto
 pantry-item-expire = Scade:
@@ -27,7 +37,7 @@ pantry-placeholder-low = es. 100%g o 2
 
 # Pantry Actions
 pantry-add-item = Aggiungi articolo
-pantry-add-pantry-item = Aggiungi articolo alla dispensa
+pantry-add = Aggiungi
 pantry-edit-item = Modifica articolo
 pantry-remove-item = Rimuovi articolo
 pantry-remove-confirm = Rimuovere { $name } da { $section }?
@@ -37,15 +47,13 @@ pantry-restock = Rifornisci
 pantry-save = Salva
 pantry-cancel = Annulla
 pantry-section-label = Sezione
-pantry-section-select = Seleziona una sezione...
+pantry-section-required = Dai un nome alla sezione
+pantry-general-quantity-only = Gli articoli prima della prima sezione possono avere solo una quantità. Spostalo in una sezione per dargli date o una soglia minima.
 pantry-section-freezer = Congelatore
 pantry-section-fridge = Frigorifero
 pantry-section-pantry = Dispensa
 pantry-section-spices = Spezie
-pantry-section-other = Altro
 pantry-section-general = Generale
-pantry-section-new = Nuova sezione…
-pantry-section-new-name = Nome della nuova sezione
 pantry-tab-items = Articoli
 pantry-tab-text = Testo
 pantry-text-intro = Modifica direttamente il file: una riga [sezione], poi un articolo per riga, scritto nome = "quantità" oppure nome = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Le righe che iniziano con # sono commenti.
