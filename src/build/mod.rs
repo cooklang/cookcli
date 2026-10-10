@@ -6,7 +6,7 @@ mod sitemap;
 mod writer;
 
 use crate::util::resolve_to_absolute_path;
-use crate::web::language::{parse_supported_language, system_language};
+use crate::web::language::{parse_supported_language, system_language, FeatureFlags};
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
@@ -203,7 +203,13 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         }
     }
 
-    renderer::render_index(&source, &output, base_url, repo_url, &lang)?;
+    // Pages advertise the feeds only when this build writes them.
+    let features = FeatureFlags {
+        feeds: feed_base.is_some(),
+        ..FeatureFlags::default()
+    };
+
+    renderer::render_index(&source, &output, base_url, repo_url, &lang, features)?;
 
     let mut tree = cooklang_find::build_tree(&source)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
@@ -221,6 +227,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         base_url,
         repo_url,
         &lang,
+        features,
         String::new(),
     )?;
 
@@ -233,6 +240,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         base_url,
         repo_url,
         &lang,
+        features,
         String::new(),
     )?;
 
@@ -340,6 +348,7 @@ fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Resu
     Ok(count)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_directories(
     tree: &cooklang_find::RecipeTree,
     source: &camino::Utf8Path,
@@ -347,6 +356,7 @@ fn walk_directories(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
+    features: FeatureFlags,
     prefix_path: String,
 ) -> Result<()> {
     for (name, child) in &tree.children {
@@ -358,8 +368,10 @@ fn walk_directories(
         } else {
             format!("{prefix_path}/{name}")
         };
-        renderer::render_directory(source, output, &sub, base_url, repo_url, lang)?;
-        walk_directories(child, source, output, base_url, repo_url, lang, sub)?;
+        renderer::render_directory(source, output, &sub, base_url, repo_url, lang, features)?;
+        walk_directories(
+            child, source, output, base_url, repo_url, lang, features, sub,
+        )?;
     }
     Ok(())
 }
@@ -373,6 +385,7 @@ fn walk_recipes(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
+    features: FeatureFlags,
     prefix_path: String,
 ) -> Result<usize> {
     let mut count = 0;
@@ -389,9 +402,9 @@ fn walk_recipes(
             } else {
                 format!("{prefix_path}/{leaf_name}")
             };
-            if let Err(e) =
-                renderer::render_recipe(source, output, &sub, aisle_path, base_url, repo_url, lang)
-            {
+            if let Err(e) = renderer::render_recipe(
+                source, output, &sub, aisle_path, base_url, repo_url, lang, features,
+            ) {
                 tracing::warn!("Skipping recipe {sub}: {e:#}");
                 continue;
             }
@@ -408,7 +421,7 @@ fn walk_recipes(
                 format!("{prefix_path}/{name}")
             };
             count += walk_recipes(
-                child, source, output, aisle_path, base_url, repo_url, lang, sub,
+                child, source, output, aisle_path, base_url, repo_url, lang, features, sub,
             )?;
         }
     }

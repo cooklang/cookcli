@@ -152,6 +152,7 @@ pub async fn middleware(
         request.extensions_mut().insert(FeatureFlags {
             show_shopping_list: false,
             show_pantry: false,
+            ..FeatureFlags::default()
         });
     }
 
