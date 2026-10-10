@@ -896,7 +896,7 @@ fn build_writes_feeds_when_feed_set() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("atom.xml and rss.xml"));
+        .stdout(predicate::str::contains("atom.xml, rss.xml and feed.json"));
 
     let atom = std::fs::read_to_string(out.join("atom.xml")).unwrap();
     assert!(atom.contains(r#"<feed xmlns="http://www.w3.org/2005/Atom""#));
@@ -913,6 +913,46 @@ fn build_writes_feeds_when_feed_set() {
         "both feeds should list the same recipes"
     );
     assert!(rss.matches("<item>").count() > 1);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("feed.json")).unwrap()).unwrap();
+    assert_eq!(json["version"], "https://jsonfeed.org/version/1.1");
+    assert_eq!(json["feed_url"], "https://recipes.example.com/feed.json");
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(
+        items.len(),
+        rss.matches("<item>").count(),
+        "the JSON feed should list the same recipes"
+    );
+    assert!(items
+        .iter()
+        .any(|i| i["url"] == "https://recipes.example.com/recipe/Breakfast/Easy%20Pancakes.html"));
+
+    // Every page advertises the feeds, relative to its own depth.
+    for (page, prefix) in [
+        ("index.html", "."),
+        ("directory/Breakfast.html", ".."),
+        ("recipe/Breakfast/Easy Pancakes.html", "../.."),
+        ("menu/Weekly Plan.html", ".."),
+    ] {
+        let html = std::fs::read_to_string(out.join(page)).unwrap();
+        for (kind, file) in [
+            ("atom+xml", "atom.xml"),
+            ("rss+xml", "rss.xml"),
+            ("feed+json", "feed.json"),
+        ] {
+            // The title follows the build language, so leave it out.
+            let (head, tail) = (
+                format!(r#"<link rel="alternate" type="application/{kind}" "#),
+                format!(r#"href="{prefix}/{file}">"#),
+            );
+            assert!(
+                html.lines()
+                    .any(|l| l.contains(&head) && l.trim_end().ends_with(&tail)),
+                "{page} should link {prefix}/{file}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -935,6 +975,16 @@ fn build_omits_feeds_when_feed_not_set() {
 
     assert!(!out.join("atom.xml").exists());
     assert!(!out.join("rss.xml").exists());
+    assert!(!out.join("feed.json").exists());
+
+    // No page advertises feeds that were not written.
+    for page in ["index.html", "recipe/Breakfast/Easy Pancakes.html"] {
+        let html = std::fs::read_to_string(out.join(page)).unwrap();
+        assert!(
+            !html.contains(r#"rel="alternate""#),
+            "{page} should not link feeds"
+        );
+    }
 }
 
 #[test]

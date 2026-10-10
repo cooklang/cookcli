@@ -60,6 +60,7 @@ const RECIPE_READS: &[&str] = &[
     "/preferences",
     "/atom.xml",
     "/rss.xml",
+    "/feed.json",
     "/static",
     // Pictures only, whoever asks: see `server::static_files`.
     "/api/static",
@@ -152,6 +153,7 @@ pub async fn middleware(
         request.extensions_mut().insert(FeatureFlags {
             show_shopping_list: false,
             show_pantry: false,
+            ..FeatureFlags::default()
         });
     }
 
@@ -372,6 +374,7 @@ mod tests {
             "/preferences",
             "/atom.xml",
             "/rss.xml",
+            "/feed.json",
             "/static/css/output.css",
             "/api/recipes",
             "/api/recipes/Soup.cook",

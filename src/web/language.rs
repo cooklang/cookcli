@@ -29,6 +29,10 @@ pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[
 pub struct FeatureFlags {
     pub show_shopping_list: bool,
     pub show_pantry: bool,
+    /// Whether `/atom.xml`, `/rss.xml` and `/feed.json` exist, so pages
+    /// advertise them for feed-reader autodiscovery. Always on for `cook server`; `cook build
+    /// web` writes the feeds only with `--feed`.
+    pub feeds: bool,
 }
 
 impl Default for FeatureFlags {
@@ -36,6 +40,7 @@ impl Default for FeatureFlags {
         Self {
             show_shopping_list: true,
             show_pantry: true,
+            feeds: true,
         }
     }
 }

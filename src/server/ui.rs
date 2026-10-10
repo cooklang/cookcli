@@ -52,6 +52,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/api-docs", get(api_docs_page))
         .route("/atom.xml", get(atom_feed))
         .route("/rss.xml", get(rss_feed))
+        .route("/feed.json", get(json_feed))
         .route(
             "/login",
             get(super::auth::handlers::login_page).post(super::auth::handlers::login),
@@ -1087,6 +1088,22 @@ async fn rss_feed(
 ) -> axum::response::Response {
     feed_response(
         crate::build::feed::FeedFormat::Rss,
+        &state,
+        &headers,
+        &uri,
+        lang,
+    )
+    .await
+}
+
+async fn json_feed(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    uri: Uri,
+    Extension(lang): Extension<LanguageIdentifier>,
+) -> axum::response::Response {
+    feed_response(
+        crate::build::feed::FeedFormat::Json,
         &state,
         &headers,
         &uri,

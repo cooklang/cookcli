@@ -333,7 +333,7 @@ Dinner: \
 
 ## Web feeds
 
-The server publishes an Atom feed at `/atom.xml` and an RSS 2.0 feed at `/rss.xml`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.
+The server publishes an Atom feed at `/atom.xml`, an RSS 2.0 feed at `/rss.xml` and a [JSON Feed](https://jsonfeed.org/version/1.1) at `/feed.json`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.
 
 Items use the same metadata as the static site's feeds (`title`, `date`, `description`, `author`, `tags`); see [Web feeds](build.md#web-feeds). The feed title and language follow the request's `Accept-Language` header.
 
