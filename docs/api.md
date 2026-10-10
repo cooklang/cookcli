@@ -900,8 +900,8 @@ Creates the section if it does not exist. Spaces around each field are dropped. 
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
-| `section` | body | `string` | yes | Section to add the item to. |
-| `name` | body | `string` | yes | Item name. |
+| `section` | body | `string` | yes | Section to add the item to. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character: it becomes a segment of the `/api/pantry/{section}/{name}` URL. |
+| `name` | body | `string` | yes | Item name. `400` when it is `.` or `..`, or contains a control character. |
 | `quantity` | body | `string` | no | Amount as `VALUE%UNIT`, or any other string such as `unlim`. |
 | `bought` | body | `string` | no | Purchase date. Accepts `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`, `MM/DD/YYYY`, `YYYY.MM.DD` or `DD-MM-YYYY`. |
 | `expire` | body | `string` | no | Expiry date, same accepted formats as `bought`. |
@@ -986,7 +986,7 @@ The section keeps its place in the file, its items and the comments around it. C
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `section` | body | `string` | yes | The section to rename. |
-| `new_name` | body | `string` | yes | Its new name. |
+| `new_name` | body | `string` | yes | Its new name. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character, as for a new section. |
 
 Request body:
 

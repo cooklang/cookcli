@@ -74,7 +74,8 @@ impl AddPantryItem {
     ///
     /// # Errors
     ///
-    /// When the section or the name is blank.
+    /// When the section or the name is blank, or cannot be a segment of the
+    /// `/api/pantry/{section}/{name}` URL the pantry page edits it through.
     fn trimmed(self) -> Result<Self, &'static str> {
         let section = self.section.trim().to_string();
         let name = self.name.trim().to_string();
@@ -83,6 +84,13 @@ impl AddPantryItem {
         }
         if name.is_empty() {
             return Err("Item name cannot be empty");
+        }
+        if !is_section_segment(&section) {
+            return Err(SECTION_SEGMENT_ERROR);
+        }
+        // The page encodes names; only the dot steps survive that.
+        if !is_url_segment(&name) {
+            return Err("Item name cannot be . or .. or contain control characters");
         }
 
         let attribute = |value: Option<String>| {
@@ -100,6 +108,24 @@ impl AddPantryItem {
         })
     }
 }
+
+/// Whether `value`, once percent-encoded, stays one path segment: browsers
+/// resolve `.` and `..` (encoded or not) as steps up the path, and drop tabs
+/// and newlines from URLs.
+fn is_url_segment(value: &str) -> bool {
+    value != "." && value != ".." && !value.chars().any(char::is_control)
+}
+
+/// Whether `section` can name a section the pantry page edits items of. A
+/// section is a TOML table name, so nothing needs these characters. Kept,
+/// `../recipes/Soup.cook#` would send whoever edits an item of it to
+/// `/api/recipes/Soup.cook` with their own rights.
+fn is_section_segment(section: &str) -> bool {
+    is_url_segment(section) && !section.contains(['/', '\\', '#', '?'])
+}
+
+const SECTION_SEGMENT_ERROR: &str =
+    "Section cannot be . or .. or contain /, \\, #, ? or control characters";
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePantryItem {
@@ -303,6 +329,10 @@ pub async fn rename_section(
 ) -> Result<Json<ApiResponse>, ApiError> {
     let section = rename.section;
     let new_name = rename.new_name.trim().to_string();
+    // A rename makes a section as surely as adding an item to a new one does.
+    if !is_section_segment(&new_name) {
+        return Err((StatusCode::BAD_REQUEST, json_error(SECTION_SEGMENT_ERROR)));
+    }
 
     let request = core_pantry::RenameSectionRequest {
         section: section.clone(),
@@ -539,7 +569,7 @@ pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
 
 #[cfg(test)]
 mod tests {
-    use super::AddPantryItem;
+    use super::{is_section_segment, AddPantryItem};
 
     fn item(section: &str, name: &str, quantity: Option<&str>) -> AddPantryItem {
         AddPantryItem {
@@ -569,5 +599,51 @@ mod tests {
     fn a_blank_name_or_section_is_refused() {
         assert!(item("fridge", "   ", None).trimmed().is_err());
         assert!(item(" ", "Milk", None).trimmed().is_err());
+    }
+
+    #[test]
+    fn a_section_that_would_leave_the_pantry_url_is_refused() {
+        for section in [
+            "../recipes/Soup.cook#",
+            "..",
+            " . ",
+            "a/b",
+            "a\\b",
+            "a#b",
+            "a?b",
+            "fr\nidge",
+        ] {
+            assert!(
+                item(section, "Milk", None).trimmed().is_err(),
+                "{section:?} was accepted"
+            );
+        }
+        assert!(item("Dry goods & spices", "Milk", None).trimmed().is_ok());
+    }
+
+    #[test]
+    fn a_section_check_covers_renames_too() {
+        // `rename_section` checks the trimmed new name with this.
+        for section in ["../recipes/Soup.cook#", "..", ".", "a/b", "a#b", "fr\nidge"] {
+            assert!(!is_section_segment(section), "{section:?} was accepted");
+        }
+        assert!(is_section_segment("Dry goods & spices"));
+    }
+
+    #[test]
+    fn an_item_name_that_would_leave_the_pantry_url_is_refused() {
+        for name in ["..", ".", "Mi\tlk"] {
+            assert!(
+                item("fridge", name, None).trimmed().is_err(),
+                "{name:?} was accepted"
+            );
+        }
+        // The page encodes names, so these stay in their segment.
+        for name in ["salt/pepper", "Milk #2", "...", "50% cream"] {
+            assert!(
+                item("fridge", name, None).trimmed().is_ok(),
+                "{name:?} was refused"
+            );
+        }
     }
 }
