@@ -56,6 +56,7 @@ mod lsp_bridge;
 mod plan_text;
 mod rename;
 mod shopping_list_watcher;
+mod static_files;
 mod title_image;
 mod ui;
 
@@ -330,11 +331,13 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
         // picture replaced under the same name keeps showing the old one.
         .nest_service(
             "/api/static",
-            SetResponseHeader::overriding(
-                ServeDir::new(&state.base_path),
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("no-cache"),
-            ),
+            Router::new()
+                .fallback_service(SetResponseHeader::overriding(
+                    ServeDir::new(&state.base_path),
+                    header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-cache"),
+                ))
+                .layer(axum::middleware::from_fn(static_files::only_pictures)),
         )
         // Inside the prefix nest, so it sees paths without the prefix; after
         // every route, so it covers them all.

@@ -408,10 +408,11 @@ async fn a_picture_named_in_the_metadata_is_reported_as_such() {
 /// A picture replaced under the same name keeps its URL, so without this the
 /// browser may go on showing the old one from its cache.
 #[tokio::test]
-async fn recipe_files_are_served_for_revalidation() {
+async fn pictures_are_served_for_revalidation() {
     let server = start_server().await;
+    std::fs::write(server.file("Pancakes.jpg"), b"picture").unwrap();
 
-    let resp = reqwest::get(server.url("/api/static/Pancakes.cook"))
+    let resp = reqwest::get(server.url("/api/static/Pancakes.jpg"))
         .await
         .expect("GET static file");
     assert_eq!(resp.status(), 200);

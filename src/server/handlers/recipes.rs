@@ -3,7 +3,7 @@ use crate::web::viewer::Viewer;
 use crate::{
     server::{
         handlers::{
-            common::{check_path, normalize_tags, recipe_file, RecipeFile},
+            common::{check_path, is_recipe_request, normalize_tags, recipe_file, RecipeFile},
             recipe_rename::RECIPE_FILES,
         },
         AppState,
@@ -107,6 +107,13 @@ pub async fn recipe(
     Query(query): Query<RecipeQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     check_path(&path)?;
+    if !is_recipe_request(&path) {
+        tracing::error!("Recipe not found: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe not found: {path}")),
+        ));
+    }
 
     let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
         .map_err(|e| {
