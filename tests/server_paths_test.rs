@@ -181,8 +181,10 @@ async fn a_broken_pantry_file_in_the_recipes_is_named_relative_to_them() {
 
     let (status, page) = server.get("/pantry").await;
     assert_eq!(status, StatusCode::OK);
+    // `config\pantry.conf` on Windows.
+    let relative = Path::new("config").join("pantry.conf");
     assert!(
-        page.contains("invalid configuration at config/pantry.conf"),
+        page.contains(&format!("invalid configuration at {}", relative.display())),
         "{page}"
     );
 }
