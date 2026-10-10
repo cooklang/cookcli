@@ -1,4 +1,6 @@
-use crate::server::handlers::common::{is_request_path, recipe_file, RecipeFile};
+use crate::server::handlers::common::{
+    is_recipe_request, is_request_path, recipe_file, RecipeFile,
+};
 use crate::server::{activity, AppState};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
@@ -194,6 +196,19 @@ async fn recipe_page(
     Extension(features): Extension<FeatureFlags>,
     Extension(viewer): Extension<Viewer>,
 ) -> axum::response::Response {
+    // The same rules as `GET /api/recipes/{path}`: nothing hidden, and only a
+    // recipe or a menu. Checked here rather than in the builder, since a static
+    // build hands it paths from the recipe tree, not from a visitor.
+    if !is_recipe_request(&path) {
+        let error = if is_request_path(&path) {
+            format!("Recipe not found: {path}")
+        } else {
+            format!("Invalid path: {path}")
+        };
+        tracing::error!("{error}");
+        return error_page(lang, &state.url_prefix, error, features, viewer);
+    }
+
     let scale = query.scale.unwrap_or(1.0);
 
     let aisle_file = state.aisle_file();

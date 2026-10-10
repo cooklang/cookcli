@@ -61,14 +61,11 @@ const RECIPE_READS: &[&str] = &[
     "/atom.xml",
     "/rss.xml",
     "/static",
+    // Pictures only, whoever asks: see `server::static_files`.
+    "/api/static",
     "/api/recipes",
     "/api/search",
 ];
-
-/// The files a guest may fetch from the recipe directory under
-/// `--recipes-only`: the recipes' pictures. Not the shopping list, the
-/// pantry or anything else that happens to live there.
-const PICTURES: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "avif"];
 
 /// Whether `path` is `prefix` or lies below it: `/edit` covers `/edit/Soup`
 /// but not `/editor-notes`.
@@ -117,14 +114,6 @@ pub fn browses_recipes(method: &Method, path: &str) -> bool {
     }
     if path == "/" {
         return true;
-    }
-    if under(path, "/api/static") {
-        return path.rsplit_once('.').is_some_and(|(name, extension)| {
-            !name.ends_with('/')
-                && PICTURES
-                    .iter()
-                    .any(|picture| extension.eq_ignore_ascii_case(picture))
-        });
     }
     RECIPE_READS.iter().any(|prefix| under(path, prefix))
 }
@@ -416,13 +405,6 @@ mod tests {
             "/api/ws/lsp",
             "/api/sync/status",
             "/api/recipe_image/Soup.cook",
-            "/api/static/.shopping-list",
-            "/api/static/.shopping-checked",
-            "/api/static/config/pantry.conf",
-            "/api/static/Week.menu",
-            "/api/static/Soup.cook",
-            "/api/static/.jpg",
-            "/api/static/Mains/.png",
             "/api/anything-added-later",
             // Look-alikes of allowed paths.
             "/recipes",

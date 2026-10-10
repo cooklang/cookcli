@@ -644,9 +644,10 @@ Mix the @flour{200%g} and @water{120%ml}.
                 "GET",
                 "/api/static/{*path}",
                 "Fetch a recipe asset",
-                "Serves files straight from the recipe directory — this is where recipe images \
-                 live. The `image` field returned by `GET /api/recipes/{*path}` is already a URL \
-                 into this route. Responses carry `Cache-Control: no-cache`, so a browser checks \
+                "Serves the recipes' pictures from the recipe directory. The `image` field \
+                 returned by `GET /api/recipes/{*path}` is already a URL into this route. Only \
+                 `jpg`, `jpeg`, `png`, `webp`, `gif` and `avif` files are served, and nothing in \
+                 a folder or under a name starting with `.`; anything else is a `404`. Responses carry `Cache-Control: no-cache`, so a browser checks \
                  back each time — a cheap `304` through the `ETag` when nothing changed — and a \
                  picture replaced under the same name shows up at once.",
             )

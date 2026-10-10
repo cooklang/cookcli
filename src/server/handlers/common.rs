@@ -42,6 +42,20 @@ pub fn check_path(p: &str) -> Result<(), ApiError> {
 /// page in front of them, will touch.
 const RECIPE_FILE_EXTENSIONS: [&str; 2] = ["cook", "menu"];
 
+/// Whether `path` from a request may name a recipe or menu to read: it is a
+/// [`is_request_path`], and its extension, if any, is `.cook` or `.menu`.
+///
+/// `cooklang-find` resolves a name without an extension to its `.cook` or
+/// `.menu` file, but opens a name with any other extension as it is, so
+/// without the second rule `/recipe/config/pantry.conf` showed the pantry
+/// configuration as recipe steps, to `--recipes-only` guests too (#658).
+pub fn is_recipe_request(path: &str) -> bool {
+    is_request_path(path)
+        && Utf8Path::new(path)
+            .extension()
+            .is_none_or(|ext| RECIPE_FILE_EXTENSIONS.contains(&ext))
+}
+
 /// Where a request path lands among the recipe and menu files.
 #[derive(Debug, PartialEq, Eq)]
 pub enum RecipeFile {

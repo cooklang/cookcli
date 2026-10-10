@@ -1393,22 +1393,13 @@ async fn recipes_only_asks_guests_to_sign_in_for_the_rest() {
         status(&server, "/api/shopping_list/items", None).await,
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        status(&server, "/api/static/.shopping-list", None).await,
-        StatusCode::UNAUTHORIZED
-    );
     let home = get_page(&server, "/", None).await.text().await.unwrap();
     assert!(home.contains("Sign in"), "no sign-in link");
     assert!(!home.contains("<a href=\"/shopping-list\""));
 
     // Signed in, the role decides as usual.
     let cookie = signed_in_cookie(&server, "alice", "secret").await;
-    for path in [
-        "/shopping-list",
-        "/pantry",
-        "/api/menus",
-        "/api/static/.shopping-list",
-    ] {
+    for path in ["/shopping-list", "/pantry", "/api/menus"] {
         assert_eq!(
             status(&server, path, Some(&cookie)).await,
             StatusCode::OK,
@@ -1451,4 +1442,118 @@ async fn recipes_only_can_come_from_the_environment() {
 
     let server = start(recipes_only_fixture(), &[], &[("COOK_RECIPES_ONLY", "")]).await;
     assert_eq!(status(&server, "/pantry", None).await, StatusCode::OK);
+}
+
+// --- Files that are not recipes (#658) ----------------------------------------
+
+/// Stands for a token in a dot-file, which no response may contain.
+const TOKEN: &str = "gho_FAKE_token_marker";
+
+/// The fixture, plus the dot-files a recipe directory that is a git checkout
+/// or part of a home directory holds, an aisle file, and a picture.
+fn hidden_files_fixture() -> Fixture {
+    let fixture = Fixture::new();
+    let recipes = fixture.recipes.path();
+    std::fs::write(recipes.join("Recipe.jpg"), b"not really a jpeg").unwrap();
+    std::fs::create_dir_all(recipes.join(".git")).unwrap();
+    std::fs::write(
+        recipes.join(".git/config"),
+        format!("[remote \"origin\"]\nurl = https://me:{TOKEN}@github.com/me/recipes\n"),
+    )
+    .unwrap();
+    std::fs::write(recipes.join(".git/shot.png"), TOKEN).unwrap();
+    std::fs::create_dir_all(recipes.join(".config/gh")).unwrap();
+    std::fs::write(
+        recipes.join(".config/gh/hosts.yml"),
+        format!("github.com:\n    oauth_token: {TOKEN}\n"),
+    )
+    .unwrap();
+    std::fs::write(recipes.join(".env"), format!("TOKEN={TOKEN}\n")).unwrap();
+    std::fs::write(
+        recipes.join("config/aisle.conf"),
+        format!("[{TOKEN}]\nflour\n"),
+    )
+    .unwrap();
+    std::fs::write(recipes.join("notes.html"), TOKEN).unwrap();
+    fixture
+}
+
+/// Requests for the fixture's other files, through each route that takes a
+/// path. The pantry file holds `flour = "1%kg"`.
+const NOT_RECIPES: &[&str] = &[
+    "/api/static/.git/config",
+    "/api/static/%2Egit/config",
+    "/api/static/.git/shot.png",
+    "/api/static/.config/gh/hosts.yml",
+    "/api/static/.env",
+    "/api/static/config/pantry.conf",
+    "/api/static/config/aisle.conf",
+    "/api/static/notes.html",
+    "/api/static/Recipe.cook",
+    "/recipe/.git/config",
+    "/recipe/.config/gh/hosts.yml",
+    "/recipe/.env",
+    "/recipe/config/pantry.conf",
+    "/recipe/config/aisle.conf",
+    "/recipe/notes.html",
+    "/api/recipes/.config/gh/hosts.yml",
+    "/api/recipes/config/pantry.conf",
+    "/api/recipes/config/aisle.conf",
+    "/api/recipes/notes.html",
+];
+
+async fn assert_not_served(server: &ServerGuard, cookie: Option<&str>) {
+    for path in NOT_RECIPES {
+        let response = get_page(server, path, cookie).await;
+        let status = response.status();
+        let body = response.text().await.unwrap();
+        assert!(
+            !body.contains(TOKEN) && !body.contains("1%kg") && !body.contains("1 kg"),
+            "{path} ({status}) served the file: {body}"
+        );
+        if path.starts_with("/api/") {
+            assert!(status.is_client_error(), "{path}: {status}");
+        }
+    }
+}
+
+/// What must still be served beside them.
+async fn assert_recipes_served(server: &ServerGuard, cookie: Option<&str>) {
+    for path in [
+        "/recipe/Recipe",
+        "/recipe/Recipe.cook",
+        "/api/recipes/Recipe",
+        "/api/recipes/Recipe.cook",
+        "/api/static/Recipe.jpg",
+    ] {
+        assert_eq!(status(server, path, cookie).await, StatusCode::OK, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn only_recipes_and_pictures_are_served_without_sign_in() {
+    let server = start(hidden_files_fixture(), &[], &[]).await;
+    assert_not_served(&server, None).await;
+    assert_recipes_served(&server, None).await;
+}
+
+#[tokio::test]
+async fn only_recipes_and_pictures_are_served_with_sign_in() {
+    let fixture = hidden_files_fixture();
+    fixture.write_roles(&[("root", "secret", "admin")]);
+    let server = start(fixture, &[], &[]).await;
+
+    assert_not_served(&server, None).await;
+    assert_recipes_served(&server, None).await;
+    // Not even to an admin: what the server is for is recipes and pictures.
+    let cookie = signed_in_cookie(&server, "root", "secret").await;
+    assert_not_served(&server, Some(&cookie)).await;
+    assert_recipes_served(&server, Some(&cookie)).await;
+}
+
+#[tokio::test]
+async fn only_recipes_and_pictures_are_served_to_recipes_only_guests() {
+    let server = start(hidden_files_fixture(), &["--recipes-only"], &[]).await;
+    assert_not_served(&server, None).await;
+    assert_recipes_served(&server, None).await;
 }
