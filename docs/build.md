@@ -78,6 +78,8 @@ Each recipe and menu page becomes one item, listed newest first. Items use these
 | `author` (or `source.author`) | Item author |
 | `tags` | Item categories |
 
+Every page then advertises both feeds with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone. Without `--feed`, pages carry no such tags.
+
 The feed title is the localized "All Recipes" heading (see `--lang`). Like `--sitemap`, the URL must be absolute and is independent of `--base-url`. [`cook server`](server.md#web-feeds) serves the same feeds at `/atom.xml` and `/rss.xml` with no flag needed.
 
 ## Localization

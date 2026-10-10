@@ -17,6 +17,7 @@ pub fn render_index(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &LanguageIdentifier,
+    features: FeatureFlags,
 ) -> Result<()> {
     let relpath = Utf8PathBuf::from("index.html");
     let prefix = compute_prefix(base_url, &relpath);
@@ -27,7 +28,7 @@ pub fn render_index(
         lang: lang.clone(),
         static_mode: true,
         repo_url: repo_url.map(String::from),
-        features: FeatureFlags::default(),
+        features,
         viewer: Default::default(),
         exclude: Some(output),
     })?;
@@ -36,6 +37,7 @@ pub fn render_index(
 }
 
 /// Render one directory listing page.
+#[allow(clippy::too_many_arguments)]
 pub fn render_directory(
     source: &Utf8Path,
     output: &Utf8Path,
@@ -43,6 +45,7 @@ pub fn render_directory(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &LanguageIdentifier,
+    features: FeatureFlags,
 ) -> Result<()> {
     let relpath = Utf8PathBuf::from(format!("directory/{sub_path}.html"));
     let prefix = compute_prefix(base_url, &relpath);
@@ -53,7 +56,7 @@ pub fn render_directory(
         lang: lang.clone(),
         static_mode: true,
         repo_url: repo_url.map(String::from),
-        features: FeatureFlags::default(),
+        features,
         viewer: Default::default(),
         exclude: Some(output),
     })?;
@@ -74,6 +77,7 @@ fn compute_prefix(base_url: Option<&str>, relpath: &Utf8Path) -> String {
 /// the output tree, so the page-relative `prefix` is identical regardless of
 /// which one we end up writing. We render once and pick the destination path
 /// based on whether the entry turned out to be a menu.
+#[allow(clippy::too_many_arguments)]
 pub fn render_recipe(
     source: &Utf8Path,
     output: &Utf8Path,
@@ -82,6 +86,7 @@ pub fn render_recipe(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &LanguageIdentifier,
+    features: FeatureFlags,
 ) -> Result<()> {
     let trimmed = recipe_relpath
         .trim_end_matches(".cook")
@@ -102,7 +107,7 @@ pub fn render_recipe(
         lang: lang.clone(),
         static_mode: true,
         repo_url: repo_url.map(String::from),
-        features: FeatureFlags::default(),
+        features,
         viewer: Default::default(),
     })?;
 
