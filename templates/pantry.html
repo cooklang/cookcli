@@ -118,7 +118,7 @@
                 </div>
                 {% endfor %}
                 {% if viewer.can_edit_lists() %}
-                <form class="row pantry-add py-3" data-section="{{ section.name }}">
+                <form class="row pantry-add py-3" data-unsaved data-section="{{ section.name }}">
                     <input type="text" name="name" autocomplete="off" aria-label="{{ tr.t("pantry-item-name") }}" placeholder="{{ tr.t("pantry-item-name") }}"
                            class="flex-1 min-w-0 h-8 px-2 text-sm rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
                     <input type="text" name="quantity" autocomplete="off" aria-label="{{ tr.t("pantry-item-quantity") }}" placeholder="{{ tr.t("pantry-item-quantity") }}" title="{{ tr.t("pantry-placeholder-quantity") }}"
@@ -136,7 +136,7 @@
         <p id="pantry-filter-empty" class="hidden text-faint italic">{{ tr.t("pantry-filter-empty") }}</p>
 
         {% if viewer.can_edit_lists() %}
-        <form id="pantry-new-item" class="card mt-4 p-4 flex flex-wrap items-end gap-2">
+        <form id="pantry-new-item" data-unsaved class="card mt-4 p-4 flex flex-wrap items-end gap-2">
             <label class="flex-1 min-w-[10rem]">
                 <span class="block text-sm text-muted mb-1">{{ tr.t("pantry-section-label") }}</span>
                 <input type="text" name="section" list="pantry-section-names" autocomplete="off"
@@ -439,7 +439,7 @@
             if (await send('PUT', url, changes, T.failedUpdate)) await refresh();
         };
 
-        const editor = el('div', { class: 'pantry-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
+        const editor = el('div', { 'data-unsaved': true, class: 'pantry-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
             el('div', { class: 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4' },
                 field(T.quantity, quantity),
                 !general && field(T.bought, bought),
@@ -496,7 +496,7 @@
             if (e.key === 'Escape') restore();
         });
 
-        head.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-2 w-full' },
+        head.replaceChildren(el('div', { 'data-unsaved': true, class: 'flex flex-wrap items-center gap-2 w-full' },
             input,
             el('button', { type: 'button', class: 'btn btn-sm', onclick: restore }, T.cancel),
             el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: submit }, T.save)));

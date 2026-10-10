@@ -62,7 +62,7 @@
             <p id="aisles-empty" class="hidden text-faint italic">{{ tr.t("aisles-empty") }}</p>
             {% if viewer.can_edit_lists() %}
             <div id="aisles-bulk" class="hidden sticky bottom-4 z-20 card p-3 mt-4 shadow-[var(--shadow-overlay)]"></div>
-            <form id="add-aisle-form" class="card mt-4 p-4 flex flex-wrap items-end gap-2">
+            <form id="add-aisle-form" data-unsaved class="card mt-4 p-4 flex flex-wrap items-end gap-2">
                 <label class="flex-1 min-w-[12rem]">
                     <span class="block text-sm text-muted mb-1">{{ tr.t("aisles-aisle-name") }}</span>
                     <input type="text" name="name" required autocomplete="off"
@@ -381,10 +381,12 @@
                     names.splice(i, 1);
                     names.unshift(name);
                     drawTokens();
+                    markNames();
                 } }, '☆'),
             names.length > 1 && el('button', { type: 'button', class: 'remove-name w-6 h-6 rounded-full hover:bg-sunk text-faint', title: T.removeName, 'aria-label': T.removeName + ': ' + name, onclick: () => {
                 names.splice(i, 1);
                 drawTokens();
+                markNames();
             } }, '×'))));
         drawTokens();
 
@@ -393,7 +395,10 @@
             names.push(...newNames(names, splitNames(input.value)));
             input.value = '';
             drawTokens();
+            markNames();
         };
+        // Names made main, removed or added wait for Save.
+        const markNames = () => panel.toggleAttribute('data-dirty', names.join('\n') !== ingredient.names.join('\n'));
         // Moving is its own setting, apart from the names: it starts on the
         // ingredient's aisle, and the ingredient moves only if it is changed.
         const select = aisleSelect(aisle.name);
@@ -410,7 +415,7 @@
             if (e.key === 'Escape') close();
         });
 
-        const panel = el('div', { class: 'aisle-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
+        const panel = el('div', { 'data-unsaved': true, class: 'aisle-editor flex flex-col gap-3 px-[14px] py-3 border-t border-line bg-sunk' },
             tokens,
             el('div', { class: 'flex flex-wrap items-center gap-2' },
                 input,
@@ -455,7 +460,7 @@
                 if (e.key === 'Enter') { e.preventDefault(); save(); }
                 if (e.key === 'Escape') showHead();
             });
-            head.replaceChildren(el('div', { class: 'flex flex-wrap items-center gap-2 w-full' },
+            head.replaceChildren(el('div', { 'data-unsaved': true, class: 'flex flex-wrap items-center gap-2 w-full' },
                 input,
                 el('button', { type: 'button', class: 'btn btn-sm', onclick: showHead }, T.cancel),
                 el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: save }, T.save)));
@@ -493,7 +498,7 @@
 
         if (CAN_EDIT && !selecting) {
             const input = el('input', { type: 'text', class: INPUT + ' flex-1 min-w-[10rem]', placeholder: T.namesPlaceholder, 'aria-label': T.addIngredient + ' (' + aisle.name + ')' });
-            const form = el('form', { class: 'row border-t border-line flex-wrap py-3' },
+            const form = el('form', { 'data-unsaved': true, class: 'row border-t border-line flex-wrap py-3' },
                 input,
                 el('button', { type: 'submit', class: 'btn btn-sm' }, T.addIngredient));
             form.addEventListener('submit', async e => {
@@ -661,7 +666,7 @@
             }
         });
 
-        const target = el('input', { type: 'text', list: 'aisle-ingredient-names', class: INPUT + ' w-48', placeholder: T.chooseIngredient, 'aria-label': T.addAsNames });
+        const target = el('input', { type: 'text', 'data-unsaved': true, list: 'aisle-ingredient-names', class: INPUT + ' w-48', placeholder: T.chooseIngredient, 'aria-label': T.addAsNames });
         const asNames = el('button', { type: 'button', class: 'btn btn-sm', disabled: true }, T.add);
         target.addEventListener('input', () => { asNames.disabled = !target.value.trim(); });
         asNames.addEventListener('click', async () => {

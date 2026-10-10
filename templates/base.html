@@ -24,6 +24,9 @@
         // `--recipes-only` and nobody signed in: no shopping list or pantry.
         window.__RECIPES_ONLY__ = {{ viewer.recipes_only()|json|safe }};
     </script>
+    {% if !static_mode %}
+    <script src="{{ prefix }}/static/js/unsaved.js"></script>
+    {% endif %}
     <style>
         .viewport {
             width: 100%;
