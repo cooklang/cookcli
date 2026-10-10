@@ -272,7 +272,7 @@ mod tests {
     fn fractions_and_mixed_numbers_scale() {
         assert_eq!(
             scaled_quantity(Some("1/2"), Some("tbsp"), 3.0).0.as_deref(),
-            Some("1.5")
+            Some("1 1/2")
         );
         assert_eq!(
             scaled_quantity(Some("1 1/2"), Some("cup"), 2.0)

@@ -495,7 +495,9 @@ function formatCooklangValue(value) {
     }
 }
 
-// Format numbers with fractions
+// Format numbers with fractions: the rules of `format_number` in
+// crates/format/src/number.rs, which every other page and output uses. Change
+// both together.
 function formatNumber(value) {
     // Round to reasonable precision
     const rounded = Math.round(value * 1000000) / 1000000;

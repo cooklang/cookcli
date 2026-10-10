@@ -1,7 +1,17 @@
 //! Human-friendly rendering of quantity numbers.
 //!
-//! Used by the web UI and menu handlers, where `0.5` should read as `1/2`
-//! rather than as a float.
+//! Every human-readable output goes through here -- the web UI, the terminal,
+//! Markdown, LaTeX, Typst, schema.org text and the shopping lists -- so a
+//! recipe shows the same numbers everywhere: `0.5` reads as `1/2` and `1.625`
+//! as `1 5/8`, while a value that is not one of those fractions stays a
+//! decimal rather than being rounded to the nearest one. JSON, YAML and the
+//! Cooklang output keep the plain number.
+//!
+//! The shopping list page renders its quantities in the browser with a copy
+//! of these rules (`formatNumber` in `templates/shopping_list.html`); change
+//! both together.
+
+use cooklang::quantity::Quantity;
 
 /// Formats a floating-point number as a human-readable string with fractions
 /// Based on the approach from cooklang-rs/bindings/src/lib.rs
@@ -77,8 +87,7 @@ fn decimal_to_fraction(value: f64) -> Option<String> {
     for &(decimal, fraction_str) in &common_fractions {
         if (fract - decimal).abs() < EPSILON {
             if whole > 0.0 {
-                // For values > 1, return decimal format instead of mixed fraction
-                return None;
+                return Some(format!("{whole:.0} {fraction_str}"));
             } else {
                 return Some(fraction_str.to_string());
             }
@@ -101,6 +110,16 @@ pub fn format_quantity(value: &cooklang::Value) -> Option<String> {
     }
 }
 
+/// Formats a quantity and its unit for display: `"1 5/8 cup"`, or `"3"` for
+/// one without a unit.
+pub fn format_quantity_with_unit(qty: &Quantity) -> String {
+    let value = format_quantity(qty.value()).unwrap_or_default();
+    match qty.unit() {
+        Some(unit) => format!("{value} {unit}"),
+        None => value,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,11 +133,41 @@ mod tests {
         assert_eq!(format_number(0.333333), "1/3");
         assert_eq!(format_number(0.666667), "2/3");
 
-        // Values greater than 1 should be displayed as decimals
-        assert_eq!(format_number(1.5), "1.5");
-        assert_eq!(format_number(2.25), "2.25");
-        assert_eq!(format_number(1.75), "1.75");
-        assert_eq!(format_number(2.333333), "2.333");
+        // Above 1 they keep the whole part: a mixed number
+        assert_eq!(format_number(1.5), "1 1/2");
+        assert_eq!(format_number(2.25), "2 1/4");
+        assert_eq!(format_number(1.75), "1 3/4");
+        assert_eq!(format_number(2.333333), "2 1/3");
+        assert_eq!(format_number(1.625), "1 5/8");
+    }
+
+    /// The bug in #432: a value that is not one of the fractions must not be
+    /// shown as the nearest one. It stays a decimal.
+    #[test]
+    fn values_between_fractions_stay_decimals() {
+        assert_eq!(format_number(1.6), "1.6");
+        assert_eq!(format_number(0.3), "0.3");
+        assert_eq!(format_number(0.33), "0.33");
+        // 5/8 scaled by 1.5 is 15/16: not in the list.
+        assert_eq!(format_number(0.9375), "0.938");
+        assert_eq!(format_number(2.4375), "2.438");
+    }
+
+    #[test]
+    fn quantities_with_units() {
+        let parsed = crate::test_support::parse_recipe(
+            "Mix @milk{1 5/8%cup}, @eggs{3} and @salt{a pinch}.\n",
+            "milk",
+            1.0,
+        )
+        .expect("parses");
+        let shown: Vec<String> = parsed
+            .value
+            .ingredients
+            .iter()
+            .map(|i| format_quantity_with_unit(i.quantity.as_ref().unwrap()))
+            .collect();
+        assert_eq!(shown, ["1 5/8 cup", "3", "a pinch"]);
     }
 
     #[test]
@@ -156,7 +205,7 @@ mod tests {
                 end: 2.25.into()
             })
             .as_deref(),
-            Some("1/2 - 2.25")
+            Some("1/2 - 2 1/4")
         );
         assert_eq!(
             format_quantity(&Value::Text("a pinch".into())).as_deref(),
