@@ -7,7 +7,7 @@
     <!-- Header bar -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-4">
-            <a href="{{ prefix }}/recipe/{{ recipe_path }}" class="btn">
+            <a id="back-link" href="{{ prefix }}/recipe/{{ recipe_path }}" class="btn">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
@@ -64,7 +64,7 @@
 
     <!-- Rename dialog -->
     <div id="rename-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-        <form id="rename-form" class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="rename-heading">
+        <form id="rename-form" data-unsaved class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="rename-heading">
             <h2 id="rename-heading" class="text-title font-bold text-text mb-4">{{ tr.t("rename-title") }}</h2>
             <label for="rename-input" class="block text-sm font-medium text-muted mb-2">{{ tr.t("rename-label") }}</label>
             <div class="flex items-center gap-2">
@@ -387,12 +387,47 @@ async function saveRecipe() {
     }
 }
 
+// Saves now instead of when the autosave would, once any save already on its
+// way is done: that one may hold older text. Resolves like saveRecipe().
+async function saveNow() {
+    if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+    }
+    while (isSaving) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return saveRecipe();
+}
+
+function hasUnsavedChanges() {
+    return editorView && window.CooklangEditor.getContent(editorView) !== originalContent;
+}
+
+// Closing the tab, the browser's own Back, a reload: asked first while the
+// last changes wait for the autosave.
+CookUnsaved.watch(hasUnsavedChanges);
+
+// Back saves what is waiting for the autosave before leaving, and stays if
+// the save fails so nothing is lost.
+document.getElementById('back-link').addEventListener('click', async function(e) {
+    // A new tab or window leaves this page open, autosave included.
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    if (!hasUnsavedChanges()) return;
+    e.preventDefault();
+    const href = this.href;
+    // Typed while the save was on its way: save again.
+    while (hasUnsavedChanges()) {
+        if (!(await saveNow())) return;
+    }
+    CookUnsaved.leave(href);
+});
+
 // Keyboard shortcut: Ctrl+S / Cmd+S - save immediately
 document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (autosaveTimer) clearTimeout(autosaveTimer);
-        saveRecipe();
+        saveNow();
     }
 });
 
@@ -429,7 +464,7 @@ async function deleteRecipe() {
 
         if (response.ok) {
             // Redirect to recipes list after successful deletion
-            window.location.href = '{{ prefix }}/';
+            CookUnsaved.leave('{{ prefix }}/');
         } else {
             const errorText = await errorMessage(response);
             console.error('Delete failed:', errorText);
@@ -501,14 +536,7 @@ async function renameRecipe(event) {
 
     // Write what is in the editor first, under the old name, and keep any
     // later autosave from writing that name again.
-    if (autosaveTimer) {
-        clearTimeout(autosaveTimer);
-        autosaveTimer = null;
-    }
-    while (isSaving) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    if (!(await saveRecipe())) {
+    if (!(await saveNow())) {
         renameFailed('Save failed');
         return;
     }
@@ -570,7 +598,7 @@ async function renameRecipe(event) {
             // No storage: the notices are lost, not the rename.
         }
     }
-    window.location.href = `{{ prefix }}/edit/${encodePath(result.path)}`;
+    CookUnsaved.leave(`{{ prefix }}/edit/${encodePath(result.path)}`);
 }
 
 document.getElementById('rename-form').addEventListener('submit', renameRecipe);
@@ -657,8 +685,7 @@ async function showPictureModal() {
     // Step pictures go by position in the saved file, so save what was typed
     // first; the list then numbers the steps as the recipe page will.
     if (editorView) {
-        if (autosaveTimer) clearTimeout(autosaveTimer);
-        await saveRecipe();
+        await saveNow();
     }
     // Asked afresh each time: an `image:` line typed into the editor since the
     // page loaded changes which picture the recipe shows.

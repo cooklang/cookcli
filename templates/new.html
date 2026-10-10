@@ -17,7 +17,7 @@
     </div>
     {% endif %}
 
-    <form action="{{ prefix }}/new" method="POST" class="space-y-6">
+    <form action="{{ prefix }}/new" method="POST" data-unsaved class="space-y-6">
         <input type="hidden" name="kind" value="{% if is_plan %}plan{% else if is_menu %}menu{% else %}recipe{% endif %}">
         <div>
             <label for="filename" class="block text-sm font-medium text-muted mb-2">

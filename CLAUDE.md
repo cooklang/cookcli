@@ -172,6 +172,13 @@ Configuration search order:
   is an allowlist of what they may request; anything else, a new route
   included, asks them to sign in (`404` without sign-in). Their `Viewer` can
   do nothing and `viewer.recipes_only()` hides the rest in templates
+- Leaving a page with something unsaved asks first (`static/js/unsaved.js`,
+  loaded by `base.html`). A write sent with `fetch` counts on its own until it
+  answers. Mark what holds typed data: `data-unsaved` on a form, inline
+  editor or field (it counts while on screen and changed since first
+  touched), `data-dirty` while a page holds changes it has not sent, or
+  `CookUnsaved.watch(fn)`. A page that moves on by itself after saving uses
+  `CookUnsaved.leave(url)` / `CookUnsaved.reload()` instead of `location`
 - Every handler that changes something takes `Extension<Viewer>` and, once
   the change succeeded, calls `server::activity::record` — one stdout line
   saying who did what. Quote request text with `activity::quoted` /
