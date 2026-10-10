@@ -236,21 +236,26 @@ test.describe('Menu editor toolbar', () => {
     expect(await readDoc(page)).toBe('Dinner: \\\n- @./Salads/Caprese{}|');
   });
 
-  test('the picker lists recipes but never menus', async ({ page }) => {
+  test('the picker offers other menus as meals, never the menu itself', async ({ page }) => {
     await button(page, 'Add recipe').click();
     const dialog = picker(page);
     const options = dialog.getByRole('option');
 
     // No query: the whole collection, from the recipe tree.
     await expect(options.filter({ hasText: './Breakfast/Easy Pancakes' })).toHaveCount(1);
-    await expect(options.filter({ hasText: 'Plan' })).toHaveCount(0);
+    await expect(options.filter({ hasText: './Weekly Plan.menu' })).toHaveCount(1);
+    await expect(options.filter({ hasText: './2 Day Plan.menu' })).toHaveCount(0);
 
-    // `pla` matches both menus as well as recipes.
-    await searchPicker(page, 'pla', 'Lamb Chops');
-    await expect(options.filter({ hasText: 'Easy Pancakes' })).toHaveCount(0);
-    for (const text of await options.allTextContents()) {
-      expect(text).not.toContain('Plan');
-    }
+    // A menu keeps its extension in the reference it inserts.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await setDoc(page, 'Dinner: \\\n- |');
+    await button(page, 'Add recipe').click();
+    await dialog.getByLabel('Servings').fill('');
+    await dialog.getByRole('combobox').focus();
+    await searchPicker(page, 'weekly', 'Weekly Plan');
+    await page.keyboard.press('Enter');
+    expect(await readDoc(page)).toBe('Dinner: \\\n- @./Weekly Plan.menu{}|');
   });
 
   test('the picker is driven from the keyboard', async ({ page }) => {
@@ -354,6 +359,19 @@ test.describe('Recipe reference in the recipe editor', () => {
     const options = picker(page).getByRole('option');
     await expect(options.first()).toBeVisible();
     await expect(options.filter({ hasText: './Neapolitan Pizza' })).toHaveCount(0);
+  });
+
+  test('never offers menus in a recipe', async ({ page }) => {
+    await button(page, 'Recipe reference').click();
+    const options = picker(page).getByRole('option');
+    await expect(options.filter({ hasText: './Breakfast/Easy Pancakes' })).toHaveCount(1);
+    await expect(options.filter({ hasText: 'Plan' })).toHaveCount(0);
+
+    // `pla` matches both menus as well as recipes.
+    await searchPicker(page, 'pla', 'Lamb Chops');
+    for (const text of await options.allTextContents()) {
+      expect(text).not.toContain('Plan');
+    }
   });
 });
 

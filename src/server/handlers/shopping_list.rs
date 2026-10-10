@@ -708,12 +708,39 @@ pub async fn add_menu_to_shopping_list(
                     RecipeInfo::default()
                 }
             };
+            let mut sub_refs = info.sub_refs;
+
+            // A menu used as a meal of this one (`@./Brunches/Sunday.menu{}`)
+            // is listed like a recipe, its references followed in a request
+            // of its own. A reference of it back to this menu would count this
+            // menu's contents a second time there, where nothing knows it is
+            // already on the list, so it is dropped here instead.
+            if info.is_menu {
+                let this_menu = menu_stem(&payload.path);
+                let nested_dir = Utf8Path::new(path)
+                    .parent()
+                    .map(Utf8Path::to_owned)
+                    .unwrap_or_default();
+                sub_refs.retain(|sub_ref| {
+                    let back = cookcli_core::resolve_reference(&nested_dir, sub_ref)
+                        .is_some_and(|p| menu_stem(p.as_str()) == this_menu);
+                    if back {
+                        tracing::warn!(
+                            "Skipping reference '{}' in menu '{}': it leads back to '{}'",
+                            sub_ref,
+                            path,
+                            payload.path
+                        );
+                    }
+                    !back
+                });
+            }
 
             recipes.push(StoredEntry {
                 name: recipe_display_name(path),
                 path: path.clone(),
                 scale: scale.unwrap_or(menu_scale),
-                included_references: Some(info.sub_refs),
+                included_references: Some(sub_refs),
                 included_reference_names: None,
                 recipes: None,
             });
@@ -737,6 +764,13 @@ pub async fn add_menu_to_shopping_list(
     activity::record(&viewer, added);
 
     Ok(StatusCode::OK)
+}
+
+/// A menu's path as `add_menu` compares them: without a leading `./` or the
+/// `.menu` extension, either of which a reference may be written with.
+fn menu_stem(path: &str) -> &str {
+    let path = path.strip_prefix("./").unwrap_or(path);
+    path.strip_suffix(".menu").unwrap_or(path)
 }
 
 #[cfg(test)]

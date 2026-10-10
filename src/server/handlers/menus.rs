@@ -5,9 +5,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang_find::{Menu, MenuItem, RecipeTree};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Serialize)]
@@ -95,6 +96,11 @@ pub enum MenuMealItem {
         /// Multiplier for the referenced recipe. Always present: a reference
         /// with no `{...}` target is ×1 before the menu scale is applied.
         scale: f64,
+        /// The reference is another menu, used as a meal of this one; `path`
+        /// then ends in `.menu`. Only sent when true, so a response without
+        /// menus reads as it always has.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        menu: bool,
     },
     #[serde(rename = "ingredient")]
     Ingredient {
@@ -141,16 +147,19 @@ pub async fn get_menu(
             )
         })?;
 
-    Ok(Json(menu_response(&menu, path, scale)))
+    Ok(Json(menu_response(&menu, path, scale, &state.base_path)))
 }
 
 /// Shape a [`Menu`] into the API response.
 ///
 /// The response keeps the semantics it had before `cooklang-find` parsed
 /// menus: a missing meal type is `"Items"`, text and notes are dropped,
-/// reference names and paths are `./Dir/Name` and `./Dir/Name.cook`, and loose
-/// quantities are scaled and formatted.
-fn menu_response(menu: &Menu, path: String, scale: f64) -> MenuResponse {
+/// reference names and paths are `./Dir/Name` and `./Dir/Name.cook` (or
+/// `./Dir/Name.menu` for a menu used as a meal), and loose quantities are
+/// scaled and formatted.
+fn menu_response(menu: &Menu, path: String, scale: f64, base_path: &Utf8Path) -> MenuResponse {
+    // Whether each referenced path is a menu, looked up once per path.
+    let mut is_menu: HashMap<String, bool> = HashMap::new();
     let sections = menu
         .sections
         .iter()
@@ -164,7 +173,7 @@ fn menu_response(menu: &Menu, path: String, scale: f64) -> MenuResponse {
                     let items: Vec<_> = meal
                         .items
                         .iter()
-                        .filter_map(|item| api_item(item, scale))
+                        .filter_map(|item| api_item(item, scale, base_path, &mut is_menu))
                         .collect();
                     // A meal of only notes or text has nothing to report.
                     (!items.is_empty()).then(|| MenuMeal {
@@ -188,17 +197,37 @@ fn menu_response(menu: &Menu, path: String, scale: f64) -> MenuResponse {
     }
 }
 
-fn api_item(item: &MenuItem, scale: f64) -> Option<MenuMealItem> {
+fn api_item(
+    item: &MenuItem,
+    scale: f64,
+    base_path: &Utf8Path,
+    is_menu: &mut HashMap<String, bool>,
+) -> Option<MenuMealItem> {
     match item {
         MenuItem::RecipeReference {
             path,
             scale: factor,
             ..
-        } => Some(MenuMealItem::RecipeReference {
-            name: format!("./{path}"),
-            path: Some(format!("./{path}.cook")),
-            scale: factor.unwrap_or(1.0),
-        }),
+        } => {
+            // A reference out of the recipe directory is not looked up.
+            let menu = !crate::util::menu::is_outside_reference(path)
+                && *is_menu.entry(path.clone()).or_insert_with(|| {
+                    crate::util::get_recipe(base_path, path).is_ok_and(|entry| entry.is_menu())
+                });
+            // The file the reference names: a recipe's `.cook`, or the
+            // `.menu` of a menu used as a meal of this one.
+            let file = if menu {
+                format!("./{}.menu", path.trim_end_matches(".menu"))
+            } else {
+                format!("./{path}.cook")
+            };
+            Some(MenuMealItem::RecipeReference {
+                name: format!("./{path}"),
+                path: Some(file),
+                scale: factor.unwrap_or(1.0),
+                menu,
+            })
+        }
         MenuItem::Ingredient {
             name,
             quantity,

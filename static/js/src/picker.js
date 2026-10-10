@@ -56,6 +56,8 @@ export function initRecipePicker(root, { prefix = "", exclude = null } = {}) {
   let searchTimer = null;
   let request = 0;
   let tree = null;
+  // Whether this opening offers menus as well as recipes (see `open`).
+  let offerMenus = false;
 
   function optionId(index) {
     return `${list.id}-option-${index}`;
@@ -73,7 +75,7 @@ export function initRecipePicker(root, { prefix = "", exclude = null } = {}) {
   }
 
   function show(items, message) {
-    results = items.filter(item => !isMenu(item.path) && item.path !== exclude);
+    results = items.filter(item => (offerMenus || !isMenu(item.path)) && item.path !== exclude);
     list.replaceChildren(...results.map((item, index) => {
       const option = document.createElement("li");
       option.id = optionId(index);
@@ -207,9 +209,11 @@ export function initRecipePicker(root, { prefix = "", exclude = null } = {}) {
   return {
     // Resolves with `{ path, reference, servings }`, or null when cancelled.
     // `servings` pre-fills the servings field; leave it out to hide the
-    // field, for references that take no servings.
-    open({ servings: initial } = {}) {
+    // field, for references that take no servings. `menus` offers menus as
+    // well, for a menu's meals; their reference keeps the `.menu`.
+    open({ servings: initial, menus = false } = {}) {
       if (settle) close(null);
+      offerMenus = menus;
       returnFocus = document.activeElement;
       search.value = "";
       servingsRow.hidden = initial === undefined;
