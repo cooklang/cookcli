@@ -86,8 +86,8 @@ export const cooklang = StreamLanguage.define({
       return "heading";
     }
 
-    // Line comments (-- comment)
-    if (sol && stream.match(/^--/)) {
+    // Line comments (-- comment), anywhere on the line as in the parser
+    if (stream.match(/^--/)) {
       stream.skipToEnd();
       return "comment";
     }
@@ -130,6 +130,11 @@ export const cooklang = StreamLanguage.define({
       return "comment";
     }
 
+    // An escaped character (\@, \[-, \--) is plain text
+    if (stream.match(/^\\./)) {
+      return state.position;
+    }
+
     // Shorthand preparations (prep) after ingredient amounts like @onion{1}(chopped)
     if (state.afterAmount && stream.match(/^\([^)]*\)/)) {
       state.afterAmount = false;
@@ -141,22 +146,23 @@ export const cooklang = StreamLanguage.define({
       state.afterAmount = false;
     }
 
-    // Ingredients (@ingredient{amount})
-    if (stream.match(/^@([^@#~]+?(?={))/)) {
+    // Ingredients (@ingredient{amount}). A name stops before "[-" or "--":
+    // the parser reads those as a comment first.
+    if (stream.match(/^@((?:(?!\[-|--)[^@#~])+?(?={))/)) {
       return "variableName";
     } else if (stream.match(/^@(.+?\b)/)) {
       return "variableName";
     }
 
     // Cookware (#cookware{amount})
-    if (stream.match(/^#([^@#~]+?(?={))/)) {
+    if (stream.match(/^#((?:(?!\[-|--)[^@#~])+?(?={))/)) {
       return "keyword";
     } else if (stream.match(/^#(.+?\b)/)) {
       return "keyword";
     }
 
-    // Timers (~timer{amount})
-    if (stream.match(/^~([^@#~]+?(?={))/)) {
+    // Timers (~timer{amount}, or ~{amount} without a name)
+    if (stream.match(/^~((?:(?!\[-|--)[^@#~])*?(?={))/)) {
       return "number";
     } else if (stream.match(/^~(.+?\b)/)) {
       return "number";
@@ -167,7 +173,7 @@ export const cooklang = StreamLanguage.define({
     if (!ch) return null;
 
     if (ch === '{') {
-      if (state.position !== "timer") state.position = "measurement";
+      state.position = "measurement";
       return null;
     }
 
@@ -177,7 +183,7 @@ export const cooklang = StreamLanguage.define({
       return null;
     }
 
-    if (ch === '%' && (state.position === "measurement" || state.position === "timer")) {
+    if (ch === '%' && state.position === "measurement") {
       state.position = "unit";
       return null;
     }
