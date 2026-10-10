@@ -1941,3 +1941,292 @@ fn an_empty_extra_item_is_an_error() {
         other => panic!("expected CoreError::Parse, got {other:?}"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Some days of a menu
+// ---------------------------------------------------------------------------
+
+/// Two dated days, the same recipe on both and a free-hand ingredient each,
+/// then an undated section.
+const WEEK: &str = "\
+== Monday (2026-10-05) ==
+
+Dinner: \\
+- @./stew{} \\
+- @almonds{50%g}
+
+== Tuesday (2026-10-06) ==
+
+Dinner: \\
+- @./stew{} \\
+- @almonds{30%g} \\
+- @bread{1}
+
+== Leftovers ==
+
+- @cheese{100%g}
+";
+
+const STEW: &str = "Simmer @beans{200%g} with @onion{1}.\n";
+
+fn day(text: &str) -> chrono::NaiveDate {
+    chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+}
+
+fn on_days(name: &str, from: Option<&str>, to: Option<&str>) -> ScaledRecipe {
+    at_path(name).on_days(DayRange {
+        from: from.map(day),
+        to: to.map(day),
+    })
+}
+
+fn request_for(recipes: Vec<ScaledRecipe>) -> GenerateRequest {
+    GenerateRequest {
+        recipes,
+        ignore_references: false,
+        extra_items: Vec::new(),
+        include_optional: false,
+    }
+}
+
+#[test]
+fn a_section_is_dated_by_the_first_date_in_its_name() {
+    let date = |name| section_date(name).map(|(date, _)| date);
+    assert_eq!(date("Wednesday (2026-10-07)"), Some(day("2026-10-07")));
+    assert_eq!(date("2026-10-07 Dinner"), Some(day("2026-10-07")));
+    assert_eq!(
+        date("Day 1 (2026-03-04) (2026-03-05)"),
+        Some(day("2026-03-04"))
+    );
+    assert_eq!(date("Lunch (12:30) (2026-03-04)"), Some(day("2026-03-04")));
+    assert_eq!(date("Jour (é) (2026-03-04)"), Some(day("2026-03-04")));
+    assert_eq!(
+        section_date("2026-10-07 Dinner"),
+        Some((day("2026-10-07"), " Dinner"))
+    );
+    for name in [
+        "Day 1",
+        "Day (2026-02-30)",
+        "12026-10-07",
+        "2026-10-071",
+        "Week 2026-10",
+    ] {
+        assert_eq!(date(name), None, "{name}");
+    }
+}
+
+#[test]
+fn only_the_chosen_days_of_a_menu_go_on_the_list() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![on_days(
+            "week.menu",
+            Some("2026-10-06"),
+            Some("2026-10-06"),
+        )]),
+    )
+    .expect("generates")
+    .value;
+
+    // Tuesday alone: one stew, its own almonds and bread, nothing undated.
+    assert_eq!(quantities(&list, "beans"), Some(vec!["200 g".to_string()]));
+    assert_eq!(quantities(&list, "almonds"), Some(vec!["30 g".to_string()]));
+    assert_eq!(quantities(&list, "bread"), Some(vec!["1".to_string()]));
+    assert_eq!(quantities(&list, "cheese"), None);
+}
+
+/// A plan's days may also be headed by their date, the meal named after it,
+/// as the planner reads them.
+#[test]
+fn a_day_may_be_headed_by_its_date() {
+    const PLAN: &str = "\
+= 2026-10-05 Dinner
+
+- @./stew{}
+
+= 2026-10-06 Dinner
+
+- @bread{1}
+";
+    let dir = dir_with(&[("plan.menu", PLAN), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("plan.menu", Some("2026-10-06"), None)]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "bread"), Some(vec!["1".to_string()]));
+    assert_eq!(quantities(&list, "beans"), None);
+}
+
+/// Narrowing to some days still leaves optional ingredients out unless they
+/// are asked for, and then marks them as optional.
+#[test]
+fn the_chosen_days_keep_optional_ingredients_apart() {
+    const PLAN: &str = "\
+== Monday (2026-10-05) ==
+
+- @?chives{5%g}
+
+== Tuesday (2026-10-06) ==
+
+- @bread{1} \\
+- @?chives{10%g}
+";
+    let dir = dir_with(&[("plan.menu", PLAN)]);
+    let tuesday = || vec![on_days("plan.menu", Some("2026-10-06"), None)];
+
+    let without = generate(&ctx(&dir), request_for(tuesday()))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&without), vec![("bread", false)]);
+
+    let with = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            include_optional: true,
+            ..request_for(tuesday())
+        },
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        names_and_flags(&with),
+        vec![("bread", false), ("chives", true)]
+    );
+    assert_eq!(quantities(&with, "chives"), Some(vec!["10 g".to_string()]));
+}
+
+#[test]
+fn either_end_of_the_range_may_be_open() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let up_to_monday = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", None, Some("2026-10-05"))]),
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        quantities(&up_to_monday, "almonds"),
+        Some(vec!["50 g".to_string()])
+    );
+    assert_eq!(quantities(&up_to_monday, "bread"), None);
+
+    let from_monday = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", Some("2026-10-05"), None)]),
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        quantities(&from_monday, "beans"),
+        Some(vec!["400 g".to_string()])
+    );
+    assert_eq!(
+        quantities(&from_monday, "almonds"),
+        Some(vec!["80 g".to_string()])
+    );
+    // Undated sections are not a day, so a range leaves them out.
+    assert_eq!(quantities(&from_monday, "cheese"), None);
+}
+
+#[test]
+fn the_chosen_days_scale_with_the_menu() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![ScaledRecipe::scaled(
+            RecipeSource::Path("week.menu".into()),
+            2.0,
+        )
+        .on_days(DayRange {
+            from: Some(day("2026-10-06")),
+            to: None,
+        })]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "beans"), Some(vec!["400 g".to_string()]));
+    assert_eq!(quantities(&list, "almonds"), Some(vec!["60 g".to_string()]));
+}
+
+#[test]
+fn a_recipe_without_days_is_taken_whole_and_quietly() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("stew.cook", Some("2026-10-06"), None)]),
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()])
+    );
+    assert!(
+        !outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("menu")),
+        "{:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
+fn a_menu_without_dated_sections_is_taken_whole_with_a_warning() {
+    let dir = dir_with(&[
+        ("plain.menu", "== Day 1 ==\n\n- @./stew{} \\\n- @bread{2}\n"),
+        ("stew.cook", STEW),
+    ]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("plain.menu", Some("2026-10-06"), None)]),
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "bread"),
+        Some(vec!["2".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()])
+    );
+    let warning = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("No section of this menu is dated"))
+        .unwrap_or_else(|| panic!("expected a warning, got {:?}", outcome.diagnostics));
+    assert_eq!(warning.severity, Severity::Warning);
+}
+
+#[test]
+fn a_menu_with_no_day_in_range_adds_nothing_and_says_so() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", Some("2027-01-01"), None)]),
+    )
+    .expect("generates");
+
+    assert!(outcome.value.is_empty(), "{:?}", outcome.value.items);
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("(from 2027-01-01)")),
+        "{:?}",
+        outcome.diagnostics
+    );
+}
