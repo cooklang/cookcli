@@ -145,18 +145,20 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cross build --release --locked --target ${{ matrix.target }}
 
-      # Keep the glibc binary installable on every supported distribution
-      # (issue #420): Ubuntu 22.04 (glibc 2.35), Debian 12 (2.36) and Fedora 43
-      # (2.42). Fail when it needs a newer glibc than the oldest of them.
+      # Keep the glibc binary installable on older distributions (issue #420):
+      # fail when it needs a newer glibc than manylinux_2_28 (Cross.toml)
+      # provides. 2.28 covers RHEL 8 and its rebuilds (supported until 2029),
+      # Debian 10+, Ubuntu 20.04+ and SLES 15, well below Ubuntu 22.04 (2.35),
+      # Debian 12 (2.36) and Fedora 43 (2.42).
       - name: Build | Check glibc floor [Linux gnu]
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
-          FLOOR=2.35
+          FLOOR=2.28
           NEEDED=$(objdump -T "target/${{ matrix.target }}/release/cook" \
             | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
           echo "cook needs glibc $NEEDED (floor $FLOOR)"
           if [ "$(printf '%s\n%s\n' "$NEEDED" "$FLOOR" | sort -V | tail -n 1)" != "$FLOOR" ]; then
-            echo "::error::cook needs glibc $NEEDED, newer than the $FLOOR floor (Ubuntu 22.04)"
+            echo "::error::cook needs glibc $NEEDED, newer than the $FLOOR floor"
             exit 1
           fi
 

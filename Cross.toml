@@ -8,10 +8,10 @@
 # cross has published no release since 0.2.5 (Ubuntu 16.04, gcc 5.4), so the
 # binary is built in PyPA's manylinux_2_28 image instead: AlmaLinux 8 with
 # glibc 2.28, but a current gcc-toolset and cmake, rebuilt upstream several
-# times a week. The binary needs GLIBC_2.28, below every supported distribution
-# (Ubuntu 22.04: 2.35, Debian 12: 2.36, Fedora 43: 2.42); release.yaml fails
-# the build if it ever needs more than Ubuntu 22.04 provides. Pin a dated
-# tag, never `latest`, so a release build is reproducible. The musl targets
+# times a week. The binary needs GLIBC_2.28 (RHEL 8+, Debian 10+, Ubuntu
+# 20.04+), and release.yaml fails the build if it ever needs more. Don't move
+# to manylinux_2_34: same gcc, but it would drop RHEL 8 and Ubuntu 20.04.
+# Pin a dated tag, never `latest`, so a release build is reproducible. The musl targets
 # below are statically linked, so `edge` is harmless there.
 [target.x86_64-unknown-linux-gnu]
 image = "quay.io/pypa/manylinux_2_28_x86_64:2026.10.10-1"
