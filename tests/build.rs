@@ -210,6 +210,13 @@ fn build_writes_recipe_pages() {
         "recipe page should use a download attribute"
     );
 
+    // "Copy for a Menu" is a client-side copy, so a static site has it too,
+    // at the recipe's own servings.
+    assert!(
+        html.contains(r#"data-menu-line="- @./Breakfast/Easy Pancakes{2%servings}""#),
+        "recipe page should offer its .menu line"
+    );
+
     // schema.org Recipe JSON-LD must be embedded for SEO.
     assert!(
         html.contains("application/ld+json"),

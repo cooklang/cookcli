@@ -107,6 +107,24 @@
                     </svg>
                     <span class="hidden lg:inline">Cook</span>
                 </button>
+                {#- A line for a hand-written .menu, at the servings or scale
+                    shown. Pure client-side copy, so static sites have it too.
+                    After Cook, so on a phone it is this one that wraps; the
+                    confirmation sits under it, taking no room in the row. #}
+                <span class="relative inline-flex">
+                    <button type="button" id="copy-menu-line" class="btn"
+                            data-menu-line="{{ self.menu_line() }}"
+                            title="{{ tr.t("recipe-copy-menu-line-title") }}"
+                            aria-label="{{ tr.t("recipe-copy-menu-line") }}"
+                            onclick="copyMenuLine(this)">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="8" y="3" width="8" height="4" rx="1" stroke-width="2"></rect>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 5h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h2M8 12h8M8 16h5"></path>
+                        </svg>
+                        <span class="hidden lg:inline">{{ tr.t("recipe-copy-menu-line") }}</span>
+                    </button>
+                    <span id="copy-menu-line-status" role="status" class="absolute top-full right-0 mt-1 whitespace-nowrap text-sm text-muted"></span>
+                </span>
                 {% if static_mode %}
                 <a href="{{ prefix }}/recipe/{{ recipe_path }}.cook" download class="btn" title="Download .cook source">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,6 +446,45 @@
 
 <script id="cooking-mode-data" type="application/json">
 {{ self.cooking_mode_json()|safe }}
+</script>
+
+<script>
+// Puts the recipe's .menu line on the clipboard. `navigator.clipboard` only
+// exists on secure origins, and the server is often reached over plain http
+// (or a static page from file://), so fall back to the legacy copy there, as
+// the shopping list does.
+let copyMenuLineTimer = null;
+async function copyMenuLine(button) {
+    const status = document.getElementById('copy-menu-line-status');
+    const text = button.dataset.menuLine;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-1000px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, text.length);
+            try {
+                if (!document.execCommand('copy')) {
+                    throw new Error('execCommand("copy") returned false');
+                }
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+        status.textContent = {{ tr.t("recipe-menu-line-copied")|json|safe }};
+    } catch (error) {
+        console.error('Failed to copy the menu line:', error);
+        status.textContent = {{ tr.t("recipe-menu-line-copy-failed")|json|safe }};
+    }
+    clearTimeout(copyMenuLineTimer);
+    copyMenuLineTimer = setTimeout(() => { status.textContent = ''; }, 2500);
+}
 </script>
 
 {% if !static_mode %}
