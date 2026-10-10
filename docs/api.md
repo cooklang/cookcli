@@ -986,7 +986,7 @@ The section keeps its place in the file, its items and the comments around it. C
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `section` | body | `string` | yes | The section to rename. |
-| `new_name` | body | `string` | yes | Its new name. |
+| `new_name` | body | `string` | yes | Its new name. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character, as for a new section. |
 
 Request body:
 

@@ -85,11 +85,8 @@ impl AddPantryItem {
         if name.is_empty() {
             return Err("Item name cannot be empty");
         }
-        // A section is a TOML table name, so nothing needs these characters.
-        // Kept, `../recipes/Soup.cook#` would send whoever edits the item to
-        // `/api/recipes/Soup.cook` with their own rights.
-        if !is_url_segment(&section) || section.contains(['/', '\\', '#', '?']) {
-            return Err("Section cannot be . or .. or contain /, \\, #, ? or control characters");
+        if !is_section_segment(&section) {
+            return Err(SECTION_SEGMENT_ERROR);
         }
         // The page encodes names; only the dot steps survive that.
         if !is_url_segment(&name) {
@@ -118,6 +115,17 @@ impl AddPantryItem {
 fn is_url_segment(value: &str) -> bool {
     value != "." && value != ".." && !value.chars().any(char::is_control)
 }
+
+/// Whether `section` can name a section the pantry page edits items of. A
+/// section is a TOML table name, so nothing needs these characters. Kept,
+/// `../recipes/Soup.cook#` would send whoever edits an item of it to
+/// `/api/recipes/Soup.cook` with their own rights.
+fn is_section_segment(section: &str) -> bool {
+    is_url_segment(section) && !section.contains(['/', '\\', '#', '?'])
+}
+
+const SECTION_SEGMENT_ERROR: &str =
+    "Section cannot be . or .. or contain /, \\, #, ? or control characters";
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePantryItem {
@@ -321,6 +329,10 @@ pub async fn rename_section(
 ) -> Result<Json<ApiResponse>, ApiError> {
     let section = rename.section;
     let new_name = rename.new_name.trim().to_string();
+    // A rename makes a section as surely as adding an item to a new one does.
+    if !is_section_segment(&new_name) {
+        return Err((StatusCode::BAD_REQUEST, json_error(SECTION_SEGMENT_ERROR)));
+    }
 
     let request = core_pantry::RenameSectionRequest {
         section: section.clone(),
@@ -557,7 +569,7 @@ pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
 
 #[cfg(test)]
 mod tests {
-    use super::AddPantryItem;
+    use super::{is_section_segment, AddPantryItem};
 
     fn item(section: &str, name: &str, quantity: Option<&str>) -> AddPantryItem {
         AddPantryItem {
@@ -607,6 +619,15 @@ mod tests {
             );
         }
         assert!(item("Dry goods & spices", "Milk", None).trimmed().is_ok());
+    }
+
+    #[test]
+    fn a_section_check_covers_renames_too() {
+        // `rename_section` checks the trimmed new name with this.
+        for section in ["../recipes/Soup.cook#", "..", ".", "a/b", "a#b", "fr\nidge"] {
+            assert!(!is_section_segment(section), "{section:?} was accepted");
+        }
+        assert!(is_section_segment("Dry goods & spices"));
     }
 
     #[test]

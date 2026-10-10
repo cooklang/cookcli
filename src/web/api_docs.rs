@@ -1798,7 +1798,14 @@ fn pantry() -> ApiSection {
             )
             .params(vec![
                 param("section", "body", "string", true, "The section to rename."),
-                param("new_name", "body", "string", true, "Its new name."),
+                param(
+                    "new_name",
+                    "body",
+                    "string",
+                    true,
+                    "Its new name. `400` when it is `.` or `..`, or contains a slash, a \
+                     backslash, `#`, `?` or a control character, as for a new section.",
+                ),
             ])
             .request(
                 r#"
