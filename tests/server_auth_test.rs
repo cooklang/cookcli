@@ -1294,6 +1294,7 @@ const RECIPE_PAGES: &[&str] = &[
     "/recipe/Week.menu",
     "/preferences",
     "/rss.xml",
+    "/feed.json",
     "/static/css/output.css",
     "/api/recipes",
     "/api/recipes/Recipe.cook",
