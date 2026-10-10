@@ -2396,3 +2396,113 @@ fn a_general_add_with_attributes_is_refused() {
     );
     assert_eq!(read_back(&ctx), original, "nothing may be written");
 }
+
+// ---------------------------------------------------------------------------
+// rename_section
+// ---------------------------------------------------------------------------
+
+fn rename(
+    ctx: &Context,
+    section: &str,
+    new_name: &str,
+) -> Result<Outcome<PantryContents>, CoreError> {
+    rename_section(
+        ctx,
+        RenameSectionRequest {
+            section: section.to_string(),
+            new_name: new_name.to_string(),
+        },
+    )
+}
+
+/// Only the header changes: the comments, the items and the other sections are
+/// the file as it was, and what comes back is the pantry under its new name.
+#[test]
+fn rename_section_changes_only_the_header() {
+    let original = "# my pantry\n[dairy]\nmilk = \"1%l\" # semi\n\n[produce]\napple = \"5\"\n";
+    let (_dir, ctx) = planted(original);
+
+    let contents = rename(&ctx, "dairy", " Fridge ")
+        .expect("renames")
+        .into_value();
+
+    assert_eq!(
+        contents
+            .sections
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Fridge", "produce"]
+    );
+    assert_eq!(read_back(&ctx), original.replace("[dairy]", "[Fridge]"));
+}
+
+#[test]
+fn rename_section_may_change_only_the_case_of_its_own_name() {
+    let (_dir, ctx) = planted("[dairy]\nmilk = \"1%l\"\n");
+    rename(&ctx, "dairy", "Dairy").expect("renames");
+    assert_eq!(read_back(&ctx), "[Dairy]\nmilk = \"1%l\"\n");
+}
+
+#[test]
+fn rename_section_refuses_and_writes_nothing() {
+    let original = "salt = \"1%kg\"\n[dairy]\nmilk = \"1%l\"\n[produce]\napple = \"5\"\n";
+    for (section, new_name, expected) in [
+        ("dairy", "  ", "the section name cannot be empty"),
+        ("dairy", "dairy", "section 'dairy' is already called that"),
+        ("freezer", "cold", "section 'freezer' not found"),
+        (
+            "dairy",
+            "Produce",
+            "there is already a section or item called 'produce'",
+        ),
+        (
+            "dairy",
+            "SALT",
+            "there is already a section or item called 'salt'",
+        ),
+        ("general", "top", "cannot be renamed"),
+        ("dairy", "general", "cannot be renamed"),
+    ] {
+        let (_dir, ctx) = planted(original);
+        match rename(&ctx, section, new_name) {
+            Err(CoreError::PantryEdit { message }) => assert!(
+                message.contains(expected),
+                "{section} → {new_name}: {message}"
+            ),
+            other => panic!(
+                "{section} → {new_name}: expected PantryEdit, got {:?}",
+                other.map(|o| o.value)
+            ),
+        }
+        assert_eq!(read_back(&ctx), original, "nothing may be written");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// replace
+// ---------------------------------------------------------------------------
+
+#[test]
+fn replace_writes_the_text_exactly() {
+    let (_dir, ctx) = planted(SMALL);
+    let text = "# hand-written\n[fridge]\nmilk   =   \"1%l\"   # odd spacing\n";
+
+    let contents = replace(&ctx, text).expect("replaces").into_value();
+
+    assert_eq!(read_back(&ctx), text);
+    assert_eq!(names(&contents.sections[0].items), ["milk"]);
+}
+
+#[test]
+fn replace_refuses_text_that_is_not_a_pantry_and_writes_nothing() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match replace(&ctx, "[fridge]\nmilk = \"1%l\"\nmilk = \"2%l\"\n") {
+        Err(CoreError::Config { message, .. }) => {
+            assert!(message.contains("line 3"), "{message}")
+        }
+        other => panic!("expected Config, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}

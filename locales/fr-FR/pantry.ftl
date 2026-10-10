@@ -8,19 +8,22 @@ pantry-configure = Configurer le garde-manger →
 pantry-no-items-section = Aucun article dans cette section
 pantry-show-out-of-stock = Afficher uniquement les articles en rupture de stock
 pantry-no-out-of-stock = Aucun article en rupture de stock dans cette section
+pantry-out-of-stock-count = En rupture de stock : %o sur %t
 pantry-total-sections = Total des sections :
-pantry-edit-config = Modifier la configuration
+pantry-manage = Gérer le garde-manger
 
 # Pantry Item Fields
 pantry-item-name = Nom de l'article
 pantry-item-quantity = Quantité
-pantry-item-quantity-short = Qté :
+pantry-item-quantity-label = Quantité :
 pantry-item-bought = Acheté :
 pantry-item-bought-date = Date d'achat
 pantry-item-expire = Expire :
 pantry-item-expire-date = Date d'expiration
 pantry-item-low = Bas à :
 pantry-item-low-threshold = Seuil de stock bas
+pantry-placeholder-quantity = ex. 500%g ou 2%L
+pantry-placeholder-low = ex. 100%g ou 2
 
 # Pantry Actions
 pantry-add-item = Ajouter un article
@@ -40,7 +43,23 @@ pantry-section-fridge = Réfrigérateur
 pantry-section-pantry = Garde-manger
 pantry-section-spices = Épices
 pantry-section-other = Autre
+pantry-section-general = Général
+pantry-section-new = Nouvelle section…
+pantry-section-new-name = Nom de la nouvelle section
+pantry-tab-items = Articles
+pantry-tab-text = Texte
+pantry-text-intro = Modifiez le fichier directement : une ligne [section], puis un article par ligne, écrit nom = "quantité" ou nom = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Les lignes commençant par # sont des commentaires.
+pantry-text-save = Enregistrer le fichier
+pantry-text-saved = Enregistré
+pantry-text-conflict = Le fichier du garde-manger a été modifié ailleurs pendant votre saisie. Votre texte est conservé ; enregistrez à nouveau pour remplacer cette modification.
+pantry-rename-section = Renommer la section
+pantry-section-name = Nom de la section
+pantry-failed-rename = Impossible de renommer la section
+pantry-failed-save-file = Impossible d'enregistrer le fichier
 pantry-optional = (optionnel)
 pantry-failed-add = Échec de l'ajout de l'article
+pantry-item-name-required = Donnez un nom à l'article
+pantry-item-exists = %s est déjà dans %s
+pantry-section-name-taken = Il existe déjà une section ou un article nommé %s
 pantry-failed-update = Échec de la mise à jour de l'article
 pantry-failed-remove = Échec de la suppression de l'article

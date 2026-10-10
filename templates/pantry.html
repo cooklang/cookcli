@@ -47,11 +47,27 @@
         </div>
     </div>
     {% else %}
+    <div class="flex flex-wrap gap-1 mb-4" role="tablist" aria-label="{{ tr.t("pantry-title") }}">
+        <button type="button" role="tab" class="nav-pill" id="tab-items" aria-controls="panel-items" data-tab="items">{{ tr.t("pantry-tab-items") }}</button>
+        <button type="button" role="tab" class="nav-pill" id="tab-text" aria-controls="panel-text" data-tab="text">{{ tr.t("pantry-tab-text") }}</button>
+    </div>
+
+    <section id="panel-items" role="tabpanel" aria-labelledby="tab-items">
     <div class="space-y-6">
         {% for section in sections %}
         <div class="card pantry-section">
             <div class="p-6">
-                <h2 class="text-title font-semibold text-text mb-4 capitalize">{{ section.name }}</h2>
+                <div class="pantry-section-head flex items-center justify-between gap-2 mb-4" data-section="{{ section.name }}">
+                    <h2 class="pantry-section-title min-w-0 break-words text-title font-semibold text-text">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</h2>
+                    {% if viewer.can_edit_lists() && section.name != "general" %}
+                    <button type="button" class="rename-section-btn icon-btn shrink-0"
+                            title="{{ tr.t("pantry-rename-section") }}" aria-label="{{ tr.t("pantry-rename-section") }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
                 {% if section.items.is_empty() %}
                 <p class="text-faint italic">{{ tr.t("pantry-no-items-section") }}</p>
                 {% else %}
@@ -72,7 +88,7 @@
                                 <div class="item-display">
                                     <div class="space-y-1 text-sm">
                                         <div class="quantity-display flex items-center">
-                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-quantity-short") }}</span>
+                                            <span class="text-faint mr-2">{{ tr.t("pantry-item-quantity-label") }}</span>
                                             <span class="item-quantity">{% if let Some(quantity) = item.quantity %}{{ quantity }}{% else %}-{% endif %}</span>
                                             <svg class="out-of-stock-icon w-4 h-4 ml-1 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -95,19 +111,29 @@
 
                                 <!-- Edit form (hidden by default) -->
                                 <div class="item-edit hidden">
-                                    <div class="space-y-2">
-                                        <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Quantity (e.g., 500%g)"
-                                               value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
-                                        <input type="text" class="edit-bought w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Bought (DD.MM.YYYY)"
-                                               value="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
-                                        <input type="text" class="edit-expire w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Expires (DD.MM.YYYY)"
-                                               value="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
-                                        <input type="text" class="edit-low w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
-                                               placeholder="Low threshold (e.g., 100%g)"
-                                               value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
+                                    <div class="space-y-2 text-sm">
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-quantity") }}</span>
+                                            <input type="text" class="edit-quantity w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   placeholder="{{ tr.t("pantry-placeholder-quantity") }}"
+                                                   value="{% if let Some(quantity) = item.quantity %}{{ quantity }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-bought-date") }}</span>
+                                            <input type="date" class="edit-bought pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   data-raw="{% if let Some(bought) = item.bought %}{{ bought }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-expire-date") }}</span>
+                                            <input type="date" class="edit-expire pantry-date w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   data-raw="{% if let Some(expire) = item.expire %}{{ expire }}{% endif %}">
+                                        </label>
+                                        <label class="block">
+                                            <span class="block text-faint mb-1">{{ tr.t("pantry-item-low-threshold") }}</span>
+                                            <input type="text" class="edit-low w-full px-2 py-1 text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                                                   placeholder="{{ tr.t("pantry-placeholder-low") }}"
+                                                   value="{% if let Some(low) = item.low %}{{ low }}{% endif %}">
+                                        </label>
                                         <div class="flex flex-wrap items-center justify-end gap-2 mt-2">
                                             <button type="button" class="cancel-btn btn btn-sm">{{ tr.t("pantry-cancel") }}</button>
                                             <button type="button" class="save-btn btn btn-primary btn-sm">{{ tr.t("pantry-save") }}</button>
@@ -156,11 +182,22 @@
                 {{ tr.t("pantry-add-item") }}
             </button>
             {% endif %}
-            <a href="{{ prefix }}/preferences" class="btn">
-                {{ tr.t("pantry-edit-config") }}
-            </a>
         </div>
     </div>
+    </section>
+
+    <section id="panel-text" role="tabpanel" aria-labelledby="tab-text" class="hidden">
+        <p class="text-muted mb-4">{{ tr.t("pantry-text-intro") }}</p>
+        <textarea id="pantry-text" spellcheck="false" aria-label="pantry.conf"
+                  class="w-full min-h-[24rem] p-3 font-mono text-sm border border-line rounded-[var(--radius-control)] bg-surface text-text"
+                  {% if !viewer.can_edit_lists() %}readonly{% endif %}></textarea>
+        {% if viewer.can_edit_lists() %}
+        <div class="flex items-center justify-end gap-3 mt-3">
+            <span id="pantry-text-status" class="text-sm text-muted" aria-live="polite"></span>
+            <button type="button" id="pantry-text-save" class="btn btn-primary">{{ tr.t("pantry-text-save") }}</button>
+        </div>
+        {% endif %}
+    </section>
     {% endif %}
 </div>
 
@@ -181,10 +218,15 @@
                     <option value="other">{{ tr.t("pantry-section-other") }}</option>
                     {% else %}
                     {% for section in sections %}
-                    <option value="{{ section.name }}">{{ section.name }}</option>
+                    <option value="{{ section.name }}">{% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %}</option>
                     {% endfor %}
                     {% endif %}
+                    <option value="__new__">{{ tr.t("pantry-section-new") }}</option>
                 </select>
+            </div>
+            <div id="add-new-section-field" class="mb-4 hidden">
+                <label for="add-new-section" class="block text-sm font-medium mb-2">{{ tr.t("pantry-section-new-name") }}</label>
+                <input type="text" id="add-new-section" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-name") }}</label>
@@ -192,19 +234,19 @@
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-quantity") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-quantity" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="e.g., 500%g or 2%L">
+                <input type="text" id="add-quantity" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-quantity") }}">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-bought-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-bought" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="DD.MM.YYYY">
+                <input type="date" id="add-bought" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-expire-date") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-expire" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="DD.MM.YYYY">
+                <input type="date" id="add-expire" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">{{ tr.t("pantry-item-low-threshold") }} {{ tr.t("pantry-optional") }}</label>
-                <input type="text" id="add-low" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="e.g., 100%g or 2">
+                <input type="text" id="add-low" class="w-full px-3 py-2 border border-line rounded-[var(--radius-control)] bg-surface text-text" placeholder="{{ tr.t("pantry-placeholder-low") }}">
             </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="closeAddModal()" class="btn">{{ tr.t("pantry-cancel") }}</button>
@@ -222,7 +264,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const outOfStockItems = document.querySelectorAll('.pantry-item.out-of-stock').length;
         const outOfStockCountSpan = document.getElementById('out-of-stock-count');
         if (outOfStockCountSpan) {
-            outOfStockCountSpan.textContent = `(${outOfStockItems} out of stock / ${totalItems} total)`;
+            outOfStockCountSpan.textContent = {{ tr.t("pantry-out-of-stock-count")|json|safe }}
+                .replace('%o', outOfStockItems).replace('%t', totalItems);
         }
     }
 
@@ -354,13 +397,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    const addSection = document.getElementById('add-section');
+    if (addSection) {
+        addSection.addEventListener('change', toggleNewSectionField);
+    }
+
     if (addForm) {
         addForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
+            const section = addSection.value === '__new__'
+                ? document.getElementById('add-new-section').value.trim()
+                : addSection.value.trim();
+            if (!section) {
+                showPantryError({{ tr.t("pantry-section-new-name")|json|safe }});
+                return;
+            }
+            const itemName = document.getElementById('add-name').value.trim();
+            if (!itemName) {
+                showPantryError({{ tr.t("pantry-item-name-required")|json|safe }});
+                return;
+            }
+            // The server refuses a second item of the same name in a section;
+            // say so here, in the page's language.
+            const taken = [...document.querySelectorAll('.pantry-item')]
+                .some(item => item.dataset.section === section && item.dataset.name === itemName);
+            if (taken) {
+                showPantryError({{ tr.t("pantry-item-exists")|json|safe }}.replace('%s', itemName).replace('%s', sectionLabel(section)));
+                return;
+            }
+
             const data = {
-                section: document.getElementById('add-section').value.trim(),
-                name: document.getElementById('add-name').value.trim(),
+                section: section,
+                name: itemName,
                 quantity: document.getElementById('add-quantity').value.trim() || null,
                 bought: document.getElementById('add-bought').value.trim() || null,
                 expire: document.getElementById('add-expire').value.trim() || null,
@@ -383,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showPantryError(data.error || {{ tr.t("pantry-failed-add")|json|safe }});
                 }
             } catch (error) {
-                showPantryError('Error adding item: ' + error);
+                showPantryError({{ tr.t("pantry-failed-add")|json|safe }} + ': ' + error);
             }
         });
     }
@@ -403,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (editBtn) {
             editBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
+                item.querySelectorAll('.pantry-date').forEach(showDate);
                 displayDiv.classList.add('hidden');
                 editDiv.classList.remove('hidden');
             });
@@ -428,8 +498,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get original values from display
             const originalQuantity = item.querySelector('.item-quantity').textContent;
-            const originalBought = item.querySelector('.item-bought').textContent;
-            const originalExpire = item.querySelector('.item-expire').textContent;
             const originalLow = item.querySelector('.item-low').textContent;
 
             // Only include fields that have changed
@@ -441,16 +509,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 data.quantity = newQuantity || null;
             }
 
-            const newBought = boughtInput.value.trim();
-            const displayBought = originalBought === '-' ? '' : originalBought;
-            if (newBought !== displayBought) {
-                data.bought = newBought || null;
+            if (dateChanged(boughtInput)) {
+                data.bought = boughtInput.value.trim() || null;
             }
-
-            const newExpire = expireInput.value.trim();
-            const displayExpire = originalExpire === '-' ? '' : originalExpire;
-            if (newExpire !== displayExpire) {
-                data.expire = newExpire || null;
+            if (dateChanged(expireInput)) {
+                data.expire = expireInput.value.trim() || null;
             }
 
             const newLow = lowInput.value.trim();
@@ -460,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             try {
-                const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -476,9 +539,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     if (data.hasOwnProperty('bought')) {
                         item.querySelector('.item-bought').textContent = data.bought || '-';
+                        boughtInput.dataset.raw = data.bought || '';
                     }
                     if (data.hasOwnProperty('expire')) {
                         item.querySelector('.item-expire').textContent = data.expire || '-';
+                        expireInput.dataset.raw = data.expire || '';
                     }
                     if (data.hasOwnProperty('low')) {
                         item.querySelector('.item-low').textContent = data.low || '-';
@@ -495,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showPantryError(data.error || {{ tr.t("pantry-failed-update")|json|safe }});
                 }
             } catch (error) {
-                showPantryError('Error updating item: ' + error);
+                showPantryError({{ tr.t("pantry-failed-update")|json|safe }} + ': ' + error);
             }
         }
 
@@ -526,7 +591,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (confirm({{ tr.t("pantry-confirm-remove-template")|json|safe }}.replace('%s', name).replace('%s', section))) {
                     try {
-                        const response = await fetch(`{{ prefix }}/api/pantry/${section}/${encodeURIComponent(name)}`, {
+                        const response = await fetch(`{{ prefix }}/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`, {
                             method: 'DELETE'
                         });
 
@@ -537,8 +602,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(() => {
                                 item.remove();
                                 // Check if section is now empty and reload if needed
-                                const sectionContainer = document.querySelector(`[data-section="${section}"]`);
-                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${section}"]`)) {
+                                const sectionContainer = document.querySelector(`[data-section="${CSS.escape(section)}"]`);
+                                if (sectionContainer && !document.querySelector(`.pantry-item[data-section="${CSS.escape(section)}"]`)) {
                                     window.location.reload();
                                 }
                             }, 200);
@@ -547,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             showPantryError(data.error || {{ tr.t("pantry-failed-remove")|json|safe }});
                         }
                     } catch (error) {
-                        showPantryError('Error removing item: ' + error);
+                        showPantryError({{ tr.t("pantry-failed-remove")|json|safe }} + ': ' + error);
                     }
                 }
             });
@@ -560,6 +625,70 @@ function closeAddModal() {
     addModal.classList.add('hidden');
     addModal.classList.remove('flex');
     document.getElementById('add-form').reset();
+    toggleNewSectionField();
+}
+
+// "New section…" in the section list reveals a field to name it.
+function toggleNewSectionField() {
+    const isNew = document.getElementById('add-section').value === '__new__';
+    const input = document.getElementById('add-new-section');
+    document.getElementById('add-new-section-field').classList.toggle('hidden', !isNew);
+    input.required = isNew;
+    if (isNew) {
+        input.focus();
+    }
+}
+
+// How a section is named on the page: `general`, the items above the first
+// [header], under its translated name, every other one as the file writes it.
+function sectionLabel(section) {
+    return section === 'general' ? {{ tr.t("pantry-section-general")|json|safe }} : section;
+}
+
+// ---- Dates -------------------------------------------------------------------
+
+// The spellings the pantry reads as dates, tried in the same order as
+// `DATE_FORMATS` in cookcli-core, so the picker shows the day the server sees.
+const DATE_SPELLINGS = [
+    [/^(\d{4})-(\d{1,2})-(\d{1,2})$/, 'ymd'],
+    [/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, 'dmy'],
+    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'dmy'],
+    [/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, 'mdy'],
+    [/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, 'ymd'],
+    [/^(\d{1,2})-(\d{1,2})-(\d{4})$/, 'dmy'],
+];
+
+// `text` as the YYYY-MM-DD a date input takes, or null if it is no date.
+function toIsoDate(text) {
+    for (const [pattern, order] of DATE_SPELLINGS) {
+        const m = pattern.exec(text.trim());
+        if (!m) continue;
+        const [y, mo, d] = order === 'ymd' ? [m[1], m[2], m[3]]
+            : order === 'dmy' ? [m[3], m[2], m[1]]
+            : [m[3], m[1], m[2]];
+        const date = new Date(Date.UTC(+y, +mo - 1, +d));
+        if (date.getUTCFullYear() === +y && date.getUTCMonth() === +mo - 1 && date.getUTCDate() === +d) {
+            return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+    }
+    return null;
+}
+
+// Fill a date field from the value the file holds (`data-raw`). One that is
+// not a date stays a text field showing it, so opening the editor loses nothing.
+function showDate(input) {
+    const raw = input.dataset.raw || '';
+    const iso = raw ? toIsoDate(raw) : '';
+    input.type = iso === null ? 'text' : 'date';
+    input.value = iso === null ? raw : iso;
+}
+
+// Whether a date field now says something other than the file, so an item
+// whose date is untouched keeps the spelling the file uses.
+function dateChanged(input) {
+    const raw = input.dataset.raw || '';
+    const before = input.type === 'date' ? (toIsoDate(raw) || '') : raw;
+    return input.value.trim() !== before;
 }
 
 function showPantryError(message) {
@@ -568,5 +697,168 @@ function showPantryError(message) {
     banner.classList.remove('hidden');
     banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
+// ---- Section rename ---------------------------------------------------------
+
+// The pencil beside a section's name swaps the heading for a field holding
+// its name as written in the file.
+document.addEventListener('click', function(e) {
+    const button = e.target.closest('.rename-section-btn');
+    if (!button) return;
+    const head = button.closest('.pantry-section-head');
+    const section = head.dataset.section;
+    const shown = [...head.children];
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = section;
+    input.setAttribute('aria-label', {{ tr.t("pantry-section-name")|json|safe }});
+    input.className = 'flex-1 min-w-[10rem] h-8 px-2 text-sm border border-line-strong rounded-[var(--radius-control)] bg-surface text-text focus:outline-none focus:border-accent';
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn btn-sm';
+    cancel.textContent = {{ tr.t("pantry-cancel")|json|safe }};
+
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn btn-primary btn-sm';
+    save.textContent = {{ tr.t("pantry-save")|json|safe }};
+
+    const form = document.createElement('div');
+    form.className = 'flex flex-wrap items-center gap-2 w-full';
+    form.append(input, cancel, save);
+
+    const restore = () => head.replaceChildren(...shown);
+    const submit = async () => {
+        const newName = input.value.trim();
+        if (newName === section) {
+            restore();
+            return;
+        }
+        // Another section, or an item above the first [header], already
+        // answering to this name ignoring case: the server would refuse it.
+        const lower = newName.toLowerCase();
+        const taken = [...document.querySelectorAll('.pantry-section-head')]
+            .map(other => other.dataset.section)
+            .filter(name => name !== 'general')
+            .concat([...document.querySelectorAll('.pantry-item[data-section="general"]')].map(item => item.dataset.name))
+            .find(name => name !== section && name.toLowerCase() === lower);
+        if (taken !== undefined) {
+            showPantryError({{ tr.t("pantry-section-name-taken")|json|safe }}.replace('%s', taken));
+            return;
+        }
+        try {
+            const response = await fetch('{{ prefix }}/api/pantry/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ section, new_name: input.value }),
+            });
+            if (response.ok) {
+                window.location.reload();
+                return;
+            }
+            const data = await response.json().catch(() => ({}));
+            showPantryError(data.error || {{ tr.t("pantry-failed-rename")|json|safe }});
+        } catch (error) {
+            showPantryError({{ tr.t("pantry-failed-rename")|json|safe }} + ': ' + error);
+        }
+    };
+    cancel.addEventListener('click', restore);
+    save.addEventListener('click', submit);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        if (e.key === 'Escape') restore();
+    });
+
+    head.replaceChildren(form);
+    input.focus();
+    input.select();
+});
+
+// ---- Items and Text tabs -----------------------------------------------------
+
+(function() {
+    const textarea = document.getElementById('pantry-text');
+    if (!textarea) return;
+    const T = {
+        saved: {{ tr.t("pantry-text-saved")|json|safe }},
+        conflict: {{ tr.t("pantry-text-conflict")|json|safe }},
+        failed: {{ tr.t("pantry-failed-save-file")|json|safe }},
+    };
+    // Set once the file is saved from the Text tab, so going back to Items
+    // shows the pantry the file now describes.
+    let itemsStale = false;
+
+    async function loadText() {
+        try {
+            const response = await fetch('{{ prefix }}/api/pantry/raw');
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || T.failed);
+            textarea.value = data.content;
+            textarea.dataset.revision = data.revision;
+            delete textarea.dataset.dirty;
+        } catch (error) {
+            showPantryError(error.message);
+        }
+    }
+
+    function selectTab(tab) {
+        if (tab === 'items' && itemsStale) {
+            window.location.href = window.location.pathname;
+            return;
+        }
+        for (const button of document.querySelectorAll('[role="tab"]')) {
+            const selected = button.dataset.tab === tab;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-selected', selected);
+            button.tabIndex = selected ? 0 : -1;
+            document.getElementById(button.getAttribute('aria-controls')).classList.toggle('hidden', !selected);
+        }
+        if (tab === 'text' && !textarea.dataset.revision) loadText();
+        try { history.replaceState(null, '', tab === 'items' ? location.pathname : '#' + tab); } catch (_) { /* ignore */ }
+    }
+
+    for (const button of document.querySelectorAll('[role="tab"]')) {
+        button.addEventListener('click', () => selectTab(button.dataset.tab));
+    }
+
+    textarea.addEventListener('input', () => { textarea.dataset.dirty = '1'; });
+
+    const saveText = document.getElementById('pantry-text-save');
+    if (saveText) {
+        saveText.addEventListener('click', async () => {
+            const status = document.getElementById('pantry-text-status');
+            document.getElementById('pantry-error-banner').classList.add('hidden');
+            status.textContent = '';
+            try {
+                const response = await fetch('{{ prefix }}/api/pantry/raw', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: textarea.value, revision: textarea.dataset.revision }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 409 && data.revision) {
+                    // Their text stays; saving again replaces the other change.
+                    textarea.dataset.revision = data.revision;
+                    showPantryError(T.conflict);
+                    return;
+                }
+                if (!response.ok) throw new Error(data.error || T.failed);
+                textarea.dataset.revision = data.revision;
+                delete textarea.dataset.dirty;
+                itemsStale = true;
+                status.textContent = T.saved;
+            } catch (error) {
+                showPantryError(error.message);
+            }
+        });
+    }
+
+    // `#text` opens the Text tab, on load or when followed from the page.
+    const tabFromHash = () => selectTab(location.hash === '#text' ? 'text' : 'items');
+    window.addEventListener('hashchange', tabFromHash);
+    tabFromHash();
+})();
 </script>
 {% endblock %}

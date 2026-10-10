@@ -17,8 +17,9 @@ pub use aisles::{
 };
 pub use menus::{get_menu, list_menus};
 pub use pantry::{
-    add_item as add_pantry_item, get_depleted, get_expiring, get_pantry,
-    remove_item as remove_pantry_item, update_item as update_pantry_item,
+    add_item as add_pantry_item, get_depleted, get_expiring, get_pantry, get_raw_pantry,
+    put_raw_pantry, remove_item as remove_pantry_item, rename_section as rename_pantry_section,
+    update_item as update_pantry_item,
 };
 pub use plans::plan_edit;
 pub use recipe_image::{recipe_image_delete, recipe_image_get, recipe_image_put};

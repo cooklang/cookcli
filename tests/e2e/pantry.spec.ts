@@ -68,7 +68,7 @@ test.describe('Pantry Management', () => {
 
       // Look for add item form
       const addButton = page.getByRole('button', { name: /Add/i });
-      const itemNameInput = page.getByLabel(/Item|Name|Ingredient/i);
+      const itemNameInput = page.locator('#add-modal').getByLabel(/Item|Name|Ingredient/i);
       const quantityInput = page.getByLabel(/Quantity|Amount/i);
       const unitInput = page.getByLabel(/Unit/i);
 
@@ -114,14 +114,14 @@ test.describe('Pantry Management', () => {
           await editButton.click();
 
           // Edit form should appear
-          const quantityInput = page.getByLabel(/Quantity|Amount/i);
+          const quantityInput = firstItem.getByLabel(/Quantity|Amount/i);
 
           if (await quantityInput.isVisible()) {
             await quantityInput.clear();
             await quantityInput.fill('200');
 
             // Save changes
-            const saveButton = page.getByRole('button', { name: /Save/i });
+            const saveButton = firstItem.getByRole('button', { name: /Save/i });
 
             if (await saveButton.isVisible()) {
               await saveButton.click();

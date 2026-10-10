@@ -8,19 +8,22 @@ pantry-configure = Voorraadkast configureren →
 pantry-no-items-section = Geen artikelen in deze sectie
 pantry-show-out-of-stock = Alleen niet-voorradige artikelen tonen
 pantry-no-out-of-stock = Geen niet-voorradige artikelen in deze sectie
+pantry-out-of-stock-count = Niet op voorraad: %o van %t
 pantry-total-sections = Totaal aantal secties:
-pantry-edit-config = Configuratie bewerken
+pantry-manage = Voorraadkast beheren
 
 # Pantry Item Fields
 pantry-item-name = Artikelnaam
 pantry-item-quantity = Hoeveelheid
-pantry-item-quantity-short = Hvh:
+pantry-item-quantity-label = Hoeveelheid:
 pantry-item-bought = Gekocht:
 pantry-item-bought-date = Aankoopdatum
 pantry-item-expire = Verloopt:
 pantry-item-expire-date = Vervaldatum
 pantry-item-low = Laag bij:
 pantry-item-low-threshold = Lage voorraaddrempel
+pantry-placeholder-quantity = bijv. 500%g of 2%L
+pantry-placeholder-low = bijv. 100%g of 2
 
 # Pantry Actions
 pantry-add-item = Artikel toevoegen
@@ -40,7 +43,23 @@ pantry-section-fridge = Koelkast
 pantry-section-pantry = Voorraadkast
 pantry-section-spices = Kruiden
 pantry-section-other = Overig
+pantry-section-general = Algemeen
+pantry-section-new = Nieuwe sectie…
+pantry-section-new-name = Naam van de nieuwe sectie
+pantry-tab-items = Artikelen
+pantry-tab-text = Tekst
+pantry-text-intro = Bewerk het bestand direct: een [sectie]-regel, daarna één artikel per regel, geschreven als naam = "hoeveelheid" of naam = {"{"} quantity = "…", bought = "…", expire = "…", low = "…" {"}"}. Regels die met # beginnen zijn opmerkingen.
+pantry-text-save = Bestand opslaan
+pantry-text-saved = Opgeslagen
+pantry-text-conflict = Het voorraadbestand is elders gewijzigd terwijl je aan het bewerken was. Je tekst blijft bewaard; sla opnieuw op om die wijziging te vervangen.
+pantry-rename-section = Sectie hernoemen
+pantry-section-name = Naam van de sectie
+pantry-failed-rename = Sectie hernoemen mislukt
+pantry-failed-save-file = Bestand opslaan mislukt
 pantry-optional = (optioneel)
 pantry-failed-add = Artikel kon niet worden toegevoegd
+pantry-item-name-required = Geef het artikel een naam
+pantry-item-exists = %s staat al in %s
+pantry-section-name-taken = Er is al een sectie of artikel met de naam %s
 pantry-failed-update = Artikel kon niet worden bijgewerkt
 pantry-failed-remove = Artikel kon niet worden verwijderd

@@ -9,7 +9,8 @@
 //! [`plan`] is the odd one out: it answers "what should I stock?" by looking at
 //! the recipe collection alone, and never reads the pantry at all.
 //!
-//! [`add`], [`remove`] and [`update`] change the pantry and write it back.
+//! [`add`], [`remove`], [`update`] and [`rename_section`] change the pantry and
+//! write it back.
 //! They are the only functions in this crate that write to a file the user
 //! owns, so read [`write_atomically`] and **[what a write
 //! touches](#what-a-write-touches)** before calling them.
@@ -984,6 +985,107 @@ pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContent
     edit::apply(&mut doc, &req.section, &req.name, &attributes)?;
 
     save(&path, &doc, diagnostics)
+}
+
+/// Which section to rename, and what to.
+///
+/// Not `#[non_exhaustive]`: consumers construct this.
+#[derive(Debug, Clone, Default)]
+pub struct RenameSectionRequest {
+    /// The section to rename, matched exactly.
+    pub section: String,
+    /// Its new name, written exactly as given once trimmed.
+    pub new_name: String,
+}
+
+/// Give a section a new name and write the pantry back.
+///
+/// The section keeps its place in the file, its items, and the comments around
+/// it; only its name changes. Changing nothing but the case of its own name is
+/// allowed.
+///
+/// Returns the pantry as it now stands on disk, and any warnings from parsing
+/// what was there before.
+///
+/// # Errors
+///
+/// - [`CoreError::PantryEdit`] if the new name is blank or the same as the old
+///   one; if either name is `general`, which is not a `[header]` but the
+///   entries above the first one; if there is no such section; or if another
+///   section — or an item above the first header — already goes by the new
+///   name, ignoring case. Nothing is written.
+/// - [`CoreError::MissingConfig`] if the context carries no pantry, and
+///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
+/// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
+///   written.
+pub fn rename_section(
+    ctx: &Context,
+    req: RenameSectionRequest,
+) -> Result<Outcome<PantryContents>, CoreError> {
+    let edit_error = |message: String| CoreError::PantryEdit { message };
+    let section = req.section;
+    let new_name = req.new_name.trim().to_string();
+
+    if new_name.is_empty() {
+        return Err(edit_error("the section name cannot be empty".to_string()));
+    }
+    if new_name == section {
+        return Err(edit_error(format!(
+            "section '{section}' is already called that"
+        )));
+    }
+    if [section.as_str(), new_name.as_str()].contains(&edit::GENERAL) {
+        return Err(edit_error(format!(
+            "'{}' is the name for the items above the first section header and cannot be renamed",
+            edit::GENERAL
+        )));
+    }
+
+    let path = path_to_edit(ctx)?;
+    let (mut doc, mut diagnostics) = read_document(&path)?;
+
+    diagnostics.extend(normalise_array_section(&mut doc, &section, &path));
+    if !edit::section_exists(&doc, &section) {
+        return Err(section_not_found(&section));
+    }
+    if let Some(taken) = edit::root_key_like(&doc, &new_name, &section) {
+        return Err(edit_error(format!(
+            "there is already a section or item called '{taken}'"
+        )));
+    }
+
+    edit::rename_section(&mut doc, &section, &new_name);
+
+    save(&path, &doc, diagnostics)
+}
+
+/// Replace the whole pantry file with `text`, as someone editing it by hand
+/// would, once it reads as a pantry.
+///
+/// `text` is written exactly as given — this is the one write that touches
+/// everything, because everything is what was asked for. It is checked the way
+/// every edit reads a file first, so a pantry the other functions here could not
+/// edit afterwards is never written, and it is written the same way they write,
+/// atomically and through a symlink.
+///
+/// Returns the pantry `text` describes, and the warnings from parsing it.
+///
+/// # Errors
+///
+/// - [`CoreError::Config`] if `text` is not a pantry, quoting the parser's
+///   complaint and the line it is on. Nothing is written.
+/// - [`CoreError::MissingConfig`] if the context carries no pantry, and
+///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
+/// - [`CoreError::Io`] if the file cannot be written.
+pub fn replace(ctx: &Context, text: &str) -> Result<Outcome<PantryContents>, CoreError> {
+    let path = path_to_edit(ctx)?;
+    let (_, diagnostics) = parse_document(&path, text)?;
+    write_atomically(&path, text)?;
+    let (conf, _) = parse_conf(&path, text)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
 }
 
 fn section_not_found(section: &str) -> CoreError {
