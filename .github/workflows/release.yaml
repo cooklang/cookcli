@@ -130,6 +130,14 @@ jobs:
 
       - name: Setup | Cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # One cache per target. The automatic key leaves the matrix out, so
+        # every Linux job would share one. cross runs the build scripts in
+        # target/release/build inside the target's image, and those images
+        # ship different glibcs (2.23 for gnu, 2.31 for freebsd, 2.39 for the
+        # musl `edge` ones): build scripts cached by a musl job cannot run in
+        # the gnu or freebsd image (GLIBC_2.32 not found).
+        with:
+          key: ${{ matrix.target }}
 
       - name: Setup | Install cross [Linux]
         if: matrix.os == 'ubuntu-latest'
