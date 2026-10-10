@@ -313,6 +313,10 @@ body {
     font-style: italic;
 }
 
+.cm-editor .cm-cook-quantity {
+    color: var(--info);
+}
+
 /* Lint (error/warning) hover bubble + autocomplete popup. Same reasoning as the
    block above: unlayered + doubled class to beat CodeMirror's runtime styles.
    Without this the popup keeps CodeMirror's hardcoded light background while the

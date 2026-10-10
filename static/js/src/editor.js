@@ -6,7 +6,7 @@ import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter } from "@codemirror/lint";
 import { autocompletion, snippet } from "@codemirror/autocomplete";
 import { tags as t } from "@lezer/highlight";
-import { cooklang } from "./cooklang-mode.js";
+import { cooklang, quantityTag } from "./cooklang-mode.js";
 import {
     initToolbar,
     recipeActions,
@@ -114,7 +114,8 @@ const cooklangHighlightStyle = HighlightStyle.define([
   { tag: t.meta, class: "cm-cook-metadata" },
   { tag: t.unit, class: "cm-cook-unit" },
   { tag: t.heading, class: "cm-cook-section" },
-  { tag: t.string, class: "cm-cook-prep" }
+  { tag: t.string, class: "cm-cook-prep" },
+  { tag: quantityTag, class: "cm-cook-quantity" }
 ]);
 
 // Editor base theme for layout

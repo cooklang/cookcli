@@ -1,9 +1,18 @@
 import { StreamLanguage } from "@codemirror/language";
+import { Tag } from "@lezer/highlight";
+
+// Quantities inside {} get their own tag so the HighlightStyle can give
+// them a class of their own; "measurement" below is only the token name.
+export const quantityTag = Tag.define("cookQuantity");
 
 // Cooklang syntax highlighting mode for CodeMirror 6
 // Ported from cooklang-obsidian/src/mode/cook/cook.ts
 export const cooklang = StreamLanguage.define({
   name: "cooklang",
+
+  tokenTable: {
+    measurement: quantityTag
+  },
 
   startState() {
     return {
@@ -48,6 +57,17 @@ export const cooklang = StreamLanguage.define({
       while (stream.eatSpace()) {}
     }
 
+    // Inside a block comment, everything is comment until "-]", which
+    // may appear anywhere on the line, not only at the start.
+    if (state.inComment) {
+      if (stream.match(/.*?-\]/)) {
+        state.inComment = false;
+      } else {
+        stream.skipToEnd();
+      }
+      return "comment";
+    }
+
     // Frontmatter delimiters (---)
     if (sol && stream.match(/^---\s*$/)) {
       state.inFrontmatter = !state.inFrontmatter;
@@ -75,15 +95,6 @@ export const cooklang = StreamLanguage.define({
     // Block comments ([- comment -])
     if (stream.match(/^\[-/)) {
       state.inComment = true;
-      return "comment";
-    }
-
-    if (state.inComment) {
-      if (stream.match(/-]/)) {
-        state.inComment = false;
-        return "comment";
-      }
-      stream.skipToEnd();
       return "comment";
     }
 
