@@ -1677,9 +1677,17 @@ fn pantry() -> ApiSection {
                     "body",
                     "string",
                     true,
-                    "Section to add the item to.",
+                    "Section to add the item to. `400` when it is `.` or `..`, or contains \
+                     a slash, a backslash, `#`, `?` or a control character: it becomes a \
+                     segment of the `/api/pantry/{section}/{name}` URL.",
                 ),
-                param("name", "body", "string", true, "Item name."),
+                param(
+                    "name",
+                    "body",
+                    "string",
+                    true,
+                    "Item name. `400` when it is `.` or `..`, or contains a control character.",
+                ),
                 param(
                     "quantity",
                     "body",

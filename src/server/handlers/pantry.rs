@@ -74,7 +74,8 @@ impl AddPantryItem {
     ///
     /// # Errors
     ///
-    /// When the section or the name is blank.
+    /// When the section or the name is blank, or cannot be a segment of the
+    /// `/api/pantry/{section}/{name}` URL the pantry page edits it through.
     fn trimmed(self) -> Result<Self, &'static str> {
         let section = self.section.trim().to_string();
         let name = self.name.trim().to_string();
@@ -83,6 +84,16 @@ impl AddPantryItem {
         }
         if name.is_empty() {
             return Err("Item name cannot be empty");
+        }
+        // A section is a TOML table name, so nothing needs these characters.
+        // Kept, `../recipes/Soup.cook#` would send whoever edits the item to
+        // `/api/recipes/Soup.cook` with their own rights.
+        if !is_url_segment(&section) || section.contains(['/', '\\', '#', '?']) {
+            return Err("Section cannot be . or .. or contain /, \\, #, ? or control characters");
+        }
+        // The page encodes names; only the dot steps survive that.
+        if !is_url_segment(&name) {
+            return Err("Item name cannot be . or .. or contain control characters");
         }
 
         let attribute = |value: Option<String>| {
@@ -99,6 +110,13 @@ impl AddPantryItem {
             low: attribute(self.low),
         })
     }
+}
+
+/// Whether `value`, once percent-encoded, stays one path segment: browsers
+/// resolve `.` and `..` (encoded or not) as steps up the path, and drop tabs
+/// and newlines from URLs.
+fn is_url_segment(value: &str) -> bool {
+    value != "." && value != ".." && !value.chars().any(char::is_control)
 }
 
 #[derive(Debug, Deserialize)]
@@ -569,5 +587,42 @@ mod tests {
     fn a_blank_name_or_section_is_refused() {
         assert!(item("fridge", "   ", None).trimmed().is_err());
         assert!(item(" ", "Milk", None).trimmed().is_err());
+    }
+
+    #[test]
+    fn a_section_that_would_leave_the_pantry_url_is_refused() {
+        for section in [
+            "../recipes/Soup.cook#",
+            "..",
+            " . ",
+            "a/b",
+            "a\\b",
+            "a#b",
+            "a?b",
+            "fr\nidge",
+        ] {
+            assert!(
+                item(section, "Milk", None).trimmed().is_err(),
+                "{section:?} was accepted"
+            );
+        }
+        assert!(item("Dry goods & spices", "Milk", None).trimmed().is_ok());
+    }
+
+    #[test]
+    fn an_item_name_that_would_leave_the_pantry_url_is_refused() {
+        for name in ["..", ".", "Mi\tlk"] {
+            assert!(
+                item("fridge", name, None).trimmed().is_err(),
+                "{name:?} was accepted"
+            );
+        }
+        // The page encodes names, so these stay in their segment.
+        for name in ["salt/pepper", "Milk #2", "...", "50% cream"] {
+            assert!(
+                item("fridge", name, None).trimmed().is_ok(),
+                "{name:?} was refused"
+            );
+        }
     }
 }

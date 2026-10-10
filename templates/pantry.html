@@ -332,10 +332,20 @@
 
     // ---- Talking to the server ----------------------------------------------
 
+    // Both parts come from the pantry file, which anyone allowed to change the
+    // pantry writes. Unencoded, a section such as `../recipes/Soup.cook#` sends
+    // the request to a recipe.
+    function pantryItemUrl(section, name) {
+        return `/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`;
+    }
+
     // Send a change; true once it is made, otherwise the banner says why.
     async function send(method, url, body, failed) {
         hideError();
         try {
+            // Encoded or not, `.` and `..` are steps up the path, out of /api/pantry.
+            const step = url.split('/').find(part => part === '.' || part === '..');
+            if (step !== undefined) throw new Error(`"${step}" cannot be changed from this page`);
             const response = await fetch(PREFIX + url, {
                 method,
                 headers: body ? { 'Content-Type': 'application/json' } : {},
@@ -425,7 +435,7 @@
                 if (low.value.trim() !== row.dataset.low) changes.low = low.value.trim() || null;
             }
             if (Object.keys(changes).length === 0) { close(); return; }
-            const url = `/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`;
+            const url = pantryItemUrl(section, name);
             if (await send('PUT', url, changes, T.failedUpdate)) await refresh();
         };
 
@@ -454,7 +464,7 @@
     async function removeItem(row) {
         const { section, name } = row.dataset;
         if (!confirm(T.removeConfirm.replace('%s', name).replace('%s', sectionLabel(section)))) return;
-        const url = `/api/pantry/${encodeURIComponent(section)}/${encodeURIComponent(name)}`;
+        const url = pantryItemUrl(section, name);
         if (await send('DELETE', url, null, T.failedRemove)) await refresh();
     }
 
