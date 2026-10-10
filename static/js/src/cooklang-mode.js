@@ -144,8 +144,12 @@ export const cooklang = StreamLanguage.define({
       return "keyword";
     }
 
-    // Timers (~timer{amount})
-    if (stream.match(/^~([^@#~]+?(?={))/)) {
+    // Timers (~timer{amount}) and nameless timers (~{amount})
+    if (stream.match(/^~(?=\{)/)) {
+      state.position = "number";
+      return "number";
+    } else if (stream.match(/^~([^@#~]+?(?={))/)) {
+      state.position = "number";
       return "number";
     } else if (stream.match(/^~(.+?\b)/)) {
       return "number";
@@ -156,7 +160,7 @@ export const cooklang = StreamLanguage.define({
     if (!ch) return null;
 
     if (ch === '{') {
-      if (state.position !== "timer") state.position = "measurement";
+      if (state.position !== "number") state.position = "measurement";
       return null;
     }
 
@@ -166,7 +170,7 @@ export const cooklang = StreamLanguage.define({
       return null;
     }
 
-    if (ch === '%' && (state.position === "measurement" || state.position === "timer")) {
+    if (ch === '%' && (state.position === "measurement" || state.position === "number")) {
       state.position = "unit";
       return null;
     }

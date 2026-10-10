@@ -229,6 +229,15 @@ test.describe('Recipe editor step pictures', () => {
     fs.rmSync(STEP_DIR, { recursive: true, force: true });
   });
 
+  test('highlights the quantity and unit inside a nameless timer', async ({ page }) => {
+    await page.goto('/edit/E2E Step Pictures/Step Test.cook');
+
+    const timer = page.locator('#editor-container .cm-cook-timer').filter({ hasText: /^5$/ });
+    const unit = page.locator('#editor-container .cm-cook-unit').filter({ hasText: /^minutes$/ });
+    await expect(timer).toHaveCount(1);
+    await expect(unit).toHaveCount(1);
+  });
+
   test("a step's camera button opens the dialog on that step, which uploads and removes its picture", async ({ page }) => {
     await page.goto('/recipe/E2E Step Pictures/Step Test.cook');
     const toppingSteps = page.locator('.step-list').nth(1).locator('.step-box');
