@@ -60,6 +60,7 @@ const RECIPE_READS: &[&str] = &[
     "/preferences",
     "/atom.xml",
     "/rss.xml",
+    "/feed.json",
     "/static",
     // Pictures only, whoever asks: see `server::static_files`.
     "/api/static",
@@ -373,6 +374,7 @@ mod tests {
             "/preferences",
             "/atom.xml",
             "/rss.xml",
+            "/feed.json",
             "/static/css/output.css",
             "/api/recipes",
             "/api/recipes/Soup.cook",

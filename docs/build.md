@@ -26,7 +26,7 @@ cook build web [OPTIONS] [OUTPUT_DIR]
 | `--base-url <URL>` | Absolute URL prefix for hosting under a subpath (e.g. `/recipes/`). When unset, links are page-relative and the site works under any prefix, including `file://`. |
 | `--lang <LANG>` | UI language for the generated site (default: system locale, falling back to `en-US`). See [Localization](#localization). |
 | `--sitemap <URL>` | Full base URL of the deployed site (e.g. `https://recipes.example.com`). When set, writes a `sitemap.xml` at the output root listing every page with absolute URLs. |
-| `--feed[=<URL>]` | Writes `atom.xml` and `rss.xml` web feeds at the output root with one item per recipe and menu. `--feed` alone reuses the `--sitemap` URL; `--feed=<URL>` (with `=`) sets the site URL explicitly. See [Web feeds](#web-feeds). |
+| `--feed[=<URL>]` | Writes `atom.xml`, `rss.xml` and `feed.json` web feeds at the output root with one item per recipe and menu. `--feed` alone reuses the `--sitemap` URL; `--feed=<URL>` (with `=`) sets the site URL explicitly. See [Web feeds](#web-feeds). |
 | `--repo-url <URL>` | URL of the recipe repository. When set, the footer's "Built with CookCLI" line gains a "View source" link pointing here. |
 | `--compress` | Also write gzip-compressed copies (`.gz`) of generated text assets for hosts that serve precompressed files (e.g. GitLab Pages). Images are skipped. |
 
@@ -54,7 +54,7 @@ cook build web --compress
 
 ## Web feeds
 
-With `--feed`, the build also writes an Atom 1.0 feed (`atom.xml`) and an RSS 2.0 feed (`rss.xml`) at the output root, so readers can subscribe to new recipes. Feeds need absolute links, so they need the site's full URL. It is usually the same as the sitemap's, so `--feed` alone reuses the `--sitemap` URL:
+With `--feed`, the build also writes an Atom 1.0 feed (`atom.xml`), an RSS 2.0 feed (`rss.xml`) and a [JSON Feed](https://jsonfeed.org/version/1.1) 1.1 (`feed.json`) at the output root, so readers can subscribe to new recipes. Feeds need absolute links, so they need the site's full URL. It is usually the same as the sitemap's, so `--feed` alone reuses the `--sitemap` URL:
 
 ```bash
 cook build web --sitemap https://recipes.example.com --feed
@@ -78,9 +78,9 @@ Each recipe and menu page becomes one item, listed newest first. Items use these
 | `author` (or `source.author`) | Item author |
 | `tags` | Item categories |
 
-Every page then advertises both feeds with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone. Without `--feed`, pages carry no such tags.
+Every page then advertises the three feeds with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone. Without `--feed`, pages carry no such tags.
 
-The feed title is the localized "All Recipes" heading (see `--lang`). Like `--sitemap`, the URL must be absolute and is independent of `--base-url`. [`cook server`](server.md#web-feeds) serves the same feeds at `/atom.xml` and `/rss.xml` with no flag needed.
+The feed title is the localized "All Recipes" heading (see `--lang`). Like `--sitemap`, the URL must be absolute and is independent of `--base-url`. [`cook server`](server.md#web-feeds) serves the same feeds at `/atom.xml`, `/rss.xml` and `/feed.json` with no flag needed.
 
 ## Localization
 

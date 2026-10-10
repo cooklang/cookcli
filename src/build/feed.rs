@@ -1,4 +1,5 @@
-//! Web feeds (`atom.xml` and `rss.xml`), one item per recipe or menu page.
+//! Web feeds (`atom.xml`, `rss.xml` and `feed.json`), one item per recipe or
+//! menu page.
 //!
 //! Shared by `cook build web --feed` (written next to the static site) and
 //! `cook server` (rendered per request), which differ only in page URLs.
@@ -8,6 +9,7 @@ use anyhow::Result;
 use camino::Utf8Path;
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use cooklang_find::RecipeTree;
+use serde::Serialize;
 
 /// One recipe or menu in the feed.
 ///
@@ -22,7 +24,7 @@ struct FeedItem {
     tags: Vec<String>,
 }
 
-/// Channel-level fields shared by both feed formats.
+/// Channel-level fields shared by every feed format.
 struct FeedInfo<'a> {
     /// Full base URL of the deployed site.
     base: &'a str,
@@ -304,11 +306,82 @@ fn render_rss(info: &FeedInfo, items: &[FeedItem]) -> String {
     out
 }
 
+/// A JSON Feed 1.1 document (<https://jsonfeed.org/version/1.1>).
+#[derive(Serialize)]
+struct JsonFeed<'a> {
+    version: &'static str,
+    title: &'a str,
+    home_page_url: String,
+    feed_url: String,
+    language: &'a str,
+    authors: [JsonAuthor<'a>; 1],
+    items: Vec<JsonItem<'a>>,
+}
+
+#[derive(Serialize)]
+struct JsonAuthor<'a> {
+    name: &'a str,
+}
+
+#[derive(Serialize)]
+struct JsonItem<'a> {
+    id: String,
+    url: String,
+    title: &'a str,
+    /// The spec requires `content_text` or `content_html` on every item; a
+    /// recipe without a description gets an empty one.
+    content_text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<&'a str>,
+    date_published: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    authors: Vec<JsonAuthor<'a>>,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    tags: &'a [String],
+}
+
+/// Render a JSON Feed 1.1 document.
+fn render_json(info: &FeedInfo, items: &[FeedItem]) -> String {
+    let feed = JsonFeed {
+        version: "https://jsonfeed.org/version/1.1",
+        title: info.title,
+        home_page_url: build_loc(info.base, ""),
+        feed_url: build_loc(info.base, "feed.json"),
+        language: info.lang,
+        authors: [JsonAuthor { name: info.author }],
+        items: items
+            .iter()
+            .map(|item| {
+                let link = build_loc(info.base, &item.relpath);
+                JsonItem {
+                    id: link.clone(),
+                    url: link,
+                    title: &item.title,
+                    content_text: item.summary.as_deref().unwrap_or_default(),
+                    summary: item.summary.as_deref(),
+                    date_published: rfc3339(item.updated),
+                    authors: item
+                        .author
+                        .as_deref()
+                        .map(|name| JsonAuthor { name })
+                        .into_iter()
+                        .collect(),
+                    tags: &item.tags,
+                }
+            })
+            .collect(),
+    };
+    let mut out = serde_json::to_string_pretty(&feed).expect("feed serializes");
+    out.push('\n');
+    out
+}
+
 /// Feed format served or written.
 #[derive(Clone, Copy)]
 pub(crate) enum FeedFormat {
     Atom,
     Rss,
+    Json,
 }
 
 impl FeedFormat {
@@ -316,6 +389,7 @@ impl FeedFormat {
         match self {
             FeedFormat::Atom => "application/atom+xml; charset=utf-8",
             FeedFormat::Rss => "application/rss+xml; charset=utf-8",
+            FeedFormat::Json => "application/feed+json; charset=utf-8",
         }
     }
 }
@@ -350,10 +424,11 @@ pub(crate) fn render_feed(
     match format {
         FeedFormat::Atom => render_atom(&info, &items),
         FeedFormat::Rss => render_rss(&info, &items),
+        FeedFormat::Json => render_json(&info, &items),
     }
 }
 
-/// Build and write `atom.xml` and `rss.xml` to the output root.
+/// Build and write `atom.xml`, `rss.xml` and `feed.json` to the output root.
 ///
 /// `base` must already be validated as an absolute http(s) URL.
 pub fn write_feeds(
@@ -380,6 +455,11 @@ pub fn write_feeds(
         output,
         Utf8Path::new("rss.xml"),
         render_rss(&info, &items).as_bytes(),
+    )?;
+    crate::build::writer::write_bytes(
+        output,
+        Utf8Path::new("feed.json"),
+        render_json(&info, &items).as_bytes(),
     )?;
     Ok(items.len())
 }
@@ -557,6 +637,38 @@ mod tests {
         assert!(xml.contains("<category>comfort</category>"));
         assert_eq!(xml.matches("<item>").count(), 2);
         assert!(xml.trim_end().ends_with("</rss>"));
+    }
+
+    #[test]
+    fn renders_json_feed_document() {
+        let json: serde_json::Value =
+            serde_json::from_str(&render_json(&info(), &items())).unwrap();
+        assert_eq!(json["version"], "https://jsonfeed.org/version/1.1");
+        assert_eq!(json["title"], "All Recipes");
+        assert_eq!(json["home_page_url"], "https://x.test/recipes/");
+        assert_eq!(json["feed_url"], "https://x.test/recipes/feed.json");
+        assert_eq!(json["language"], "en-US");
+        assert_eq!(json["authors"][0]["name"], "x.test");
+
+        let items = json["items"].as_array().unwrap();
+        assert_eq!(items.len(), 2);
+        let mac = &items[0];
+        let url = "https://x.test/recipes/recipe/Mac%20%26%20Cheese.html";
+        assert_eq!(mac["id"], url);
+        assert_eq!(mac["url"], url);
+        assert_eq!(mac["title"], "Mac & Cheese");
+        assert_eq!(mac["content_text"], "Creamy <3");
+        assert_eq!(mac["summary"], "Creamy <3");
+        assert_eq!(mac["date_published"], "2026-06-06T00:00:00Z");
+        assert_eq!(mac["authors"][0]["name"], "Jane");
+        assert_eq!(mac["tags"], serde_json::json!(["comfort", "\"quick\""]));
+
+        // Optional fields are left out, but every item keeps a content field.
+        let week = items[1].as_object().unwrap();
+        assert_eq!(week["content_text"], "");
+        for key in ["summary", "authors", "tags"] {
+            assert!(!week.contains_key(key), "unexpected {key}");
+        }
     }
 
     #[test]

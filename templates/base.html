@@ -12,6 +12,7 @@
     {% if features.feeds %}
     <link rel="alternate" type="application/atom+xml" title="{{ tr.t("recipes-title") }}" href="{{ prefix }}/atom.xml">
     <link rel="alternate" type="application/rss+xml" title="{{ tr.t("recipes-title") }}" href="{{ prefix }}/rss.xml">
+    <link rel="alternate" type="application/feed+json" title="{{ tr.t("recipes-title") }}" href="{{ prefix }}/feed.json">
     {% endif %}
     <link href="{{ prefix }}/static/css/output.css" rel="stylesheet">
     <script>

@@ -40,7 +40,7 @@ pub enum BuildCommand {
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
     ///   cook build web --compress              # Also write .gz copies for precompressed hosting
-    ///   cook build web --sitemap https://recipes.example.com --feed  # Also write atom.xml and rss.xml
+    ///   cook build web --sitemap https://recipes.example.com --feed  # Also write atom.xml, rss.xml and feed.json
     Web(WebBuildArgs),
 }
 
@@ -90,8 +90,8 @@ pub struct WebBuildArgs {
 
     /// Generate web feeds, optionally for a given site URL
     ///
-    /// Writes `atom.xml` and `rss.xml` at the output root with one item per
-    /// recipe and menu, newest first. An item's date is its `date` metadata
+    /// Writes `atom.xml`, `rss.xml` and `feed.json` (JSON Feed) at the output
+    /// root with one item per recipe and menu, newest first. An item's date is its `date` metadata
     /// (YYYY-MM-DD or RFC 3339) when present, otherwise the file's
     /// modification time.
     ///
@@ -289,7 +289,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
 
     let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
     let feed_note = match feed_count {
-        Some(n) => format!(", atom.xml and rss.xml ({n} items)"),
+        Some(n) => format!(", atom.xml, rss.xml and feed.json ({n} items)"),
         None => String::new(),
     };
     println!(
