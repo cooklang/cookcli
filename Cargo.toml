@@ -3,7 +3,7 @@ members = [".", "crates/core", "crates/format"]
 
 [package]
 name = "cookcli"
-version = "0.38.1"
+version = "0.39.0"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
@@ -92,7 +92,7 @@ cooklang-language-server = { version = "0.3.0", optional = true }
 cooklang-reports = { version = "0.6.0" }
 # `version` + `path`: local builds use the workspace copy, the published crate
 # resolves from crates.io.
-cookcli-core = { version = "0.38.1", path = "crates/core" }
+cookcli-core = { version = "0.39.0", path = "crates/core" }
 directories = "6"
 flate2 = "1"
 fluent = "0.17"

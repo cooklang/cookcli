@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.39.0](https://github.com/cooklang/cookcli/compare/v0.38.1...v0.39.0) (2026-10-10)
+
+
+### Features
+
+* a menu can use another menu as one of its meals ([#609](https://github.com/cooklang/cookcli/issues/609)) ([d99192b](https://github.com/cooklang/cookcli/commit/d99192b4c5d39cc48f0d0091ed0fb254add3042e))
+* **pantry:** list items as rows, like the aisle page ([#653](https://github.com/cooklang/cookcli/issues/653)) ([ee335c3](https://github.com/cooklang/cookcli/commit/ee335c33ed10776b926538b5d8a977e936cc9355))
+* **pantry:** new sections from Add item, rename sections, edit pantry.conf as text ([#629](https://github.com/cooklang/cookcli/issues/629)) ([2a2ed08](https://github.com/cooklang/cookcli/commit/2a2ed0848a40e8828817f7f8111c99a17b68ad16))
+* **shopping-list:** --from / --to for some days of a menu ([#612](https://github.com/cooklang/cookcli/issues/612)) ([6e22411](https://github.com/cooklang/cookcli/commit/6e224113ed4e8b631f5e3e37d5280ab8546da410))
+* **web:** ask before leaving a page with unsaved changes ([#674](https://github.com/cooklang/cookcli/issues/674)) ([845a8f2](https://github.com/cooklang/cookcli/commit/845a8f2d5165701aef6357047cbb46fd4cebd856)), closes [#519](https://github.com/cooklang/cookcli/issues/519)
+
+
+### Bug Fixes
+
+* **ci:** build the Linux glibc binary in manylinux_2_28 ([#662](https://github.com/cooklang/cookcli/issues/662)) ([aea109c](https://github.com/cooklang/cookcli/commit/aea109c475c9d2cc4a1af23e0344b616c4349ddb))
+* **ci:** give each release target its own Rust cache ([#657](https://github.com/cooklang/cookcli/issues/657)) ([459a0e9](https://github.com/cooklang/cookcli/commit/459a0e96bbf865b1a9c7f7daa5e2b4ad903b5b18))
+* **editor:** close [- -] comments mid-line, highlight quantities ([#663](https://github.com/cooklang/cookcli/issues/663)) ([3506f6a](https://github.com/cooklang/cookcli/commit/3506f6a5f1e442f609053c1cdb2e609edf63b10f))
+* **editor:** highlight nameless timers, mid-line comments and escapes like the parser ([#667](https://github.com/cooklang/cookcli/issues/667)) ([2700d3d](https://github.com/cooklang/cookcli/commit/2700d3d6acfecca2dbff330dfe7e5e90f6198828))
+* **server:** keep pantry edits inside /api/pantry ([#666](https://github.com/cooklang/cookcli/issues/666)) ([ad7c9a9](https://github.com/cooklang/cookcli/commit/ad7c9a9da906f64fd3b50e0bbf36da7954d064ae))
+* **server:** serve only recipes and pictures from the recipe folder ([#668](https://github.com/cooklang/cookcli/issues/668)) ([0b24597](https://github.com/cooklang/cookcli/commit/0b245975ad9f338c3e4bbfd150c1dfbab3baf450)), closes [#658](https://github.com/cooklang/cookcli/issues/658)
+
 ## [0.38.1](https://github.com/cooklang/cookcli/compare/v0.38.0...v0.38.1) (2026-10-09)
 
 
