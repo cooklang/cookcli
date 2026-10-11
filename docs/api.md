@@ -1090,14 +1090,15 @@ Reads and changes `aisle.conf`, which groups the shopping list by store aisle: a
 
 Read the aisles
 
-Aisles in file order, which is the order the shopping list uses. Each ingredient's first name is the one the shopping list shows; the others are merged into it. `warnings` lists the lines the parser skipped, such as a name listed twice. Without an aisle file, `configured` is `false`, `path` and `revision` are `null` and `aisles` is empty. The response below is trimmed to two of the seed's eight aisles and a few ingredients each.
+Aisles in file order, which is the order the shopping list uses. Each ingredient's first name is the one the shopping list shows; the others are merged into it. `warnings` lists the lines the parser skipped, such as a name listed twice. `file` is where the aisle file is, relative to the recipe directory; for the global one, outside it, `file` is `null` and `shared` is `true`, since other recipe directories use it too. The full path is never sent. Without an aisle file, `configured` and `shared` are `false`, `file` and `revision` are `null` and `aisles` is empty. The response below is trimmed to two of the seed's eight aisles and a few ingredients each.
 
 Response:
 
 ```json
 {
   "configured": true,
-  "path": "/path/to/recipes/config/aisle.conf",
+  "file": "config/aisle.conf",
+  "shared": false,
   "revision": "edbf1fd2579f964e",
   "aisles": [
     {
@@ -1123,7 +1124,7 @@ Response:
 
 Create an aisle file
 
-Creates an empty `config/aisle.conf` in the recipe directory and answers `201` with the same shape as `GET /api/aisles`. `409` if an aisle file already exists, wherever it was found.
+Creates an empty `config/aisle.conf` in the recipe directory and answers `201` with the same shape as `GET /api/aisles`. `409` if an aisle file already exists, wherever it was found (the answer does not say where).
 
 ### `POST /api/aisles/changes`
 
@@ -1175,7 +1176,6 @@ Response:
 
 ```json
 {
-  "path": "/path/to/recipes/config/aisle.conf",
   "content": "[fruit and veg]\napples\nbananas\ngrapes\n",
   "revision": "edbf1fd2579f964e"
 }

@@ -199,9 +199,8 @@ async fn handle_lsp_connection(
 /// to choose the root could list recipe and menu files anywhere the server's
 /// user can read, and one able to drop it could steer the fallback.
 ///
-/// The editor already names the base path, so it loses nothing. On Windows
-/// its `'file://' + basePath` never parsed (the canonical `\\?\` prefix turns
-/// into a query string), and it got the fallback instead.
+/// The editor sends no root of its own (`rootUri: null`): the page is not told
+/// where the server keeps its files, and the root is filled in here.
 struct Workspace {
     uri: String,
     path: String,

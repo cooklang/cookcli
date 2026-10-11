@@ -3,8 +3,11 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 pub type ApiError = (StatusCode, Json<serde_json::Value>);
 
+/// The JSON body of an error response. The message goes through
+/// [`private_paths::hide`](crate::server::private_paths::hide), so a path in it
+/// does not say where the server keeps its files.
 pub fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "error": msg.to_string() }))
+    Json(serde_json::json!({ "error": crate::server::private_paths::hide(&msg.to_string()) }))
 }
 
 /// Whether `path`, taken from a request, may be joined to the recipe

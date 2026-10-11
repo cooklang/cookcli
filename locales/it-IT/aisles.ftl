@@ -61,3 +61,4 @@ aisles-add-to-aisle = Aggiungi alla corsia
 aisles-add-as-names = Oppure aggiungi come altri nomi di
 aisles-choose-ingredient = Ingrediente…
 aisles-move-to-aisle = Sposta nella corsia
+aisles-shared-file = È il file delle corsie globale, condiviso con le altre cartelle di ricette.

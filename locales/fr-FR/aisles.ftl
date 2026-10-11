@@ -61,3 +61,4 @@ aisles-add-to-aisle = Ajouter au rayon
 aisles-add-as-names = Ou ajouter comme autres noms de
 aisles-choose-ingredient = Ingrédient…
 aisles-move-to-aisle = Déplacer vers le rayon
+aisles-shared-file = C'est le fichier de rayons global, partagé avec vos autres dossiers de recettes.

@@ -61,3 +61,4 @@ aisles-add-to-aisle = Zum Gang hinzufügen
 aisles-add-as-names = Oder als weitere Namen hinzufügen von
 aisles-choose-ingredient = Zutat…
 aisles-move-to-aisle = In Gang verschieben
+aisles-shared-file = Dies ist die globale Gang-Datei, die auch deine anderen Rezeptordner verwenden.

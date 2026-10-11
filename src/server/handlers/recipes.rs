@@ -3,7 +3,9 @@ use crate::web::viewer::Viewer;
 use crate::{
     server::{
         handlers::{
-            common::{check_path, is_recipe_request, normalize_tags, recipe_file, RecipeFile},
+            common::{
+                check_path, is_recipe_request, json_error, normalize_tags, recipe_file, RecipeFile,
+            },
             recipe_rename::RECIPE_FILES,
         },
         AppState,
@@ -30,10 +32,6 @@ pub struct RecipeQuery {
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
     q: String,
-}
-
-fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "error": msg.to_string() }))
 }
 
 pub async fn all_recipes(

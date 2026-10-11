@@ -61,3 +61,4 @@ aisles-add-to-aisle = Add to aisle
 aisles-add-as-names = Or add as other names of
 aisles-choose-ingredient = Ingredient…
 aisles-move-to-aisle = Move to aisle
+aisles-shared-file = This is the global aisle file, shared with your other recipe folders.

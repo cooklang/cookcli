@@ -54,6 +54,7 @@ mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
 mod plan_text;
+mod private_paths;
 mod rename;
 mod shopping_list_watcher;
 mod static_files;
@@ -516,6 +517,25 @@ fn build_state(
 
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
+
+    let users_file = args
+        .users_file
+        .as_deref()
+        .and_then(|path| std::path::absolute(path).ok())
+        .and_then(|path| Utf8PathBuf::from_path_buf(path).ok());
+    let global_config = cookcli_core::global_config_path("session.json").ok();
+    private_paths::register(
+        &absolute_path,
+        [
+            global_config.as_deref(),
+            aisle_path.as_deref(),
+            pantry_path.as_deref(),
+            users_file.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(camino::Utf8Path::parent),
+    );
 
     let shopping_list_events = match shopping_list_watcher::spawn(absolute_path.clone()) {
         Ok(tx) => Some(tx),

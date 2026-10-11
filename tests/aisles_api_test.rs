@@ -52,6 +52,18 @@ impl ServerGuard {
         std::fs::read_to_string(self.aisle_file()).expect("read aisle.conf")
     }
 
+    /// The answer as sent, for checking what it does not say.
+    async fn text(&self, method: reqwest::Method, path: &str, body: Value) -> (StatusCode, String) {
+        let resp = reqwest::Client::new()
+            .request(method, self.url(path))
+            .json(&body)
+            .send()
+            .await
+            .expect("request");
+        let status = resp.status();
+        (status, resp.text().await.expect("text body"))
+    }
+
     async fn get(&self, path: &str) -> (StatusCode, Value) {
         let resp = reqwest::get(self.url(path)).await.expect("GET");
         let status = resp.status();
@@ -115,15 +127,22 @@ fn free_port() -> u16 {
 /// several tests booting servers at once another one can claim it first. The
 /// server exits 1 on a bound port, so retry with a fresh one.
 async fn start_server(aisles: Option<&str>) -> ServerGuard {
+    start_server_with(aisles, None).await
+}
+
+/// As [`start_server`], with `global` as the aisle file of the isolated
+/// global config directory, which the server falls back on when the recipe
+/// directory has none.
+async fn start_server_with(aisles: Option<&str>, global: Option<&str>) -> ServerGuard {
     for _ in 0..5 {
-        if let Some(server) = try_start_server(aisles).await {
+        if let Some(server) = try_start_server(aisles, global).await {
             return server;
         }
     }
     panic!("could not start cook server on a free port after 5 attempts");
 }
 
-async fn try_start_server(aisles: Option<&str>) -> Option<ServerGuard> {
+async fn try_start_server(aisles: Option<&str>, global: Option<&str>) -> Option<ServerGuard> {
     let dir = TempDir::new().expect("temp dir");
     let recipes = dir.path().join("recipes");
     std::fs::create_dir_all(&recipes).unwrap();
@@ -135,6 +154,12 @@ async fn try_start_server(aisles: Option<&str>) -> Option<ServerGuard> {
     if let Some(aisles) = aisles {
         std::fs::create_dir_all(recipes.join("config")).unwrap();
         std::fs::write(recipes.join("config/aisle.conf"), aisles).unwrap();
+    }
+    if let Some(global) = global {
+        // Where `common::with_isolated_config` points `COOK_CONFIG_DIR`.
+        let config = dir.path().join(".cook-config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(config.join("aisle.conf"), global).unwrap();
     }
 
     let port = free_port();
@@ -498,4 +523,73 @@ async fn uncategorized_lists_what_no_aisle_names() {
         .await;
     let (_, body) = server.get("/api/aisles/uncategorized").await;
     assert_eq!(names(&body), ["chives"]);
+}
+
+#[tokio::test]
+async fn answers_never_name_the_server_directories() {
+    let server = start_server(Some(AISLES)).await;
+    let root = server.dir.path().to_str().unwrap().to_string();
+
+    let (_, aisles) = server.get("/api/aisles").await;
+    assert_eq!(aisles["file"], "config/aisle.conf");
+    assert_eq!(aisles["shared"], false);
+    assert!(aisles.get("path").is_none(), "{aisles}");
+
+    for (method, path, body, status) in [
+        (
+            reqwest::Method::GET,
+            "/api/aisles",
+            json!(null),
+            StatusCode::OK,
+        ),
+        (
+            reqwest::Method::GET,
+            "/api/aisles/raw",
+            json!(null),
+            StatusCode::OK,
+        ),
+        (reqwest::Method::GET, "/aisles", json!(null), StatusCode::OK),
+        (
+            reqwest::Method::POST,
+            "/api/aisles",
+            json!(null),
+            StatusCode::CONFLICT,
+        ),
+        (
+            reqwest::Method::POST,
+            "/api/aisles/changes",
+            json!({ "action": "add_ingredient", "aisle": "dairy", "names": ["eggs"] }),
+            StatusCode::OK,
+        ),
+        (
+            reqwest::Method::POST,
+            "/api/aisles/changes",
+            json!({ "action": "remove_ingredient", "name": "caviar" }),
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let (got, text) = server.text(method.clone(), path, body).await;
+        assert_eq!(got, status, "{method} {path}: {text}");
+        assert!(
+            !text.contains(&root),
+            "{method} {path} names {root}: {text}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_global_aisle_file_is_shared_but_not_located() {
+    let server = start_server_with(None, Some("[pantry]\nrice\n")).await;
+    let root = server.dir.path().to_str().unwrap().to_string();
+
+    let (status, text) = server
+        .text(reqwest::Method::GET, "/api/aisles", json!(null))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!text.contains(&root), "{text}");
+    let aisles: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(aisles["configured"], true);
+    assert_eq!(aisles["file"], Value::Null);
+    assert_eq!(aisles["shared"], true);
+    assert_eq!(aisles["aisles"][0]["name"], "pantry");
 }

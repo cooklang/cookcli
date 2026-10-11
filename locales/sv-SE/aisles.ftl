@@ -61,3 +61,4 @@ aisles-add-to-aisle = Lägg till i gång
 aisles-add-as-names = Eller lägg till som andra namn på
 aisles-choose-ingredient = Ingrediens…
 aisles-move-to-aisle = Flytta till gång
+aisles-shared-file = Det här är den globala gångfilen, som delas med dina andra receptmappar.
