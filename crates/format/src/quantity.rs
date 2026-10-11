@@ -12,6 +12,8 @@
 
 use cooklang::quantity::{GroupedQuantity, Quantity};
 
+use crate::number::format_quantity_with_unit;
+
 /// The components of `grouped`, ordered by unit name, the unitless component
 /// first.
 ///
@@ -56,11 +58,12 @@ pub fn ordered_components(grouped: &GroupedQuantity) -> Vec<&Quantity> {
 }
 
 /// Render `grouped` the way its own `Display` impl does — the components joined
-/// with `", "` — but in [`ordered_components`] order.
+/// with `", "` — but in [`ordered_components`] order, each component through
+/// [`format_quantity_with_unit`].
 pub fn grouped_quantity_fmt(grouped: &GroupedQuantity) -> String {
     ordered_components(grouped)
         .into_iter()
-        .map(|q| q.to_string())
+        .map(format_quantity_with_unit)
         .collect::<Vec<_>>()
         .join(", ")
 }

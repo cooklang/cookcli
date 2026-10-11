@@ -30,6 +30,7 @@
 
 //! Format a recipe as markdown
 
+use crate::number::format_quantity_with_unit;
 use crate::quantity::grouped_quantity_fmt;
 use std::{fmt::Write, io};
 
@@ -488,15 +489,18 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
                     write!(&mut step_str, "({name})").expect("writing to a String is infallible");
                 }
                 if let Some(quantity) = &t.quantity {
-                    write!(&mut step_str, "{quantity}").expect("writing to a String is infallible");
+                    write!(&mut step_str, "{}", format_quantity_with_unit(quantity))
+                        .expect("writing to a String is infallible");
                 }
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
                 if opts.italic_amounts {
-                    write!(&mut step_str, "*{q}*").expect("writing to a String is infallible");
+                    write!(&mut step_str, "*{}*", format_quantity_with_unit(q))
+                        .expect("writing to a String is infallible");
                 } else {
-                    write!(&mut step_str, "{q}").expect("writing to a String is infallible");
+                    write!(&mut step_str, "{}", format_quantity_with_unit(q))
+                        .expect("writing to a String is infallible");
                 }
             }
         }

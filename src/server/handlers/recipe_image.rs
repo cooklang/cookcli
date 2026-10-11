@@ -297,14 +297,18 @@ fn step_text(recipe: &cooklang::Recipe, step: &cooklang::Step) -> String {
                 if let Some(timer) = recipe.timers.get(*index) {
                     match (&timer.name, &timer.quantity) {
                         (Some(name), _) => text.push_str(name),
-                        (None, Some(quantity)) => text.push_str(&quantity.to_string()),
+                        (None, Some(quantity)) => text.push_str(
+                            &crate::util::format::number::format_quantity_with_unit(quantity),
+                        ),
                         (None, None) => {}
                     }
                 }
             }
             Item::InlineQuantity { index } => {
                 if let Some(quantity) = recipe.inline_quantities.get(*index) {
-                    text.push_str(&quantity.to_string());
+                    text.push_str(&crate::util::format::number::format_quantity_with_unit(
+                        quantity,
+                    ));
                 }
             }
         }

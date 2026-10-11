@@ -1,6 +1,6 @@
 //! Format a recipe as a standalone Typst document.
 
-use crate::{quantity::grouped_quantity_fmt, PaperSize};
+use crate::{number::format_quantity_with_unit, quantity::grouped_quantity_fmt, PaperSize};
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -378,18 +378,18 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
                         name,
                         t.quantity
                             .as_ref()
-                            .map_or("".to_string(), |q| q.to_string())
+                            .map_or("".to_string(), format_quantity_with_unit)
                     )
                 } else {
                     t.quantity
                         .as_ref()
-                        .map_or("".to_string(), |q| q.to_string())
+                        .map_or("".to_string(), format_quantity_with_unit)
                 };
                 write!(w, r#"#timer("{}")"#, escape_typst(&timer_text))?;
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
-                write!(w, r"*{}*", escape_typst(&q.to_string()))?;
+                write!(w, r"*{}*", escape_typst(&format_quantity_with_unit(q)))?;
             }
         }
     }
