@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ConfigSource, Severity};
+use crate::{ConfigSource, DiagnosticKind, Severity, UnscalableCause};
 use camino::Utf8Path;
 
 const AISLE: &str = "\
@@ -653,14 +653,15 @@ fn a_yield_target_passes_the_factor_it_reached_further_down() {
 /// `cooklang`'s `scale_to_yield` compares the yield's unit to the target's as
 /// plain strings — the converter it is handed only refits quantities once the
 /// factor is known, and never reconciles `kg` with `g`. So a target in another
-/// unit is an error rather than a conversion.
+/// unit is refused rather than converted, and the reference is listed as
+/// written.
 ///
 /// Pinned because `target_factor` compares the two the same way, and a
 /// `cooklang` that started converting would make it quietly answer `None` — and
 /// a `None` is a factor of 1 for everything below the reference. This test
 /// fails first if that ever changes.
 #[test]
-fn a_yield_target_in_another_unit_is_a_reference_error() {
+fn a_yield_target_in_another_unit_is_listed_as_written() {
     let dir = dir_with(&[
         ("main.cook", "Prepare @./sauce{500%g}.\n"),
         (
@@ -669,13 +670,28 @@ fn a_yield_target_in_another_unit_is_a_reference_error() {
         ),
     ]);
 
-    match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::Reference { name, message }) => {
-            assert!(name.contains("sauce"), "{name}");
-            assert!(message.contains("500"), "{message}");
-        }
-        other => panic!("expected CoreError::Reference, got {other:?}"),
-    }
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("its yield is in kg"),
+        "{warning:?}"
+    );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 g".to_string(),
+            cause: UnscalableCause::YieldInOtherUnit {
+                unit: "kg".to_string()
+            },
+        })
+    );
 }
 
 /// A servings target is scaled as asked, not rounded to whole servings the way
@@ -738,7 +754,7 @@ fn half_servings_in_a_menu_are_not_rounded_up() {
 /// there. If it ever started coping, the sauce under this reference would be
 /// counted at a factor of one without a word said.
 #[test]
-fn a_servings_target_against_a_fractional_base_is_a_reference_error() {
+fn a_servings_target_against_a_fractional_base_is_listed_as_written() {
     let dir = dir_with(&[
         ("main.cook", "Prepare @./dinner{6%servings}.\n"),
         (
@@ -748,26 +764,47 @@ fn a_servings_target_against_a_fractional_base_is_a_reference_error() {
         ("sauce.cook", "Simmer @tomatoes{4}.\n"),
     ]);
 
-    match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::Reference { name, message }) => {
-            assert!(name.contains("dinner"), "{name}");
-            assert!(message.contains("6"), "{message}");
-        }
-        other => panic!("expected CoreError::Reference, got {other:?}"),
-    }
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "dinner"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "rice"), None);
+    assert_eq!(
+        quantities(&outcome.value, "tomatoes"),
+        None,
+        "nothing below the reference is expanded, at a factor of one or any other"
+    );
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("whole number of servings"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NoServings,
+                ..
+            })
+        ),
+        "{warning:?}"
+    );
 }
 
 /// The other way `target_factor` can decline to answer: a servings target
-/// against a recipe that declares no servings. `an_unscalable_reference_is_a_reference_error`
+/// against a recipe that declares no servings. `an_unscalable_reference_is_listed_as_written`
 /// pins the yield half of this; this is the servings half.
 ///
 /// The reference carries a sub-recipe below it deliberately. If `cooklang`
 /// ever stopped refusing this, expansion would carry on with the
 /// `unwrap_or(1.0)` fallback and the stock would be counted at the sauce's
-/// authored amounts whatever was asked for — silently. The error is what
-/// keeps that fallback unreachable, so the error is what is pinned.
+/// authored amounts whatever was asked for — silently. Stopping at the
+/// reference is what keeps that fallback unreachable, so that is what is
+/// pinned.
 #[test]
-fn a_servings_target_on_a_recipe_without_servings_is_a_reference_error() {
+fn a_servings_target_on_a_recipe_without_servings_is_listed_as_written() {
     let dir = dir_with(&[
         // No `servings` metadata, so scaling to a servings target cannot work.
         ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
@@ -775,13 +812,15 @@ fn a_servings_target_on_a_recipe_without_servings_is_a_reference_error() {
         ("main.cook", "Prepare @./sauce{6%servings}.\n"),
     ]);
 
-    match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::Reference { name, message }) => {
-            assert!(name.contains("sauce"), "{name}");
-            assert!(message.contains("6"), "{message}");
-        }
-        other => panic!("expected CoreError::Reference, got {other:?}"),
-    }
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    assert_eq!(quantities(&outcome.value, "bones"), None);
+    unexpanded_warning(&outcome.diagnostics);
 }
 
 /// The recursion is bounded by the ancestor chain, not by a depth limit, so a
@@ -1447,23 +1486,198 @@ fn a_recipe_that_does_not_parse_is_a_parse_error_naming_its_file() {
     }
 }
 
-/// A reference the referenced recipe cannot satisfy is its own error, so a
-/// caller can tell it apart from the recipe being missing or broken.
+/// The one warning a reference that could not be scaled raises, checked for
+/// what every such warning must say: that it is a warning, and which recipe
+/// wrote the reference.
+fn unexpanded_warning(diagnostics: &[Diagnostic]) -> &Diagnostic {
+    let found: Vec<&Diagnostic> = diagnostics
+        .iter()
+        .filter(|d| d.message.contains("Could not scale recipe reference"))
+        .collect();
+    assert_eq!(found.len(), 1, "{diagnostics:?}");
+    let warning = found[0];
+    assert_eq!(warning.severity, Severity::Warning, "{warning:?}");
+    assert!(
+        warning.message.contains("on the list as written"),
+        "{warning:?}"
+    );
+    assert!(
+        file_name(warning).is_some(),
+        "the warning names the recipe holding the reference: {warning:?}"
+    );
+    warning
+}
+
+/// The file a diagnostic is attributed to, by name.
+fn file_name(diagnostic: &Diagnostic) -> Option<&str> {
+    diagnostic
+        .location
+        .as_ref()
+        .and_then(|l| l.file.as_deref())
+        .and_then(Utf8Path::file_name)
+}
+
+/// A reference its recipe cannot be scaled for is wrong, but only the
+/// reference is: everything else still makes the list, and the reference is on
+/// it as written (<https://github.com/cooklang/cookcli/issues/682>). It used to
+/// fail the whole list.
 #[test]
-fn an_unscalable_reference_is_a_reference_error() {
+fn an_unscalable_reference_is_listed_as_written() {
     let dir = dir_with(&[
         // No `yield` metadata, so scaling to a yield target cannot work.
         ("sauce.cook", "Simmer @tomatoes{4}.\n"),
-        ("main.cook", "Prepare @./sauce{500%ml}.\n"),
+        (
+            "main.cook",
+            "Prepare @./sauce{500%ml} with @pasta{200%g}.\n",
+        ),
+        ("salad.cook", "Toss @lettuce{1}.\n"),
     ]);
 
-    match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::Reference { name, message }) => {
-            assert!(name.contains("sauce"), "{name}");
-            assert!(message.contains("500"), "{message}");
-        }
-        other => panic!("expected CoreError::Reference, got {other:?}"),
-    }
+    let outcome = generate(&ctx(&dir), request(&["main.cook", "salad.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 ml".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    assert_eq!(
+        quantities(&outcome.value, "pasta"),
+        Some(vec!["200 g".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "lettuce"),
+        Some(vec!["1".to_string()])
+    );
+
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert_eq!(file_name(warning), Some("main.cook"));
+    assert!(warning.message.contains("'sauce'"), "{warning:?}");
+    assert!(
+        warning.message.contains("`yield: 500%ml`"),
+        "the warning says what to write, in the unit asked for: {warning:?}"
+    );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 ml".to_string(),
+            cause: UnscalableCause::NoYield {
+                unit: "ml".to_string()
+            },
+        }),
+        "the parts a caller words the warning from, in another language say"
+    );
+}
+
+/// What is listed is the amount the reference asks for once the recipe holding
+/// it was scaled — the 300 g a carbonara for two asks of its fresh pasta, not
+/// the 600 g it is written with.
+#[test]
+fn an_unscalable_reference_is_listed_at_its_holders_scale() {
+    let dir = dir_with(&[
+        (
+            "pasta.cook",
+            "---\nservings: 4\n---\n\nKnead @flour{400%g}.\n",
+        ),
+        ("carbonara.cook", "Boil @./pasta{600%g}.\n"),
+    ]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Path("carbonara.cook".into()),
+                0.5,
+            )],
+            ..request(&[])
+        },
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "pasta"),
+        Some(vec!["300 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "flour"), None);
+    unexpanded_warning(&outcome.diagnostics);
+}
+
+/// A reference deeper down is attributed to the recipe that wrote it, not to
+/// the one the list was asked for.
+#[test]
+fn an_unscalable_reference_deeper_down_names_the_recipe_holding_it() {
+    let dir = dir_with(&[
+        ("menu.cook", "Make @./dinner{} and buy @bread{1}.\n"),
+        ("dinner.cook", "Prepare @./sauce{500%ml}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["menu.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "bread"),
+        Some(vec!["1".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 ml".to_string()])
+    );
+    assert_eq!(
+        file_name(unexpanded_warning(&outcome.diagnostics)),
+        Some("dinner.cook")
+    );
+}
+
+/// An amount that is not a number cannot be a target at all. Listed as
+/// written too, rather than failing the list.
+#[test]
+fn a_reference_whose_amount_is_not_a_number_is_listed_as_written() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: 500%ml\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{a splash}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["a splash".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(warning.message.contains("not a number"), "{warning:?}");
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NotANumber,
+                ..
+            })
+        ),
+        "{warning:?}"
+    );
+}
+
+/// An optional reference stays optional when it is listed as written.
+#[test]
+fn an_unscalable_optional_reference_is_listed_as_optional() {
+    let dir = dir_with(&[
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+        ("main.cook", "Serve with @?./sauce{500%ml}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), with_optional(&["main.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&list), vec![("sauce", true)]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+    assert!(list.items.is_empty(), "{:?}", list.items);
 }
 
 // ---------------------------------------------------------------------------

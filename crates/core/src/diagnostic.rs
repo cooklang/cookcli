@@ -80,6 +80,56 @@ pub struct Diagnostic {
     /// without `default` that omission fails to deserialize.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hints: Vec<String>,
+    /// What the diagnostic is about, in parts a caller can word for itself —
+    /// in another language, say. Only some diagnostics carry one; `message`
+    /// is always there and says the same in English.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<DiagnosticKind>,
+}
+
+/// The parts of a [`Diagnostic`] that has them, for a caller wording it itself.
+///
+/// `#[non_exhaustive]` so that describing more diagnostics this way is not a
+/// breaking change: a caller words the kinds it knows and falls back to
+/// [`Diagnostic::message`] for the rest.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DiagnosticKind {
+    /// A recipe reference asked for an amount its recipe cannot be scaled to,
+    /// so it is on the shopping list as written rather than as the recipe's
+    /// ingredients.
+    UnscalableReference {
+        /// The referenced recipe, as a path relative to the recipe directory.
+        reference: String,
+        /// The amount asked for, as the reference writes it once scaled:
+        /// `300 g`, `6 servings`.
+        amount: String,
+        /// Why it could not be scaled.
+        cause: UnscalableCause,
+    },
+}
+
+/// Why a recipe could not be scaled to the amount a reference asks for.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "cause", rename_all = "snake_case")]
+pub enum UnscalableCause {
+    /// The amount is not a number: `{a splash}`.
+    NotANumber,
+    /// Servings were asked for, and the recipe has no whole number of them.
+    NoServings,
+    /// An amount in `unit` was asked for, and the recipe has no `yield` to
+    /// scale from.
+    NoYield {
+        /// The unit asked for.
+        unit: String,
+    },
+    /// The recipe's `yield` is in `unit`, not in the unit asked for.
+    YieldInOtherUnit {
+        /// The unit the yield is in.
+        unit: String,
+    },
 }
 
 impl Diagnostic {
@@ -90,6 +140,7 @@ impl Diagnostic {
             message: message.into(),
             location: None,
             hints: Vec::new(),
+            kind: None,
         }
     }
 
@@ -100,6 +151,7 @@ impl Diagnostic {
             message: message.into(),
             location: None,
             hints: Vec::new(),
+            kind: None,
         }
     }
 
@@ -113,6 +165,7 @@ impl Diagnostic {
             message: message.into(),
             location: None,
             hints: Vec::new(),
+            kind: None,
         }
     }
 
@@ -123,6 +176,12 @@ impl Diagnostic {
             span: None,
         });
         location.file = Some(file.into());
+        self
+    }
+
+    /// Attach the parts of this diagnostic, for a caller wording it itself.
+    pub fn with_kind(mut self, kind: DiagnosticKind) -> Self {
+        self.kind = Some(kind);
         self
     }
 }
@@ -238,6 +297,7 @@ mod tests {
                 span: Some(Span { start: 12, end: 20 }),
             }),
             hints: Vec::new(),
+            kind: None,
         }
         .at_file("soup.cook");
 
@@ -271,6 +331,7 @@ mod tests {
                 span: Some(Span { start: 12, end: 20 }),
             }),
             hints: Vec::new(),
+            kind: None,
         };
         let json = serde_json::to_string(&d).unwrap();
         assert_eq!(

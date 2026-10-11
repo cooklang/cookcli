@@ -28,7 +28,7 @@ pub mod shopping_list;
 pub mod source;
 
 pub use context::{global_config_path, Context, CONFIG_DIR_ENV};
-pub use diagnostic::{Diagnostic, Location, Severity, Span};
+pub use diagnostic::{Diagnostic, DiagnosticKind, Location, Severity, Span, UnscalableCause};
 pub use error::CoreError;
 pub use find::{is_safe_relative_path, resolve_reference, REFERENCE_SEPARATOR};
 pub use format::{PaperSize, Style};
