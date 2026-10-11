@@ -5,7 +5,9 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
-use crate::util::recipe_info::{ref_info_or_default, RecipeInfo};
+use crate::util::recipe_info::{
+    combined_quantity, ref_info_or_default, reference_factor, RecipeInfo,
+};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
 use crate::web::viewer::Viewer;
@@ -418,6 +420,25 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     );
     recipe.scale(scale, crate::util::PARSER.converter());
 
+    // A referenced recipe opens at the size this one asks for, worked out from
+    // the reference's quantity — scaled above along with everything else —
+    // against its servings or yield, read from disk once per recipe. A static
+    // site has no scaling, so its links stay plain, as a menu's do.
+    let mut ref_info_cache: std::collections::HashMap<String, RecipeInfo> =
+        std::collections::HashMap::new();
+    let mut link_query = |path: &str, quantity: Option<&cooklang::quantity::Quantity>| {
+        if static_mode {
+            return String::new();
+        }
+        let info = ref_info_cache
+            .entry(path.to_string())
+            .or_insert_with(|| ref_info_or_default(base_path, path, path));
+        reference_query(
+            reference_factor(quantity, scale, info),
+            info.default_servings,
+        )
+    };
+
     // Load aisle config for cooking mode ingredient sorting
     let aisle_content = if let Some(path) = aisle_path {
         match std::fs::read_to_string(path) {
@@ -484,6 +505,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             }
         });
 
+        let reference_query = reference_path
+            .as_deref()
+            .map(|path| link_query(path, combined_quantity(&ingredient_list).as_ref()))
+            .unwrap_or_default();
+
         // Combine notes from all ingredients
         let combined_note = if ingredient_list.len() > 1 {
             let notes: Vec<_> = ingredient_list
@@ -531,6 +557,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             unit: formatted_unit,
             note: combined_note,
             reference_path,
+            reference_query,
         });
     }
 
@@ -583,9 +610,14 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                         }
                                     });
 
+                                    let reference_query = reference_path
+                                        .as_deref()
+                                        .map(|path| link_query(path, ing.quantity.as_ref()))
+                                        .unwrap_or_default();
                                     step_items.push(StepItem::Ingredient {
                                         name: ing.name.to_string(),
                                         reference_path,
+                                        reference_query,
                                     });
 
                                     // Also add to step ingredients list
@@ -735,6 +767,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     }
                 });
 
+                let reference_query = reference_path
+                    .as_deref()
+                    .map(|path| link_query(path, combined_quantity(&ingredient_list).as_ref()))
+                    .unwrap_or_default();
+
                 // Combine notes from all ingredients in the section
                 let combined_note = if ingredient_list.len() > 1 {
                     let notes: Vec<_> = ingredient_list
@@ -784,6 +821,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     unit: formatted_unit,
                     note: combined_note,
                     reference_path,
+                    reference_query,
                 });
             }
 
@@ -816,6 +854,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             unit: formatted_unit,
                             note: ingredient.note.clone(),
                             reference_path: None,
+                            reference_query: String::new(),
                         },
                     ));
                 }
@@ -1687,5 +1726,114 @@ mod servings_tests {
             links(&html),
             vec!["servings=0.2", "scale=0.3", "servings=0.4"]
         );
+    }
+}
+
+#[cfg(test)]
+mod reference_link_tests {
+    use super::*;
+    use askama::Template;
+
+    /// `Dinner` serves 2 and asks for each sub-recipe a different way.
+    const DINNER: &str = "---\nservings: 2\n---\n\n\
+        Make @./Sauce{2%servings}, @./Dough{}, @./Stock{250%ml}, @./Toast{3} \
+        and @./Jam{200%g}.\n";
+
+    /// The page for `Dinner` and its rendered HTML.
+    fn dinner(servings: Option<f64>, static_mode: bool) -> (RecipeTemplate, String) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        for (name, content) in [
+            ("Dinner", DINNER),
+            ("Sauce", "---\nservings: 4\n---\n\nStir @tomato{4}.\n"),
+            ("Dough", "---\nservings: 4\n---\n\nKnead @flour{500%g}.\n"),
+            ("Stock", "---\nyield: 500%ml\n---\n\nBoil @bones{1%kg}.\n"),
+            ("Toast", "Toast @bread{2%slices}.\n"),
+            ("Jam", "Cook @fruit{1%kg}.\n"),
+        ] {
+            std::fs::write(base.join(format!("{name}.cook")), content).unwrap();
+        }
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Dinner",
+            aisle_path: None,
+            scale: 1.0,
+            servings,
+            lang: "en-US".parse().unwrap(),
+            static_mode,
+            repo_url: None,
+            features: FeatureFlags::default(),
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        let RecipeBuildOutput::Recipe(template) = output else {
+            panic!("Dinner.cook is not a menu");
+        };
+        let html = template.render().unwrap();
+        (*template, html)
+    }
+
+    /// The query every link to `name` carries — the ingredient list and the
+    /// step both link to it, and must agree. The link keeps the `./` the
+    /// reference is written with.
+    fn query<'a>(html: &'a str, name: &str) -> &'a str {
+        let prefix = format!(r#"href="/recipe/./{name}"#);
+        let queries: Vec<&str> = html
+            .match_indices(&prefix)
+            .map(|(at, _)| {
+                let rest = &html[at + prefix.len()..];
+                let rest = rest.strip_prefix(".html").unwrap_or(rest);
+                rest[..rest.find('"').unwrap()].trim_start_matches('?')
+            })
+            .collect();
+        assert!(queries.len() >= 2, "{name}: {queries:?}");
+        assert!(
+            queries.iter().all(|q| *q == queries[0]),
+            "{name}: {queries:?}"
+        );
+        queries[0]
+    }
+
+    #[test]
+    fn sub_recipes_open_at_the_size_the_recipe_asks_for() {
+        let (_, html) = dinner(None, false);
+        assert_eq!(query(&html, "Sauce"), "servings=2", "2 servings asked");
+        assert_eq!(query(&html, "Dough"), "", "no quantity: as made");
+        assert_eq!(query(&html, "Stock"), "scale=0.5", "250 ml of 500 ml");
+        assert_eq!(query(&html, "Toast"), "scale=3", "a plain number");
+        assert_eq!(query(&html, "Jam"), "", "grams of a recipe with no yield");
+    }
+
+    #[test]
+    fn scaling_the_recipe_scales_its_sub_recipes() {
+        let (_, html) = dinner(Some(4.0), false);
+        assert_eq!(
+            query(&html, "Sauce"),
+            "",
+            "4 servings is the sauce as written"
+        );
+        assert_eq!(query(&html, "Dough"), "servings=8", "follows the recipe");
+        assert_eq!(query(&html, "Stock"), "", "500 ml is the stock as written");
+        assert_eq!(query(&html, "Toast"), "scale=6");
+        assert_eq!(query(&html, "Jam"), "");
+    }
+
+    #[test]
+    fn a_static_site_links_plainly() {
+        let (_, html) = dinner(Some(4.0), true);
+        for name in ["Sauce", "Dough", "Stock", "Toast", "Jam"] {
+            assert_eq!(query(&html, name), "", "{name}");
+        }
+    }
+
+    #[test]
+    fn a_factor_written_as_one_links_plainly() {
+        assert_eq!(reference_query(Some(1.0004), None), "");
+        assert_eq!(reference_query(Some(1.0004), Some(4)), "");
+        assert_eq!(reference_query(Some(0.5), Some(4)), "?servings=2");
+        assert_eq!(reference_query(Some(1.0 / 3.0), None), "?scale=0.333");
+        assert_eq!(reference_query(None, Some(4)), "");
+        assert_eq!(reference_query(Some(f64::NAN), None), "");
     }
 }

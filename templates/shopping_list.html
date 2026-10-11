@@ -138,6 +138,16 @@ function encodeRecipePath(path) {
         .join('/');
 }
 
+// What a recipe link adds so the page opens at the size on the list: `?scale=`
+// with the factor written as the menu links write it (3 decimals at most), and
+// nothing at ×1 or when the size is unknown. A recipe with servings shows the
+// factor as servings.
+function scaleQuery(scale) {
+    const factor = Number(Number(scale).toFixed(3));
+    if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return '';
+    return '?scale=' + encodeURIComponent(String(factor));
+}
+
 function showError(message) {
     const banner = document.getElementById('error-banner');
     const msg = document.getElementById('error-message');
@@ -295,11 +305,12 @@ function renderSelectedRecipes() {
                     <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
                         ${refs.map((ref, i) => {
                             const refName = refNames[i] || ref.split('/').pop();
+                            const refScale = (recipe.included_reference_scales || [])[i];
                             return `<li class="text-xs text-faint flex items-center gap-1">
                                 <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                 </svg>
-                                <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
+                                <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}${scaleQuery(refScale)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
                             </li>`;
                         }).join('')}
                     </ul>` : '';
@@ -308,7 +319,7 @@ function renderSelectedRecipes() {
                         <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}" class="hover:text-accent-text hover:underline">${escHtml(recipe.name)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}${scaleQuery(recipe.scale)}" class="hover:text-accent-text hover:underline">${escHtml(recipe.name)}</a>
                         <span class="text-faint text-xs">(×${escHtml(recipe.scale)})</span>
                     </div>
                     ${refsHtml}
@@ -319,7 +330,7 @@ function renderSelectedRecipes() {
             <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
                 <div class="flex items-center justify-between">
                     <div>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}${scaleQuery(item.scale)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                         <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
                     ${removeButton(item.path, index)}
@@ -336,11 +347,12 @@ function renderSelectedRecipes() {
             <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
                 ${refs.map((ref, i) => {
                     const refName = refNames[i] || ref.split('/').pop();
+                    const refScale = (item.included_reference_scales || [])[i];
                     return `<li class="text-sm text-faint flex items-center gap-1">
                         <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}${scaleQuery(refScale)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
                     </li>`;
                 }).join('')}
             </ul>` : '';
@@ -349,7 +361,7 @@ function renderSelectedRecipes() {
         <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
             <div class="flex items-center justify-between">
                 <div>
-                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}${scaleQuery(item.scale)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
                     <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
                 ${removeButton(item.path, index)}

@@ -1128,7 +1128,10 @@ fn shopping_list() -> ApiSection {
                  of whatever the same recipe's standalone entry (if any) was given. `name` is \
                  the `title` the recipe or menu declares, or its file name when it declares \
                  none or cannot be read; `included_reference_names` names each of \
-                 `included_references` the same way, in the same order.",
+                 `included_references` the same way, in the same order, and \
+                 `included_reference_scales` gives how many times its own size each is made \
+                 — from the quantity the recipe asks for against the sub-recipe's servings or \
+                 yield — or `null` where that cannot be worked out.",
             )
             .response(
                 r#"
@@ -1138,7 +1141,8 @@ fn shopping_list() -> ApiSection {
     "name": "Caprese",
     "scale": 2.0,
     "included_references": [],
-    "included_reference_names": []
+    "included_reference_names": [],
+    "included_reference_scales": []
   },
   {
     "path": "2 Day Plan.menu",
@@ -1150,35 +1154,40 @@ fn shopping_list() -> ApiSection {
         "name": "Easy Pancakes",
         "scale": 5.0,
         "included_references": [],
-        "included_reference_names": []
+        "included_reference_names": [],
+        "included_reference_scales": []
       },
       {
         "path": "lamb-chops",
         "name": "Sicilian-style Scottadito Lamb Chops",
         "scale": 1.0,
         "included_references": [],
-        "included_reference_names": []
+        "included_reference_names": [],
+        "included_reference_scales": []
       },
       {
         "path": "Neapolitan Pizza",
         "name": "Neapolitan Pizza",
         "scale": 1.0,
         "included_references": ["Shared/Pizza Dough"],
-        "included_reference_names": ["Pizza Dough"]
+        "included_reference_names": ["Pizza Dough"],
+        "included_reference_scales": [1.0]
       },
       {
         "path": "Salads/Caprese",
         "name": "Caprese",
         "scale": 1.0,
         "included_references": ["Shared/Vinaigrette"],
-        "included_reference_names": ["Vinaigrette"]
+        "included_reference_names": ["Vinaigrette"],
+        "included_reference_scales": [1.0]
       },
       {
         "path": "Risotto",
         "name": "Classic Risotto alla Milanese",
         "scale": 1.0,
         "included_references": [],
-        "included_reference_names": []
+        "included_reference_names": [],
+        "included_reference_scales": []
       }
     ]
   }

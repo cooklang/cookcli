@@ -1,6 +1,8 @@
 use crate::server::handlers::common::{check_path, json_error};
 use crate::server::{activity, private_paths, AppState};
-use crate::util::recipe_info::{resolve_recipe_info, RecipeInfo};
+use crate::util::recipe_info::{
+    combined_quantity, ref_info_or_default, reference_factor, resolve_recipe_info, RecipeInfo,
+};
 use crate::util::PARSER;
 use crate::web::language::get_preferred_language;
 use crate::web::templates::Tr;
@@ -19,6 +21,7 @@ use cookcli_core::shopping_list::{
 };
 use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
 use cooklang::ingredient_list::IngredientList;
+use cooklang::model::Ingredient;
 use cooklang::pantry::PantryConf;
 use serde::Deserialize;
 use serde_json;
@@ -303,7 +306,8 @@ pub async fn get_shopping_list_items(
 /// pulls in — by the title its file declares rather than by its file name.
 ///
 /// Done on the way out rather than stored, so a list written before this, or
-/// a recipe retitled since, still shows the current title.
+/// a recipe retitled since, still shows the current title. The sub-recipes'
+/// sizes are worked out on the way too, so their links open them at it.
 fn name_by_title(ctx: &cookcli_core::Context, entries: &mut [StoredEntry]) {
     for entry in entries {
         // `None` only when the stored path is not one to look up; keep the
@@ -329,12 +333,67 @@ fn name_by_title(ctx: &cookcli_core::Context, entries: &mut [StoredEntry]) {
                     })
                     .collect(),
             );
+            entry.included_reference_scales = Some(reference_scales(
+                ctx,
+                path.as_deref(),
+                entry.scale,
+                dir,
+                refs,
+            ));
         }
 
         if let Some(recipes) = &mut entry.recipes {
             name_by_title(ctx, recipes);
         }
     }
+}
+
+/// How many times its own size each of `refs` is made when the recipe at
+/// `path` is made `scale` times — what that recipe's page opens them at, see
+/// [`reference_factor`]. `None` for any that cannot be worked out, and for all
+/// of them when the recipe cannot be read.
+fn reference_scales(
+    ctx: &cookcli_core::Context,
+    path: Option<&Utf8Path>,
+    scale: f64,
+    dir: &Utf8Path,
+    refs: &[String],
+) -> Vec<Option<f64>> {
+    let recipe = path.and_then(|path| {
+        let entry = crate::util::get_recipe(ctx.base_path(), path.as_str()).ok()?;
+        crate::util::parse_recipe_from_entry(&entry, scale).ok()
+    });
+    let Some(recipe) = recipe else {
+        return vec![None; refs.len()];
+    };
+    refs.iter()
+        .map(|reference| {
+            // The recipe page stores `./Sauces/Pesto`, as the reference is
+            // written; other clients may leave out the `./` or add `.cook`.
+            let plain = |path: &str| {
+                let path = path.strip_prefix("./").unwrap_or(path);
+                path.strip_suffix(".cook").unwrap_or(path).to_string()
+            };
+            let wanted = plain(reference);
+            let uses: Vec<&Ingredient> = recipe
+                .ingredients
+                .iter()
+                .filter(|ingredient| {
+                    ingredient.reference.as_ref().is_some_and(|r| {
+                        let mut parts = r.components.clone();
+                        parts.push(r.name.clone());
+                        plain(&parts.join("/")) == wanted
+                    })
+                })
+                .collect();
+            if uses.is_empty() {
+                return None;
+            }
+            let target = cookcli_core::resolve_reference(dir, reference)?;
+            let info = ref_info_or_default(ctx.base_path(), target.as_str(), reference);
+            reference_factor(combined_quantity(&uses).as_ref(), scale, &info)
+        })
+        .collect()
 }
 
 /// The recipe's metadata `title`, or its file stem when it declares none.
@@ -389,6 +448,7 @@ pub async fn add_to_shopping_list(
         scale: payload.scale,
         included_references: payload.included_references,
         included_reference_names: None,
+        included_reference_scales: None,
         recipes: None,
     };
 
@@ -802,6 +862,7 @@ pub async fn add_menu_to_shopping_list(
                 scale: scale.unwrap_or(menu_scale),
                 included_references: Some(sub_refs),
                 included_reference_names: None,
+                included_reference_scales: None,
                 recipes: None,
             });
         }
