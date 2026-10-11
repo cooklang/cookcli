@@ -14,6 +14,10 @@ use axum::{
 use std::sync::Arc;
 use unic_langid::LanguageIdentifier;
 
+/// Marks the API's `401` and `403` from this middleware, `sign-in` or `role`,
+/// so a page can tell them from a handler's own refusals and say what to do.
+pub const REFUSED_HEADER: &str = "x-cook-refused";
+
 /// Requests that change nothing even though their method says otherwise.
 /// Matched exactly: `/api/shopping_list/add` is not `/api/shopping_list`.
 const OPEN_WRITES: &[&str] = &[
@@ -184,7 +188,8 @@ fn refuse(url_prefix: &str, request: &Request) -> Response {
     if is_api(path) {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "Sign in to make changes" })),
+            [(REFUSED_HEADER, "sign-in")],
+            Json(serde_json::json!({ "error": tr(request).t("sign-in-to-change") })),
         )
             .into_response();
     }
@@ -214,24 +219,35 @@ fn forbid(url_prefix: &str, request: &Request, viewer: Viewer) -> Response {
     if is_api(path) {
         return (
             StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": "Your role does not allow this change" })),
+            [(REFUSED_HEADER, "role")],
+            Json(serde_json::json!({ "error": tr(request).t("role-forbidden-change") })),
         )
             .into_response();
     }
 
-    let lang = request
-        .extensions()
-        .get::<LanguageIdentifier>()
-        .cloned()
-        .unwrap_or(crate::web::language::EN_US);
     let features = request
         .extensions()
         .get::<FeatureFlags>()
         .copied()
         .unwrap_or_default();
-    let message = crate::web::templates::Tr::new(lang.clone()).t("role-forbidden");
-    let page = crate::server::ui::error_page(lang, url_prefix, message, features, viewer);
+    let message = tr(request).t("role-forbidden");
+    let page =
+        crate::server::ui::error_page(language(request), url_prefix, message, features, viewer);
     (StatusCode::FORBIDDEN, page).into_response()
+}
+
+/// The language the visitor asked for, as `language_middleware` found it.
+fn language(request: &Request) -> LanguageIdentifier {
+    request
+        .extensions()
+        .get::<LanguageIdentifier>()
+        .cloned()
+        .unwrap_or(crate::web::language::EN_US)
+}
+
+/// Refusals are written in the visitor's language, the API's too.
+fn tr(request: &Request) -> crate::web::templates::Tr {
+    crate::web::templates::Tr::new(language(request))
 }
 
 #[cfg(test)]

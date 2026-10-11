@@ -91,12 +91,14 @@ pub fn preamble() -> ApiPreamble {
             note(
                 "401",
                 "the server requires signing in to make changes, and the request carried no \
-                 valid session cookie.",
+                 valid session cookie. The response carries `X-Cook-Refused: sign-in`, and its \
+                 `error` is written in the language of the `lang` cookie or `Accept-Language`.",
             ),
             note(
                 "403",
                 "the signed-in user's role does not allow this request (`Your role does not \
-                 allow this change`); signing in again as the same user will not help. Also: \
+                 allow this change`, marked `X-Cook-Refused: role` and translated like the \
+                 `401`); signing in again as the same user will not help. Also: \
                  the request was sent to a host name other than `localhost` or an IP address, \
                  or a browser request tried to modify recipes from an origin the server does \
                  not trust (another site). Start the server with `--cors-origin <ORIGIN>` to \

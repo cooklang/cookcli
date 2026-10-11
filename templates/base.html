@@ -27,6 +27,9 @@
     </script>
     {% if !static_mode %}
     <script src="{{ prefix }}/static/js/unsaved.js"></script>
+    {% if viewer.auth_enabled() %}
+    <script src="{{ prefix }}/static/js/sign-in-notice.js"></script>
+    {% endif %}
     {% endif %}
     <style>
         .viewport {
@@ -385,6 +388,19 @@
         <main>
             {% block content %}{% endblock %}
         </main>
+
+        {% if !static_mode && viewer.auth_enabled() %}
+        <!-- Shown by sign-in-notice.js when the server refuses a change. -->
+        <div id="refused-notice" role="alert"
+             data-sign-in="{{ tr.t("signed-out-notice") }}" data-role="{{ tr.t("role-forbidden") }}"
+             class="hidden fixed top-4 inset-x-4 z-50 mx-auto max-w-md card p-4 border-l-[3px] border-l-danger bg-danger-soft shadow-[var(--shadow-overlay)] print:hidden">
+            <div class="flex items-center gap-3">
+                <p class="flex-1 text-text" data-refused-text></p>
+                <a href="{{ prefix }}/login" data-login-link data-refused-sign-in class="btn btn-sm">{{ tr.t("sign-in") }}</a>
+                <button type="button" class="icon-btn" data-refused-close aria-label="{{ tr.t("aria-close") }}" title="{{ tr.t("aria-close") }}">&times;</button>
+            </div>
+        </div>
+        {% endif %}
 
         {% if static_mode %}
         <footer class="mt-12 mb-6 text-center text-sm text-faint print:hidden">

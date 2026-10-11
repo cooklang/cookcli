@@ -364,6 +364,10 @@ async fn without_users_the_server_stays_open() {
     let home = get_page(&server, "/", None).await.text().await.unwrap();
     assert!(home.contains("href=\"/new\""), "New Recipe button missing");
     assert!(!home.contains("Sign in"), "no sign-in link without users");
+    assert!(
+        !home.contains("refused-notice"),
+        "nothing to refuse without users"
+    );
 
     let login = get_page(&server, "/login", None).await;
     assert_eq!(login.status(), StatusCode::SEE_OTHER);
@@ -418,6 +422,7 @@ async fn guests_can_browse_but_not_change_anything() {
     // API writes: 401 with the usual error shape, and nothing changes.
     let resp = put_recipe(&server, "Recipe.cook", None).await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(resp.headers()["x-cook-refused"], "sign-in");
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["error"], "Sign in to make changes");
     let recipe = server.fixture.recipes.path().join("Recipe.cook");
@@ -794,6 +799,7 @@ async fn each_role_can_do_only_what_it_allows() {
         .unwrap();
         assert_eq!(refused_for_role(add.status()), !lists, "{user} list add");
         if !lists {
+            assert_eq!(add.headers()["x-cook-refused"], "role", "{user}");
             let body: serde_json::Value = add.json().await.unwrap();
             assert_eq!(body["error"], "Your role does not allow this change");
         }
@@ -964,6 +970,63 @@ async fn a_refused_page_is_translated_throughout() {
     assert!(page.contains("Retour aux recettes"), "{page}");
     assert!(!page.contains("Something went wrong"), "{page}");
     assert!(!page.contains("Back to recipes"), "{page}");
+}
+
+#[tokio::test]
+async fn an_api_refusal_is_translated_and_marked() {
+    let fixture = Fixture::new();
+    fixture.write_roles(&[("bob", "pw", "reader"), ("eddie", "pw", "editor")]);
+    let server = start(fixture, &[], &[]).await;
+    let bob = signed_in_cookie(&server, "bob", "pw").await;
+    let eddie = signed_in_cookie(&server, "eddie", "pw").await;
+    let add = |cookie: Option<&str>| {
+        let mut req = client()
+            .post(server.url("/api/shopping_list/add"))
+            .header(ACCEPT_LANGUAGE, "fr-FR")
+            .json(&serde_json::json!({ "path": "Recipe.cook", "scale": 1.0 }));
+        if let Some(cookie) = cookie {
+            req = req.header(COOKIE, cookie);
+        }
+        req.send()
+    };
+
+    let guest = add(None).await.unwrap();
+    assert_eq!(guest.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(guest.headers()["x-cook-refused"], "sign-in");
+    let body: serde_json::Value = guest.json().await.unwrap();
+    assert_eq!(body["error"], "Connectez-vous pour faire des modifications");
+
+    let reader = add(Some(&bob)).await.unwrap();
+    assert_eq!(reader.status(), StatusCode::FORBIDDEN);
+    assert_eq!(reader.headers()["x-cook-refused"], "role");
+    let body: serde_json::Value = reader.json().await.unwrap();
+    assert_eq!(body["error"], "Votre rôle ne permet pas cette modification");
+
+    // A handler's own refusal is not the middleware's: no mark, so the page
+    // does not offer to sign in over a 404.
+    let missing = client()
+        .delete(server.url("/api/recipes/Missing.cook"))
+        .header(COOKIE, &eddie)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    assert!(missing.headers().get("x-cook-refused").is_none());
+
+    // The page a signed-in user works on carries the notice, translated.
+    let page = client()
+        .get(server.url("/shopping-list"))
+        .header(COOKIE, &bob)
+        .header(ACCEPT_LANGUAGE, "fr-FR")
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("id=\"refused-notice\""), "{page}");
+    assert!(page.contains("sign-in-notice.js"), "{page}");
+    assert!(page.contains("Votre session a pris fin"), "{page}");
 }
 
 #[tokio::test]

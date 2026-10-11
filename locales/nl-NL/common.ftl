@@ -164,6 +164,9 @@ sign-in-password = Wachtwoord
 sign-in-failed = Onjuiste gebruikersnaam of wachtwoord.
 signed-in-as = Ingelogd als
 role-forbidden = Je account mag dit niet. Vraag wie deze server beheert om een andere rol.
+role-forbidden-change = Je rol staat deze wijziging niet toe
+sign-in-to-change = Log in om wijzigingen aan te brengen
+signed-out-notice = Je bent niet meer ingelogd, dus deze wijziging is niet doorgevoerd.
 
 # Errors
 error-title = Er is iets misgegaan
