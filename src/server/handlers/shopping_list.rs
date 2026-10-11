@@ -85,10 +85,13 @@ pub async fn shopping_list(
                 .location
                 .as_ref()
                 .and_then(|l| l.file.as_deref())
+                // With `/` on Windows too, like every recipe path the API
+                // sends — and like the reference named in the same line.
                 .map(|file| {
                     file.strip_prefix(&state.base_path)
                         .unwrap_or(file)
-                        .to_string()
+                        .as_str()
+                        .replace('\\', "/")
                 })
                 .unwrap_or_else(|| name.clone());
             // The rest — a parse warning in one of the recipes, say — is for
