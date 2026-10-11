@@ -138,9 +138,11 @@ async fn a_pantry_that_does_not_parse_is_reported() {
     assert!(names(&list).contains(&"milk".to_string()), "{list}");
 
     // And says why, as the pantry page does: the file and the parser's
-    // complaint with its line, the file named relative to the recipes.
+    // complaint with its line, the file named relative to the recipes
+    // (with the platform's separator, `config\pantry.conf` on Windows).
     let error = list["pantry_error"].as_str().expect("pantry_error");
-    assert!(error.contains("config/pantry.conf"), "{error}");
+    let file = std::path::Path::new("config").join("pantry.conf");
+    assert!(error.contains(&*file.to_string_lossy()), "{error}");
     assert!(error.contains("line 1"), "{error}");
     assert!(error.contains("// my pantry"), "{error}");
     assert!(
