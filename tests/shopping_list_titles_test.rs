@@ -7,6 +7,9 @@
 //! The same goes for a menu, the recipes nested in it, and the sub-recipes an
 //! entry pulls in (`included_reference_names`). Whatever declares no title, or
 //! cannot be read, keeps its file name.
+//!
+//! Each sub-recipe also comes with the size the entry makes it at
+//! (`included_reference_scales`), so the page can link to it at that size.
 
 #![cfg(feature = "server")]
 
@@ -59,6 +62,18 @@ fn write_fixture(dir: &TempDir) {
     std::fs::write(
         recipes.join("Shared").join("syrup.cook"),
         "---\ntitle: Maple Syrup\n---\nWarm @maple sap{1%cup}.\n",
+    )
+    .unwrap();
+    // Two servings of a jam made for four, the syrup at the toast's own size,
+    // and grams of a recipe that is not there.
+    std::fs::write(
+        recipes.join("Breakfast").join("toast.cook"),
+        "Spread @./Shared/jam{2%servings}, @./Shared/syrup{} and @./Shared/butter{30%g}.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        recipes.join("Shared").join("jam.cook"),
+        "---\nservings: 4\n---\nCook @fruit{1%kg}.\n",
     )
     .unwrap();
     // No title: keeps its file name.
@@ -240,5 +255,42 @@ async fn a_menu_and_the_recipes_in_it_are_named_by_their_titles() {
     assert_eq!(
         entry(recipes, "Breakfast/easy-pancakes")["included_reference_names"],
         json!(["Maple Syrup"])
+    );
+}
+
+#[tokio::test]
+async fn each_sub_recipe_comes_with_the_size_it_is_made_at() {
+    let server = start_server().await;
+    post(
+        &server,
+        "/api/shopping_list/add",
+        json!({
+            "path": "Breakfast/toast.cook",
+            "scale": 2.0,
+            "included_references": ["Shared/jam", "Shared/syrup", "Shared/butter"],
+        }),
+    )
+    .await;
+    post(
+        &server,
+        "/api/shopping_list/add",
+        json!({
+            "path": "Breakfast/easy-pancakes.cook",
+            "scale": 0.5,
+            "included_references": ["Shared/syrup"],
+        }),
+    )
+    .await;
+
+    let items = items(&server).await;
+    // At ×2 the toast asks for 4 servings of jam, all of it; the syrup follows
+    // the toast; grams of a missing recipe cannot be worked out.
+    assert_eq!(
+        entry(&items, "Breakfast/toast.cook")["included_reference_scales"],
+        json!([1.0, 2.0, null])
+    );
+    assert_eq!(
+        entry(&items, "Breakfast/easy-pancakes.cook")["included_reference_scales"],
+        json!([0.5])
     );
 }

@@ -916,6 +916,9 @@ pub struct IngredientData {
     /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
     pub reference_path: Option<String>,
+    /// What the link to `reference_path` adds so the recipe opens at the size
+    /// this one asks for — see [`reference_query`]. Empty otherwise.
+    pub reference_query: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -967,6 +970,8 @@ pub enum StepItem {
     Ingredient {
         name: String,
         reference_path: Option<String>,
+        /// As on [`IngredientData::reference_query`].
+        reference_query: String,
     },
     Cookware(String),
     Timer {
@@ -1002,6 +1007,25 @@ pub fn reference_path(name: &str, menu: bool, static_mode: bool) -> String {
         (true, false) => format!("recipe/{}.menu", path.trim_end_matches(".menu")),
         (false, true) => format!("recipe/{path}.html"),
         (false, false) => format!("recipe/{path}"),
+    }
+}
+
+/// The query that opens a referenced recipe `factor` times its own size, as
+/// a menu's links do: by servings when it declares a whole number of them,
+/// since its page counts servings, otherwise by the multiplier. Empty at ×1,
+/// or when the factor is unknown.
+pub fn reference_query(factor: Option<f64>, servings: Option<u32>) -> String {
+    let Some(factor) = factor.filter(|f| f.is_finite() && *f > 0.0) else {
+        return String::new();
+    };
+    // Compared as written, so that a factor a hair off 1 links plainly too.
+    let text = |value: f64| filters::scale_factor(&value).unwrap_or_default();
+    if text(factor) == "1" {
+        return String::new();
+    }
+    match servings.filter(|&n| n > 0) {
+        Some(n) => format!("?servings={}", text(f64::from(n) * factor)),
+        None => format!("?scale={}", text(factor)),
     }
 }
 

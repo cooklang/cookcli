@@ -62,6 +62,11 @@ pub struct StoredEntry {
     /// the list, and ignored when adding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub included_reference_names: Option<Vec<String>>,
+    /// How many times its own size each of `included_references` is made, in
+    /// the same order — `null` where that cannot be worked out — so a link can
+    /// open it at that size. Never stored, like `included_reference_names`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub included_reference_scales: Option<Vec<Option<f64>>>,
     /// The recipes in a menu entry, or `None` for a plain recipe entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipes: Option<Vec<StoredEntry>>,
@@ -495,6 +500,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                             scale: cr.multiplier.unwrap_or(1.0),
                             included_references: Some(child_paths(cr)),
                             included_reference_names: None,
+                            included_reference_scales: None,
                             recipes: None,
                         }),
                         _ => None,
@@ -506,6 +512,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: None,
                     included_reference_names: None,
+                    included_reference_scales: None,
                     recipes: Some(recipes),
                 });
             } else {
@@ -516,6 +523,7 @@ fn entries_from_list(list: &ShoppingList) -> Vec<StoredEntry> {
                     scale: r.multiplier.unwrap_or(1.0),
                     included_references: Some(child_paths(r)),
                     included_reference_names: None,
+                    included_reference_scales: None,
                     recipes: None,
                 });
             }

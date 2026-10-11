@@ -20,6 +20,7 @@ fn entry(path: &str, scale: f64) -> StoredEntry {
         scale,
         included_references: None,
         included_reference_names: None,
+        included_reference_scales: None,
         recipes: None,
     }
 }
