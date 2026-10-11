@@ -1,5 +1,5 @@
 use crate::server::handlers::common::{check_path, json_error};
-use crate::server::{activity, AppState};
+use crate::server::{activity, private_paths, AppState};
 use crate::util::recipe_info::{resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
 use crate::web::viewer::Viewer;
@@ -15,6 +15,7 @@ use cookcli_core::shopping_list::{
     ShoppingListStore, StoredEntry,
 };
 use cooklang::ingredient_list::IngredientList;
+use cooklang::pantry::PantryConf;
 use serde::Deserialize;
 use serde_json;
 use std::sync::Arc;
@@ -82,31 +83,7 @@ pub async fn shopping_list(
 
     let aisle = aisle_result.output().cloned().unwrap_or_default();
 
-    // Load pantry configuration
-    let pantry_conf = if let Some(path) = &state.pantry_path {
-        match std::fs::read_to_string(path) {
-            Ok(content) => {
-                tracing::debug!("Loaded pantry file from: {:?}", path);
-                // Parse pantry file using cooklang pantry parser
-                let result = cooklang::pantry::parse_lenient(&content);
-
-                if result.report().has_warnings() {
-                    for warning in result.report().warnings() {
-                        tracing::warn!("Pantry configuration warning: {}", warning);
-                    }
-                }
-
-                result.output().cloned()
-            }
-            Err(e) => {
-                tracing::warn!("Failed to read pantry file from {:?}: {}", path, e);
-                None
-            }
-        }
-    } else {
-        tracing::debug!("No pantry file configured");
-        None
-    };
+    let (pantry_conf, pantry_error) = read_pantry(&state);
 
     // Use common names from aisle configuration
     list = list.use_common_names(&aisle, PARSER.converter());
@@ -186,9 +163,49 @@ pub async fn shopping_list(
     let json_value = serde_json::json!({
         "categories": shopping_categories,
         "pantry_items": pantry_items,
+        "pantry_error": pantry_error,
         "checked": checked.into_iter().collect::<Vec<_>>()
     });
     Ok(Json(json_value))
+}
+
+/// The pantry to take off the list, and, when there is a pantry file but it
+/// could not be used, why.
+///
+/// The list is made without it then, so the reason goes to the page: a list
+/// asking for everything already at home is otherwise all a shopper sees. It is
+/// worded as the pantry page words it, where the file can be fixed.
+fn read_pantry(state: &AppState) -> (Option<PantryConf>, Option<String>) {
+    let Some(path) = &state.pantry_path else {
+        tracing::debug!("No pantry file configured");
+        return (None, None);
+    };
+
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            tracing::debug!("Loaded pantry file from: {:?}", path);
+            let result = cooklang::pantry::parse_lenient(&content);
+            for warning in result.report().warnings() {
+                tracing::warn!("Pantry configuration warning: {}", warning);
+            }
+            if let Some(pantry) = result.output() {
+                return (Some(pantry.clone()), None);
+            }
+        }
+        Err(e) => tracing::debug!("Failed to read pantry file from {:?}: {}", path, e),
+    }
+
+    // Read again through core for the error the pantry page shows, which
+    // quotes the parser and the line; reached only when the file is broken.
+    let ctx = cookcli_core::Context::new(state.base_path.clone())
+        .with_pantry(cookcli_core::ConfigSource::Path(path.clone()));
+    let error = match cookcli_core::pantry::load(&ctx) {
+        Err(error) => error.to_string(),
+        // Fixed in between.
+        Ok(_) => "the pantry configuration could not be parsed".to_string(),
+    };
+    tracing::warn!("Pantry not used for the shopping list: {error}");
+    (None, Some(private_paths::hide(&error)))
 }
 
 pub async fn get_shopping_list_items(

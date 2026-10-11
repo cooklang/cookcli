@@ -40,6 +40,15 @@
             </div>
         </div>
 
+        <!-- A pantry file the list could not use, so nothing was taken off it.
+             Filled from the `pantry_error` of POST /api/shopping_list; the
+             pantry page shows the same error and has the file's Text tab. -->
+        <div id="pantry-unused" role="status" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
+            <p class="text-sm font-medium text-text mb-1">{{ tr.t("shopping-pantry-unused") }}</p>
+            <p id="pantry-unused-reason" class="text-sm text-muted font-mono whitespace-pre-wrap mb-2"></p>
+            <a href="{{ prefix }}/pantry" class="text-sm text-accent-text hover:underline">{{ tr.t("shopping-pantry-open") }}</a>
+        </div>
+
         <!-- Heading and list actions share a row; the heading lives here rather
              than in the JS-rendered list so the buttons stay put while the list
              below them re-renders. -->
@@ -132,6 +141,12 @@ function hideError() {
     document.getElementById('error-banner').classList.add('hidden');
 }
 
+// Say why the pantry was not taken off the list, or hide the box when it was.
+function showPantryError(error) {
+    document.getElementById('pantry-unused').classList.toggle('hidden', !error);
+    document.getElementById('pantry-unused-reason').textContent = error || '';
+}
+
 // The last markup written into each container. Renders compare against it —
 // never against `innerHTML`, which the browser re-serialises — and leave the
 // DOM alone when nothing changed, so a refresh that brings back the same list
@@ -202,9 +217,15 @@ async function refreshList() {
     renderSelectedRecipes();
 
     // Automatically generate the shopping list if there are items
-    if (shoppingList.length > 0) {
+    if (shoppingList.length === 0) {
+        showPantryError(null);
+    } else {
         const data = await generateList();
-        if (!data) return;
+        if (!data) {
+            showPantryError(null);
+            return;
+        }
+        showPantryError(data.pantry_error);
         displayShoppingList(data);
         applyServerChecked(data.checked || [], ticks);
     }
