@@ -376,9 +376,9 @@ impl ListItem {
 /// - [`CoreError::RecipeNotFound`] if a recipe, or a recipe it references,
 ///   does not exist.
 /// - [`CoreError::Parse`] if any recipe reached has parse errors.
-/// - [`CoreError::Reference`] if a recipe reference cannot be scaled.
 ///
-/// A recipe that reaches itself is *not* an error. See
+/// A recipe that reaches itself is *not* an error, and neither is a reference
+/// that cannot be scaled to the amount it asks for: both are warnings. See
 /// [`extract_ingredients`].
 pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<AggregatedList>, CoreError> {
     let mut diagnostics = Vec::new();
@@ -602,6 +602,11 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// named it was scaled by, so scaling a menu scales everything under it. One
 /// with a quantity names an absolute target instead, and the factor *that*
 /// reaches is what carries on down from there.
+///
+/// A target the referenced recipe cannot be scaled to — a weight when it has
+/// no `yield`, servings when it declares none — puts the reference itself on
+/// the list, as `--ignore-references` would, with a warning saying what to
+/// change. Nothing below it is expanded.
 ///
 /// **Every reference is resolved from disk**, under [`Context::base_path`],
 /// including the references of a [`RecipeSource::Content`] recipe. Only the
@@ -955,6 +960,8 @@ impl Expansion<'_> {
                 self.diagnostics.push(cycle);
                 continue;
             }
+            // The recipe writing this reference, before the chain grows past it.
+            let holder = ancestors.last().cloned();
             // Expanding this one, so it is an ancestor of anything inside it.
             let mut ancestors = ancestors.to_vec();
             ancestors.extend(ref_entry.path().cloned());
@@ -962,21 +969,22 @@ impl Expansion<'_> {
             // Parse and scale the recipe based on the quantity specification.
             let (ref_recipe, ref_scale) = match ingredient.quantity.as_ref() {
                 Some(quantity) => {
-                    let target_value =
-                        match quantity.value() {
-                            Value::Number(num) => num.to_string().parse::<f64>().map_err(|_| {
-                                CoreError::Reference {
-                                    name: ref_path.clone(),
-                                    message: format!("invalid numeric value: {num}"),
-                                }
-                            })?,
-                            other => {
-                                return Err(CoreError::Reference {
-                                    name: ref_path.clone(),
-                                    message: format!("quantity is not a number: {other}"),
-                                });
-                            }
-                        };
+                    let target_value = match quantity.value() {
+                        Value::Number(num) => num.to_string().parse::<f64>().ok(),
+                        _ => None,
+                    };
+                    let Some(target_value) = target_value else {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: \
+                                 the amount is not a number"
+                            ),
+                        );
+                        continue;
+                    };
 
                     let (mut ref_recipe, ref_diagnostics) =
                         parse_entry(&ref_entry, &ref_path, None)?;
@@ -991,23 +999,36 @@ impl Expansion<'_> {
                     // Read before scaling: the servings and yield this is worked
                     // out from are what scaling rewrites.
                     let reached = target_factor(&ref_recipe, target_value, quantity.unit());
-                    match (is_servings(quantity.unit()), reached) {
+                    let scaled = match (is_servings(quantity.unit()), reached) {
                         // `scale_to_target` would round the servings to a
                         // whole number first (cooklang-rs#133): 2.5 servings
                         // would come out as 3.
                         (true, Some(factor)) => {
-                            scale_to_servings(&mut ref_recipe, target_value, factor, self.converter)
+                            scale_to_servings(
+                                &mut ref_recipe,
+                                target_value,
+                                factor,
+                                self.converter,
+                            );
+                            Ok(())
                         }
-                        _ => ref_recipe
-                            .scale_to_target(target_value, quantity.unit(), self.converter)
-                            .map_err(|e| CoreError::Reference {
-                                name: ref_path.clone(),
-                                message: format!(
-                                    "cannot scale to {} {}: {e}",
-                                    target_value,
-                                    quantity.unit().unwrap_or("(no unit)")
-                                ),
-                            })?,
+                        _ => ref_recipe.scale_to_target(
+                            target_value,
+                            quantity.unit(),
+                            self.converter,
+                        ),
+                    };
+                    if let Err(e) = scaled {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: {}",
+                                scale_failure(&e, quantity.unit().unwrap_or_default())
+                            ),
+                        );
+                        continue;
                     }
 
                     // The target is absolute, so the caller's factor does not
@@ -1042,6 +1063,78 @@ impl Expansion<'_> {
         }
 
         Ok(())
+    }
+
+    /// Put a reference that cannot be scaled on the list as it is written —
+    /// `Pâtes fraîches: 300 g`, the item `--ignore-references` would make of it
+    /// — and say why its recipe's ingredients are not there instead.
+    ///
+    /// The spec calls such a reference an error, and it is one: but of the
+    /// reference, not of the list. Failing the whole list over it dropped every
+    /// other recipe on it (<https://github.com/cooklang/cookcli/issues/682>).
+    /// Listing it, rather than skipping it like a cycle, keeps it in front of
+    /// whoever reads only the list — the web list does not show warnings — and
+    /// what it names is still something to buy or make.
+    ///
+    /// Nothing below the reference is expanded, so the factor
+    /// [`target_factor`] could not work out never reaches anything.
+    ///
+    /// The warning is attributed to `holder`, the recipe that wrote the
+    /// reference, as the depth warning is: whichever side gets fixed, that is
+    /// where the reference and its amount are.
+    fn list_unexpanded(
+        &mut self,
+        ingredient: &cooklang::Ingredient,
+        optional: bool,
+        holder: Option<&Utf8PathBuf>,
+        message: String,
+    ) {
+        if ingredient.modifiers().should_be_listed() {
+            let mut quantity = GroupedQuantity::empty();
+            if let Some(q) = &ingredient.quantity {
+                quantity.add(q, self.converter);
+            }
+            let target = if optional {
+                &mut self.list.optional
+            } else {
+                &mut self.list.required
+            };
+            target.add_ingredient(
+                ingredient.display_name().into_owned(),
+                &quantity,
+                self.converter,
+            );
+        }
+
+        let mut warning = Diagnostic::warning(format!(
+            "{message}. It is on the list as written, not as the recipe's ingredients"
+        ));
+        if let Some(path) = holder {
+            warning = warning.at_file(path.clone());
+        }
+        self.diagnostics.push(warning);
+    }
+}
+
+/// Why `cooklang` refused a scaling target, said as what to change.
+///
+/// `cooklang` reads `yield` only as `number%unit` with no space, and matches
+/// its unit to the reference's exactly, so a recipe can look like it declares
+/// one and still not. The message says what form it takes rather than leaving
+/// the reader with "missing or invalid".
+fn scale_failure(error: &cooklang::scale::ScaleError, unit: &str) -> String {
+    use cooklang::scale::ScaleError;
+    match error {
+        ScaleError::InvalidServings => {
+            "it has no whole number of servings, such as `servings: 4`".to_string()
+        }
+        ScaleError::InvalidYield => format!(
+            "it has no yield to scale from. Add how much it makes, written number%unit, \
+             such as `yield: 500%{unit}`"
+        ),
+        ScaleError::UnitMismatch { got, .. } => {
+            format!("its yield is in {got}, so ask for it in {got}")
+        }
     }
 }
 
@@ -1083,8 +1176,9 @@ fn scale_to_servings(recipe: &mut Recipe, target: f64, factor: f64, converter: &
 /// `None` when the recipe cannot answer: servings that are not a whole number
 /// — `cooklang` holds them as a `u32`, so `1.5` is as unreadable to it as none
 /// at all — no yield, or a yield measured in another unit. `scale_to_target`
-/// raises the error for each of those, so nothing here has to, and the
-/// caller's `unwrap_or(1.0)` is unreachable.
+/// refuses each of those, and the caller then lists the reference as written
+/// and expands nothing below it, so nothing here has to, and the caller's
+/// `unwrap_or(1.0)` is unreachable.
 ///
 /// With one exception, which is why that fallback is a `1` and not an
 /// `expect`: a **zero** base, `servings: 0` or `yield: 0%g`. `cooklang`
