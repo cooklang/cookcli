@@ -678,12 +678,13 @@ fn a_yield_target_in_another_unit_is_a_reference_error() {
     }
 }
 
-/// `cooklang` rounds a servings target to a whole number before scaling, and
-/// `target_factor` rounds it the same way. On whole targets the two agree
-/// whatever either does, so this asks for 6.4 servings: the sauce below the
-/// reference comes out at three times its amounts, not 3.2 times.
+/// A servings target is scaled as asked, not rounded to whole servings the way
+/// `cooklang`'s `scale_to_target` would (#680, cooklang-rs#133), and the factor
+/// passed down is the same one. On whole targets that would hold whatever
+/// either did, so this asks for 6.4 servings: the sauce below the reference
+/// comes out at 3.2 times its amounts.
 #[test]
-fn a_fractional_servings_target_rounds_the_same_way_all_the_way_down() {
+fn a_fractional_servings_target_scales_exactly_all_the_way_down() {
     let dir = dir_with(&[
         ("main.cook", "Prepare @./dinner{6.4%servings}.\n"),
         (
@@ -697,13 +698,34 @@ fn a_fractional_servings_target_rounds_the_same_way_all_the_way_down() {
         .expect("generates")
         .value;
 
-    // 6.4 rounds to 6, which is three times what the dinner makes.
-    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    // 6.4 servings is 3.2 times what the dinner makes.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["320 g".to_string()]));
     assert_eq!(
         quantities(&list, "tomatoes"),
-        Some(vec!["12".to_string()]),
-        "12, not 12.8: the factor passed down is rounded like the one applied"
+        Some(vec!["12.8".to_string()]),
+        "the factor passed down is the one applied"
     );
+}
+
+/// The case in #680: a menu planning 2.5 servings of a recipe for one.
+#[test]
+fn half_servings_in_a_menu_are_not_rounded_up() {
+    let dir = dir_with(&[
+        (
+            "week.menu",
+            "== Monday ==\n\nDinner: \\\n- @./stew{2.5%servings}\n",
+        ),
+        (
+            "stew.cook",
+            "---\nservings: 1\n---\n\nSimmer @beans{100%g}.\n",
+        ),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["week.menu"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "beans"), Some(vec!["250 g".to_string()]));
 }
 
 /// The third case where `target_factor` declines: a recipe whose servings are

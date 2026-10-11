@@ -57,8 +57,8 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{
-    aisle::AisleConf, convert::Converter, ingredient_list::IngredientList, pantry::PantryConf,
-    quantity::GroupedQuantity, quantity::Value, Recipe,
+    aisle::AisleConf, convert::Converter, ingredient_list::IngredientList, metadata::StdKey,
+    pantry::PantryConf, quantity::GroupedQuantity, quantity::Value, Recipe,
 };
 use cooklang_find::RecipeEntry;
 use serde::{Deserialize, Serialize};
@@ -991,16 +991,24 @@ impl Expansion<'_> {
                     // Read before scaling: the servings and yield this is worked
                     // out from are what scaling rewrites.
                     let reached = target_factor(&ref_recipe, target_value, quantity.unit());
-                    ref_recipe
-                        .scale_to_target(target_value, quantity.unit(), self.converter)
-                        .map_err(|e| CoreError::Reference {
-                            name: ref_path.clone(),
-                            message: format!(
-                                "cannot scale to {} {}: {e}",
-                                target_value,
-                                quantity.unit().unwrap_or("(no unit)")
-                            ),
-                        })?;
+                    match (is_servings(quantity.unit()), reached) {
+                        // `scale_to_target` would round the servings to a
+                        // whole number first (cooklang-rs#133): 2.5 servings
+                        // would come out as 3.
+                        (true, Some(factor)) => {
+                            scale_to_servings(&mut ref_recipe, target_value, factor, self.converter)
+                        }
+                        _ => ref_recipe
+                            .scale_to_target(target_value, quantity.unit(), self.converter)
+                            .map_err(|e| CoreError::Reference {
+                                name: ref_path.clone(),
+                                message: format!(
+                                    "cannot scale to {} {}: {e}",
+                                    target_value,
+                                    quantity.unit().unwrap_or("(no unit)")
+                                ),
+                            })?,
+                    }
 
                     // The target is absolute, so the caller's factor does not
                     // multiply into it — but the factor it *reached* carries on
@@ -1037,13 +1045,40 @@ impl Expansion<'_> {
     }
 }
 
-/// The factor [`Recipe::scale_to_target`] works out for `target`, so that
-/// references *inside* the scaled recipe that carry no quantity of their own
-/// can inherit it.
+/// Whether a reference's unit asks for a number of servings, spelled the way
+/// [`Recipe::scale_to_target`] recognises it.
+fn is_servings(unit: Option<&str>) -> bool {
+    matches!(unit, Some("servings") | Some("serving"))
+}
+
+/// Scales `recipe` by `factor` to `target` servings, as
+/// [`Recipe::scale_to_servings`] does but without first rounding `target` to
+/// whole servings, which `cooklang` holds as a `u32` (cooklang-rs#133).
 ///
-/// `scale_to_target` applies the factor without reporting it, so this derives
-/// it the same way — and must run first, while the recipe still holds the
-/// servings and yield that scaling rewrites.
+/// `factor` is [`target_factor`]'s, so the recipe's own servings are known and
+/// not zero. The servings metadata is rewritten to `target`, as
+/// `scale_to_servings` rewrites it, keeping a string a string.
+fn scale_to_servings(recipe: &mut Recipe, target: f64, factor: f64, converter: &Converter) {
+    recipe.scale(factor, converter);
+    if let Some(servings) = recipe.metadata.get_mut(StdKey::Servings) {
+        *servings = match servings {
+            serde_yaml::Value::String(_) => serde_yaml::Value::String(target.to_string()),
+            _ if target.fract() == 0.0 && target >= 0.0 => {
+                serde_yaml::Value::Number((target as u64).into())
+            }
+            _ => serde_yaml::Value::Number(target.into()),
+        };
+    }
+}
+
+/// The factor a reference's target scales its recipe by, so that references
+/// *inside* the scaled recipe that carry no quantity of their own can inherit
+/// it.
+///
+/// For a servings target, [`scale_to_servings`] applies this factor. For the
+/// others [`Recipe::scale_to_target`] applies it without reporting it, so this
+/// derives it the same way. Either way it must run first, while the recipe
+/// still holds the servings and yield that scaling rewrites.
 ///
 /// `None` when the recipe cannot answer: servings that are not a whole number
 /// — `cooklang` holds them as a `u32`, so `1.5` is as unreadable to it as none
@@ -1072,13 +1107,12 @@ fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64
     let base = match unit {
         // No unit at all is already a factor rather than an amount.
         None => return Some(target),
-        // Whole servings only, rounded the way `scale_to_servings` rounds
-        // them, so that half a serving asked for does not put the two out of
-        // step.
+        // The target as asked, half servings included: the factor applied
+        // and the factor passed down are both this one.
         Some("servings") | Some("serving") => {
             return match f64::from(recipe.metadata.servings()?.as_number()?) {
                 0.0 => None,
-                base => Some(target.round() / base),
+                base => Some(target / base),
             }
         }
         Some(unit) => {
