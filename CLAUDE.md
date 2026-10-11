@@ -171,7 +171,7 @@ Configuration search order:
   with `viewer.can_edit_lists()` / `can_edit_recipes()` / `can_admin()`
 - `--recipes-only` / `COOK_RECIPES_ONLY`: whoever is not signed in (everyone
   without a users file) only reads recipes. `auth::middleware::browses_recipes`
-  is an allowlist of what they may request; anything else, a new route
+  is an allowlist (`RECIPE_READS`) of what they may request; anything else, a new route
   included, asks them to sign in (`404` without sign-in). Their `Viewer` can
   do nothing and `viewer.recipes_only()` hides the rest in templates
 - Leaving a page with something unsaved asks first (`static/js/unsaved.js`,
@@ -190,6 +190,11 @@ Configuration search order:
   out relative to the recipe directory, or as `…/file` for a config folder.
   Never put `e.to_string()` in a response body by hand, and never put the
   recipe directory's absolute path in a page or API answer.
+- Files from the recipe directory are served narrowly: `/api/static` gives
+  only pictures and never a name starting with `.` (`server/static_files.rs`),
+  and the recipe endpoints take only `.cook` / `.menu` paths
+  (`handlers::common::is_recipe_request`). Serve new files through these
+  rather than a fresh `ServeDir`.
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)
@@ -230,6 +235,24 @@ Configuration search order:
 - Supports YAML frontmatter or `>>` metadata (deprecated)
 - Output formats: human, json, yaml, markdown, cooklang
 
+### Parser and Config File Limits
+- Every parser is built with `Extensions::empty()` (`crates/core/src/parser.rs`,
+  `crates/format/src/lib.rs`): no `@&` references, no range values (`2-3`
+  stays text), no Unicode fractions. Don't turn extensions on in CookCLI; they
+  need a spec change first (#219, #502).
+- `--` and `[-` open a comment anywhere on a line, `>` notes included, and `\`
+  escapes one character. The editor's highlighting
+  (`static/js/src/cooklang-mode.js`) has to follow the same rules.
+- cooklang's `scale_to_target` rounds a servings target to a whole number, so
+  the shopping list scales servings references itself (`scale_to_servings` in
+  `crates/core/src/shopping_list/mod.rs`).
+- Recipe reference paths keep their leading `./` (`/recipe/./Shared/X`): strip
+  `./` and the extension before comparing two of them.
+- `aisle.conf` only has `//` comments; `#` or `--` lines become ingredients,
+  which `cookcli_core::aisle::comment_lookalikes` warns about. `pantry.conf` is
+  TOML, edited with `toml_edit` in `cookcli-core` so comments survive; the
+  server writes it through core too.
+
 ## Frontend Architecture
 
 ### Template System
@@ -237,7 +260,12 @@ The web UI uses server-side rendering with Askama templates:
 - Templates located in `templates/` directory
 - Base template (`base.html`) provides common layout
 - Page-specific templates extend the base template
-- Template data structures defined in `src/server/templates.rs`
+- Template data structures defined in `src/web/templates.rs`
+- Templates are compiled into the binary: a template change needs a rebuild
+  and a server restart
+- In page scripts, DOM `replaceChildren` / `append` write `false` and
+  `undefined` as text, so never pass them `cond && node`; filter first, like
+  `el()` / `fill()` in `templates/aisles.html`
 
 ### Styling
 - Tailwind CSS for utility-first styling
@@ -246,9 +274,10 @@ The web UI uses server-side rendering with Askama templates:
 - Tailwind is configured in `static/css/input.css` (`@source`, `@custom-variant`, `@theme`); components live in `static/css/components.css`
 
 ### Translations
-- UI strings are Fluent messages in `locales/<lang>/*.ftl` (`common`, `pantry`,
-  `preferences`, `recipes`, `shopping`), one folder per locale: de-DE, en-US,
-  es-ES, eu-ES, fr-FR, it-IT, nl-NL, sv-SE
+- UI strings are Fluent messages in `locales/<lang>/*.ftl` (`aisles`, `common`,
+  `pantry`, `preferences`, `recipes`, `shopping`), one folder per locale: de-DE,
+  en-US, es-ES, eu-ES, fr-FR, it-IT, ja-JP, nl-NL, sv-SE
+- A literal `{` in a message is written `{"{"}`
 - Templates call `tr.t("key")`, `tr.tn("key", count)` (plurals) and
   `tr.tf("key", factor)`, defined on `Tr` in `src/web/templates.rs`; askama passes
   fields by reference, so helpers take `&usize` / `&f64`
@@ -262,7 +291,10 @@ The web UI uses server-side rendering with Askama templates:
 - `base.html` - Common layout with navigation and search
 - `recipes.html` - Recipe listing with directory navigation
 - `recipe.html` - Individual recipe display with scaling
+- `menu.html` - Menu and meal plan display
+- `edit.html` / `new.html` - Recipe and menu editor, new file form
 - `shopping_list.html` - Shopping list management
+- `pantry.html` / `aisles.html` - Pantry and aisle management
 - `preferences.html` - User preferences and settings
 
 ### Frontend Features
@@ -304,6 +336,29 @@ Things to know when running them:
 - Two `cookcli-core` pantry tests check file permissions and cannot pass when
   cargo runs as root (e.g. in a root container). Their failure message says so;
   it is not a regression.
+- `cargo test` stops at the first failing test binary; add `--no-fail-fast`
+  to see them all.
+- Build the expected value of a path in a test with the platform separator
+  (`Path::join`, or `.replace('/', std::path::MAIN_SEPARATOR_STR)` as in
+  `tests/doctor_characterization_test.rs`). CookCLI prints native paths, so a
+  literal `"config/pantry.conf"` fails only on the Windows CI job. URLs and API
+  paths the code normalizes to `/` are the exception.
+- `docs/api.md` is generated from the API docs: regenerate it with
+  `UPDATE_API_DOCS=1 cargo test --test api_docs_md_test`.
+- The Docker image builds with `--no-default-features --features server,lsp`
+  (no `sync`). Anything the server needs must not sit under
+  `#[cfg(feature = "sync")]`; check with that build when touching `AppState`.
+- Two checkouts must not share a `CARGO_TARGET_DIR`: the artifacts have the
+  same names, so one checkout's build replaces the `cook` the other's tests run.
+- Playwright is fully parallel locally but uses one worker on CI. The
+  shopping-list and pantry specs share files in `./seed`, so retry a local
+  failure there with `--workers=1` before blaming the change, and restore
+  `seed/config/aisle.conf` as well as `pantry.conf` afterwards.
+- A spec that fakes ticks through the `POST /api/shopping_list` answer must
+  also stub `GET /api/shopping_list/checked`: the page's event stream
+  refetches the ticks when it opens.
+- The Docker image's `docker-entrypoint.sh` refuses a `/recipes` it cannot
+  write; mount a writable copy to try it.
 
 For manual testing:
 1. Use `cook seed` to create test recipes
@@ -343,6 +398,17 @@ Packaging scripts live in `packaging/`: `debian/` (.deb), `fedora/` (.rpm) and
 `source-tarball.sh`, which builds the source tarball with the compiled front-end
 assets (shared by the release workflow and the RPM build).
 
+Release workflow (`.github/workflows/release.yaml`) traps:
+- The Linux glibc binary is built in PyPA's `manylinux_2_28` image
+  (`Cross.toml`), and a release step fails when the binary needs a glibc above
+  `FLOOR=2.28`. Building it natively on `ubuntu-latest` would raise that floor
+  to the runner's glibc (#420). Bump the image's dated tag, never `latest`.
+- The `Swatinem/rust-cache` key includes `matrix.target`: a shared key once
+  fed build scripts linked against a newer glibc to older cross images (#656).
+- When Dependabot cannot fix an advisory because the fixed version raises
+  other crates' minimums, `cargo update -p <crate> --precise <version>` can
+  (#640).
+
 ## Before Creating a PR
 
 Always run these checks before creating a PR:
@@ -367,7 +433,7 @@ Output formatting is centralized in `src/util/` modules. Each format has its own
 
 ### Working with Templates
 1. Create new template in `templates/` directory
-2. Define data structure in `src/server/templates.rs`
+2. Define data structure in `src/web/templates.rs`
 3. Implement handler in `src/server/ui.rs`
 4. Add route in the UI router
 
@@ -382,7 +448,9 @@ Output formatting is centralized in `src/util/` modules. Each format has its own
 2. Start CSS watch: `npm run watch-css`
 3. Run server: `cargo run -- server ./seed`
 4. Make changes to templates or styles
-5. Refresh browser to see changes (templates are recompiled on each request in dev mode)
+5. Rebuild and restart the server for template changes (Askama compiles them
+   in); CSS and JS changes only need a browser refresh in a debug build, once
+   `watch-css` / `watch-js` has rebuilt them
 
 ### Debugging Recipe Parsing
 Use `RUST_LOG=trace` to see detailed parsing information including:
