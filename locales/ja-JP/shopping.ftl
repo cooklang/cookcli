@@ -21,6 +21,7 @@ shopping-pantry-open = 在庫を開いて修正する
 shopping-remove = 削除
 shopping-add-recipes-first = 先にレシピを追加してください
 shopping-failed-to-generate = 買い物リストを作成できませんでした
+shopping-warnings = 確認が必要なレシピがあります。リストに足りないものがあるかもしれません:
 shopping-failed-to-add = 買い物リストに追加できませんでした
 shopping-error = エラー
 shopping-print = 印刷

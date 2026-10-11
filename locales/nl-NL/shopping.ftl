@@ -25,6 +25,7 @@ shopping-pantry-open = Open de voorraadkast om het te herstellen
 shopping-remove = Verwijderen
 shopping-add-recipes-first = Voeg eerst enkele recepten toe
 shopping-failed-to-generate = Boodschappenlijst kon niet worden gegenereerd
+shopping-warnings = Sommige recepten verdienen een blik; er ontbreekt misschien iets op de lijst:
 shopping-failed-to-add = Toevoegen aan boodschappenlijst mislukt
 shopping-error = Fout
 shopping-print = Afdrukken

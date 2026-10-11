@@ -25,6 +25,7 @@ shopping-pantry-open = Apri la dispensa per correggerlo
 shopping-remove = Rimuovi
 shopping-add-recipes-first = Aggiungi prima qualche ricetta
 shopping-failed-to-generate = Impossibile generare la lista della spesa
+shopping-warnings = Alcune ricette vanno controllate: alla lista potrebbe mancare qualcosa:
 shopping-failed-to-add = Impossibile aggiungere alla lista della spesa
 shopping-error = Errore
 shopping-print = Stampa

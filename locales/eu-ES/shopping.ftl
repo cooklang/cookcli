@@ -25,6 +25,7 @@ shopping-pantry-open = Ireki jaki-tokia konpontzeko
 shopping-remove = Ezabatu
 shopping-add-recipes-first = Mesedez, lehenengo gehitu errezeta batzuk
 shopping-failed-to-generate = Errorea erosketa zerrenda sortzerakoan
+shopping-warnings = Errezeta batzuk berrikusi behar dira; baliteke zerrendan zerbait falta izatea:
 shopping-failed-to-add = Errorea erosketa zerrendara gehitzerakoan
 shopping-error = Errorea
 shopping-print = Inprimatu

@@ -25,6 +25,7 @@ shopping-pantry-open = Öppna skafferiet för att rätta det
 shopping-remove = Radera
 shopping-add-recipes-first = Vänligen lägg till recept först
 shopping-failed-to-generate = Misslyckades att generera handlingslista
+shopping-warnings = Några recept behöver ses över, listan kan sakna något:
 shopping-failed-to-add = Misslyckades att lägga till handlingslista
 shopping-error = Fel
 shopping-print = Skriv ut

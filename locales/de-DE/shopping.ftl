@@ -25,6 +25,7 @@ shopping-pantry-open = Vorratskammer öffnen, um es zu beheben
 shopping-remove = Entfernen
 shopping-add-recipes-first = Bitte fügen Sie zuerst einige Rezepte hinzu
 shopping-failed-to-generate = Einkaufsliste konnte nicht erstellt werden
+shopping-warnings = Einige Rezepte sollten Sie prüfen, der Liste fehlt vielleicht etwas:
 shopping-failed-to-add = Hinzufügen zur Einkaufsliste fehlgeschlagen
 shopping-error = Fehler
 shopping-print = Drucken

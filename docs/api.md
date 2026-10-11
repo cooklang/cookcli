@@ -499,7 +499,7 @@ Two distinct things live here. `POST /api/shopping_list` is stateless: send reci
 
 Aggregate ingredients across recipes
 
-Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request.
+Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` holds what the recipes raised while the list was worked out, one `recipe path: message` line each — a sub-recipe reference that could not be scaled to the amount it asks for, say, which is then listed as written rather than as its ingredients. Empty when there is nothing to say.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -680,7 +680,8 @@ Response:
   ],
   "pantry_items": ["flour", "water", "salt", "tipo zero flour", "olive oil", "fresh basil", "black pepper"],
   "pantry_error": null,
-  "checked": []
+  "checked": [],
+  "warnings": []
 }
 ```
 

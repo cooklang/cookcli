@@ -14,6 +14,7 @@ use cookcli_core::shopping_list::{
     extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingIngredients,
     ShoppingListStore, StoredEntry,
 };
+use cookcli_core::Severity;
 use cooklang::ingredient_list::IngredientList;
 use cooklang::pantry::PantryConf;
 use serde::Deserialize;
@@ -34,6 +35,11 @@ pub async fn shopping_list(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut ingredients = ShoppingIngredients::default();
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
+    // What the recipes on the list said while it was worked out — a reference
+    // listed as written because its recipe could not be scaled, a cycle, a
+    // parse warning. Sent along so the page can show them: the server log is
+    // no place for a shopper to find out why an ingredient is missing.
+    let mut warnings: Vec<String> = Vec::new();
 
     for entry in payload {
         let name = entry.recipe;
@@ -66,6 +72,27 @@ pub async fn shopping_list(
 
         for diagnostic in diagnostics {
             tracing::warn!("Recipe '{}': {}", name, diagnostic.message);
+            if diagnostic.severity == Severity::Hint {
+                continue;
+            }
+            // Named after the recipe it is about — the one that raised it,
+            // which for a reference further down is not the one requested.
+            let file = diagnostic
+                .location
+                .as_ref()
+                .and_then(|l| l.file.as_deref())
+                .map(|file| {
+                    file.strip_prefix(&state.base_path)
+                        .unwrap_or(file)
+                        .to_string()
+                })
+                .unwrap_or_else(|| name.clone());
+            let warning = private_paths::hide(&format!("{file}: {}", diagnostic.message));
+            // Two recipes on the list can share a sub-recipe, and so the
+            // warning about it.
+            if !warnings.contains(&warning) {
+                warnings.push(warning);
+            }
         }
     }
 
@@ -164,7 +191,8 @@ pub async fn shopping_list(
         "categories": shopping_categories,
         "pantry_items": pantry_items,
         "pantry_error": pantry_error,
-        "checked": checked.into_iter().collect::<Vec<_>>()
+        "checked": checked.into_iter().collect::<Vec<_>>(),
+        "warnings": warnings
     });
     Ok(Json(json_value))
 }

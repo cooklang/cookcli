@@ -25,6 +25,7 @@ shopping-pantry-open = Ouvrir le garde-manger pour le corriger
 shopping-remove = Retirer
 shopping-add-recipes-first = Veuillez d'abord ajouter quelques recettes
 shopping-failed-to-generate = Échec de la génération de la liste de courses
+shopping-warnings = Certaines recettes sont à vérifier, il manque peut-être quelque chose à la liste :
 shopping-failed-to-add = Échec de l'ajout à la liste de courses
 shopping-error = Erreur
 shopping-print = Imprimer

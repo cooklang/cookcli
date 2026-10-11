@@ -49,6 +49,14 @@
             <a href="{{ prefix }}/pantry" class="text-sm text-accent-text hover:underline">{{ tr.t("shopping-pantry-open") }}</a>
         </div>
 
+        <!-- What the recipes said while the list was worked out: a sub-recipe
+             listed as written because it could not be scaled, and the like.
+             Filled from the `warnings` of POST /api/shopping_list. -->
+        <div id="list-warnings" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
+            <p class="text-sm font-medium text-text mb-1">{{ tr.t("shopping-warnings") }}</p>
+            <ul id="list-warning-list" class="text-sm text-muted font-mono list-disc pl-5"></ul>
+        </div>
+
         <!-- Heading and list actions share a row; the heading lives here rather
              than in the JS-rendered list so the buttons stay put while the list
              below them re-renders. -->
@@ -147,6 +155,15 @@ function showPantryError(error) {
     document.getElementById('pantry-unused-reason').textContent = error || '';
 }
 
+// Show what the recipes said while the list was worked out, or nothing.
+function showWarnings(warnings) {
+    document.getElementById('list-warnings').classList.toggle('hidden', !warnings.length);
+    setHtml(
+        document.getElementById('list-warning-list'),
+        warnings.map(w => '<li>' + escHtml(w) + '</li>').join('')
+    );
+}
+
 // The last markup written into each container. Renders compare against it —
 // never against `innerHTML`, which the browser re-serialises — and leave the
 // DOM alone when nothing changed, so a refresh that brings back the same list
@@ -219,13 +236,16 @@ async function refreshList() {
     // Automatically generate the shopping list if there are items
     if (shoppingList.length === 0) {
         showPantryError(null);
+        showWarnings([]);
     } else {
         const data = await generateList();
         if (!data) {
             showPantryError(null);
+            showWarnings([]);
             return;
         }
         showPantryError(data.pantry_error);
+        showWarnings(data.warnings || []);
         displayShoppingList(data);
         applyServerChecked(data.checked || [], ticks);
     }
