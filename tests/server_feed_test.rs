@@ -1,4 +1,4 @@
-//! End-to-end tests for the `/atom.xml` and `/rss.xml` feeds served by
+//! End-to-end tests for the `/atom.xml`, `/rss.xml` and `/feed.json` feeds served by
 //! `cook server`.
 
 #![cfg(feature = "server")]
@@ -144,6 +144,36 @@ async fn serves_rss_feed() {
 }
 
 #[tokio::test]
+async fn serves_json_feed() {
+    let server = start_server(Some("/cook")).await;
+    let (status, content_type, body) = get_text(
+        server.url("/cook/feed.json"),
+        &[("accept-language", "fr-FR")],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(content_type.starts_with("application/feed+json"));
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let base = server.url("/cook/");
+    assert_eq!(json["version"], "https://jsonfeed.org/version/1.1");
+    assert_eq!(json["title"], "Toutes les Recettes");
+    assert_eq!(json["language"], "fr-FR");
+    assert_eq!(json["home_page_url"], base);
+    assert_eq!(json["feed_url"], format!("{base}feed.json"));
+
+    // Newest first: Omelette (May) before Pancakes (January).
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["url"], format!("{base}recipe/Omelette"));
+    let pancakes = &items[1];
+    assert_eq!(pancakes["title"], "Fluffy Pancakes");
+    assert_eq!(pancakes["content_text"], "Sunday treat");
+    assert_eq!(pancakes["date_published"], "2026-01-01T00:00:00Z");
+    assert_eq!(pancakes["tags"], serde_json::json!(["sweet"]));
+}
+
+#[tokio::test]
 async fn feed_links_follow_url_prefix_and_forwarded_proto() {
     let server = start_server(Some("/cook")).await;
     let (status, _, body) = get_text(
@@ -173,4 +203,6 @@ async fn pages_advertise_the_feeds() {
     assert!(html.contains(r#"type="application/atom+xml""#));
     assert!(html.contains(r#"href="/atom.xml""#));
     assert!(html.contains(r#"href="/rss.xml""#));
+    assert!(html.contains(r#"type="application/feed+json""#));
+    assert!(html.contains(r#"href="/feed.json""#));
 }
