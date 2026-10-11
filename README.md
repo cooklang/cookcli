@@ -623,9 +623,10 @@ COOK_USERS_FILE=/etc/cook/users.toml cook server --host
 Organizes ingredients by store section for shopping lists. Items not in any category will appear under "Other".
 
 ```
+// In the order you walk the store
 [produce]
 tomatoes|tomato
-basil|basil leaves
+basil|basil leaves // fresh, not dried
 garlic
 onions
 
@@ -651,6 +652,12 @@ pork
 bread
 rolls
 ```
+
+Each `[name]` line starts a section, and each line under it is one ingredient,
+with its other names after `|`. Comments start with `//`, on a line of their
+own or at the end of one. Unlike `pantry.conf`, this file is not TOML: a line
+starting with `#` or `--` is read as an ingredient, and `cook doctor aisle`
+points such lines out.
 
 ### Pantry Configuration (`pantry.conf`)
 

@@ -74,6 +74,14 @@ another way is usually a typo rather than a missing aisle entry. Pass
       Soups/Harira.cook
 ```
 
+It also warns about lines of `aisle.conf` written like a `#` or `--` comment.
+The file's comments start with `//`, so such a line is read as an ingredient,
+and one at the end of a line becomes part of the last name on it:
+
+```
+WARN /home/me/recipes/config/aisle.conf: line 4 is read as an ingredient: tomatoes | tomato # cherry (comments in aisle.conf start with //)
+```
+
 ### `pantry`
 
 Check which recipe ingredients are in your pantry inventory.

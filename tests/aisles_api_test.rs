@@ -215,10 +215,41 @@ async fn the_aisles_are_read_in_file_order() {
         ])
     );
     assert_eq!(aisles["warnings"], json!([]));
+    assert_eq!(aisles["comment_lines"], json!([]));
 
     let page = reqwest::get(server.url("/aisles")).await.unwrap();
     assert_eq!(page.status(), StatusCode::OK);
     assert!(page.text().await.unwrap().contains("fruit and veg"));
+}
+
+/// The file's only comment is `//`. A line written like a TOML or recipe
+/// comment is still an ingredient, so it is shown as one, and pointed out.
+#[tokio::test]
+async fn lines_written_like_other_comments_are_pointed_out() {
+    let server = start_server(Some(
+        "[produce]\n# fruit first\napples\nonion | onions # red or white\n-- leeks\n// fine\n",
+    ))
+    .await;
+
+    let (status, aisles) = server.get("/api/aisles").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        aisles["aisles"][0]["ingredients"],
+        json!([
+            { "names": ["# fruit first"] },
+            { "names": ["apples"] },
+            { "names": ["onion", "onions # red or white"] },
+            { "names": ["-- leeks"] },
+        ])
+    );
+    assert_eq!(
+        aisles["comment_lines"],
+        json!([
+            { "line": 2, "text": "# fruit first" },
+            { "line": 4, "text": "onion | onions # red or white" },
+            { "line": 5, "text": "-- leeks" },
+        ])
+    );
 }
 
 #[tokio::test]
