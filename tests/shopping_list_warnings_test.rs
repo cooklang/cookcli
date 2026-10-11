@@ -19,7 +19,9 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 /// The carbonara asks its fresh pasta for 600 g, and the pasta declares only
-/// servings, so it cannot be scaled to a weight. The salad is fine.
+/// servings, so it cannot be scaled to a weight. The cacio e pepe asks the same
+/// of pasta that declares `yield: 600%g`, which works — and which `cooklang`
+/// 0.19 warns about, reading `yield` as servings. The salad is fine.
 fn write_fixture(root: &Path) {
     std::fs::create_dir_all(root.join("Plats")).unwrap();
     std::fs::write(
@@ -31,6 +33,16 @@ fn write_fixture(root: &Path) {
         root.join("Plats/Carbonara.cook"),
         "---\nservings: 4\n---\n\nBoil @./Plats/Pâtes fraîches{600%g}, \
          add @guanciale{200%g}.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("Plats/Tagliatelle.cook"),
+        "---\nservings: 4\nyield: 600%g\n---\n\nKnead @semolina{400%g}.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("Plats/Cacio e pepe.cook"),
+        "Boil @./Plats/Tagliatelle{300%g}, add @pecorino{100%g}.\n",
     )
     .unwrap();
     std::fs::write(root.join("Salad.cook"), "Toss @lettuce{1}.\n").unwrap();
@@ -107,8 +119,14 @@ async fn try_start_server() -> Option<ServerGuard> {
 
 /// The list for `requests`, as the shopping list page asks for it.
 async fn list(server: &ServerGuard, requests: Value) -> Value {
+    list_in(server, "en-US", requests).await
+}
+
+/// The same, asked by a browser set to `language`.
+async fn list_in(server: &ServerGuard, language: &str, requests: Value) -> Value {
     reqwest::Client::new()
         .post(server.url("/api/shopping_list"))
+        .header("Accept-Language", language)
         .json(&requests)
         .send()
         .await
@@ -156,7 +174,9 @@ async fn a_reference_listed_as_written_is_explained_to_the_page() {
     let warnings = warnings(&list);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(
-        warnings[0].starts_with("Plats/Carbonara.cook: Could not scale recipe reference"),
+        warnings[0].starts_with(
+            "Plats/Carbonara.cook: the recipe Plats/Pâtes fraîches could not be scaled to 300 g"
+        ),
         "named after the recipe holding the reference, relative to the recipe \
          directory: {warnings:?}"
     );
@@ -167,6 +187,45 @@ async fn a_reference_listed_as_written_is_explained_to_the_page() {
         !warnings[0].contains(&base),
         "the server's own folders stay out of what it sends: {warnings:?}"
     );
+}
+
+/// Worded in the language the page is shown in.
+#[tokio::test]
+async fn the_warning_is_in_the_language_of_the_page() {
+    let server = start_server().await;
+
+    let list = list_in(
+        &server,
+        "fr-FR,fr;q=0.9",
+        json!([{ "recipe": "Plats/Carbonara.cook", "scale": 0.5 }]),
+    )
+    .await;
+
+    let warnings = warnings(&list);
+    assert_eq!(
+        warnings,
+        vec![
+            "Plats/Carbonara.cook : impossible d'adapter la recette Plats/Pâtes fraîches \
+             à 300 g : elle n'indique pas combien elle produit. Ajoutez un rendement au \
+             format nombre%unité, par exemple `yield: 500%g`. Elle figure sur la liste telle \
+             quelle, pas sous forme de ses ingrédients."
+                .to_string()
+        ]
+    );
+}
+
+/// The recipes' own parse warnings are for the recipe page and `cook doctor`,
+/// not the list. One of them is `cooklang` 0.19 objecting to the very
+/// `yield: 600%g` the warning above asks for.
+#[tokio::test]
+async fn a_recipe_parse_warning_is_not_sent() {
+    let server = start_server().await;
+
+    let list = list(&server, json!([{ "recipe": "Plats/Cacio e pepe.cook" }])).await;
+
+    let names = item_names(&list);
+    assert!(names.contains(&"semolina".to_string()), "{names:?}");
+    assert!(warnings(&list).is_empty(), "{list}");
 }
 
 #[tokio::test]

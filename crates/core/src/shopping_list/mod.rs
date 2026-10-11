@@ -53,7 +53,8 @@ use crate::{
     find,
     format::{quantity::ordered_components, shopping_list::quantity_fmt},
     parser::{parse_recipe_at, parse_unscaled, PARSER},
-    ConfigSource, Context, CoreError, Diagnostic, Outcome, RecipeSource,
+    ConfigSource, Context, CoreError, Diagnostic, DiagnosticKind, Outcome, RecipeSource,
+    UnscalableCause,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{
@@ -982,6 +983,11 @@ impl Expansion<'_> {
                                 "Could not scale recipe reference '{ref_path}' to {quantity}: \
                                  the amount is not a number"
                             ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: UnscalableCause::NotANumber,
+                            },
                         );
                         continue;
                     };
@@ -1019,14 +1025,20 @@ impl Expansion<'_> {
                         ),
                     };
                     if let Err(e) = scaled {
+                        let unit = quantity.unit().unwrap_or_default();
                         self.list_unexpanded(
                             ingredient,
                             optional,
                             holder.as_ref(),
                             format!(
                                 "Could not scale recipe reference '{ref_path}' to {quantity}: {}",
-                                scale_failure(&e, quantity.unit().unwrap_or_default())
+                                scale_failure(&e, unit)
                             ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: unscalable_cause(&e, unit),
+                            },
                         );
                         continue;
                     }
@@ -1088,6 +1100,7 @@ impl Expansion<'_> {
         optional: bool,
         holder: Option<&Utf8PathBuf>,
         message: String,
+        kind: DiagnosticKind,
     ) {
         if ingredient.modifiers().should_be_listed() {
             let mut quantity = GroupedQuantity::empty();
@@ -1108,7 +1121,8 @@ impl Expansion<'_> {
 
         let mut warning = Diagnostic::warning(format!(
             "{message}. It is on the list as written, not as the recipe's ingredients"
-        ));
+        ))
+        .with_kind(kind);
         if let Some(path) = holder {
             warning = warning.at_file(path.clone());
         }
@@ -1134,6 +1148,20 @@ fn scale_failure(error: &cooklang::scale::ScaleError, unit: &str) -> String {
         ),
         ScaleError::UnitMismatch { got, .. } => {
             format!("its yield is in {got}, so ask for it in {got}")
+        }
+    }
+}
+
+/// [`scale_failure`] as data, for a caller wording the warning itself.
+fn unscalable_cause(error: &cooklang::scale::ScaleError, unit: &str) -> UnscalableCause {
+    use cooklang::scale::ScaleError;
+    match error {
+        ScaleError::InvalidServings => UnscalableCause::NoServings,
+        ScaleError::InvalidYield => UnscalableCause::NoYield {
+            unit: unit.to_string(),
+        },
+        ScaleError::UnitMismatch { got, .. } => {
+            UnscalableCause::YieldInOtherUnit { unit: got.clone() }
         }
     }
 }

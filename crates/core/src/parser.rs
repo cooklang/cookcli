@@ -141,6 +141,7 @@ fn convert_diagnostic(diag: &SourceDiag, file: Option<&Utf8Path>) -> Diagnostic 
         // Often a ready-to-apply replacement, which is exactly the payload
         // the CLI's `warn!` used to discard.
         hints: diag.hints.iter().map(|h| h.to_string()).collect(),
+        kind: None,
     }
 }
 

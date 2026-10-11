@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ConfigSource, Severity};
+use crate::{ConfigSource, DiagnosticKind, Severity, UnscalableCause};
 use camino::Utf8Path;
 
 const AISLE: &str = "\
@@ -682,6 +682,16 @@ fn a_yield_target_in_another_unit_is_listed_as_written() {
         warning.message.contains("its yield is in kg"),
         "{warning:?}"
     );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 g".to_string(),
+            cause: UnscalableCause::YieldInOtherUnit {
+                unit: "kg".to_string()
+            },
+        })
+    );
 }
 
 /// A servings target is scaled as asked, not rounded to whole servings the way
@@ -769,6 +779,16 @@ fn a_servings_target_against_a_fractional_base_is_listed_as_written() {
     let warning = unexpanded_warning(&outcome.diagnostics);
     assert!(
         warning.message.contains("whole number of servings"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NoServings,
+                ..
+            })
+        ),
         "{warning:?}"
     );
 }
@@ -1536,6 +1556,17 @@ fn an_unscalable_reference_is_listed_as_written() {
         warning.message.contains("`yield: 500%ml`"),
         "the warning says what to write, in the unit asked for: {warning:?}"
     );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 ml".to_string(),
+            cause: UnscalableCause::NoYield {
+                unit: "ml".to_string()
+            },
+        }),
+        "the parts a caller words the warning from, in another language say"
+    );
 }
 
 /// What is listed is the amount the reference asks for once the recipe holding
@@ -1618,6 +1649,16 @@ fn a_reference_whose_amount_is_not_a_number_is_listed_as_written() {
     assert_eq!(quantities(&outcome.value, "tomatoes"), None);
     let warning = unexpanded_warning(&outcome.diagnostics);
     assert!(warning.message.contains("not a number"), "{warning:?}");
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NotANumber,
+                ..
+            })
+        ),
+        "{warning:?}"
+    );
 }
 
 /// An optional reference stays optional when it is listed as written.

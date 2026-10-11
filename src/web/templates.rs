@@ -59,6 +59,20 @@ impl Tr {
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
+    /// Translate a message whose variables are all text, named in `args`.
+    pub fn ta(&self, key: &str, args: &[(&str, &str)]) -> String {
+        let args = args
+            .iter()
+            .map(|(name, value)| {
+                (
+                    std::borrow::Cow::Owned(name.to_string()),
+                    fluent::FluentValue::from(value.to_string()),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }

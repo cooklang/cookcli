@@ -49,9 +49,9 @@
             <a href="{{ prefix }}/pantry" class="text-sm text-accent-text hover:underline">{{ tr.t("shopping-pantry-open") }}</a>
         </div>
 
-        <!-- What the recipes said while the list was worked out: a sub-recipe
-             listed as written because it could not be scaled, and the like.
-             Filled from the `warnings` of POST /api/shopping_list. -->
+        <!-- Why the list is not what its recipes say: a sub-recipe listed as
+             written because it could not be scaled. Filled from the
+             `warnings` of POST /api/shopping_list, already translated. -->
         <div id="list-warnings" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
             <p class="text-sm font-medium text-text mb-1">{{ tr.t("shopping-warnings") }}</p>
             <ul id="list-warning-list" class="text-sm text-muted font-mono list-disc pl-5"></ul>
@@ -155,7 +155,7 @@ function showPantryError(error) {
     document.getElementById('pantry-unused-reason').textContent = error || '';
 }
 
-// Show what the recipes said while the list was worked out, or nothing.
+// Show why the list is not what its recipes say, or nothing.
 function showWarnings(warnings) {
     document.getElementById('list-warnings').classList.toggle('hidden', !warnings.length);
     setHtml(

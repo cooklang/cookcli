@@ -911,11 +911,13 @@ fn shopping_list() -> ApiSection {
                  when there is a pantry file but it could not be read or parsed, why: the \
                  list is then made without the pantry, and the error is the one the pantry \
                  page shows. `checked` echoes the server's current persistent checked \
-                 state, unrelated to the recipes in this request. `warnings` holds what \
-                 the recipes raised while the list was worked out, one `recipe path: \
-                 message` line each — a sub-recipe reference that could not be scaled to \
-                 the amount it asks for, say, which is then listed as written rather than \
-                 as its ingredients. Empty when there is nothing to say.",
+                 state, unrelated to the recipes in this request. `warnings` says why the \
+                 list is not what its recipes say, one line each in the language of the \
+                 request (`lang` cookie, then `Accept-Language`), starting with the path \
+                 of the recipe concerned: for now, a sub-recipe reference that could not \
+                 be scaled to the amount it asks for, which is then listed as written \
+                 rather than as its ingredients. Parse warnings of the recipes are not \
+                 included. Empty when there is nothing to say.",
             )
             .params(vec![
                 param(

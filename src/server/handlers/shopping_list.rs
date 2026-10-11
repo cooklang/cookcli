@@ -2,8 +2,11 @@ use crate::server::handlers::common::{check_path, json_error};
 use crate::server::{activity, private_paths, AppState};
 use crate::util::recipe_info::{resolve_recipe_info, RecipeInfo};
 use crate::util::PARSER;
+use crate::web::language::get_preferred_language;
+use crate::web::templates::Tr;
 use crate::web::viewer::Viewer;
 use anyhow::Context as _;
+use axum::http::HeaderMap;
 use axum::{
     extract::{Extension, State},
     http::StatusCode,
@@ -14,7 +17,7 @@ use cookcli_core::shopping_list::{
     extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingIngredients,
     ShoppingListStore, StoredEntry,
 };
-use cookcli_core::Severity;
+use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
 use cooklang::ingredient_list::IngredientList;
 use cooklang::pantry::PantryConf;
 use serde::Deserialize;
@@ -31,14 +34,18 @@ pub struct RecipeRequest {
 
 pub async fn shopping_list(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     axum::extract::Json(payload): axum::extract::Json<Vec<RecipeRequest>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Warnings are shown as they are, so they are worded in the page's
+    // language here.
+    let tr = Tr::new(get_preferred_language(&headers));
     let mut ingredients = ShoppingIngredients::default();
     let core_ctx = cookcli_core::Context::new(state.base_path.clone());
-    // What the recipes on the list said while it was worked out — a reference
-    // listed as written because its recipe could not be scaled, a cycle, a
-    // parse warning. Sent along so the page can show them: the server log is
-    // no place for a shopper to find out why an ingredient is missing.
+    // Why the list is not what the recipes on it say — a reference listed as
+    // written because its recipe could not be scaled. Sent along so the page
+    // can show it: the server log is no place for a shopper to find out why
+    // an ingredient is missing.
     let mut warnings: Vec<String> = Vec::new();
 
     for entry in payload {
@@ -72,9 +79,6 @@ pub async fn shopping_list(
 
         for diagnostic in diagnostics {
             tracing::warn!("Recipe '{}': {}", name, diagnostic.message);
-            if diagnostic.severity == Severity::Hint {
-                continue;
-            }
             // Named after the recipe it is about — the one that raised it,
             // which for a reference further down is not the one requested.
             let file = diagnostic
@@ -87,7 +91,12 @@ pub async fn shopping_list(
                         .to_string()
                 })
                 .unwrap_or_else(|| name.clone());
-            let warning = private_paths::hide(&format!("{file}: {}", diagnostic.message));
+            // The rest — a parse warning in one of the recipes, say — is for
+            // the recipe page and `cook doctor`, and stays in the log.
+            let Some(warning) = warning_text(&tr, &file, &diagnostic) else {
+                continue;
+            };
+            let warning = private_paths::hide(&warning);
             // Two recipes on the list can share a sub-recipe, and so the
             // warning about it.
             if !warnings.contains(&warning) {
@@ -234,6 +243,44 @@ fn read_pantry(state: &AppState) -> (Option<PantryConf>, Option<String>) {
     };
     tracing::warn!("Pantry not used for the shopping list: {error}");
     (None, Some(private_paths::hide(&error)))
+}
+
+/// `diagnostic` as one line for the shopping list page, in the page's language
+/// and after the recipe it is about — or `None` when it is not one the page
+/// shows.
+///
+/// The page shows what core describes in parts ([`Diagnostic::kind`]): those
+/// are about the list, and can be worded in any language. That leaves out the
+/// parse warnings of the recipes on it, which the list is not where to fix —
+/// and one of which, `cooklang` 0.19 reading `yield` as a synonym of
+/// `servings`, is raised by the very `yield: 600%g` this warning asks for.
+fn warning_text(tr: &Tr, recipe: &str, diagnostic: &Diagnostic) -> Option<String> {
+    let Some(DiagnosticKind::UnscalableReference {
+        reference,
+        amount,
+        cause,
+    }) = &diagnostic.kind
+    else {
+        return None;
+    };
+    let (key, unit) = match cause {
+        UnscalableCause::NotANumber => ("shopping-warning-not-a-number", ""),
+        UnscalableCause::NoServings => ("shopping-warning-no-servings", ""),
+        UnscalableCause::NoYield { unit } => ("shopping-warning-no-yield", unit.as_str()),
+        UnscalableCause::YieldInOtherUnit { unit } => {
+            ("shopping-warning-yield-unit", unit.as_str())
+        }
+        _ => return None,
+    };
+    Some(tr.ta(
+        key,
+        &[
+            ("recipe", recipe),
+            ("reference", reference),
+            ("amount", amount),
+            ("unit", unit),
+        ],
+    ))
 }
 
 pub async fn get_shopping_list_items(
