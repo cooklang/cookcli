@@ -1396,7 +1396,9 @@ fn aisles() -> ApiSection {
                 "Aisles in file order, which is the order the shopping list uses. Each \
                  ingredient's first name is the one the shopping list shows; the others are \
                  merged into it. `warnings` lists the lines the parser skipped, such as a \
-                 name listed twice. `file` is where the aisle file is, relative to the \
+                 name listed twice. `comment_lines` lists the lines written like a `#` or \
+                 `--` comment, with their `line` number and `text`: the file's comments \
+                 start with `//`, so these are read as ingredients. `file` is where the aisle file is, relative to the \
                  recipe directory; for the global one, outside it, `file` is `null` and \
                  `shared` is `true`, since other recipe directories use it too. The full \
                  path is never sent. Without an aisle file, `configured` and `shared` are \
@@ -1427,7 +1429,8 @@ fn aisles() -> ApiSection {
       ]
     }
   ],
-  "warnings": []
+  "warnings": [],
+  "comment_lines": []
 }
 "#,
             ),

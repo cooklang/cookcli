@@ -102,6 +102,23 @@ test.describe('Aisles', () => {
     expect(fs.readFileSync(AISLE_FILE, 'utf8')).toBe(original);
   });
 
+  test('points out lines written like a # comment until they use //', async ({ page }) => {
+    fs.writeFileSync(AISLE_FILE, original.replace('[fruit and veg]\n', '[fruit and veg]\n# fruit first\n'));
+    await page.goto('/aisles');
+
+    const comments = page.locator('#aisles-comments');
+    await expect(comments).toBeVisible();
+    await expect(comments.locator('li')).toHaveText([/^Line \d+: # fruit first$/]);
+    await expect(card(page, 'fruit and veg').locator('.aisle-ingredient[data-name="# fruit first"]'))
+      .toBeVisible();
+
+    await page.getByRole('tab', { name: 'Text' }).click();
+    const text = page.locator('#aisles-text');
+    await text.fill((await text.inputValue()).replace('# fruit first', '// fruit first'));
+    await page.getByRole('button', { name: 'Save file' }).click();
+    await expect(comments).toBeHidden();
+  });
+
   test('assigns an aisle from the shopping list', async ({ page }) => {
     // The list itself is shared with every other spec running alongside, so
     // this one is given its own; grouping it is still the server's work.

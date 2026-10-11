@@ -38,6 +38,17 @@ pub struct Aisles {
     /// What the parser had to skip: a duplicate name, an ingredient above
     /// the first aisle.
     pub warnings: Vec<String>,
+    /// Lines written like a `#` or `--` comment, which the parser reads as
+    /// ingredients: the file's only comment is `//`.
+    pub comment_lines: Vec<CommentLine>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommentLine {
+    /// Counted from 1.
+    pub line: usize,
+    /// The line as the parser reads it, without any `//` comment.
+    pub text: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,6 +73,7 @@ impl Aisles {
             revision: None,
             aisles: Vec::new(),
             warnings: Vec::new(),
+            comment_lines: Vec::new(),
         }
     }
 
@@ -105,6 +117,13 @@ impl Aisles {
                 .report()
                 .warnings()
                 .map(|warning| warning.to_string())
+                .collect(),
+            comment_lines: cookcli_core::aisle::comment_lookalikes(text)
+                .into_iter()
+                .map(|found| CommentLine {
+                    line: found.line,
+                    text: found.text,
+                })
                 .collect(),
         }
     }

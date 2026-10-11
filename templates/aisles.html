@@ -44,6 +44,10 @@
             <p class="text-sm font-medium text-text mb-1">{{ tr.t("aisles-warnings") }}</p>
             <ul id="aisles-warning-list" class="text-sm text-muted font-mono list-disc pl-5"></ul>
         </div>
+        <div id="aisles-comments" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
+            <p class="text-sm font-medium text-text mb-1">{{ tr.t("aisles-comment-lines") }}</p>
+            <ul id="aisles-comment-list" class="text-sm text-muted font-mono list-disc pl-5"></ul>
+        </div>
 
         <div class="flex flex-wrap gap-1 mb-4" role="tablist" aria-label="{{ tr.t("aisles-title") }}">
             <button type="button" role="tab" class="nav-pill" id="tab-aisles" aria-controls="panel-aisles" data-tab="aisles">{{ tr.t("aisles-tab-aisles") }}</button>
@@ -156,6 +160,7 @@
         chooseIngredient: {{ tr.t("aisles-choose-ingredient")|json|safe }},
         moveToAisle: {{ tr.t("aisles-move-to-aisle")|json|safe }},
         sharedFile: {{ tr.t("aisles-shared-file")|json|safe }},
+        commentLine: {{ tr.t("aisles-comment-line")|json|safe }},
     };
 
     let state = {{ aisles|json|safe }};
@@ -789,6 +794,12 @@
         warnings.classList.toggle('hidden', !state.warnings.length);
         document.getElementById('aisles-warning-list')
             .replaceChildren(...state.warnings.map(w => el('li', {}, w)));
+        const comments = document.getElementById('aisles-comments');
+        comments.classList.toggle('hidden', !state.comment_lines.length);
+        document.getElementById('aisles-comment-list')
+            .replaceChildren(...state.comment_lines.map(c => el('li', {},
+                el('span', { class: 'text-faint' }, T.commentLine.replace('%n', c.line) + ' '),
+                c.text)));
 
         // Picks of ingredients that are gone, or have changed, are dropped.
         const entries = new Map();

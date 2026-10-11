@@ -646,7 +646,9 @@ impl IngredientCoverage {
 ///
 /// A configuration that parses with warnings — a duplicate entry, say — is a
 /// successful check carrying those warnings as [`Outcome::diagnostics`],
-/// located in the file when it came from one.
+/// located in the file when it came from one. So is a line that looks like a
+/// `#` or `--` comment, which the parser reads as an ingredient: see
+/// [`comment_lookalikes`](crate::aisle::comment_lookalikes).
 ///
 /// # Errors
 ///
@@ -673,6 +675,11 @@ pub fn aisle_coverage(
         let conf = parsed
             .output()
             .ok_or_else(|| config_error(source, "aisle", &diagnostics))?;
+        diagnostics.extend(
+            crate::aisle::comment_lookalikes(&text)
+                .iter()
+                .map(|found| found.diagnostic(source.path())),
+        );
         // The map is keyed by each name and synonym, already lowercased.
         known.extend(conf.ingredients_info().into_keys());
     }
@@ -2172,9 +2179,35 @@ mod tests {
         assert_eq!(known(&outcome.value), ["leek"]);
     }
 
-    /// The pantry's mirror of the test above. It exists because deleting
-    /// `pantry_coverage`'s `collect_diagnostics` call left every other test in
-    /// this module passing: the aisle twin does not cover it.
+    /// A `#` comment is an ingredient to the parser, and one at the end of a
+    /// line takes a synonym with it: `tomato` below is not known.
+    #[test]
+    fn a_comment_written_with_a_hash_comes_back_as_a_warning() {
+        let dir = one_recipe("Add @tomato{1} and @leek{1}.\n");
+        let conf = "[produce]\n# veg\nleek\ntomatoes | tomato # cherry\n";
+        let outcome = checked(&aisle_ctx(&dir, conf), true);
+
+        let messages: Vec<&str> = outcome
+            .diagnostics
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "line 2 is read as an ingredient: # veg (comments in aisle.conf start with //)",
+                "line 4 is read as an ingredient: tomatoes | tomato # cherry \
+                 (comments in aisle.conf start with //)",
+            ]
+        );
+        assert_eq!(unknown(&outcome.value), ["tomato"]);
+    }
+
+    /// The pantry's mirror of
+    /// `a_warning_in_the_aisle_configuration_comes_back_as_a_diagnostic`. It
+    /// exists because deleting `pantry_coverage`'s `collect_diagnostics` call
+    /// left every other test in this module passing: the aisle twin does not
+    /// cover it.
     #[test]
     fn a_warning_in_the_pantry_configuration_comes_back_as_a_diagnostic() {
         let dir = one_recipe("Add @ice{1}.\n");

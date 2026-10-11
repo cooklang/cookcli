@@ -10,6 +10,7 @@
 
 #![warn(missing_docs)]
 
+pub mod aisle;
 pub mod context;
 pub mod diagnostic;
 pub mod doctor;
