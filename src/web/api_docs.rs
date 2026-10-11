@@ -907,8 +907,11 @@ fn shopping_list() -> ApiSection {
                  ingredients that match no aisle category land in `other`, sorted \
                  alphabetically. Quantities are reduced by anything in `pantry.conf`; \
                  `pantry_items` lists the ingredient names that were found there (with a \
-                 nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's \
-                 current persistent checked state, unrelated to the recipes in this request.",
+                 nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, \
+                 when there is a pantry file but it could not be read or parsed, why: the \
+                 list is then made without the pantry, and the error is the one the pantry \
+                 page shows. `checked` echoes the server's current persistent checked \
+                 state, unrelated to the recipes in this request.",
             )
             .params(vec![
                 param(
@@ -1103,6 +1106,7 @@ fn shopping_list() -> ApiSection {
     }
   ],
   "pantry_items": ["flour", "water", "salt", "tipo zero flour", "olive oil", "fresh basil", "black pepper"],
+  "pantry_error": null,
   "checked": []
 }
 "#,
