@@ -21,8 +21,8 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
-- `401` — the server requires signing in to make changes, and the request carried no valid session cookie.
-- `403` — the signed-in user's role does not allow this request (`Your role does not allow this change`); signing in again as the same user will not help. Also: the request was sent to a host name other than `localhost` or an IP address, or a browser request tried to modify recipes from an origin the server does not trust (another site). Start the server with `--cors-origin <ORIGIN>` to allow that origin and its host.
+- `401` — the server requires signing in to make changes, and the request carried no valid session cookie. The response carries `X-Cook-Refused: sign-in`, and its `error` is written in the language of the `lang` cookie or `Accept-Language`.
+- `403` — the signed-in user's role does not allow this request (`Your role does not allow this change`, marked `X-Cook-Refused: role` and translated like the `401`); signing in again as the same user will not help. Also: the request was sent to a host name other than `localhost` or an IP address, or a browser request tried to modify recipes from an origin the server does not trust (another site). Start the server with `--cors-origin <ORIGIN>` to allow that origin and its host.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
 - `413` — the request body is over the size limit, or a picture has more pixels than the server will decode.
 - `415` — a picture in a format the server cannot read. The body adds a `code`; see `PUT /api/recipe_image/{*path}`.

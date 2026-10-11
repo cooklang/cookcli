@@ -164,6 +164,9 @@ sign-in-password = パスワード
 sign-in-failed = ユーザー名またはパスワードが違います。
 signed-in-as = ログイン中:
 role-forbidden = このアカウントではこの操作はできません。サーバーの管理者に別の権限を依頼してください。
+role-forbidden-change = このアカウントの権限ではこの変更はできません
+sign-in-to-change = 変更するにはログインしてください
+signed-out-notice = ログインが切れているため、この変更は保存されませんでした。
 
 # Errors
 error-title = エラーが発生しました

@@ -164,6 +164,9 @@ sign-in-password = Pasahitza
 sign-in-failed = Erabiltzaile-izena edo pasahitza okerra da.
 signed-in-as = Saioa hasita:
 role-forbidden = Zure kontuak ezin du hau egin. Eskatu beste rol bat zerbitzari hau kudeatzen duenari.
+role-forbidden-change = Zure rolak ez du aldaketa hau baimentzen
+sign-in-to-change = Hasi saioa aldaketak egiteko
+signed-out-notice = Zure saioa amaitu da, beraz aldaketa hau ez da egin.
 
 # Errors
 error-title = Zerbait gaizki joan da

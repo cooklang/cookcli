@@ -165,7 +165,9 @@ Configuration search order:
   A write route not listed in its `WRITES` table needs `Administer`, so list
   a new one there at the capability it deserves. A GET handler must never
   change anything. Guests get `401`, signed-in users whose role falls short
-  `403`. Templates get a `Viewer` (`src/web/viewer.rs`) and hide controls
+  `403`; on `/api` both are translated and marked `X-Cook-Refused`, which
+  `static/js/sign-in-notice.js` turns into a notice (with a sign-in link for
+  `401`) for any page's write. Templates get a `Viewer` (`src/web/viewer.rs`) and hide controls
   with `viewer.can_edit_lists()` / `can_edit_recipes()` / `can_admin()`
 - `--recipes-only` / `COOK_RECIPES_ONLY`: whoever is not signed in (everyone
   without a users file) only reads recipes. `auth::middleware::browses_recipes`
