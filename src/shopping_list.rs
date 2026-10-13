@@ -192,26 +192,19 @@ pub struct ShoppingListArgs {
 ///
 /// The comparison is canonical on both sides: symlinks and `./` segments make
 /// a byte-wise path check unreliable, and the recipe side can be a bare name
-/// that only resolves through `cooklang-find`. The output may not exist yet,
-/// so its parent is canonicalized and the file name re-attached.
+/// that only resolves through `cooklang-find`. An output that does not exist
+/// yet can only be skipped — a missing file is never an input.
 fn refuse_output_over_input(ctx: &Context, output: &Utf8Path, recipes: &[String]) -> Result<()> {
-    let output_path = (|| {
-        if let Ok(canonical) = std::fs::canonicalize(output) {
-            return Utf8PathBuf::from_path_buf(canonical).ok();
-        }
-        let parent = std::fs::canonicalize(output.parent()?).ok()?;
-        Utf8PathBuf::from_path_buf(parent)
-            .ok()?
-            .join(output.file_name()?)
-            .into()
-    })();
-    let Some(output_path) = output_path else {
+    let Ok(output_path) = std::fs::canonicalize(output) else {
+        return Ok(());
+    };
+    let Some(output_path) = Utf8PathBuf::from_path_buf(output_path).ok() else {
         return Ok(());
     };
 
     for recipe in recipes {
-        let (name, _) = split_recipe_name_and_scaling_factor(recipe)
-            .unwrap_or((recipe.as_str(), 1.0));
+        let (name, _) =
+            split_recipe_name_and_scaling_factor(recipe).unwrap_or((recipe.as_str(), 1.0));
         let Ok(entry) = cookcli_core::find::get_recipe(ctx.base_path(), name) else {
             continue;
         };
@@ -222,9 +215,7 @@ fn refuse_output_over_input(ctx: &Context, output: &Utf8Path, recipes: &[String]
             continue;
         };
         if Utf8Path::from_path(&canonical).is_some_and(|p| p == output_path) {
-            anyhow::bail!(
-                "Output path '{output}' is an input recipe; refusing to overwrite it"
-            );
+            anyhow::bail!("Output path '{output}' is an input recipe; refusing to overwrite it");
         }
     }
     Ok(())
