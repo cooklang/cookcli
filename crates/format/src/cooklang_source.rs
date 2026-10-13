@@ -40,7 +40,7 @@ use cooklang::{
     metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
-    quantity::Quantity,
+    quantity::{Quantity, Value},
     Recipe,
 };
 use regex::Regex;
@@ -133,7 +133,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                     quantity: igr.quantity.as_ref(),
                     note: igr.note.as_deref(),
                 }
-                .format(&mut step_str)
+                .format(&mut step_str)?
             }
             &Item::Cookware { index } => {
                 let cw = &recipe.cookware[index];
@@ -145,7 +145,7 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                     quantity: cw.quantity.as_ref(),
                     note: None,
                 }
-                .format(&mut step_str)
+                .format(&mut step_str)?
             }
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
@@ -157,10 +157,11 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
                     quantity: t.quantity.as_ref(),
                     note: None,
                 }
-                .format(&mut step_str)
+                .format(&mut step_str)?
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
+                check_writable(q.value())?;
                 write!(&mut step_str, "{}", q.value()).expect("writing to a String is infallible");
                 if let Some(u) = q.unit() {
                     step_str.push_str(u);
@@ -255,8 +256,35 @@ enum ComponentKind {
     Timer,
 }
 
+/// Refuse a quantity value the grammar cannot write back.
+///
+/// A negative number — reachable by scaling a recipe down below zero —
+/// would be emitted as `@flour{-400%g}` and reparse as *text*: the
+/// quantity silently stops scaling and aggregating. `inf`/`NaN` have no
+/// source form either. Failing the format is honest; corrupting the file
+/// quietly is not.
+fn check_writable(value: &Value) -> io::Result<()> {
+    let writable = match value {
+        Value::Number(n) => n.value().is_finite() && n.value() >= 0.0,
+        Value::Range { start, end } => {
+            [start, end]
+                .iter()
+                .all(|n| n.value().is_finite() && n.value() >= 0.0)
+        }
+        Value::Text(_) => true,
+    };
+    if writable {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("cannot write quantity '{value}' as cooklang source"),
+        ))
+    }
+}
+
 impl ComponentFormatter<'_> {
-    fn format(self, w: &mut String) {
+    fn format(self, w: &mut String) -> io::Result<()> {
         w.push(match self.kind {
             ComponentKind::Ingredient => '@',
             ComponentKind::Cookware => '#',
@@ -285,6 +313,7 @@ impl ComponentFormatter<'_> {
             }
         }
         if let Some(q) = self.quantity {
+            check_writable(q.value())?;
             w.push('{');
             w.push_str(&q.value().to_string());
             if let Some(unit) = q.unit() {
@@ -297,6 +326,7 @@ impl ComponentFormatter<'_> {
         if let Some(note) = self.note {
             write!(w, "({note})").unwrap();
         }
+        Ok(())
     }
 }
 
@@ -501,6 +531,20 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
                 "step lines must not be indented: {line:?}\n--- rendered ---\n{rendered}"
             );
         }
+    }
+
+    /// A scaled-down recipe can hold a negative quantity, which the
+    /// grammar cannot write back — `@flour{-400%g}` reparses as *text*,
+    /// silently un-scaled. Refusing is honest
+    /// (<https://github.com/cooklang/cookcli/issues/722>).
+    #[test]
+    fn a_negative_quantity_fails_the_format() {
+        let recipe = parse_recipe("Add @flour{400%g}.\n", "r", -1.0).unwrap().value;
+        let mut buf = Vec::new();
+        assert!(
+            print_cooklang(&recipe, &mut buf).is_err(),
+            "a negative quantity must not be emitted as source"
+        );
     }
 
     /// A recipe reference is re-emitted with `/` between its components on
