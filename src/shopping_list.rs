@@ -29,7 +29,7 @@
 // SOFTWARE.
 
 use anyhow::Result;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use chrono::NaiveDate;
 use clap::{Args, ValueEnum};
 use tracing::warn;
@@ -187,6 +187,49 @@ pub struct ShoppingListArgs {
     to: Option<NaiveDate>,
 }
 
+/// Refuse to write the shopping list over one of the recipes it was built
+/// from.
+///
+/// The comparison is canonical on both sides: symlinks and `./` segments make
+/// a byte-wise path check unreliable, and the recipe side can be a bare name
+/// that only resolves through `cooklang-find`. The output may not exist yet,
+/// so its parent is canonicalized and the file name re-attached.
+fn refuse_output_over_input(ctx: &Context, output: &Utf8Path, recipes: &[String]) -> Result<()> {
+    let output_path = (|| {
+        if let Ok(canonical) = std::fs::canonicalize(output) {
+            return Utf8PathBuf::from_path_buf(canonical).ok();
+        }
+        let parent = std::fs::canonicalize(output.parent()?).ok()?;
+        Utf8PathBuf::from_path_buf(parent)
+            .ok()?
+            .join(output.file_name()?)
+            .into()
+    })();
+    let Some(output_path) = output_path else {
+        return Ok(());
+    };
+
+    for recipe in recipes {
+        let (name, _) = split_recipe_name_and_scaling_factor(recipe)
+            .unwrap_or((recipe.as_str(), 1.0));
+        let Ok(entry) = cookcli_core::find::get_recipe(ctx.base_path(), name) else {
+            continue;
+        };
+        let Some(path) = entry.path() else {
+            continue;
+        };
+        let Ok(canonical) = std::fs::canonicalize(path.as_std_path()) else {
+            continue;
+        };
+        if Utf8Path::from_path(&canonical).is_some_and(|p| p == output_path) {
+            anyhow::bail!(
+                "Output path '{output}' is an input recipe; refusing to overwrite it"
+            );
+        }
+    }
+    Ok(())
+}
+
 /// A day on the command line: `YYYY-MM-DD`, or `today` in local time.
 fn parse_day(value: &str) -> std::result::Result<NaiveDate, String> {
     if value.eq_ignore_ascii_case("today") {
@@ -337,6 +380,13 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     }
 
     let list = outcome.value;
+
+    // The inputs are read before the output is written, so `-o` could
+    // silently overwrite one of them: `cook sl m5.cook -o m5.cook` replaced
+    // the recipe with its own shopping list.
+    if let Some(output) = args.output.as_deref() {
+        refuse_output_over_input(ctx, output, &expanded_recipes)?;
+    }
 
     write_to_output(args.output.as_deref(), |w| {
         if args.ingredients_only {
