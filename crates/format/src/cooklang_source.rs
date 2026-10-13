@@ -49,8 +49,46 @@ use regex::Regex;
 ///
 /// Metadata is emitted as YAML front-matter; steps are re-wrapped to the
 /// terminal width without breaking a component across lines.
+///
+/// Errors before writing anything when a quantity cannot be expressed in the
+/// grammar: a negative or non-finite number — a recipe can only hold one by
+/// being scaled by a negative or degenerate factor — would parse back as
+/// text, silently unscaling the recipe (#722). Fractions, and ranges for
+/// consumers parsing with `RANGE_VALUES`, are core syntax and round-trip
+/// fine, so they pass as long as their value is finite and non-negative.
 pub fn print_cooklang(recipe: &Recipe, mut writer: impl io::Write) -> io::Result<()> {
     let w = &mut writer;
+
+    fn writable(number: &cooklang::quantity::Number) -> bool {
+        let value = number.value();
+        // `Number`'s Display rounds with `(n * 1000.0).round() / 1000.0`,
+        // which overflows to `inf` above ~1.8e305 — a finite value that
+        // still writes a non-numeric quantity.
+        value.is_finite() && value >= 0.0 && (value * 1000.0).is_finite()
+    }
+
+    for q in recipe
+        .ingredients
+        .iter()
+        .flat_map(|i| &i.quantity)
+        .chain(recipe.cookware.iter().flat_map(|c| &c.quantity))
+        .chain(recipe.timers.iter().flat_map(|t| &t.quantity))
+    {
+        let writable = match q.value() {
+            cooklang::Value::Number(n) => writable(n),
+            cooklang::Value::Range { start, end } => writable(start) && writable(end),
+            cooklang::Value::Text(_) => true,
+        };
+        if !writable {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "cannot write a quantity of {q} as cooklang: \
+                     it would read back as text, not a scalable amount"
+                ),
+            ));
+        }
+    }
 
     metadata(w, &recipe.metadata)?;
     writeln!(w)?;
@@ -354,7 +392,12 @@ impl ComponentFormatter<'_> {
             {
                 w.push('=');
             }
-            write_value(w, q.value());
+            match q.value() {
+                // `-0.0` passes the non-negative check but spells as `-0`,
+                // which reparses as text — write it as `0` (#722).
+                cooklang::Value::Number(n) if n.value() == 0.0 => w.push('0'),
+                value => write_value(w, value),
+            }
             if let Some(unit) = q.unit() {
                 write!(w, "%{unit}").unwrap();
             }
@@ -491,6 +534,88 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         let mut buf = Vec::new();
         print_cooklang(recipe, &mut buf).expect("formats");
         String::from_utf8(buf).expect("utf-8")
+    }
+
+    /// A negative scale leaves a negative quantity in the recipe, and
+    /// cooklang has no spelling for one: `{-400%g}` reparses as *text*, so
+    /// the amount silently stops scaling and aggregating. The same holds for
+    /// `inf`/`NaN` from a degenerate factor. Writing the recipe would
+    /// corrupt it, so the format refuses instead (#722). The values are
+    /// planted by hand: the CLI also refuses a negative scale up front, but
+    /// the format crate must not depend on that to stay safe.
+    #[test]
+    fn an_unwritable_quantity_is_refused_not_written_as_text() {
+        // `1e308` is finite but `Number`'s Display rounds it through
+        // `n * 1000.0`, which overflows — it would spell `inf`.
+        for value in [-400.0, f64::INFINITY, f64::NAN, 1e308] {
+            let mut recipe = parse_recipe("Mix @flour{400%g}.\n", "r", 1.0)
+                .expect("parses")
+                .value;
+            recipe.ingredients[0].quantity = Some(Quantity::new(
+                cooklang::Value::Number(value.into()),
+                Some("g".to_string()),
+            ));
+
+            let mut out = Vec::new();
+            let error = print_cooklang(&recipe, &mut out).expect_err("must refuse");
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData, "{value}");
+            assert!(out.is_empty(), "{value}: nothing may be written first");
+        }
+    }
+
+    /// Fractions are core quantity grammar — `1/2` and `1 1/2` reparse under
+    /// `Extensions::empty()` — so they must keep formatting, including in
+    /// timers and cookware and behind a scaling lock (#722, #737).
+    #[test]
+    fn fraction_quantities_still_format() {
+        let text = "Mix @flour{1/2%cup} in a #pan{1/2}, rest ~{1/2%hour}, \
+                    knead @dough{=1 1/2%ball}.\n";
+        let recipe = parse_recipe(text, "r", 1.0).expect("parses").value;
+
+        let mut out = Vec::new();
+        print_cooklang(&recipe, &mut out).expect("fractions are writable");
+        let printed = String::from_utf8(out).expect("utf-8");
+        assert!(printed.contains("1/2"), "{printed}");
+
+        // Everything written must read back as a quantity, not text.
+        let reparsed = parse_recipe(&printed, "r", 1.0).expect("reparses").value;
+        for quantity in reparsed
+            .ingredients
+            .iter()
+            .flat_map(|i| &i.quantity)
+            .chain(reparsed.cookware.iter().flat_map(|c| &c.quantity))
+            .chain(reparsed.timers.iter().flat_map(|t| &t.quantity))
+        {
+            assert!(!quantity.value().is_text(), "{printed}");
+        }
+    }
+
+    /// `-0.0` is `>= 0.0`, so the check passes it — but `-0` reparses as
+    /// text. It must be written as `0` (#722).
+    #[test]
+    fn negative_zero_is_written_as_zero() {
+        let mut recipe = parse_recipe("Mix @flour{1%g}.\n", "r", 1.0)
+            .expect("parses")
+            .value;
+        recipe.ingredients[0].quantity = Some(Quantity::new(
+            cooklang::Value::Number(cooklang::quantity::Number::Regular(-0.0)),
+            Some("g".to_string()),
+        ));
+
+        let mut out = Vec::new();
+        print_cooklang(&recipe, &mut out).expect("writable");
+        let printed = String::from_utf8(out).expect("utf-8");
+        // `Quantity::new` is non-scalable, so the value carries the `=` lock;
+        // what matters is `0` in it, not `-0`.
+        assert!(printed.contains("{=0%g}"), "{printed}");
+
+        let reparsed = parse_recipe(&printed, "r", 1.0).expect("reparses").value;
+        assert!(!reparsed.ingredients[0]
+            .quantity
+            .as_ref()
+            .unwrap()
+            .value()
+            .is_text());
     }
 
     /// The formatter's whole contract: what it writes must parse back into

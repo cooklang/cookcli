@@ -94,17 +94,23 @@ pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
     F: FnOnce(&mut dyn std::io::Write) -> Result<()>,
 {
-    let mut stream: Box<dyn std::io::Write> = if let Some(path) = output {
-        let file = std::fs::File::create(path).context("Failed to create output file")?;
-        let stream = anstream::StripStream::new(file);
-        Box::new(stream)
-    } else {
-        Box::new(anstream::stdout().lock())
-    };
-    f(stream.as_mut())?;
-    // Explicitly flush the stream to ensure all output is written
     use std::io::Write;
-    stream.flush()?;
+    if let Some(path) = output {
+        // Render fully before touching the file: a formatter that fails
+        // halfway (e.g. an unwritable cooklang quantity, #722) must not
+        // leave a truncated file behind.
+        let mut buf = Vec::new();
+        {
+            let mut stream = anstream::StripStream::new(&mut buf);
+            f(&mut stream)?;
+            stream.flush()?;
+        }
+        std::fs::write(path, &buf).context("Failed to write output file")?;
+    } else {
+        let mut stream = anstream::stdout().lock();
+        f(&mut stream)?;
+        stream.flush()?;
+    }
     Ok(())
 }
 

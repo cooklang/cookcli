@@ -42,14 +42,14 @@ pub enum CoreError {
         rendered: String,
     },
 
-    /// A scaling factor was not a finite number.
+    /// A scaling factor was not a finite, non-negative number.
     ///
-    /// Only NaN and infinity are rejected. Zero and negative factors are
-    /// accepted, because the CLI accepts them and this crate must not change
-    /// that behaviour. NaN is worth catching because a missing JavaScript
-    /// argument arrives as `undefined`, which becomes NaN across NAPI and
-    /// would otherwise silently produce NaN quantities.
-    #[error("scale factor must be finite, but was {scale}")]
+    /// NaN, infinity and negative factors are rejected; zero is accepted.
+    /// NaN is worth catching because a missing JavaScript argument arrives as
+    /// `undefined`, which becomes NaN across NAPI and would otherwise silently
+    /// produce NaN quantities. A negative factor yields amounts like `-400 g`
+    /// that no output format can write as scalable quantities (#722).
+    #[error("scale factor must be a finite non-negative number, but was {scale}")]
     InvalidScale {
         /// The rejected factor.
         scale: f64,

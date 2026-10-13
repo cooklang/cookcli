@@ -59,8 +59,10 @@ pub fn parse_options() -> ParseOptions<'static> {
 ///
 /// # Scale
 ///
-/// `scale` must be finite; NaN and infinity give [`CoreError::InvalidScale`].
-/// Zero and negative factors are *accepted*, matching what the CLI does today.
+/// `scale` must be a finite, non-negative number: NaN, infinity and negative
+/// factors give [`CoreError::InvalidScale`]. A negative factor is nonsense for
+/// every output — it leaves quantities like `-400 g` that no format can write
+/// as scalable amounts (#722).
 pub fn parse_recipe(text: &str, name: &str, scale: f64) -> Result<Outcome<Recipe>, CoreError> {
     parse_recipe_at(text, name, scale, None)
 }
@@ -76,7 +78,9 @@ pub fn parse_recipe_at(
     scale: f64,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    if !scale.is_finite() {
+    // `is_sign_negative` covers `-0.0` too: it scales cleanly to zero but
+    // prints `-0 g` in human output, which reads as a parser bug.
+    if !scale.is_finite() || scale.is_sign_negative() {
         return Err(CoreError::InvalidScale { scale });
     }
 
@@ -281,18 +285,24 @@ mod tests {
         }
     }
 
-    /// Zero and negative scale are accepted, because the CLI accepts them.
-    /// Rejecting them would be a behaviour change smuggled into a refactor.
+    /// Zero scale zeroes every quantity; a negative one would produce amounts
+    /// like `-400 g` that no output format can represent, so it is rejected
+    /// (#722).
     #[test]
-    fn zero_and_negative_scale_are_accepted() {
+    fn zero_scale_is_accepted_but_negative_is_rejected() {
         assert_eq!(
             quantity_value(&parse_recipe(GOOD, "s", 0.0).unwrap().value, 0),
             0.0
         );
-        assert_eq!(
-            quantity_value(&parse_recipe(GOOD, "s", -1.0).unwrap().value, 0),
-            -2.0
-        );
+        assert!(matches!(
+            parse_recipe(GOOD, "s", -1.0),
+            Err(CoreError::InvalidScale { scale }) if scale == -1.0
+        ));
+        // `-0.0` is not `< 0.0` but still spells `-0 g` in output.
+        assert!(matches!(
+            parse_recipe(GOOD, "s", -0.0),
+            Err(CoreError::InvalidScale { scale }) if scale == 0.0 && scale.is_sign_negative()
+        ));
     }
 
     #[test]

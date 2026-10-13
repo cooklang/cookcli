@@ -86,7 +86,8 @@ pub fn split_name_and_scale(query: &str) -> Option<(&str, f64)> {
 ///   matter cannot be understood. The underlying cause is in `source`.
 /// - [`CoreError::Parse`] if the recipe has parse errors. Its `name` is the
 ///   recipe's path, matching the file the `rendered` report points at.
-/// - [`CoreError::InvalidScale`] if the scale is not finite.
+/// - [`CoreError::InvalidScale`] if the scale is not finite, or is negative
+///   (`-0` included — it scales but prints `-0 g`).
 pub fn read(ctx: &Context, req: ReadRequest) -> Result<Outcome<ReadResult>, CoreError> {
     match req.source {
         RecipeSource::Content { text, name } => {
