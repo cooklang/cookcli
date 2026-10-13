@@ -280,6 +280,7 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
             // The resolved `-b` already sits in `ctx`; a raw relative path
             // here reached the walker uncanonicalized (#714).
             base_dir: None,
+            ..Default::default()
         },
     )
     .map_err(cli_error)?;
@@ -318,7 +319,14 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
         warn!("No aisle configuration found");
     }
 
-    let outcome = aisle_coverage(ctx, CoverageRequest { base_dir: None }).map_err(cli_error)?;
+    let outcome = aisle_coverage(
+        ctx,
+        CoverageRequest {
+            base_dir: None,
+            ..Default::default()
+        },
+    )
+    .map_err(cli_error)?;
     log_diagnostics(&outcome.diagnostics);
     let coverage = outcome.value;
 

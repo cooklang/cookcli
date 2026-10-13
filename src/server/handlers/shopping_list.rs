@@ -1,5 +1,6 @@
 use crate::server::handlers::common::{check_path, json_error};
 use crate::server::{activity, private_paths, AppState};
+use crate::util::inside_collection;
 use crate::util::recipe_info::{
     combined_quantity, ref_info_or_default, reference_factor, resolve_recipe_info, RecipeInfo,
 };
@@ -62,6 +63,16 @@ pub async fn shopping_list(
         // on Windows, merely looking up `\\host\share` hands that host the
         // user's NTLM hash.
         check_path(&name)?;
+        // A name that reaches a file through a link out of the collection is
+        // refused before it is read — this route is guest-reachable (#698).
+        if !inside_collection(&state.base_path, &state.base_path.join(&name)) {
+            // The refusal says what core says, so a link out and a dangling
+            // name answer identically.
+            return Err((
+                StatusCode::BAD_REQUEST,
+                json_error(format!("recipe not found: {name}")),
+            ));
+        }
         let recipe = ScaledRecipe::scaled(
             cookcli_core::RecipeSource::Path(name.as_str().into()),
             entry.scale.unwrap_or(1.0),
@@ -75,6 +86,7 @@ pub async fn shopping_list(
                 included_references: entry.included_references.as_deref(),
                 // Only what was chosen, below.
                 include_optional: false,
+                confined: true,
             },
             &mut ingredients,
         )
@@ -408,6 +420,14 @@ fn reference_scales(
 ) -> Vec<Option<f64>> {
     let recipe = path.and_then(|path| {
         let entry = crate::util::get_recipe(ctx.base_path(), path.as_str()).ok()?;
+        // A reference through a link out of the collection is not looked up
+        // either — its servings would come from a file outside it (#698).
+        if entry
+            .path()
+            .is_some_and(|file| !inside_collection(ctx.base_path(), file))
+        {
+            return None;
+        }
         crate::util::parse_recipe_from_entry(&entry, scale).ok()
     });
     let Some(recipe) = recipe else {
@@ -440,7 +460,15 @@ fn reference_scales(
                 return None;
             }
             let target = cookcli_core::resolve_reference(dir, reference)?;
-            let info = ref_info_or_default(ctx.base_path(), target.as_str(), reference);
+            // The target's servings come from a file too: one outside the
+            // collection is not read for them either (#698).
+            let info = if cookcli_core::find::get_recipe_inside(ctx.base_path(), target.as_str())
+                .is_ok()
+            {
+                ref_info_or_default(ctx.base_path(), target.as_str(), reference)
+            } else {
+                RecipeInfo::default()
+            };
             reference_factor(combined_quantity(&uses).as_ref(), scale, &info)
         })
         .collect()
@@ -452,6 +480,9 @@ fn reference_scales(
 /// `path` must already be a safe relative path: `cooklang-find` joins it to
 /// the recipe directory and asks the filesystem.
 fn recipe_title(ctx: &cookcli_core::Context, path: &Utf8Path) -> Option<String> {
+    // A stored reference that leaves the collection once resolved gets no
+    // title from it — its file is not this server's to name (#698).
+    cookcli_core::find::get_recipe_inside(ctx.base_path(), path.as_str()).ok()?;
     let request = cookcli_core::recipe::ReadRequest {
         source: cookcli_core::RecipeSource::Path(path.to_owned()),
         scale: 1.0,
@@ -487,6 +518,36 @@ pub async fn add_to_shopping_list(
     // `aggregate_current_ingredient_names` on the way to a compact. Refuse it
     // at the door rather than storing something those have to defend against.
     check_path(&payload.path)?;
+    if !inside_collection(&state.base_path, &state.base_path.join(&payload.path)) {
+        tracing::error!("{:?} resolves outside the recipe directory", payload.path);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!(
+                "{} is not inside the recipe directory once links are followed",
+                payload.path
+            )),
+        ));
+    }
+    // A bare name without an extension reaches its `.cook`/`.menu` through
+    // cooklang-find — `Leak` finds `Leak.cook`, link or not — so it is
+    // resolved here rather than on the joined path above, which sees nothing
+    // until the extension is tried. A name that resolves to nothing is still
+    // stored, as before; one that resolves outside is refused.
+    if let Ok(entry) = cookcli_core::find::get_recipe(&state.base_path, &payload.path) {
+        if entry
+            .path()
+            .is_some_and(|file| !inside_collection(&state.base_path, file))
+        {
+            tracing::error!("{:?} resolves outside the recipe directory", payload.path);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                json_error(format!(
+                    "{} is not inside the recipe directory once links are followed",
+                    payload.path
+                )),
+            ));
+        }
+    }
 
     let store = ShoppingListStore::new(&state.base_path);
     let added = format!(
@@ -502,7 +563,7 @@ pub async fn add_to_shopping_list(
             cookcli_core::RecipeSource::Path(payload.path.as_str().into()),
             payload.scale,
         );
-        optional_selections(&core_ctx, &recipe, &payload.optional_ingredients)
+        optional_selections(&core_ctx, &recipe, &payload.optional_ingredients, true)
             .map_err(|e| {
                 tracing::error!("Failed to read optional ingredients: {e}");
                 (StatusCode::BAD_REQUEST, json_error(e))
@@ -749,10 +810,13 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
      -> anyhow::Result<()> {
         // `.shopping-list` is a file, and one written before these endpoints
         // checked what they stored can still hold a path that leaves the
-        // recipe directory. Skipping it costs the compact the ingredients of
-        // an entry that was never a recipe in this collection; following it
-        // would read whatever it names.
-        if !crate::util::is_safe_relative_path(path) {
+        // recipe directory — lexically, or through a link once resolved.
+        // Skipping it costs the compact the ingredients of an entry that was
+        // never a recipe in this collection; following it would read
+        // whatever it names (#698).
+        if !crate::util::is_safe_relative_path(path)
+            || !inside_collection(&state.base_path, &state.base_path.join(path))
+        {
             tracing::warn!(
                 "Ignoring stored shopping list path outside the recipe directory: {path}"
             );
@@ -765,6 +829,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 ignore_references: false,
                 included_references: included,
                 include_optional: false,
+                confined: true,
             },
             &mut list,
         )
@@ -868,6 +933,22 @@ pub async fn add_menu_to_shopping_list(
         )
     })?;
 
+    // `get_recipe` follows links, so `Link/Week.menu` through a
+    // `Link -> /outside` symlink is a hit (#698).
+    if entry
+        .path()
+        .is_some_and(|file| !inside_collection(&state.base_path, file))
+    {
+        tracing::error!("{:?} resolves outside the recipe directory", payload.path);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!(
+                "{} is not inside the recipe directory once links are followed",
+                payload.path
+            )),
+        ));
+    }
+
     // References come back with their factor already resolved: `{target%unit}`
     // against the referenced recipe's servings/yield, times the menu scale.
     let menu = crate::util::menu::load_menu(&entry, &recipe_path, &state.base_path, menu_scale)
@@ -900,6 +981,22 @@ pub async fn add_menu_to_shopping_list(
             if crate::util::menu::is_outside_reference(path) {
                 tracing::warn!(
                     "Skipping recipe reference '{}' in menu '{}': it points outside the \
+                     recipe directory",
+                    path,
+                    payload.path
+                );
+                continue;
+            }
+            // Lexically inside is not containment either — `Linked/Secret`
+            // is a link out. Resolving it here keeps that file's own
+            // references from being stored as list sub-entries (#698).
+            let lands_outside = cookcli_core::find::get_recipe(&state.base_path, path)
+                .ok()
+                .and_then(|entry| entry.path().cloned())
+                .is_some_and(|file| !inside_collection(&state.base_path, &file));
+            if lands_outside {
+                tracing::warn!(
+                    "Skipping recipe reference '{}' in menu '{}': it resolves outside the \
                      recipe directory",
                     path,
                     payload.path

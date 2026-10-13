@@ -556,6 +556,7 @@ fn included_references_are_matched_resolved_however_they_were_spelled() {
                 ignore_references: false,
                 included_references: Some(&[spelling.to_string()]),
                 include_optional: false,
+                confined: false,
             },
             &mut list,
         )
@@ -1290,6 +1291,7 @@ fn included_references_selects_which_references_to_follow() {
             ignore_references: false,
             included_references: Some(&included),
             include_optional: false,
+            confined: false,
         },
         &mut list,
     )
@@ -1327,6 +1329,7 @@ fn included_references_filter_the_top_level_only() {
             ignore_references: false,
             included_references: Some(&included),
             include_optional: false,
+            confined: false,
         },
         &mut list,
     )
@@ -1621,6 +1624,7 @@ fn optional_selections_are_scaled_and_summed() {
             "chilli".to_string(),
             "basil".to_string(),
         ],
+        false,
     )
     .expect("reads the recipe")
     .value;
@@ -1650,6 +1654,7 @@ fn optional_selections_ignore_required_and_unknown_names() {
         &ctx(&dir),
         &at_path("a.cook"),
         &["salt".to_string(), "nutmeg".to_string()],
+        false,
     )
     .expect("reads the recipe")
     .value;

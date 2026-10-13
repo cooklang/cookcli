@@ -119,6 +119,40 @@ pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry, CoreE
         .map_err(|e| fetch_error(e, Utf8Path::new(clean_name)))
 }
 
+/// [`get_recipe`], refusing a hit whose file lies outside `base_path`.
+///
+/// `get_recipe` tries `.cook` and `.menu` on a bare name and follows links,
+/// so a bare `Sauce` resolves `Sauce.cook` even when that file is a link out,
+/// and `Link/Sauce` through `Link -> /outside` is a hit for it. A caller
+/// answering on behalf of someone else must stay inside the collection: the
+/// entry is returned only when its path canonicalizes inside `base_path`.
+/// An outside hit reads as [`CoreError::RecipeNotFound`] — the same answer a
+/// genuinely missing recipe gives, so the refusal reveals nothing (#698).
+pub fn get_recipe_inside(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry, CoreError> {
+    let entry = get_recipe(base_path, name)?;
+    let inside = entry
+        .path()
+        .is_some_and(|file| inside_base(base_path, file));
+    if inside {
+        Ok(entry)
+    } else {
+        Err(CoreError::RecipeNotFound {
+            name: name.to_string(),
+        })
+    }
+}
+
+/// Whether `path` canonicalizes inside `base` — the containment half of
+/// [`get_recipe_inside`], for a caller already holding the file's path.
+/// `false` for a path that does not exist: it cannot be read anyway, so there
+/// is nothing to confine.
+pub fn inside_base(base: &Utf8Path, path: &Utf8Path) -> bool {
+    path.canonicalize_utf8()
+        .ok()
+        .zip(base.canonicalize_utf8().ok())
+        .is_some_and(|(path, base)| path.starts_with(&base))
+}
+
 /// Map a lookup failure onto the error that describes what actually happened.
 ///
 /// Only `FetchError::InvalidPath` means the recipe is absent;
