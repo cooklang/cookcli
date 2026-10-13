@@ -168,7 +168,7 @@ pub struct AddArgs {
     /// Name of the ingredient to add
     pub name: String,
 
-    /// Quantity on hand (e.g. "2%kg", "500%ml", "12")
+    /// Quantity on hand (e.g. "2%kg", "500%ml", "12", "unlim")
     #[arg(long)]
     pub quantity: Option<String>,
 
@@ -202,7 +202,7 @@ pub struct UpdateArgs {
     /// Name of the ingredient to update
     pub name: String,
 
-    /// New quantity value (e.g. "2%kg")
+    /// New quantity value (e.g. "2%kg", "unlim")
     #[arg(long)]
     pub quantity: Option<String>,
 

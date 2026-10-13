@@ -280,6 +280,24 @@ fn depleted_reports_what_is_at_or_below_its_own_threshold() {
     assert!(!reported.contains(&"butter".to_string()), "{reported:?}");
 }
 
+/// `.3%kg` and `0.3%kg` are the same quantity to the file's own reader, and
+/// `1e2%g` a hundred grams — a private regex read them differently, so
+/// `depleted` answered `.3%kg` as not-a-quantity and `1e2%g` as `1` of a
+/// unit called `e2%g` (#710).
+#[test]
+fn depleted_reads_quantities_the_same_way_the_file_does() {
+    let reported = depleted_names(
+        "[store]\nlead_dot = \".3%kg\"\nnormal = \"0.3%kg\"\nexponent = \"1e2%g\"\nout = \".0%g\"\n",
+        false,
+    );
+
+    // Both spellings of 0.3 kg are under the 0.5 kg line, 1e2 g sits on the
+    // 100 g one, and .0%g is simply out.
+    for name in ["lead_dot", "normal", "exponent", "out"] {
+        assert!(reported.contains(&name.to_string()), "{name}: {reported:?}");
+    }
+}
+
 #[test]
 fn depleted_reports_in_file_order_with_the_section_on_each_item() {
     let items = depleted(&ctx_with(PANTRY), DepletedRequest { all: true })
@@ -622,10 +640,15 @@ fn the_built_in_thresholds_are_per_unit() {
     assert!(is_low_quantity("100 G"));
     assert!(!is_low_quantity("101 G"));
 
-    // Not a quantity at all.
-    for not_a_quantity in ["", "always available", "a few", "-1%g"] {
+    // Not a quantity at all. A negative one is nonsense but parses, and is
+    // below every threshold — safer listed than not.
+    for not_a_quantity in ["", "always available", "a few"] {
         assert!(!is_low_quantity(not_a_quantity), "{not_a_quantity:?}");
     }
+    assert!(
+        is_low_quantity("-1%g"),
+        "a negative amount is below any line"
+    );
 }
 
 #[test]
@@ -1536,6 +1559,279 @@ fn remove_refuses_a_section_that_is_not_there() {
         other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
     }
     assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+/// What `add` refuses to write: a quantity that is not one never subtracts
+/// from a shopping list, and a date that is not one never expires — junk the
+/// next read would quietly ignore (#710). The file must be left alone either
+/// way.
+#[test]
+fn add_refuses_an_attribute_nothing_could_read_back() {
+    for (key, request) in [
+        (
+            "quantity",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                quantity: Some("garbage".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "low",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                low: Some("plenty".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "expire",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                expire: Some("32/13/2025".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "bought",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                bought: Some("last tuesday".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = add(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
+}
+
+/// The spellings #710 was opened with, and the ones that parse yet cannot
+/// mean an amount: `nan`/`inf`/`-5` count as covered-or-not by accident of
+/// `NaN` comparisons, and `unlim` under `low` is a threshold that never
+/// trips. A date with a two-digit year stores as the year 27.
+#[test]
+fn add_refuses_quantities_and_dates_that_parse_to_nonsense() {
+    for (key, request) in [
+        ("quantity", "500g"),
+        ("quantity", "1/2%cup"),
+        ("quantity", "1,5%kg"),
+        ("quantity", "nan%g"),
+        ("quantity", "inf%g"),
+        ("quantity", "-5%g"),
+        // `-0` is not `< 0`: it needs the explicit sign check.
+        ("quantity", "-0"),
+        ("quantity", "-0%g"),
+    ]
+    .map(|(key, value)| {
+        (
+            key,
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                quantity: Some(value.to_string()),
+                ..Default::default()
+            },
+        )
+    })
+    .into_iter()
+    .chain([(
+        "low",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("unlim".to_string()),
+            ..Default::default()
+        },
+    )])
+    .chain([(
+        "low",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("-0".to_string()),
+            ..Default::default()
+        },
+    )])
+    .chain([(
+        "expire",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            expire: Some("27-01-02".to_string()),
+            ..Default::default()
+        },
+    )]) {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = add(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
+}
+
+/// What `add` accepts: every spelling the file's readers can parse —
+/// `unlim`/`unlimited` as the seed pantry writes them, a bare count, the
+/// `VALUE%UNIT` form, its spaced variants, a leading-dot decimal — and every
+/// date format `parse_date` understands (#710).
+#[test]
+fn add_accepts_the_quantities_and_dates_readers_use() {
+    for (quantity, bought, expire) in [
+        (Some("unlim"), None, None),
+        (Some("unlimited"), None, None),
+        (Some("2"), None, None),
+        (Some("500%g"), None, None),
+        (Some("500 g"), None, None),
+        (Some(".5%kg"), None, None),
+        (Some("2%kg"), Some("2025-01-02"), Some("02.01.2026")),
+        // `01/13/2026` is unambiguous: month 13 is not a day, so only the
+        // `%m/%d/%Y` format can read it — `01/02` would parse as `%d/%m/%Y`
+        // first and leave that one untested.
+        (Some("12"), Some("02/01/2025"), Some("01/13/2026")),
+        (Some("1%l"), Some("2025.01.02"), Some("02-01-2026")),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        add(
+            &ctx,
+            AddRequest {
+                section: "pantry".to_string(),
+                name: format!("item-{quantity:?}-{bought:?}"),
+                quantity: quantity.map(str::to_string),
+                bought: bought.map(str::to_string),
+                expire: expire.map(str::to_string),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("{quantity:?} must be accepted: {error}"));
+    }
+}
+
+/// A file edited by hand can hold a `quantity` or `low` nothing reads back.
+/// Every consumer then skips it silently — `depleted`, the stock dots, the
+/// shopping list — so `load` says so rather than leaving it looking stocked
+/// (#710).
+#[test]
+fn load_warns_on_a_value_nothing_can_read_back() {
+    let outcome = load(&ctx_with(
+        "[pantry]\n\
+         flour = { quantity = \"0g\" }\n\
+         salt = { quantity = \"1%kg\", low = \"sometimes\" }\n\
+         sugar = { quantity = \"unlim\" }\n",
+    ))
+    .expect("an unreadable value is not fatal");
+
+    let messages: Vec<&str> = outcome
+        .diagnostics
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("'flour' has a quantity that cannot be read back: 0g")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("'salt' has a low that cannot be read back: sometimes")),
+        "{messages:?}"
+    );
+    // `unlim` is a spelling, not junk.
+    assert!(
+        !messages.iter().any(|m| m.contains("'sugar'")),
+        "{messages:?}"
+    );
+}
+
+/// The `low` refusal must not suggest `unlim` — it is exactly what was just
+/// refused.
+#[test]
+fn a_refused_low_does_not_suggest_it() {
+    let (_dir, ctx) = planted(SMALL);
+    let error = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("sometimes".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("unreadable low must be refused");
+    assert!(!error.to_string().contains("or `unlim`"), "{error}");
+}
+
+/// `unlimited` is a spelling for "still stocked" — a `quantity`, not a
+/// `low` threshold: a threshold that is not a number never trips `is_low`,
+/// so storing it is the junk this command exists to refuse.
+#[test]
+fn add_refuses_unlimited_as_a_low_threshold() {
+    let (_dir, ctx) = planted(SMALL);
+    let before = read_back(&ctx);
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "salt".to_string(),
+            quantity: Some("1%kg".to_string()),
+            low: Some("unlimited".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("unlimited low must be refused");
+    assert_eq!(read_back(&ctx), before, "nothing may be written");
+}
+
+/// The same values through `update` (#710), where a fresh pantry with a bad
+/// value stored it verbatim before.
+#[test]
+fn update_refuses_an_attribute_nothing_could_read_back() {
+    for (key, request) in [
+        (
+            "quantity",
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                quantity: Some("heaps".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "expire",
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                expire: Some("next friday".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = update(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
 }
 
 #[test]

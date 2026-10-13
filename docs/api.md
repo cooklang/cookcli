@@ -870,7 +870,7 @@ Re-aggregates the current list and removes checks for ingredients that are no lo
 
 ## Pantry
 
-Reads and writes `pantry.conf`, a TOML file of what you already have at home. Quantities are typically `VALUE%UNIT`, e.g. `250%g`, but the field is just a string — `unlim` and plain counts like `12` appear untouched in the seed data. Every endpoint here returns 404 when no pantry file is configured. Changes edit only the entry concerned, so comments, blank lines and formatting elsewhere in the file are kept; they need the `shopper` role when sign-in is on.
+Reads and writes `pantry.conf`, a TOML file of what you already have at home. Quantities are typically `VALUE%UNIT`, e.g. `250%g`; `unlim` and plain counts like `12` appear in the seed data, and writes refuse a value nothing could parse back. Every endpoint here returns 404 when no pantry file is configured. Changes edit only the entry concerned, so comments, blank lines and formatting elsewhere in the file are kept; they need the `shopper` role when sign-in is on.
 
 ### `GET /api/pantry`
 
@@ -910,7 +910,7 @@ Creates the section if it does not exist. Spaces around each field are dropped. 
 |------|----|------|----------|-------------|
 | `section` | body | `string` | yes | Section to add the item to. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character: it becomes a segment of the `/api/pantry/{section}/{name}` URL. |
 | `name` | body | `string` | yes | Item name. `400` when it is `.` or `..`, or contains a control character. |
-| `quantity` | body | `string` | no | Amount as `VALUE%UNIT`, or any other string such as `unlim`. |
+| `quantity` | body | `string` | no | Amount as `VALUE%UNIT` (e.g. `250%g`), a plain count like `12`, or `unlim`/`unlimited`. `400` for a value the pantry cannot read back. |
 | `bought` | body | `string` | no | Purchase date. Accepts `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`, `MM/DD/YYYY`, `YYYY.MM.DD` or `DD-MM-YYYY`. |
 | `expire` | body | `string` | no | Expiry date, same accepted formats as `bought`. |
 | `low` | body | `string` | no | Threshold below which the item counts as running low. Compared against `quantity` only when both share the same unit; see `GET /api/pantry/depleted`. |
@@ -939,16 +939,16 @@ Response:
 
 Update an item
 
-Only the fields present in the body are changed; omitted fields keep their current values, and a body with none of them writes nothing. `404` if the section or the item does not exist.
+Only the fields present in the body are changed; omitted fields keep their current values, and a body with none of them writes nothing. `404` if the section or the item does not exist. `400` for a `quantity`, `low`, `bought` or `expire` value the pantry cannot read back — the same forms as `POST /api/pantry/add` accepts.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `section` | path | `string` | yes | Section containing the item. |
 | `name` | path | `string` | yes | Item name. |
-| `quantity` | body | `string` | no | New amount. |
-| `bought` | body | `string` | no | New purchase date. |
-| `expire` | body | `string` | no | New expiry date. |
-| `low` | body | `string` | no | New low threshold. |
+| `quantity` | body | `string` | no | New amount, the same forms as `POST /api/pantry/add`. |
+| `bought` | body | `string` | no | New purchase date, the same formats as `POST /api/pantry/add`. |
+| `expire` | body | `string` | no | New expiry date, the same formats as `POST /api/pantry/add`. |
+| `low` | body | `string` | no | New low threshold — a readable amount, never `unlim`. |
 
 Request body:
 
