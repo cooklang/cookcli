@@ -65,6 +65,14 @@ pub struct ReportArgs {
     base_path: Option<Utf8PathBuf>,
 }
 
+impl ReportArgs {
+    /// The `--base-path`, so `configure_context` can point config
+    /// discovery at it too — not only recipe resolution.
+    pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
+        self.base_path.clone()
+    }
+}
+
 pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     // Print warning about prototype feature
     warn!("⚠️  The report command is a prototype feature and will change in future versions.");
@@ -77,9 +85,8 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
     let template = fs::read_to_string(&args.template)
         .with_context(|| format!("Failed to read template file: {}", args.template))?;
 
-    // Aisle and pantry fall back to the context, which discovers them relative
-    // to the working directory — not to `--base-path`, which only steers recipe
-    // references inside the template.
+    // Aisle and pantry fall back to the context, which discovers them under
+    // the resolved `--base-path`; explicit `--aisle`/`--pantry` still win.
     let mut core_ctx = ctx.clone();
     if let Some(aisle) = args.aisle {
         core_ctx = core_ctx.with_aisle(ConfigSource::Path(to_absolute(aisle)));
@@ -102,7 +109,9 @@ pub fn run(ctx: &crate::Context, args: ReportArgs) -> Result<()> {
             template,
             scale: scaling_factor,
             datastore: args.datastore,
-            base_path: args.base_path.map(to_absolute),
+            // `ctx` already holds the resolved `--base-path`; core defaults
+            // the request's to it, so nothing needs passing here.
+            base_path: None,
         },
     );
 

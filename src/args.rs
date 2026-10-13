@@ -298,3 +298,25 @@ pub enum Command {
     #[cfg(feature = "self-update")]
     Update(update::UpdateArgs),
 }
+
+impl Command {
+    /// The `--base-path` the command was run with, when it takes one.
+    ///
+    /// `configure_context` resolves it once for every command, so recipe,
+    /// aisle and pantry discovery all agree on the directory (#711): commands
+    /// that kept their own lookup read `./config/` of the working directory
+    /// even with `-b` pointing elsewhere. Sign-in and sync state are not
+    /// affected — they still come only from the global config directory.
+    pub fn base_path(&self) -> Option<camino::Utf8PathBuf> {
+        match self {
+            #[cfg(feature = "server")]
+            Command::Server(args) => args.get_base_path(),
+            Command::Build(args) => args.get_base_path(),
+            Command::ShoppingList(args) => args.get_base_path(),
+            Command::Doctor(args) => args.get_base_path(),
+            Command::Pantry(args) => args.base_path.clone(),
+            Command::Report(args) => args.get_base_path(),
+            _ => None,
+        }
+    }
+}

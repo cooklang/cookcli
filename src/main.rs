@@ -102,19 +102,10 @@ pub fn main() -> Result<()> {
 
 fn configure_context() -> Result<Context> {
     let args = CliArgs::parse();
-    let base_path = match args.command {
-        #[cfg(feature = "server")]
-        Command::Server(ref server_args) => server_args
-            .get_base_path()
-            .unwrap_or_else(|| Utf8PathBuf::from(".")),
-        Command::ShoppingList(ref shopping_list_args) => shopping_list_args
-            .get_base_path()
-            .unwrap_or_else(|| Utf8PathBuf::from(".")),
-        Command::Build(ref build_args) => build_args
-            .get_base_path()
-            .unwrap_or_else(|| Utf8PathBuf::from(".")),
-        _ => Utf8PathBuf::from("."),
-    };
+    let base_path = args
+        .command
+        .base_path()
+        .unwrap_or_else(|| Utf8PathBuf::from("."));
 
     // Core neither resolves nor validates the base path, deliberately. The CLI
     // does both, so a mistyped `--base-path` fails here with one clear message

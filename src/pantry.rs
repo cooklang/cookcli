@@ -297,16 +297,8 @@ struct IngredientStep {
 }
 
 pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
-    // Create a new context with the provided base path if specified
-    let new_ctx;
-    let ctx = if let Some(base_path) = args.base_path {
-        let absolute_base_path = crate::util::resolve_to_absolute_path(&base_path)?;
-        new_ctx = AppContext::discover(absolute_base_path);
-        &new_ctx
-    } else {
-        ctx
-    };
-
+    // `-b` is already resolved in `ctx` — `configure_context` honours
+    // `Command::base_path()` for every command.
     let format = args.format;
 
     match args.command {
