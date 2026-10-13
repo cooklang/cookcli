@@ -525,9 +525,24 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
 
         let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
         assert!(
-            !reparsed.ingredients[0].quantity.as_ref().unwrap().scalable(),
+            !reparsed.ingredients[0]
+                .quantity
+                .as_ref()
+                .unwrap()
+                .scalable(),
             "the lock was lost on reparse: {rendered}"
         );
+    }
+
+    /// Scaling first does not drop the lock either: `@egg{=2}` at ×10 is
+    /// still `=2`, while an unlocked quantity has already grown.
+    #[test]
+    fn a_locked_quantity_survives_scaling() {
+        let source = "Add @egg{=2} and @milk{100%ml}.\n";
+        let scaled = parse_recipe(source, "r", 10.0).unwrap().value;
+        let rendered = format_to_string(&scaled);
+        assert!(rendered.contains("@egg{=2}"), "got: {rendered}");
+        assert!(rendered.contains("@milk{1000%ml}"), "got: {rendered}");
     }
 
     /// A recipe reference is re-emitted with `/` between its components on
