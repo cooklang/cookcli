@@ -127,6 +127,31 @@ fn latex_output_is_a_well_formed_document() {
     assert!(out.contains("Rest the dough"), "the text block: {out}");
 }
 
+/// `\\` in the output is a LaTeX line break, not a backslash, so escaping a
+/// literal backslash that way dropped the character and broke the line it
+/// sat on (#715).
+#[test]
+fn latex_emits_a_literal_backslash_as_textbackslash() {
+    let dir = TempDir::new().unwrap();
+    // `\\` in the source is cooklang's escape for a literal backslash.
+    fs::write(
+        dir.path().join("dish.cook"),
+        "Serve from the C:\\\\temp share.\n",
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(dir.path())
+        .args(["recipe", "read", "-f", "latex", "dish.cook"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8(output.stdout).expect("utf-8");
+
+    assert!(out.contains(r"C:\textbackslash{}temp"), "{out}");
+    assert!(!out.contains(r"C:\\temp"), "{out}");
+}
+
 // ---------------------------------------------------------------------------
 // Typst
 // ---------------------------------------------------------------------------

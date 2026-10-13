@@ -443,7 +443,7 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
 fn escape_latex(text: &str) -> String {
     text.chars()
         .map(|c| match c {
-            '\\' => r"\\".to_string(),
+            '\\' => r"\textbackslash{}".to_string(),
             '{' => r"\{".to_string(),
             '}' => r"\}".to_string(),
             '$' => r"\$".to_string(),
