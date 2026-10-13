@@ -404,7 +404,7 @@ fn cookware(
                 write!(w, "{quantity} ")?;
             }
         }
-        write!(w, "{}", escape_md(cw.display_name().as_ref()))?;
+        write!(w, "{}", escape_md(cw.display_name()))?;
 
         if cw.modifiers().is_optional() {
             write!(w, " {}", opts.optional_marker)?;
@@ -452,8 +452,9 @@ fn w_section(
                     // Add extra newline for list separation
                     writeln!(w)?
                 } else {
-                    // Format as a note with blockquote style
-                    writeln!(w, "> **Note:** {}", escape_md(text.trim()))?
+                    // Format as a note with blockquote style — the text
+                    // follows `**Note:**`, so it is mid-line.
+                    writeln!(w, "> **Note:** {}", escape_md_at(text.trim(), false))?
                 }
             }
         };
@@ -471,35 +472,39 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
     }
 
     let mut step_str = String::new();
+    // Line-start rules apply only to text that actually opens a line: an
+    // item mid-step can hold `-` or `1.` without forming a list.
+    let at_line_start = |step_str: &String| step_str.is_empty() || step_str.ends_with('\n');
     for item in &step.items {
+        let line_start = at_line_start(&step_str);
         match item {
             Item::Text { value } => {
                 // Check if this is a list bullet and format it properly for markdown
                 if value.trim() == "-" {
                     step_str.push_str("\n- ");
                 } else {
-                    step_str.push_str(&escape_md(value));
+                    step_str.push_str(&escape_md_at(value, line_start));
                 }
             }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
-                step_str.push_str(&escape_md(igr.display_name().as_ref()));
+                step_str.push_str(&escape_md_at(igr.display_name().as_ref(), line_start));
             }
             &Item::Cookware { index } => {
                 let cw = &recipe.cookware[index];
-                step_str.push_str(&escape_md(&cw.name));
+                step_str.push_str(&escape_md_at(&cw.name, line_start));
             }
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
                 if let Some(name) = &t.name {
-                    write!(&mut step_str, "({})", escape_md(name))
+                    write!(&mut step_str, "({})", escape_md_at(name, line_start))
                         .expect("writing to a String is infallible");
                 }
                 if let Some(quantity) = &t.quantity {
                     write!(
                         &mut step_str,
                         "{}",
-                        escape_md(&format_quantity_with_unit(quantity))
+                        escape_md_at(&format_quantity_with_unit(quantity), line_start)
                     )
                     .expect("writing to a String is infallible");
                 }
@@ -510,14 +515,14 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
                     write!(
                         &mut step_str,
                         "*{}*",
-                        escape_md(&format_quantity_with_unit(q))
+                        escape_md_at(&format_quantity_with_unit(q), line_start)
                     )
                     .expect("writing to a String is infallible");
                 } else {
                     write!(
                         &mut step_str,
                         "{}",
-                        escape_md(&format_quantity_with_unit(q))
+                        escape_md_at(&format_quantity_with_unit(q), line_start)
                     )
                     .expect("writing to a String is infallible");
                 }
@@ -531,25 +536,114 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
     Ok(())
 }
 
-/// Escape every Markdown-significant character in user text.
+/// Escape Markdown in user text — inline and at line starts.
 ///
 /// Ingredient and cookware names, step text, notes, tags and metadata are
 /// recipe content, not markup: a name like `*flour*` or `<b>` must render
-/// literally rather than becoming emphasis or raw HTML.
-fn escape_md(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '{' | '}' | '#' | '!' | '('
-            | ')' | '&' | '~' => format!("\\{c}"),
-            _ => c.to_string(),
-        })
-        .collect()
+/// literally rather than becoming emphasis or raw HTML. The escape set is
+/// the characters that can still form markup — `` \ ` * [ ] < > # ~ `` —
+/// plus `_` at a word boundary only: intra-word `_` cannot emphasise, so
+/// `a_b_c` in a URL or identifier stays readable. `(`, `)`, `!`,
+/// `{`, `}` and `|` get no escape — once the brackets are escaped no link
+/// or image can form. `&` is escaped only when a complete named entity
+/// follows (`&copy;`), which would otherwise decode to `©`; a bare `&` in
+/// `salt & pepper` cannot form markup and is left alone.
+///
+/// Per line, the first character of a `-`/`+`/`=` line, the `.`/`)` of a
+/// `1.`/`1)` marker, and the first `|`/`:` of a GFM delimiter row
+/// (`|---|---|`, `:-- | --:`) are escaped too, so a description line that
+/// happens to look like a list item, a rule, a setext heading or a table
+/// stays text — a header row alone cannot make a table without one.
+pub fn escape_md(text: &str) -> String {
+    escape_md_at(text, true)
+}
+
+/// [`escape_md`], but `at_line_start` says whether the first line opens a
+/// line — step text between components does not, and escaping what only
+/// matters at a line start there would just add noise.
+fn escape_md_at(text: &str, at_line_start: bool) -> String {
+    text.split('\n')
+        .enumerate()
+        .map(|(i, line)| escape_md_line(line, i > 0 || at_line_start))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn escape_md_line(line: &str, at_line_start: bool) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    for (i, &c) in chars.iter().enumerate() {
+        match c {
+            '\\' | '`' | '*' | '[' | ']' | '<' | '>' | '#' | '~' => out.extend(['\\', c]),
+            // `&copy;` decodes to `©` even where the brackets are escaped;
+            // numeric entities (`&#35;`) are already safe — the `#` is
+            // escaped. Escape `&` only when a complete named entity
+            // follows, so `salt & pepper` stays readable.
+            '&' => {
+                let mut end = i + 1;
+                while chars.get(end).is_some_and(|c| c.is_ascii_alphanumeric()) {
+                    end += 1;
+                }
+                let named_entity = end > i + 1
+                    && chars[i + 1].is_ascii_alphabetic()
+                    && chars.get(end) == Some(&';');
+                if named_entity {
+                    out.extend(['\\', c]);
+                } else {
+                    out.push(c);
+                }
+            }
+            '_' => {
+                let intra_word = i > 0
+                    && chars[i - 1].is_alphanumeric()
+                    && chars.get(i + 1).is_some_and(|c| c.is_alphanumeric());
+                if intra_word {
+                    out.push(c);
+                } else {
+                    out.extend(['\\', c]);
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    // What the line would open left alone: a `-`/`+` bullet or `---`/`===`
+    // rule or setext heading, or a `1.`/`1)` ordered list, or a GFM table
+    // delimiter row — a line of only `|`, `-`, `:` and space, which needs a
+    // header row to do anything, so escaping its first character is enough
+    // to keep the row plain text. Each marker is ASCII punctuation, so a
+    // backslash prints it literally.
+    if at_line_start {
+        let body = line.trim_start_matches([' ', '\t']);
+        let at = line.len() - body.len();
+        if body.starts_with(['-', '+', '='])
+            || body
+                .bytes()
+                .all(|b| matches!(b, b'|' | b'-' | b':' | b' ' | b'\t'))
+                && body.contains(['|', ':'])
+        {
+            out.insert(at, '\\');
+        } else if let Some(marker) = ordered_list_delimiter(body) {
+            out.insert(at + marker, '\\');
+        }
+    }
+    out
+}
+
+/// The byte index of the `.` or `)` that ends a `1.`/`1)` ordered-list
+/// marker at the start of `line`, if it starts with one.
+fn ordered_list_delimiter(line: &str) -> Option<usize> {
+    let digits = line.bytes().take_while(|b| b.is_ascii_digit()).count();
+    match line.as_bytes()[digits..] {
+        [b'.' | b')'] | [b'.' | b')', b' ' | b'\t', ..] if digits > 0 => Some(digits),
+        _ => None,
+    }
 }
 
 /// Percent-encode a path segment for a Markdown `(...)` link destination.
 ///
-/// A bare `)` or space ends the destination, and `%` must be encoded first,
-/// so a reference like `we]ird (sauce)` produces a usable link.
+/// A bare `)` or space ends the destination, a `#` or `?` would start a
+/// fragment or query, and `%` must be encoded first, so a reference like
+/// `we]ird (sauce)` or `#1 Burger` produces a usable link.
 fn escape_md_url(text: &str) -> String {
     text.chars()
         .map(|c| match c {
@@ -558,6 +652,8 @@ fn escape_md_url(text: &str) -> String {
             ')' => "%29".to_string(),
             ' ' => "%20".to_string(),
             '\\' => "%5C".to_string(),
+            '#' => "%23".to_string(),
+            '?' => "%3F".to_string(),
             _ => c.to_string(),
         })
         .collect()
@@ -670,6 +766,85 @@ wrapping shows up as an extra line."
     #[test]
     fn escapes_cover_the_markup_characters() {
         assert_eq!(escape_md("*flour* [x] <b>"), r"\*flour\* \[x\] \<b\>");
+        // `(` `)` `!` `{` `}` and a `|` mid-line cannot form markup on
+        // their own — brackets are escaped, and a pipe row is only a table
+        // header next to a delimiter row. A bare `&` likewise.
+        assert_eq!(
+            escape_md("dish (serves 4)! salt & pepper ~1 tsp"),
+            "dish (serves 4)! salt & pepper \\~1 tsp"
+        );
+        // `_` emphasises only at a word boundary: `a_b_c` stays readable,
+        // `_x` is escaped.
+        assert_eq!(
+            escape_md("https://x/a_b_c and _x_"),
+            "https://x/a_b_c and \\_x\\_"
+        );
+    }
+
+    /// A named entity (`&copy;`, `&amp;`) decodes even inside otherwise
+    /// escaped text, so `&` is escaped when — and only when — a complete
+    /// `&name;` follows it.
+    #[test]
+    fn named_entities_do_not_decode_user_text() {
+        assert_eq!(escape_md("&copy; &amp; &x1z;"), r"\&copy; \&amp; \&x1z;");
+        // Incomplete patterns and a bare `&` are untouched.
+        assert_eq!(
+            escape_md("salt & pepper &copy &; 1 & 2"),
+            "salt & pepper &copy &; 1 & 2"
+        );
+        // A numeric entity is already safe: the `#` is escaped.
+        assert_eq!(escape_md("&#169;"), "&\\#169;");
+    }
+
+    /// A description or note line that looks like a list item, a rule or
+    /// a setext heading must stay text (#721).
+    #[test]
+    fn escapes_cover_line_starts() {
+        assert_eq!(
+            escape_md("1. first\n2) then\n- item\n+ plus\n---\n===\nx. not a list"),
+            "1\\. first\n2\\) then\n\\- item\n\\+ plus\n\\---\n\\===\nx. not a list"
+        );
+        // `#`, `>` and `~` at a line start are already caught inline.
+        assert_eq!(escape_md("# heading\n> quote"), "\\# heading\n\\> quote");
+    }
+
+    /// A GFM delimiter row in a multi-line description makes the row above
+    /// it a table header in GFM renderers, and swallows what follows. Its
+    /// first `|` or `:` is escaped; a header row on its own is harmless, so
+    /// its pipes stay plain (#721).
+    #[test]
+    fn a_delimiter_row_cannot_start_a_table() {
+        assert_eq!(
+            escape_md("Intro\n| a | b |\n|---|---|\n| 1 | 2 |\nafter"),
+            "Intro\n| a | b |\n\\|---|---|\n| 1 | 2 |\nafter"
+        );
+        // The row need not start with a pipe.
+        assert_eq!(escape_md("a | b\n:-- | --:"), "a | b\n\\:-- | --:");
+        // `--` and `-` are handled by the rule/bullet escape as before.
+        assert_eq!(escape_md("---\n===\n--"), "\\---\n\\===\n\\--");
+    }
+
+    /// Between components nothing opens a line, so `-` and `=` mid-step
+    /// keep their plain spelling rather than collecting noise escapes.
+    #[test]
+    fn mid_step_text_gets_no_line_start_escapes() {
+        let out = render("Mix @flour{1%kg} - then add @sugar{2%g} = sweet.\n");
+        assert!(
+            out.contains(" - then add"),
+            "mid-step `-` must not be escaped: {out}"
+        );
+        assert!(
+            out.contains(" = sweet."),
+            "mid-step `=` must not be escaped: {out}"
+        );
+        // An item that really does open the line still is.
+        let out = render("- then stir.\n");
+        assert!(out.contains("\\- then stir"), "{out}");
+    }
+
+    #[test]
+    fn url_encoding_covers_fragment_and_query() {
         assert_eq!(escape_md_url("we]ird (sauce)"), "we]ird%20%28sauce%29");
+        assert_eq!(escape_md_url("#1 Burger?x"), "%231%20Burger%3Fx");
     }
 }

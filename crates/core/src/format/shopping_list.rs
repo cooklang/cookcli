@@ -40,6 +40,7 @@ use crate::{
     shopping_list::{AggregatedList, RawItem},
 };
 use cooklang::quantity::{GroupedQuantity, Quantity, Value};
+use cooklang_format::markdown::escape_md;
 use serde::Serialize;
 use yansi::Paint;
 
@@ -103,19 +104,6 @@ pub fn build_human_table(list: AggregatedList, plain: bool, style: Style) -> tab
     table
 }
 
-/// Escape every Markdown-significant character in user text, so an
-/// ingredient named `*flour*` or `<b>` renders literally rather than
-/// becoming emphasis or raw HTML.
-fn escape_md(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '{' | '}' | '#' | '!' | '('
-            | ')' | '&' | '~' => format!("\\{c}"),
-            _ => c.to_string(),
-        })
-        .collect()
-}
-
 /// Render the list as Markdown.
 ///
 /// `plain` drops the category headings; `ingredients_only` drops the
@@ -130,7 +118,7 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
         } else {
             let quantity_string = ordered_components(&item.quantity)
                 .into_iter()
-                .map(|q| escape_md(&quantity_fmt(&q)))
+                .map(|q| escape_md(&quantity_fmt(q)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("- *{quantity_string}* {ingredient}\n")
@@ -332,8 +320,9 @@ mod tests {
         assert!(human.contains("chives (optional) 2 g"), "{human}");
 
         let md = build_md_value(optional_list(), true, false);
-        // Parens are Markdown-significant, so the marker renders escaped.
-        assert_eq!(md, "- *5 g* chives\n- *2 g* chives \\(optional\\)\n");
+        // Parens form no markup on their own, so the marker stays literal —
+        // the same as the recipe Markdown prints it.
+        assert_eq!(md, "- *5 g* chives\n- *2 g* chives (optional)\n");
 
         let json = build_json_value(optional_list(), true);
         let flags: Vec<Option<bool>> = json
@@ -515,7 +504,8 @@ mod tests {
         .value;
 
         let md = build_md_value(list, false, false);
-        assert!(md.contains("special\\_salt"), "{md}");
+        // `_` inside a word cannot emphasise, so it stays literal.
+        assert!(md.contains("special_salt"), "{md}");
         assert!(md.contains("# seasoning\\*"), "{md}");
     }
 
