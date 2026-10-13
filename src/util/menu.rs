@@ -41,8 +41,8 @@ pub fn parse_menu(entry: &RecipeEntry, menu_path: &Utf8Path) -> Result<Menu> {
         if let MenuItem::RecipeReference { path, unit, .. } = item {
             match cookcli_core::resolve_reference(menu_dir, path) {
                 Some(resolved) => *path = resolved.to_string(),
-                // Climbs out of the recipe directory, or names an absolute
-                // path. The authored path is kept so callers can tell
+                // Climbs out of the recipe directory, or names a drive on
+                // Windows. The authored path is kept so callers can tell
                 // (`is_outside_reference`), and the unit is dropped so
                 // `resolve_scales` does not join the path onto the base dir
                 // and read a file outside it: the target is then used as a
