@@ -460,8 +460,12 @@ mod tests {
     /// collection.
     #[test]
     fn an_absolute_reference_resolves_to_nothing() {
-        assert_eq!(resolved("", "/etc/passwd"), None);
-        assert_eq!(resolved("Menus", "/tmp/x.cook"), None);
+        // A leading `/` is absolute only on Unix; on Windows it is
+        // root-relative and resolves inside the collection like `etc/passwd`.
+        if cfg!(unix) {
+            assert_eq!(resolved("", "/etc/passwd"), None);
+            assert_eq!(resolved("Menus", "/tmp/x.cook"), None);
+        }
         if cfg!(windows) {
             assert_eq!(resolved("", "C:/Windows/win.ini"), None);
             assert_eq!(resolved("", r"C:\Windows\win.ini"), None);

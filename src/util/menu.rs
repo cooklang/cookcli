@@ -368,9 +368,19 @@ mod tests {
             "Sub/../../../outside/Outside",
             "../Outside",
             "a/../../Outside",
-            "/abs/Outside",
         ] {
             assert!(is_outside_reference(outside), "{outside}");
+        }
+        // A leading `/` is absolute only on Unix: on Windows it is
+        // root-relative, so `resolve_reference` rewrites it to a relative
+        // `abs/Outside` that stays inside the collection. The absolute form
+        // there needs a drive letter.
+        if cfg!(unix) {
+            assert!(is_outside_reference("/abs/Outside"));
+        }
+        if cfg!(windows) {
+            assert!(is_outside_reference("C:/abs/Outside"));
+            assert!(is_outside_reference("C:\\abs\\Outside"));
         }
         for inside in ["Shared/Sauce", "Local"] {
             assert!(!is_outside_reference(inside), "{inside}");
