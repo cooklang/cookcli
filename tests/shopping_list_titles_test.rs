@@ -71,6 +71,12 @@ fn write_fixture(dir: &TempDir) {
         "Spread @./Shared/jam{2%servings}, @./Shared/syrup{} and @./Shared/butter{30%g}.\n",
     )
     .unwrap();
+    // The same jam, written as a step up from `Breakfast/`.
+    std::fs::write(
+        recipes.join("Breakfast").join("scones.cook"),
+        "Split and fill with @../Shared/jam{2%servings}.\n",
+    )
+    .unwrap();
     std::fs::write(
         recipes.join("Shared").join("jam.cook"),
         "---\nservings: 4\n---\nCook @fruit{1%kg}.\n",
@@ -293,4 +299,38 @@ async fn each_sub_recipe_comes_with_the_size_it_is_made_at() {
         entry(&items, "Breakfast/easy-pancakes.cook")["included_reference_scales"],
         json!([0.5])
     );
+}
+
+#[tokio::test]
+async fn a_sub_recipe_written_with_a_step_up_keeps_its_size() {
+    let server = start_server().await;
+    // The recipe page stores the reference resolved; a list saved before it
+    // did holds it as written. Both name the same jam.
+    for stored in ["Shared/jam", "../Shared/jam"] {
+        post(
+            &server,
+            "/api/shopping_list/add",
+            json!({
+                "path": "Breakfast/scones.cook",
+                "scale": 1.0,
+                "included_references": [stored],
+            }),
+        )
+        .await;
+
+        let items = items(&server).await;
+        // Two servings of a jam made for four.
+        assert_eq!(
+            entry(&items, "Breakfast/scones.cook")["included_reference_scales"],
+            json!([0.5]),
+            "stored as {stored}"
+        );
+
+        post(
+            &server,
+            "/api/shopping_list/remove",
+            json!({ "path": "Breakfast/scones.cook" }),
+        )
+        .await;
+    }
 }
