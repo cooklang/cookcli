@@ -74,8 +74,8 @@ fn generate_frontmatter(name: &str, metadata: &str) -> String {
         // the value however it needs to stay one string.
         let mut entry = serde_yaml::Mapping::new();
         entry.insert("title".into(), name.into());
-        let line = serde_yaml::to_string(&entry)
-            .expect("a string-keyed string map always serializes");
+        let line =
+            serde_yaml::to_string(&entry).expect("a string-keyed string map always serializes");
         frontmatter.push_str(&line);
     }
     if has_metadata {
