@@ -901,7 +901,8 @@ fn shopping_list() -> ApiSection {
                 "POST",
                 "/api/shopping_list",
                 "Aggregate ingredients across recipes",
-                "Stateless — nothing is stored. Ingredients with the same name are combined and \
+                "Stateless — nothing is stored. Ingredients with the same name are combined, \
+                 letter case ignored and the first spelling kept, and \
                  unit-converted, then grouped into aisle categories from `aisle.conf`; a \
                  category with no matching entries is omitted from `categories` entirely, and \
                  ingredients that match no aisle category land in `other`, sorted \

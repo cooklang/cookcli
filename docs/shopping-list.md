@@ -96,7 +96,7 @@ open.
 
 ## Notes
 
-- Ingredients with the same name are automatically combined
+- Ingredients with the same name are automatically combined — letter case is ignored and the first spelling is kept (`@sugar` + `@Sugar` → one `sugar` line)
 - Items are grouped by aisle category from `aisle.conf` (use `--plain` to disable)
 - Uncategorized items appear in an "other" category; run `cook doctor aisle` to find them
 - Menu files (`.menu`) are supported with their own scaling
