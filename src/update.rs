@@ -42,7 +42,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
 
     println!("Downloading and installing version {latest_version}...");
 
-    let target = get_target_triple();
+    let target = get_target_triple()?;
     let binary_name = format!("cook-{target}");
 
     let status = Update::configure()
@@ -102,7 +102,7 @@ pub fn check_for_updates() -> Result<Option<String>> {
     }
 }
 
-fn get_target_triple() -> String {
+fn get_target_triple() -> Result<String> {
     let arch = if cfg!(target_arch = "x86_64") {
         "x86_64"
     } else if cfg!(target_arch = "aarch64") {
@@ -112,7 +112,7 @@ fn get_target_triple() -> String {
     } else if cfg!(target_arch = "x86") {
         "i686"
     } else {
-        panic!("Unsupported architecture")
+        anyhow::bail!("Unsupported architecture: {}", std::env::consts::ARCH)
     };
 
     let os = if cfg!(target_os = "linux") {
@@ -128,7 +128,7 @@ fn get_target_triple() -> String {
     } else if cfg!(target_os = "freebsd") {
         "unknown-freebsd"
     } else {
-        panic!("Unsupported operating system")
+        anyhow::bail!("Unsupported operating system: {}", std::env::consts::OS)
     };
 
     let special_arm = if cfg!(target_arch = "arm") && cfg!(target_os = "linux") {
@@ -137,5 +137,5 @@ fn get_target_triple() -> String {
         ""
     };
 
-    format!("{arch}-{os}{special_arm}")
+    Ok(format!("{arch}-{os}{special_arm}"))
 }
