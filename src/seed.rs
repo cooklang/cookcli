@@ -1,6 +1,6 @@
 use std::fs;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::Args;
 
@@ -35,7 +35,7 @@ pub fn run(ctx: &Context, args: SeedArgs) -> Result<()> {
         bail!("{} is not a directory", path);
     }
 
-    fs::create_dir_all(path).expect("Couldn't create output path");
+    fs::create_dir_all(path).with_context(|| format!("Couldn't create output path: {path}"))?;
 
     for seed in SeedFiles::iter() {
         SeedFiles::get(seed.as_ref()).map(|content| {
