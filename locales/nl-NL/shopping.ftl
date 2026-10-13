@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: het recept { $reference } kon niet 
 shopping-warning-no-servings = { $recipe }: het recept { $reference } kon niet worden omgerekend naar { $amount }: het noemt geen heel aantal porties, zoals `servings: 4`. Het staat op de lijst zoals het geschreven is, niet als zijn ingrediënten.
 shopping-warning-no-yield = { $recipe }: het recept { $reference } kon niet worden omgerekend naar { $amount }: het zegt niet hoeveel het oplevert. Voeg een opbrengst toe als getal%eenheid, zoals `yield: 500%{ $unit }`. Het staat op de lijst zoals het geschreven is, niet als zijn ingrediënten.
 shopping-warning-yield-unit = { $recipe }: het recept { $reference } kon niet worden omgerekend naar { $amount }: de opbrengst staat in { $unit }, vraag het dus in { $unit }. Het staat op de lijst zoals het geschreven is, niet als zijn ingrediënten.
+shopping-warning-non-positive-base = { $recipe }: het recept { $reference } kon niet worden omgerekend naar { $amount }: het declareert `{ $declared }`, er is dus niets om vanuit om te rekenen. Het staat op de lijst zoals het geschreven is, niet als zijn ingrediënten.
 shopping-failed-to-add = Toevoegen aan boodschappenlijst mislukt
 shopping-error = Fout
 shopping-print = Afdrukken

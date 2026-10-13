@@ -823,6 +823,145 @@ fn a_servings_target_on_a_recipe_without_servings_is_listed_as_written() {
     unexpanded_warning(&outcome.diagnostics);
 }
 
+/// `servings: 0` is a whole number of servings, so `scale_to_target` does
+/// not refuse it — it divides by zero, scales by infinity and answers `Ok`.
+/// The reference is refused before that, as unscalable (#699).
+#[test]
+fn a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nservings: 0\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "tomatoes"),
+        None,
+        "the recipe below the reference is not expanded, least of all by inf"
+    );
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "servings: 0"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// The yield half of [`a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity`]:
+/// `yield: 0%g` divides by zero the same way.
+#[test]
+fn a_zero_yield_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: 0%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "yield: 0%g"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// `nan` and `inf` are not numbers a yield can mean, but Rust's float parse
+/// accepts them, so `yield: nan%g` passed the positive check and listed
+/// `tomatoes NaN` — or `0`, dividing by `inf` — without a warning.
+#[test]
+fn a_non_finite_yield_is_unscalable_too() {
+    for declared in ["nan", "inf"] {
+        let dir = dir_with(&[
+            (
+                "sauce.cook",
+                &format!("---\nyield: {declared}%g\n---\n\nSimmer @tomatoes{{4}}.\n"),
+            ),
+            ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        ]);
+
+        let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+        assert_eq!(quantities(&outcome.value, "tomatoes"), None, "{declared}");
+        let warning = unexpanded_warning(&outcome.diagnostics);
+        assert!(
+            matches!(
+                &warning.kind,
+                Some(DiagnosticKind::UnscalableReference {
+                    cause: UnscalableCause::NonPositiveBase { declared: d },
+                    ..
+                }) if d == &format!("yield: {declared}%g")
+            ),
+            "{declared}: {warning:?}"
+        );
+    }
+}
+
+/// A negative base flips the sign too: `yield: -500%g` asked for `500%g`
+/// divided to `-4` and listed `tomatoes -4` without a warning before
+/// (#699). It is refused the same way.
+#[test]
+fn a_negative_yield_recipe_is_unscalable_not_sign_flipped() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: -500%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("yield: -500%g"),
+        "the warning names the declared base: {warning:?}"
+    );
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+}
+
 /// The recursion is bounded by the ancestor chain, not by a depth limit, so a
 /// cycle that only closes further down is still caught — and still counted
 /// once rather than looping.

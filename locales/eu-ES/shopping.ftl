@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: ezin izan da { $reference } errezet
 shopping-warning-no-servings = { $recipe }: ezin izan da { $reference } errezeta { $amount } kopurura egokitu: ez du anoa kopuru oso bat adierazten, adibidez `servings: 4`. Idatzita dagoen bezala ageri da zerrendan, ez bere osagai gisa.
 shopping-warning-no-yield = { $recipe }: ezin izan da { $reference } errezeta { $amount } kopurura egokitu: ez du esaten zenbat ematen duen. Gehitu errendimendu bat zenbakia%unitatea formatuan, adibidez `yield: 500%{ $unit }`. Idatzita dagoen bezala ageri da zerrendan, ez bere osagai gisa.
 shopping-warning-yield-unit = { $recipe }: ezin izan da { $reference } errezeta { $amount } kopurura egokitu: bere errendimendua { $unit } unitatean dago, beraz eskatu { $unit } unitatean. Idatzita dagoen bezala ageri da zerrendan, ez bere osagai gisa.
+shopping-warning-non-positive-base = { $recipe }: ezin izan da { $reference } errezeta { $amount } kopurura egokitu: `{ $declared }` deklaratzen du, beraz ez dago nondik egokitu. Idatzita dagoen bezala ageri da zerrendan, ez bere osagai gisa.
 shopping-failed-to-add = Errorea erosketa zerrendara gehitzerakoan
 shopping-error = Errorea
 shopping-print = Inprimatu
