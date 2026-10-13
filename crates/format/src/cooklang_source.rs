@@ -286,6 +286,17 @@ impl ComponentFormatter<'_> {
         }
         if let Some(q) = self.quantity {
             w.push('{');
+            // The `=` scaling lock has to be re-emitted or the quantity
+            // silently becomes scalable on reparse (`@egg{=2}` read back as
+            // `@egg{2}` scales ×10 to 20 eggs). Only an ingredient with a
+            // non-text value may carry it: on cookware, timers or text the
+            // parser warns the lock has no effect.
+            if matches!(self.kind, ComponentKind::Ingredient)
+                && !q.scalable()
+                && !q.value().is_text()
+            {
+                w.push('=');
+            }
             w.push_str(&q.value().to_string());
             if let Some(unit) = q.unit() {
                 write!(w, "%{unit}").unwrap();
@@ -501,6 +512,22 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
                 "step lines must not be indented: {line:?}\n--- rendered ---\n{rendered}"
             );
         }
+    }
+
+    /// The `=` lock marks a quantity that must not scale. Dropping it made
+    /// the reparse scalable, so `@egg{=2}` at ×10 became 20 eggs
+    /// (<https://github.com/cooklang/cookcli/issues/702>).
+    #[test]
+    fn a_locked_quantity_keeps_its_lock() {
+        let source = "Add @egg{=2} and @milk{100%ml}.\n";
+        let rendered = format_to_string(&parse_recipe(source, "r", 1.0).unwrap().value);
+        assert!(rendered.contains("@egg{=2}"), "got: {rendered}");
+
+        let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
+        assert!(
+            !reparsed.ingredients[0].quantity.as_ref().unwrap().scalable(),
+            "the lock was lost on reparse: {rendered}"
+        );
     }
 
     /// A recipe reference is re-emitted with `/` between its components on
