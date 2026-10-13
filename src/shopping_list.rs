@@ -213,6 +213,7 @@ enum OutputFormat {
 pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     // Expand directories to .cook files
     let mut expanded_recipes = Vec::new();
+    let mut empty_dirs = Vec::new();
     for entry in &args.recipes {
         let path = if entry.contains(':') {
             // Handle recipe:scaling syntax
@@ -224,6 +225,8 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
         // Check if it's a directory
         if path.is_dir() {
+            let mut found = false;
+            let mut menus = 0usize;
             // Find all .cook files in the directory, skipping hidden ones such
             // as macOS `._<name>.cook` AppleDouble companions (#555)
             for dir_entry in std::fs::read_dir(&path)? {
@@ -234,6 +237,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                 let file_path = dir_entry.path();
                 if let Some(ext) = file_path.extension() {
                     if ext == "cook" {
+                        found = true;
                         if let Ok(utf8_path) = Utf8PathBuf::from_path_buf(file_path) {
                             // Preserve the scaling factor if it was specified
                             if entry.contains(':') {
@@ -243,8 +247,13 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                                 expanded_recipes.push(utf8_path.to_string());
                             }
                         }
+                    } else if ext == "menu" {
+                        menus += 1;
                     }
                 }
+            }
+            if !found {
+                empty_dirs.push((path, menus));
             }
         } else {
             // Not a directory, use as-is
@@ -254,7 +263,27 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // If no recipes were expanded (empty directory or no directories), use original list
     if expanded_recipes.is_empty() && !args.recipes.is_empty() {
+        // Falling back to the raw arguments made a directory full of menus —
+        // or of nothing edible — report itself as a missing recipe. Name what
+        // was actually wrong.
+        if let Some((dir, menus)) = empty_dirs.into_iter().next() {
+            let mut msg = format!("Directory '{dir}' contains no .cook files");
+            if menus > 0 {
+                msg.push_str(&format!(
+                    " — it has {menus} .menu file(s) that can be passed by name"
+                ));
+            }
+            anyhow::bail!(msg);
+        }
         expanded_recipes = args.recipes.clone();
+    } else {
+        for (dir, menus) in empty_dirs {
+            if menus > 0 {
+                warn!("{dir} contains no .cook files (only {menus} .menu file(s))");
+            } else {
+                warn!("{dir} contains no .cook files");
+            }
+        }
     }
 
     // Aisle and pantry resolution: an explicit flag wins, and otherwise the
