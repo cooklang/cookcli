@@ -251,7 +251,7 @@ pub(crate) fn print_md_with_options(
     writeln!(
         writer,
         "# {}{}\n",
-        name,
+        escape_md(name),
         if scale != 1.0 {
             format!(" @ {scale}")
         } else {
@@ -262,7 +262,7 @@ pub(crate) fn print_md_with_options(
     if opts.tags {
         if let Some(tags) = recipe.metadata.tags() {
             for (i, tag) in tags.iter().enumerate() {
-                write!(writer, "#{tag}")?;
+                write!(writer, "#{}", escape_md(tag))?;
                 if i < tags.len() - 1 {
                     write!(writer, " ")?;
                 }
@@ -272,15 +272,16 @@ pub(crate) fn print_md_with_options(
     }
 
     if let Some(desc) = recipe.metadata.description() {
+        let desc = escape_md(desc);
         match opts.description {
             DescriptionStyle::Hidden => {}
             DescriptionStyle::Blockquote => {
-                write_block(&mut writer, desc, "> ", "> ")?;
+                write_block(&mut writer, &desc, "> ", "> ")?;
                 writeln!(writer)?;
             }
             DescriptionStyle::Heading => {
                 writeln!(writer, "## {}\n", opts.heading.description)?;
-                write_block(&mut writer, desc, "", "")?;
+                write_block(&mut writer, &desc, "", "")?;
                 writeln!(writer)?;
             }
         }
@@ -339,7 +340,7 @@ fn ingredients(
 
         write!(w, "- ")?;
         if !entry.quantity.is_empty() {
-            let quantity = grouped_quantity_fmt(&entry.quantity);
+            let quantity = escape_md(&grouped_quantity_fmt(&entry.quantity));
             if opts.italic_amounts {
                 write!(w, "*{quantity}* ")?;
             } else {
@@ -349,17 +350,22 @@ fn ingredients(
 
         if let Some(reference) = &ingredient.reference {
             let sep = crate::REFERENCE_SEPARATOR;
-            let path = reference.components.join(sep);
+            let path = reference
+                .components
+                .iter()
+                .map(|c| escape_md_url(c))
+                .collect::<Vec<_>>()
+                .join(sep);
             write!(
                 w,
                 "[{}]({}{}{})",
-                ingredient.display_name(),
+                escape_md(ingredient.display_name().as_ref()),
                 path,
                 sep,
-                ingredient.name
+                escape_md_url(&ingredient.name)
             )?;
         } else {
-            write!(w, "{}", ingredient.display_name())?;
+            write!(w, "{}", escape_md(ingredient.display_name().as_ref()))?;
         }
 
         if ingredient.modifiers().is_optional() {
@@ -367,7 +373,7 @@ fn ingredients(
         }
 
         if let Some(note) = &ingredient.note {
-            write!(w, " ({note})")?;
+            write!(w, " ({})", escape_md(note))?;
         }
         writeln!(w)?;
     }
@@ -391,21 +397,21 @@ fn cookware(
         let cw = item.cookware;
         write!(w, "- ")?;
         if !item.quantity.is_empty() {
-            let quantity = grouped_quantity_fmt(&item.quantity);
+            let quantity = escape_md(&grouped_quantity_fmt(&item.quantity));
             if opts.italic_amounts {
                 write!(w, "*{quantity}* ")?;
             } else {
                 write!(w, "{quantity} ")?;
             }
         }
-        write!(w, "{}", cw.display_name())?;
+        write!(w, "{}", escape_md(cw.display_name().as_ref()))?;
 
         if cw.modifiers().is_optional() {
             write!(w, " {}", opts.optional_marker)?;
         }
 
         if let Some(note) = &cw.note {
-            write!(w, " ({note})")?;
+            write!(w, " ({})", escape_md(note))?;
         }
         writeln!(w)?;
     }
@@ -431,7 +437,7 @@ fn w_section(
 ) -> io::Result<()> {
     if section.name.is_some() || recipe.sections.len() > 1 {
         if let Some(name) = &section.name {
-            writeln!(w, "### {name}\n")?;
+            writeln!(w, "### {}\n", escape_md(name))?;
         } else {
             let s = opts.heading.section.replace("%n", &num.to_string());
             writeln!(w, "### {s}\n")?;
@@ -447,7 +453,7 @@ fn w_section(
                     writeln!(w)?
                 } else {
                     // Format as a note with blockquote style
-                    writeln!(w, "> **Note:** {}", text.trim())?
+                    writeln!(w, "> **Note:** {}", escape_md(text.trim()))?
                 }
             }
         };
@@ -472,35 +478,48 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
                 if value.trim() == "-" {
                     step_str.push_str("\n- ");
                 } else {
-                    step_str.push_str(value);
+                    step_str.push_str(&escape_md(value));
                 }
             }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
-                step_str.push_str(igr.display_name().as_ref());
+                step_str.push_str(&escape_md(igr.display_name().as_ref()));
             }
             &Item::Cookware { index } => {
                 let cw = &recipe.cookware[index];
-                step_str.push_str(&cw.name);
+                step_str.push_str(&escape_md(&cw.name));
             }
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
                 if let Some(name) = &t.name {
-                    write!(&mut step_str, "({name})").expect("writing to a String is infallible");
+                    write!(&mut step_str, "({})", escape_md(name))
+                        .expect("writing to a String is infallible");
                 }
                 if let Some(quantity) = &t.quantity {
-                    write!(&mut step_str, "{}", format_quantity_with_unit(quantity))
-                        .expect("writing to a String is infallible");
+                    write!(
+                        &mut step_str,
+                        "{}",
+                        escape_md(&format_quantity_with_unit(quantity))
+                    )
+                    .expect("writing to a String is infallible");
                 }
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
                 if opts.italic_amounts {
-                    write!(&mut step_str, "*{}*", format_quantity_with_unit(q))
-                        .expect("writing to a String is infallible");
+                    write!(
+                        &mut step_str,
+                        "*{}*",
+                        escape_md(&format_quantity_with_unit(q))
+                    )
+                    .expect("writing to a String is infallible");
                 } else {
-                    write!(&mut step_str, "{}", format_quantity_with_unit(q))
-                        .expect("writing to a String is infallible");
+                    write!(
+                        &mut step_str,
+                        "{}",
+                        escape_md(&format_quantity_with_unit(q))
+                    )
+                    .expect("writing to a String is infallible");
                 }
             }
         }
@@ -510,6 +529,38 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe, opts: &Options) 
     let indent = " ".repeat(marker.chars().count());
     write_block(w, &step_str, &marker, &indent)?;
     Ok(())
+}
+
+/// Escape every Markdown-significant character in user text.
+///
+/// Ingredient and cookware names, step text, notes, tags and metadata are
+/// recipe content, not markup: a name like `*flour*` or `<b>` must render
+/// literally rather than becoming emphasis or raw HTML.
+fn escape_md(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '{' | '}' | '#' | '!' | '('
+            | ')' | '&' | '~' => format!("\\{c}"),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
+/// Percent-encode a path segment for a Markdown `(...)` link destination.
+///
+/// A bare `)` or space ends the destination, and `%` must be encoded first,
+/// so a reference like `we]ird (sauce)` produces a usable link.
+fn escape_md_url(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '%' => "%25".to_string(),
+            '(' => "%28".to_string(),
+            ')' => "%29".to_string(),
+            ' ' => "%20".to_string(),
+            '\\' => "%5C".to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
 }
 
 /// Writes `text` with `first` before its first line and `rest` before the rest.
@@ -605,5 +656,20 @@ wrapping shows up as an extra line."
             md.contains("1. Gather the following: - plain flour\n   - whole milk\n"),
             "the bullet should be indented under the step, in:\n{md}"
         );
+    }
+
+    /// Recipe content is text, not markup: emphasis markers, HTML and link
+    /// syntax must come out escaped so they render literally.
+    #[test]
+    fn user_text_is_escaped() {
+        let out = render("Add @flour{2%cups} and beat **hard** <i>gently</i>.\n");
+        assert!(out.contains(r"\*\*hard\*\*"), "{out}");
+        assert!(out.contains(r"\<i\>gently\</i\>"), "{out}");
+    }
+
+    #[test]
+    fn escapes_cover_the_markup_characters() {
+        assert_eq!(escape_md("*flour* [x] <b>"), r"\*flour\* \[x\] \<b\>");
+        assert_eq!(escape_md_url("we]ird (sauce)"), "we]ird%20%28sauce%29");
     }
 }

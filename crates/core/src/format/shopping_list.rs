@@ -103,6 +103,19 @@ pub fn build_human_table(list: AggregatedList, plain: bool, style: Style) -> tab
     table
 }
 
+/// Escape every Markdown-significant character in user text, so an
+/// ingredient named `*flour*` or `<b>` renders literally rather than
+/// becoming emphasis or raw HTML.
+fn escape_md(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '|' | '{' | '}' | '#' | '!' | '('
+            | ')' | '&' | '~' => format!("\\{c}"),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
 /// Render the list as Markdown.
 ///
 /// `plain` drops the category headings; `ingredients_only` drops the
@@ -111,13 +124,13 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
     let mut output = String::new();
 
     let format_ingredient = |item: &RawItem| {
-        let ingredient = display_name(item);
+        let ingredient = escape_md(&display_name(item));
         if ingredients_only {
             format!("- {ingredient}\n")
         } else {
             let quantity_string = ordered_components(&item.quantity)
                 .into_iter()
-                .map(quantity_fmt)
+                .map(|q| escape_md(&quantity_fmt(&q)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("- *{quantity_string}* {ingredient}\n")
@@ -133,7 +146,7 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
             if i > 0 {
                 output.push('\n');
             }
-            output.push_str(&format!("# {category}\n"));
+            output.push_str(&format!("# {}\n", escape_md(&category)));
             for item in &items {
                 output.push_str(&format_ingredient(item));
             }
@@ -319,7 +332,8 @@ mod tests {
         assert!(human.contains("chives (optional) 2 g"), "{human}");
 
         let md = build_md_value(optional_list(), true, false);
-        assert_eq!(md, "- *5 g* chives\n- *2 g* chives (optional)\n");
+        // Parens are Markdown-significant, so the marker renders escaped.
+        assert_eq!(md, "- *5 g* chives\n- *2 g* chives \\(optional\\)\n");
 
         let json = build_json_value(optional_list(), true);
         let flags: Vec<Option<bool>> = json
@@ -475,6 +489,34 @@ mod tests {
             !names_only.contains('*'),
             "--ingredients-only drops quantities: {names_only}"
         );
+    }
+
+    /// An ingredient or category name is text, not markup: `special_salt`
+    /// must not render as an emphasis span.
+    #[test]
+    fn markdown_escapes_ingredient_and_category_names() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.cook"), "Add @special_salt{1%tsp}.\n").unwrap();
+
+        let base = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let ctx = Context::new(base).with_aisle(crate::ConfigSource::Inline(
+            "[seasoning*]\nspecial_salt\n".to_string(),
+        ));
+        let list = generate(
+            &ctx,
+            GenerateRequest {
+                recipes: vec![ScaledRecipe::new(RecipeSource::Path("a.cook".into()))],
+                ignore_references: false,
+                extra_items: Vec::new(),
+                include_optional: false,
+            },
+        )
+        .expect("generates")
+        .value;
+
+        let md = build_md_value(list, false, false);
+        assert!(md.contains("special\\_salt"), "{md}");
+        assert!(md.contains("# seasoning\\*"), "{md}");
     }
 
     /// Two units that cannot be added stay side by side — and every writer
