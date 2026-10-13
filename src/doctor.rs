@@ -10,7 +10,10 @@ use cookcli_core::{
 use std::collections::BTreeSet;
 use tracing::warn;
 
-use crate::{util::cli_error, Context};
+use crate::{
+    util::{cli_error, resolve_to_absolute_path},
+    Context,
+};
 
 #[derive(Debug, Args)]
 pub struct DoctorArgs {
@@ -193,6 +196,20 @@ fn check_for_updates() {
     }
 }
 
+/// The `--base-path` core scans, canonicalized.
+///
+/// Core neither resolves nor validates the directory it walks — passing a
+/// raw `-b .` reached it as `./` and the search layer could not express a
+/// found recipe relative to it. Every command that touches
+/// `resolve_to_absolute_path` canonicalizes first; the doctor subcommands
+/// were the ones that skipped it.
+fn scan_dir(base_path: Option<Utf8PathBuf>) -> Result<Option<Utf8PathBuf>> {
+    base_path
+        .as_deref()
+        .map(resolve_to_absolute_path)
+        .transpose()
+}
+
 /// Print a check's failure and carry on to the next one.
 ///
 /// Only the aggregate `cook doctor` goes through here. Each subcommand run on
@@ -264,7 +281,7 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
     let outcome = pantry_coverage(
         ctx,
         CoverageRequest {
-            base_dir: args.base_path,
+            base_dir: scan_dir(args.base_path)?,
         },
     )
     .map_err(cli_error)?;
@@ -306,7 +323,7 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
     let outcome = aisle_coverage(
         ctx,
         CoverageRequest {
-            base_dir: args.base_path,
+            base_dir: scan_dir(args.base_path)?,
         },
     )
     .map_err(cli_error)?;
@@ -352,7 +369,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
     let report = cookcli_core::doctor::validate(
         ctx,
         cookcli_core::doctor::ValidateRequest {
-            base_dir: args.base_path,
+            base_dir: scan_dir(args.base_path)?,
             // This report is going straight to a terminal.
             style: cookcli_core::Style::Ansi,
         },
