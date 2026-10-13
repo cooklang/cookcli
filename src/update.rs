@@ -119,29 +119,6 @@ fn version_is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::version_is_newer;
-
-    /// The case string ordering got backwards: `"0.38.9" >= "0.38.10"`.
-    #[test]
-    fn a_digit_wider_version_is_newer_not_older() {
-        assert!(version_is_newer("0.38.10", "0.38.9"));
-        assert!(!version_is_newer("0.38.9", "0.38.10"));
-    }
-
-    #[test]
-    fn equal_versions_are_not_newer() {
-        assert!(!version_is_newer("0.38.1", "0.38.1"));
-    }
-
-    #[test]
-    fn unparseable_versions_fall_back_to_string_order() {
-        assert!(version_is_newer("zeta", "alpha"));
-        assert!(!version_is_newer("alpha", "zeta"));
-    }
-}
-
 fn get_target_triple() -> Result<String> {
     let arch = if cfg!(target_arch = "x86_64") {
         "x86_64"
@@ -178,4 +155,27 @@ fn get_target_triple() -> Result<String> {
     };
 
     Ok(format!("{arch}-{os}{special_arm}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::version_is_newer;
+
+    /// The case string ordering got backwards: `"0.38.9" >= "0.38.10"`.
+    #[test]
+    fn a_digit_wider_version_is_newer_not_older() {
+        assert!(version_is_newer("0.38.10", "0.38.9"));
+        assert!(!version_is_newer("0.38.9", "0.38.10"));
+    }
+
+    #[test]
+    fn equal_versions_are_not_newer() {
+        assert!(!version_is_newer("0.38.1", "0.38.1"));
+    }
+
+    #[test]
+    fn unparseable_versions_fall_back_to_string_order() {
+        assert!(version_is_newer("zeta", "alpha"));
+        assert!(!version_is_newer("alpha", "zeta"));
+    }
 }
