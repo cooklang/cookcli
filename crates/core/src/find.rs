@@ -37,8 +37,8 @@ pub fn is_safe_relative_path(path: &str) -> bool {
 ///
 /// `reference` is the reference as the recipe writes it — `./Shared/Sauce`,
 /// `../sauces/tomato`. The parser only produces one from a name starting `./`
-/// or `../`, so it always opens with a dot component and can never be an
-/// absolute path of its own.
+/// or `../`, but a menu's items are not parsed by it, so a path absolute of
+/// its own (`/etc/passwd`) can arrive here and is refused like an escape.
 ///
 /// **A reference that steps up does so from the directory of the file that
 /// writes it; one that does not is read from the collection root.** That is
@@ -60,6 +60,10 @@ pub fn is_safe_relative_path(path: &str) -> bool {
 /// collection, so callers report them the way they report one that is missing.
 pub fn resolve_reference(from: &Utf8Path, reference: &str) -> Option<Utf8PathBuf> {
     let reference = reference.replace('\\', "/");
+    // An absolute path names a file, not a recipe in the collection.
+    if Utf8Path::new(&reference).is_absolute() {
+        return None;
+    }
     let parts: Vec<&str> = reference.split('/').collect();
 
     let mut resolved: Vec<&str> = if parts.contains(&"..") {
@@ -449,6 +453,19 @@ mod tests {
     #[test]
     fn a_dot_in_front_of_a_step_up_does_not_re_anchor_it() {
         assert_eq!(resolved("Breakfast", "./../Secret"), Some("Secret".into()));
+    }
+
+    /// A menu's references do not come through the recipe parser, so an
+    /// absolute path can arrive here; it names a file, not a recipe in the
+    /// collection.
+    #[test]
+    fn an_absolute_reference_resolves_to_nothing() {
+        assert_eq!(resolved("", "/etc/passwd"), None);
+        assert_eq!(resolved("Menus", "/tmp/x.cook"), None);
+        if cfg!(windows) {
+            assert_eq!(resolved("", "C:/Windows/win.ini"), None);
+            assert_eq!(resolved("", r"C:\Windows\win.ini"), None);
+        }
     }
 
     /// A reference is written in a recipe file, which is not always ours: an
