@@ -206,12 +206,17 @@ pub fn keep_empty_meals(menu: &mut Menu, content: &str) {
 }
 
 /// True for a reference [`load_menu`] could not keep inside the recipe
-/// directory, however the escape is spelled: `../x`, `a/../../x`, `..\x` or
-/// an absolute `/x`.
+/// directory, however the escape is spelled: `../x`, `a/../../x`, `..\x`, an
+/// absolute `/x`, or a drive-relative `C:x` on Windows.
+///
+/// Every reference kept inside was rewritten to what `resolve_reference`
+/// gives, and resolving that again changes nothing; an escape keeps its
+/// authored path, which never resolves to itself. Asking that one question
+/// keeps this in step with `resolve_reference` instead of a second, lexical
+/// rule that a spelling it does not know slips past.
 #[cfg_attr(not(feature = "server"), allow(dead_code))]
 pub fn is_outside_reference(path: &str) -> bool {
-    let path = path.replace('\\', "/");
-    Utf8Path::new(&path).is_absolute() || path.split('/').any(|part| part == "..")
+    cookcli_core::resolve_reference(Utf8Path::new(""), path).as_deref() != Some(Utf8Path::new(path))
 }
 
 fn menu_items_mut(menu: &mut Menu) -> impl Iterator<Item = &mut MenuItem> {
@@ -368,19 +373,18 @@ mod tests {
             "Sub/../../../outside/Outside",
             "../Outside",
             "a/../../Outside",
+            "..\\Outside",
+            "/abs/Outside",
+            "",
         ] {
             assert!(is_outside_reference(outside), "{outside}");
         }
-        // A leading `/` is absolute only on Unix: on Windows it is
-        // root-relative, so `resolve_reference` rewrites it to a relative
-        // `abs/Outside` that stays inside the collection. The absolute form
-        // there needs a drive letter.
-        if cfg!(unix) {
-            assert!(is_outside_reference("/abs/Outside"));
-        }
+        // A drive prefix only means something on Windows, where joining one
+        // onto the recipe directory replaces it.
         if cfg!(windows) {
-            assert!(is_outside_reference("C:/abs/Outside"));
-            assert!(is_outside_reference("C:\\abs\\Outside"));
+            for outside in ["C:/abs/Outside", "C:\\abs\\Outside", "C:x.menu"] {
+                assert!(is_outside_reference(outside), "{outside}");
+            }
         }
         for inside in ["Shared/Sauce", "Local"] {
             assert!(!is_outside_reference(inside), "{inside}");
