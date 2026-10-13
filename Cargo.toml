@@ -40,7 +40,7 @@ import = ["dep:cooklang-import", "dep:reqwest"]
 # `cook lsp` - language server for editor integrations.
 lsp = ["dep:cooklang-language-server", "dep:tower-lsp"]
 
-self-update = ["dep:self_update", "dep:reqwest"]
+self-update = ["dep:self_update", "dep:reqwest", "dep:semver"]
 # The sync loop only runs inside the web server, so sync implies server.
 sync = [
     "server",
@@ -112,6 +112,9 @@ open = { version = "5.3", optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 rust-embed = "8"
+# Version ordering for `cook update` and `cook doctor`: string comparison
+# lies across a digit-width boundary ("0.38.9" > "0.38.10").
+semver = { version = "1", optional = true }
 # Tells a case-only rename (`pasta` to `Pasta`) on a case-insensitive file
 # system from a rename onto another file.
 same-file = { version = "1", optional = true }
