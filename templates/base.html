@@ -342,17 +342,16 @@
                                 <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="menu-item {% if active == "recipes" %}active{% endif %}">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M4 12a7 7 0 0 0 14 0H4Z M18 12l4-4"/>
+                                            d="M5 3.5h12a2 2 0 0 1 2 2V21H7a3 3 0 0 1-3-3V5a1.5 1.5 0 0 1 1.5-1.5Z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 18a3 3 0 0 1 3-3h12M9 8h5M9 11h5"/>
                                     </svg>
                                     <span>{{ tr.t("nav-recipes") }}</span>
                                 </a>
                                 {% if features.show_shopping_list && !static_mode %}
                                 <a href="{{ prefix }}/shopping-list" class="menu-item {% if active == "shopping" %}active{% endif %}">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M3 3h2l2.5 12h10.8l2-8H6"/>
-                                        <circle cx="9" cy="19" r="1" stroke-width="2"/>
-                                        <circle cx="17" cy="19" r="1" stroke-width="2"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                                     </svg>
                                     <span>{{ tr.t("nav-shopping-list") }}</span>
                                 </a>
