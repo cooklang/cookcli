@@ -9,6 +9,7 @@ recipe-ingredients = 材料
 recipe-steps = 作り方
 recipe-notes = メモ
 recipe-cookware = 調理器具
+recipe-optional = （任意）
 recipe-timers = タイマー
 recipe-tags = タグ
 recipe-add-to-shopping = 買い物リストに追加

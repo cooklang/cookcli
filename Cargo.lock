@@ -714,7 +714,7 @@ dependencies = [
  "console",
  "cookcli-core",
  "cooklang",
- "cooklang-find",
+ "cooklang-find 0.12.0",
  "cooklang-import",
  "cooklang-language-server",
  "cooklang-reports",
@@ -775,7 +775,7 @@ dependencies = [
  "camino",
  "chrono",
  "cooklang",
- "cooklang-find",
+ "cooklang-find 0.12.0",
  "cooklang-format",
  "cooklang-reports",
  "directories",
@@ -860,6 +860,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cooklang-find"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a55a6c3a4499f7e159369169ea5771f7f634444f7cc4baed4ba1ccc1ae07d14b"
+dependencies = [
+ "camino",
+ "glob",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "cooklang-format"
 version = "0.38.1"
 dependencies = [
@@ -928,7 +943,7 @@ checksum = "a8c769664170e37bc12b9a83505589a9b23c5818666e2958aee37499608dbd0e"
 dependencies = [
  "anyhow",
  "cooklang",
- "cooklang-find",
+ "cooklang-find 0.10.0",
  "minijinja",
  "serde",
  "serde_json",
