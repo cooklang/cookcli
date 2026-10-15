@@ -714,7 +714,7 @@ dependencies = [
  "console",
  "cookcli-core",
  "cooklang",
- "cooklang-find 0.10.0",
+ "cooklang-find",
  "cooklang-import",
  "cooklang-language-server",
  "cooklang-reports",
@@ -775,7 +775,7 @@ dependencies = [
  "camino",
  "chrono",
  "cooklang",
- "cooklang-find 0.10.0",
+ "cooklang-find",
  "cooklang-format",
  "cooklang-reports",
  "directories",
@@ -842,21 +842,6 @@ dependencies = [
  "unicase",
  "unicode-width 0.2.2",
  "yansi",
-]
-
-[[package]]
-name = "cooklang-find"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5850cb631fdcd36ba3bb75f0361020f823d286119fa804a349ed60312728c28"
-dependencies = [
- "camino",
- "glob",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -937,13 +922,13 @@ dependencies = [
 
 [[package]]
 name = "cooklang-reports"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77d9edeb10af65d6fdb713eabd7ea447b15a8614c21cb270ccf0f095174bb6b5"
+checksum = "a8c769664170e37bc12b9a83505589a9b23c5818666e2958aee37499608dbd0e"
 dependencies = [
  "anyhow",
  "cooklang",
- "cooklang-find 0.6.1",
+ "cooklang-find",
  "minijinja",
  "serde",
  "serde_json",
@@ -2666,12 +2651,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "memo-map"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d1115007560874e373613744c6fba374c17688327a71c1476d1a5954cc857b"
-
-[[package]]
 name = "migrations_internals"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2710,14 +2689,12 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "2.21.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3d648e68cea56d9858d535ee28f9538404e2dd8cb08ed0bd05dca379477f39"
+checksum = "13345868cfa94eadafc067112ff29271380a820d5594d9ee6ba81a8d00ea5dc2"
 dependencies = [
  "indexmap",
- "memo-map",
  "serde",
- "serde_json",
 ]
 
 [[package]]
