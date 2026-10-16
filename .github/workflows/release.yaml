@@ -33,10 +33,12 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
+        # Settings live in the two files below; a `release-type` input here
+        # would make the action ignore them.
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          release-type: rust
-          draft: true
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
 
   # Build sources for every OS
   github_build:
