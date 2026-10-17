@@ -16,9 +16,9 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    add_optional_selections, extract_ingredients, optional_selections, recipe_display_name,
-    subtract_pantry_from_optional, ExtractOptions, OptionalSelection, ScaledRecipe,
-    ShoppingIngredients, ShoppingListStore, StoredEntry,
+    add_optional_selections, extract_ingredients, merge_case_variants, optional_selections,
+    recipe_display_name, subtract_pantry_from_optional, ExtractOptions, OptionalSelection,
+    ScaledRecipe, ShoppingIngredients, ShoppingListStore, StoredEntry,
 };
 use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
 use cooklang::model::Ingredient;
@@ -118,7 +118,12 @@ pub async fn shopping_list(
         }
     }
 
+    // Merge case variants so `sugar`/`Sugar` buy and deplete the pantry as
+    // one item (#694) — each list on its own, required and optional stay
+    // separate.
     let ShoppingIngredients { required, optional } = ingredients;
+    let required = merge_case_variants(required);
+    let optional = merge_case_variants(optional);
 
     // Parse aisle with lenient parsing
     let aisle_content = read_aisle_file(&state);
@@ -800,7 +805,11 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
         .cloned()
         .unwrap_or_default();
     let mut names = Vec::new();
-    for part in [list.required, list.optional] {
+    // Merge case variants first, so `sugar`/`Sugar` tick as one name (#694).
+    for part in [
+        merge_case_variants(list.required),
+        merge_case_variants(list.optional),
+    ] {
         names.extend(part.iter().map(|(name, _)| name.clone()));
         names.extend(
             part.use_common_names(&aisle, PARSER.converter())

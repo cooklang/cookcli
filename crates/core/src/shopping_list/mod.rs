@@ -342,6 +342,26 @@ impl AggregatedList {
     }
 }
 
+/// Fold case variants of an ingredient's name into a single entry.
+///
+/// [`IngredientList`] keys on the name as spelled, so `sugar` and `Sugar`
+/// travel the pipeline as two items — yet the pantry lookup, the server's
+/// checked set and the aisle all match case-insensitively, which subtracted
+/// stock from, and ticked, *each* variant separately (#694). The first
+/// spelling seen keeps the name; the quantities are summed by
+/// [`IngredientList::add_ingredient`], converting units as usual.
+pub fn merge_case_variants(list: IngredientList) -> IngredientList {
+    let mut spellings: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut merged = IngredientList::new();
+    for (name, quantity) in list.iter() {
+        let name = spellings
+            .entry(name.to_lowercase())
+            .or_insert_with(|| name.clone());
+        merged.add_ingredient(name.clone(), quantity, PARSER.converter());
+    }
+    merged
+}
+
 impl ListItem {
     fn render(item: &RawItem) -> Self {
         Self {
@@ -357,8 +377,9 @@ impl ListItem {
 
 /// Build a shopping list from several recipes.
 ///
-/// Ingredients with the same name are merged, converting units where they
-/// convert; the aisle configuration from [`Context::aisle`] folds synonyms onto
+/// Ingredients with the same name are merged — letter case ignored, the
+/// first spelling kept — converting units where they convert; the aisle
+/// configuration from [`Context::aisle`] folds synonyms onto
 /// one spelling and supplies the categories; the pantry configuration from
 /// [`Context::pantry`] is subtracted from what is left. Pass
 /// [`ConfigSource::None`] for either to skip that step — that is how CookCLI's
@@ -415,8 +436,13 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
             .add_recipe(&outcome.value, PARSER.converter(), false);
     }
 
-    let mut required = list.required.use_common_names(&aisle, PARSER.converter());
-    let mut optional = list.optional.use_common_names(&aisle, PARSER.converter());
+    // Case variants merge before anything else reads the list, so `sugar`
+    // and `Sugar` buy, categorise and deplete the pantry as one ingredient
+    // under the first spelling (#694).
+    let mut required =
+        merge_case_variants(list.required).use_common_names(&aisle, PARSER.converter());
+    let mut optional =
+        merge_case_variants(list.optional).use_common_names(&aisle, PARSER.converter());
     if let Some(pantry) = &pantry {
         optional = subtract_pantry_from_optional(optional, &required, pantry);
         required = required.subtract_pantry(pantry, PARSER.converter());

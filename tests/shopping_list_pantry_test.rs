@@ -26,9 +26,14 @@ struct ServerGuard {
 impl ServerGuard {
     /// The shopping list for the one recipe in the directory.
     async fn list(&self) -> Value {
+        self.list_of("Pancakes.cook").await
+    }
+
+    /// The shopping list for one named recipe.
+    async fn list_of(&self, recipe: &str) -> Value {
         let response = reqwest::Client::new()
             .post(format!("http://127.0.0.1:{}/api/shopping_list", self.port))
-            .json(&json!([{ "recipe": "Pancakes.cook", "scale": 1 }]))
+            .json(&json!([{ "recipe": recipe, "scale": 1 }]))
             .send()
             .await
             .expect("request");
@@ -68,6 +73,11 @@ async fn try_start_server(pantry: &str) -> Option<ServerGuard> {
     std::fs::write(
         recipes.join("Pancakes.cook"),
         "Mix @milk{1%l}, @flour{200%g} and @eggs{2}.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        recipes.join("Variants.cook"),
+        "Add @sugar{100%g} and @Sugar{200%g}.\n",
     )
     .unwrap();
     std::fs::write(recipes.join("config/pantry.conf"), pantry).unwrap();
@@ -126,6 +136,30 @@ async fn a_pantry_that_reads_is_taken_off_and_no_error_is_sent() {
     assert_eq!(list["pantry_error"], Value::Null, "{list}");
     assert_eq!(list["pantry_items"], json!(["milk"]), "{list}");
     assert!(!names(&list).contains(&"milk".to_string()), "{list}");
+}
+
+/// `sugar` and `Sugar` are one item on the web list too, summed under the
+/// first spelling, and the pantry's `100 g` counts against the sum once —
+/// so 200 g is left to buy, not 100 g (#694).
+#[tokio::test]
+async fn case_variants_merge_and_share_the_pantry_once() {
+    let server = start_server("[cupboard]\nsugar = \"100%g\"\n").await;
+    let list = server.list_of("Variants.cook").await;
+
+    let items: Vec<&Value> = list["categories"]
+        .as_array()
+        .expect("categories")
+        .iter()
+        .flat_map(|category| category["items"].as_array().expect("items"))
+        .collect();
+    assert_eq!(items.len(), 1, "{list}");
+    assert_eq!(items[0]["name"], json!("sugar"), "{list}");
+    // 300 g asked for less the pantry's 100 g.
+    assert_eq!(
+        items[0]["quantities"][0]["value"]["value"]["value"],
+        json!(200.0),
+        "{list}"
+    );
 }
 
 #[tokio::test]

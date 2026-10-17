@@ -185,6 +185,42 @@ fn ingredients_are_categorised_by_the_aisle_configuration() {
     assert_eq!(list.categories[2].items[0].name, "sand");
 }
 
+/// Names that differ only by case are one ingredient: their amounts merge
+/// under the first spelling seen, in both the flat and categorised views.
+/// Upstream's categoriser used to keep only the last variant.
+/// <https://github.com/cooklang/cookcli/issues/694>
+#[test]
+fn ingredients_differing_only_by_case_are_merged() {
+    let dir = dir_with(&[("a.cook", "Add @sugar{1%cup} and @Sugar{2%cup}.\n")]);
+
+    let list = generate(&ctx(&dir), request(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "sugar"), Some(vec!["3 cup".to_string()]));
+    assert_eq!(quantities(&list, "Sugar"), None);
+
+    let names: Vec<&str> = list.items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, vec!["sugar"]);
+}
+
+/// The pantry matches case-insensitively, so two variants would each be
+/// charged the same stock: `sugar 100 g` + `Sugar 200 g` with `100 g` in the
+/// pantry used to show 100 g left to buy instead of 200 g (#694).
+#[test]
+fn merged_case_variants_subtract_the_pantry_once() {
+    let dir = dir_with(&[("a.cook", "Add @sugar{100%g} and @Sugar{200%g}.\n")]);
+    let ctx = ctx(&dir).with_pantry(ConfigSource::Inline(
+        "[cupboard]\nsugar = \"100%g\"\n".to_string(),
+    ));
+
+    let list = generate(&ctx, request(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "sugar"), Some(vec!["200 g".to_string()]));
+}
+
 /// Without an aisle configuration everything lands in `other`, and the caller
 /// is told why rather than being left to wonder.
 #[test]
