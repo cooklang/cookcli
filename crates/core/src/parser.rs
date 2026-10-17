@@ -85,6 +85,52 @@ pub fn parse_recipe_at(
     Ok(outcome)
 }
 
+/// Strip a leading UTF-8 byte-order mark.
+///
+/// `cooklang`'s frontmatter fence check runs on the raw text, so in a BOM'd
+/// file `﻿---` is not a fence and the whole frontmatter becomes a phantom
+/// step — the title and every other key are silently lost (upstream bug;
+/// menus already get this treatment in `util/menu.rs`).
+pub fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// How many bytes a BOM took, for shifting spans produced from the stripped
+/// text back into the file's own coordinates.
+pub fn bom_len(text: &str) -> usize {
+    text.len() - strip_bom(text).len()
+}
+
+/// Strip a leading BOM and parse with CookCLI's [`parse_options`].
+///
+/// The returned `&str` is the text the recipe and its diagnostics came from,
+/// so a caller rendering report spans or slicing by them works on the same
+/// string; a caller reporting `Diagnostic` spans against the file shifts them
+/// by [`bom_len`] (#712, #713).
+pub fn parse_file(text: &str) -> (&str, cooklang::RecipeResult) {
+    let text = strip_bom(text);
+    (text, PARSER.parse_with_options(text, parse_options()))
+}
+
+/// Move every diagnostic's span `shift` bytes right — e.g. by [`bom_len`],
+/// so `Diagnostic.location.span` still indexes the original file, not the
+/// stripped text it was computed from.
+pub(crate) fn shift_spans(diagnostics: &mut [Diagnostic], shift: usize) {
+    if shift == 0 {
+        return;
+    }
+    for diagnostic in diagnostics {
+        if let Some(span) = diagnostic
+            .location
+            .as_mut()
+            .and_then(|location| location.span.as_mut())
+        {
+            span.start += shift;
+            span.end += shift;
+        }
+    }
+}
+
 /// Parse recipe text and collect diagnostics, without scaling it.
 ///
 /// Deliberately separate from `parse_recipe_at(.., 1.0, ..)`:
@@ -103,18 +149,27 @@ pub(crate) fn parse_unscaled(
     name: &str,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    let parsed = PARSER.parse_with_options(text, parse_options());
+    // Diagnostics come from the stripped text — the rendered report lines up
+    // — but `Diagnostic.location.span` is shifted back onto the file, which
+    // includes the BOM.
+    let shift = bom_len(text);
+    let (text, parsed) = parse_file(text);
     let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
     let parse_error = |report: &SourceReport| CoreError::Parse {
         name: name.to_string(),
-        diagnostics: collect_diagnostics(report, file),
+        diagnostics: {
+            let mut diagnostics = collect_diagnostics(report, file);
+            shift_spans(&mut diagnostics, shift);
+            diagnostics
+        },
         rendered: render_report(report, &display_path, text, false),
     };
 
     if parsed.report().has_errors() {
         return Err(parse_error(parsed.report()));
     }
-    let diagnostics = collect_diagnostics(parsed.report(), file);
+    let mut diagnostics = collect_diagnostics(parsed.report(), file);
+    shift_spans(&mut diagnostics, shift);
 
     match parsed.into_result() {
         Ok((recipe, _)) => Ok(Outcome::with_diagnostics(recipe, diagnostics)),
@@ -238,6 +293,50 @@ mod tests {
         assert_eq!(
             quantity_value(&parse_recipe(GOOD, "s", 0.5).unwrap().value, 0),
             1.0
+        );
+    }
+
+    /// `Diagnostic.location.span` indexes the file, BOM included — the three
+    /// bytes the parser never saw are put back, so a caller underlining the
+    /// warning in the original buffer lands on the right text.
+    #[test]
+    fn a_utf8_bom_keeps_spans_in_file_coordinates() {
+        let recipe = "Cook @salt{=1}.\n";
+        let plain = parse_recipe(recipe, "a", 1.0).expect("parses");
+        let bommed = parse_recipe(&format!("\u{feff}{recipe}"), "a", 1.0).expect("parses");
+
+        let span = |outcome: &Outcome<Recipe>| {
+            outcome.diagnostics[0]
+                .location
+                .as_ref()
+                .and_then(|l| l.span)
+                .expect("the warning has a span")
+        };
+        let plain = span(&plain);
+        let bommed = span(&bommed);
+        assert_eq!(bommed.start, plain.start + 3);
+        assert_eq!(bommed.end, plain.end + 3);
+    }
+
+    /// A leading UTF-8 BOM must not defeat the frontmatter fence: the file
+    /// should parse exactly as if the BOM were absent. Upstream `cooklang`
+    /// does not strip it; cookcli does, on every file-content entry point.
+    #[test]
+    fn a_utf8_bom_does_not_break_frontmatter() {
+        let text = "\u{feff}---\ntitle: BOM Recipe\n---\n\nMix @flour{2%cups}.\n";
+        let outcome = parse_recipe(text, "bom", 1.0).expect("parses");
+        assert_eq!(outcome.value.metadata.title(), Some("BOM Recipe"));
+        assert_eq!(outcome.value.ingredients.len(), 1);
+        assert!(
+            outcome
+                .value
+                .sections
+                .iter()
+                .flat_map(|s| &s.content)
+                .filter(|c| c.is_step())
+                .count()
+                == 1,
+            "the frontmatter must not become a phantom step"
         );
     }
 
