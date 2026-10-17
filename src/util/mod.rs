@@ -206,10 +206,7 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
 
     // Normalize the path by resolving all components
     std::fs::canonicalize(&absolute)
-        .map_err(|e| {
-            tracing::error!("Failed to canonicalize path: {:?}", e);
-            anyhow::anyhow!("Failed to canonicalize path")
-        })?
+        .with_context(|| format!("Base path not found: {absolute}"))?
         .try_into()
         .map_err(|e| {
             tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);

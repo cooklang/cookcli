@@ -119,6 +119,19 @@ struct ValidateArgs {
     strict: bool,
 }
 
+impl DoctorArgs {
+    /// The `--base-path` of whichever subcommand ran, so
+    /// `configure_context` can point config discovery at it.
+    pub fn get_base_path(&self) -> Option<Utf8PathBuf> {
+        match &self.command {
+            Some(DoctorCommand::Aisle(a)) => a.base_path.clone(),
+            Some(DoctorCommand::Pantry(a)) => a.base_path.clone(),
+            Some(DoctorCommand::Validate(a)) => a.base_path.clone(),
+            None => None,
+        }
+    }
+}
+
 pub fn run(ctx: &Context, args: DoctorArgs) -> Result<()> {
     match args.command {
         Some(DoctorCommand::Aisle(aisle_args)) => run_aisle(ctx, aisle_args),
@@ -264,7 +277,9 @@ fn run_pantry(ctx: &Context, args: PantryArgs) -> Result<()> {
     let outcome = pantry_coverage(
         ctx,
         CoverageRequest {
-            base_dir: args.base_path,
+            // The resolved `-b` already sits in `ctx`; a raw relative path
+            // here reached the walker uncanonicalized (#714).
+            base_dir: None,
         },
     )
     .map_err(cli_error)?;
@@ -303,13 +318,7 @@ fn run_aisle(ctx: &Context, args: AisleArgs) -> Result<()> {
         warn!("No aisle configuration found");
     }
 
-    let outcome = aisle_coverage(
-        ctx,
-        CoverageRequest {
-            base_dir: args.base_path,
-        },
-    )
-    .map_err(cli_error)?;
+    let outcome = aisle_coverage(ctx, CoverageRequest { base_dir: None }).map_err(cli_error)?;
     log_diagnostics(&outcome.diagnostics);
     let coverage = outcome.value;
 
@@ -352,7 +361,7 @@ fn run_validate(ctx: &Context, args: ValidateArgs) -> Result<()> {
     let report = cookcli_core::doctor::validate(
         ctx,
         cookcli_core::doctor::ValidateRequest {
-            base_dir: args.base_path,
+            base_dir: None,
             // This report is going straight to a terminal.
             style: cookcli_core::Style::Ansi,
         },

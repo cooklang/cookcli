@@ -289,6 +289,39 @@ fn a_bom_and_a_timer_near_the_edge_of_the_line() {
         .stdout(predicate::str::contains("multibyte.cook:1"));
 }
 
+/// `-b` steers configuration discovery too: run from a directory whose own
+/// `config/` says nothing, `doctor aisle -b <base>` reads `base/config/`.
+/// It used to read the working directory's `config/` instead (#711).
+#[test]
+fn aisle_with_base_path_reads_the_configuration_there() {
+    let base = collection("Cook with @salt{}.\n", Some("[spices]\nsalt\n"), None);
+    let cwd = TempDir::new().unwrap();
+
+    cook(cwd.path())
+        .args(["doctor", "aisle", "-b"])
+        .arg(base.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "All ingredients are present in aisle configuration",
+        ))
+        .stdout(predicate::str::contains("salt").not());
+}
+
+/// `doctor validate -b ./` from inside the collection failed with
+/// "Cannot search './'" — the relative path reached the walker
+/// uncanonicalized (#714).
+#[test]
+fn validate_with_a_relative_base_path_finds_the_recipes() {
+    let base = collection("Bake @flour{200%g}.\n", None, None);
+
+    cook(base.path())
+        .args(["doctor", "validate", "-b", "./"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Total recipes scanned: 1"));
+}
+
 // ---------------------------------------------------------------------------
 // doctor pantry
 // ---------------------------------------------------------------------------
