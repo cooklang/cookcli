@@ -470,6 +470,25 @@ fn test_shopping_list_directory_skips_hidden_files() {
         .stdout(predicate::str::contains("ghost").not());
 }
 
+#[test]
+fn test_shopping_list_menu_only_directory_errors_clearly() {
+    // A directory of only menus has nothing to expand to. Falling back to the
+    // path itself surfaced as "recipe not found"; name what is really there.
+    // https://github.com/cooklang/cookcli/issues/723
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let plans = temp_dir.path().join("plans");
+    fs::create_dir_all(&plans).unwrap();
+    fs::write(plans.join("week.menu"), "@./dish{}\n").unwrap();
+    fs::write(plans.join("weekend.menu"), "@./dish{}\n").unwrap();
+
+    shopping_list_in(temp_dir.path())
+        .arg("plans")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("contains no .cook files"))
+        .stderr(predicate::str::contains("2 .menu file(s)"));
+}
+
 // -- Some days of a menu: --from / --to -------------------------------------
 
 /// `cook shopping-list` in `dir`, its config kept away from the developer's.
