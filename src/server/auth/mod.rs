@@ -297,7 +297,7 @@ fn refuse_inside(base_path: &Utf8Path, path: &Utf8Path, what: &str) -> Result<()
     let base = base_path
         .canonicalize_utf8()
         .unwrap_or_else(|_| base_path.to_path_buf());
-    if super::canonical_or_nearest(path).starts_with(&base) {
+    if crate::util::canonical_or_nearest(path).starts_with(&base) {
         bail!(
             "{what} {path} is inside the recipe directory {base_path}, which the server \
              publishes. Keep it elsewhere: set {} to another directory, or pass --users-file \

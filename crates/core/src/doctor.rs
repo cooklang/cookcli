@@ -545,6 +545,13 @@ pub fn broken_references(report: &ValidationReport) -> BTreeMap<&Utf8Path, Vec<S
 pub struct CoverageRequest {
     /// Directory whose recipes to scan. Defaults to the context base path.
     pub base_dir: Option<Utf8PathBuf>,
+    /// Skip entries whose file leaves `base_dir` once links are followed.
+    /// [`build_tree`](crate::find::build_tree) walks into linked folders, so
+    /// without this a `Linked -> /outside` directory lists its outside
+    /// recipes — names and paths a caller answering for someone else must
+    /// not publish (#698). The CLI leaves it off: it reads under the user's
+    /// own permissions anyway.
+    pub confined: bool,
 }
 
 /// One ingredient a collection uses, and whether a configuration knows it.
@@ -769,6 +776,20 @@ fn coverage(
 
     let tree = build_tree(&base_dir)?;
     let entries = walk(&tree);
+    // A linked folder the walk followed contributes outside recipes;
+    // confine drops them before they are read or listed.
+    let entries: Vec<_> = if req.confined {
+        entries
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .path()
+                    .is_none_or(|path| crate::find::inside_base(&base_dir, path))
+            })
+            .collect()
+    } else {
+        entries
+    };
     let total_recipes = entries.len();
 
     // A map, so an ingredient two recipes share is one ingredient carrying
@@ -2202,6 +2223,7 @@ mod tests {
             &aisle_ctx(&ignored, "[pantry]\nsalt\n"),
             CoverageRequest {
                 base_dir: Some(base(&scanned)),
+                ..Default::default()
             },
         )
         .expect("the check succeeds")

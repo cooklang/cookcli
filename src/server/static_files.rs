@@ -6,12 +6,15 @@
 //! handed anyone `.git/config`, `.env`, `config/pantry.conf` and the shopping
 //! list, sign-in or not (#658).
 
+use crate::server::AppState;
+use crate::util::inside_collection;
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::sync::Arc;
 
 /// The extensions of the files `/api/static` serves: the title and step
 /// pictures the recipe pages link to.
@@ -37,13 +40,35 @@ pub fn serves(path: &str) -> bool {
 }
 
 /// Answers `404` for whatever [`serves`] refuses, before `ServeDir` looks.
-pub async fn only_pictures(request: Request, next: Next) -> Response {
-    if serves(request.uri().path()) {
+///
+/// `serves` is lexical, so `Linked.jpg -> /outside` passes it and `ServeDir`
+/// happily follows the link. The file must also stay inside the recipe
+/// directory once links are followed (#698).
+pub async fn only_pictures(
+    State(state): State<Arc<AppState>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if serves(request.uri().path()) && inside(&state, request.uri().path()) {
         next.run(request).await
     } else {
         tracing::debug!(path = request.uri().path(), "refused a static file");
         StatusCode::NOT_FOUND.into_response()
     }
+}
+
+/// `path` joined to the recipe directory, still inside it once links are
+/// followed. `serves` has run already: the names are clean of `.` and `..`
+/// and the file is a picture.
+fn inside(state: &AppState, path: &str) -> bool {
+    let Ok(path) = urlencoding::decode(path) else {
+        return false;
+    };
+    let file = path
+        .split('/')
+        .filter(|name| !name.is_empty())
+        .fold(state.base_path.clone(), |dir, name| dir.join(name));
+    inside_collection(&state.base_path, &file)
 }
 
 #[cfg(test)]

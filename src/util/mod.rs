@@ -239,6 +239,42 @@ pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry> {
     cookcli_core::find::get_recipe(base_path, name).map_err(cli_error)
 }
 
+/// `path` canonicalized, or, when it does not exist yet, its nearest existing
+/// ancestor canonicalized with the rest appended.
+pub fn canonical_or_nearest(path: &Utf8Path) -> Utf8PathBuf {
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(canonical) = current.canonicalize_utf8() {
+            return missing
+                .iter()
+                .rev()
+                .fold(canonical, |acc: Utf8PathBuf, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name);
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Whether `path` stays inside `base` once links are followed. `path` need
+/// not exist: its nearest existing ancestor is canonicalized and the rest
+/// appended, so `Link/New.cook` through a `Link -> /outside` symlink counts
+/// as outside, as does a `Linked.cook -> /outside` file.
+///
+/// `is_safe_relative_path` is lexical, so a request for `Link/Secret.cook`
+/// passes it; without this the raw, save and delete endpoints, the editor and
+/// the picture and `/api/static` routes then reached the file the link
+/// pointed to (#698). A link that stays in the directory still resolves.
+pub fn inside_collection(base: &Utf8Path, path: &Utf8Path) -> bool {
+    let base = canonical_or_nearest(base);
+    canonical_or_nearest(path).starts_with(&base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

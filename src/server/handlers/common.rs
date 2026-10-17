@@ -1,3 +1,4 @@
+use crate::util::inside_collection;
 use axum::{http::StatusCode, Json};
 use camino::{Utf8Path, Utf8PathBuf};
 
@@ -59,6 +60,20 @@ pub fn is_recipe_request(path: &str) -> bool {
             .is_none_or(|ext| RECIPE_FILE_EXTENSIONS.contains(&ext))
 }
 
+/// The answer a missing recipe or menu gives, for a path that resolves
+/// outside the recipe directory: refusing it as "not inside" would reveal
+/// there is a file at the link's far end (#698). `what` is "Recipe", "Menu"
+/// and the like, matching the handler's own not-found wording.
+pub fn not_found(what: &str, path: &str) -> ApiError {
+    (
+        StatusCode::NOT_FOUND,
+        json_error(format!(
+            "{what} not found: {path}: {}",
+            cooklang_find::fetcher::FetchError::InvalidPath(Utf8PathBuf::from(path))
+        )),
+    )
+}
+
 /// Where a request path lands among the recipe and menu files.
 #[derive(Debug, PartialEq, Eq)]
 pub enum RecipeFile {
@@ -116,6 +131,21 @@ pub fn recipe_file(base: &Utf8Path, path: &str) -> Result<RecipeFile, ApiError> 
             StatusCode::BAD_REQUEST,
             json_error(format!(
                 "Invalid path: {path:?}: a name cannot start or end with a space"
+            )),
+        ));
+    }
+
+    let resolved = match &file {
+        RecipeFile::Existing(file) | RecipeFile::Missing(file) => file,
+    };
+    if !inside_collection(base, resolved) {
+        // The rename's wording: the request path names what it may, the file
+        // it lands on just sits where it must not be reached.
+        tracing::error!("{path:?} resolves outside the recipe directory");
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json_error(format!(
+                "{path} is not inside the recipe directory once links are followed"
             )),
         ));
     }

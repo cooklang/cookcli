@@ -143,7 +143,7 @@ fn random_recipe_handler(
         Some(p) => state.base_path.join(p),
         None => state.base_path.clone(),
     };
-    let tree = match cooklang_find::build_tree(&dir) {
+    let mut tree = match cooklang_find::build_tree(&dir) {
         Ok(tree) => tree,
         Err(e) => {
             let page = error_page(
@@ -156,6 +156,9 @@ fn random_recipe_handler(
             return (StatusCode::NOT_FOUND, page).into_response();
         }
     };
+    // The glob walk follows linked folders; a random pick or a directory
+    // page must not reach files outside the collection (#698).
+    crate::web::builders::prune_outside(&mut tree, &state.base_path);
     let recipes = crate::web::builders::cook_recipe_paths(&tree);
     if recipes.is_empty() {
         let page = error_page(lang, prefix, "No recipes in this folder", features, viewer);
@@ -710,7 +713,7 @@ async fn create_recipe(
         let parent_owned = parent.to_owned();
         let base = base_canonical.clone();
         let inside = tokio::task::spawn_blocking(move || {
-            super::canonical_or_nearest(&parent_owned).starts_with(&base)
+            crate::util::canonical_or_nearest(&parent_owned).starts_with(&base)
         })
         .await
         .unwrap_or(false);
@@ -1166,8 +1169,11 @@ async fn feed_response(
 
     // Walking the recipe tree reads every file: keep it off the async runtime.
     let rendered = tokio::task::spawn_blocking(move || {
-        let tree = cooklang_find::build_tree(&base_path)
+        let mut tree = cooklang_find::build_tree(&base_path)
             .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+        // The glob walk follows linked folders; a feed must not publish
+        // what sits outside the collection (#698).
+        crate::web::builders::prune_outside(&mut tree, &base_path);
         Ok::<_, anyhow::Error>(crate::build::feed::render_feed(
             format,
             &tree,

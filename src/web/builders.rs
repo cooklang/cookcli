@@ -6,7 +6,7 @@
 //! reused from a non-async context (e.g. `cook build web`).
 
 use crate::util::recipe_info::{
-    combined_quantity, ref_info_or_default, reference_factor, RecipeInfo,
+    combined_quantity, ref_info_or_default_inside, reference_factor, RecipeInfo,
 };
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
@@ -41,6 +41,18 @@ pub fn prune_subtree(tree: &mut cooklang_find::RecipeTree, dir: &Utf8Path) {
     }
 }
 
+/// Drop every node of `tree` that resolves outside `base` once links are
+/// followed. The glob walk follows linked folders, so unfiltered listings,
+/// feeds and stats would publish the names of files outside the collection
+/// — and a linked folder would keep its whole outside subtree (#698).
+pub fn prune_outside(tree: &mut cooklang_find::RecipeTree, base: &Utf8Path) {
+    tree.children
+        .retain(|_, child| crate::util::inside_collection(base, &child.path));
+    for child in tree.children.values_mut() {
+        prune_outside(child, base);
+    }
+}
+
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
 pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTemplate> {
     let RecipesBuildInput {
@@ -69,6 +81,11 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
     if let Some(dir) = exclude {
         prune_subtree(&mut tree, dir);
+    }
+    // A static site is built by its owner from their own collection and
+    // links; the server publishes, so it lists nothing that resolves out.
+    if !static_mode {
+        prune_outside(&mut tree, base_path);
     }
 
     let mut items = Vec::new();
@@ -155,7 +172,12 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     });
 
     let todays_menu = if sub_path.is_none() {
-        crate::web::menus::find_todays_menu(base_path, exclude)
+        // The date search follows links; on the server a menu it finds
+        // outside the collection must not be linked from the front page.
+        crate::web::menus::find_todays_menu(base_path, exclude).filter(|menu| {
+            static_mode
+                || crate::util::inside_collection(base_path, &base_path.join(&menu.menu_path))
+        })
     } else {
         None
     };
@@ -410,6 +432,22 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let entry = cooklang_find::get_recipe(vec![base_path], recipe_path_buf.as_path())
         .map_err(|e| anyhow::anyhow!("Recipe not found: {recipe_path}: {e}"))?;
 
+    // `get_recipe` follows links, so `Link/Secret.cook` through a
+    // `Link -> /outside` symlink is a hit and the page would serve the file
+    // it points to (#698). `cook build` keeps following them: there the
+    // collection and the links are the user's own. The page answers exactly
+    // as it does for a missing file, so the link reveals nothing.
+    if !static_mode
+        && entry
+            .path()
+            .is_some_and(|file| !crate::util::inside_collection(base_path, file))
+    {
+        anyhow::bail!(
+            "Recipe not found: {recipe_path}: {}",
+            cooklang_find::fetcher::FetchError::InvalidPath(recipe_path_buf.clone())
+        );
+    }
+
     let actual_path = entry.path();
     tracing::info!(
         "Recipe path: {}, actual_path: {:?}, is_menu: {}",
@@ -456,7 +494,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         }
         let info = ref_info_cache
             .entry(path.to_string())
-            .or_insert_with(|| ref_info_or_default(base_path, path, path));
+            .or_insert_with(|| ref_info_or_default_inside(base_path, path, path));
         reference_query(
             reference_factor(quantity, scale, info),
             info.default_servings,
@@ -1032,7 +1070,7 @@ fn build_menu_template_inner(
                 .and_then(|n| u32::try_from(n).ok())
         })
     };
-    let mut menu = crate::util::menu::parse_menu(&entry, menu_path)
+    let mut menu = crate::util::menu::parse_menu(&entry, menu_path, base_path)
         .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
     // The planner needs the meals a plan names but has not filled yet.
     if let Ok(content) = entry.content() {
@@ -1087,7 +1125,7 @@ fn build_menu_template_inner(
                             if crate::util::menu::is_outside_reference(path) {
                                 RecipeInfo::default()
                             } else {
-                                ref_info_or_default(base_path, path, path)
+                                ref_info_or_default_inside(base_path, path, path)
                             }
                         });
 

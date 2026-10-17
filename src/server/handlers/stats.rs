@@ -39,10 +39,13 @@ fn count_entries(tree: &RecipeTree) -> (usize, usize) {
 pub async fn stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<StatsResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
+    let mut tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
         tracing::error!("Failed to build recipe tree: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    // The glob walk follows linked folders; counts must not include what
+    // sits outside the collection (#698).
+    crate::web::builders::prune_outside(&mut tree, &state.base_path);
 
     let (recipe_count, menu_count) = count_entries(&tree);
 
