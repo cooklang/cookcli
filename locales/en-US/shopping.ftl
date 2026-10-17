@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: the recipe { $reference } could not
 shopping-warning-no-servings = { $recipe }: the recipe { $reference } could not be scaled to { $amount }: it has no whole number of servings, such as `servings: 4`. It is on the list as written, not as its ingredients.
 shopping-warning-no-yield = { $recipe }: the recipe { $reference } could not be scaled to { $amount }: it does not say how much it makes. Add a yield, written number%unit, such as `yield: 500%{ $unit }`. It is on the list as written, not as its ingredients.
 shopping-warning-yield-unit = { $recipe }: the recipe { $reference } could not be scaled to { $amount }: its yield is in { $unit }, so ask for it in { $unit }. It is on the list as written, not as its ingredients.
+shopping-warning-non-positive-base = { $recipe }: the recipe { $reference } could not be scaled to { $amount }: it declares `{ $declared }`, so there is nothing to scale from. It is on the list as written, not as its ingredients.
 shopping-failed-to-add = Failed to add to shopping list
 shopping-error = Error
 shopping-print = Print

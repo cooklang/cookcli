@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: receptet { $reference } kunde inte 
 shopping-warning-no-servings = { $recipe }: receptet { $reference } kunde inte räknas om till { $amount }: det anger inget helt antal portioner, som `servings: 4`. Det står på listan som det är skrivet, inte som sina ingredienser.
 shopping-warning-no-yield = { $recipe }: receptet { $reference } kunde inte räknas om till { $amount }: det anger inte hur mycket det ger. Lägg till ett utbyte skrivet tal%enhet, som `yield: 500%{ $unit }`. Det står på listan som det är skrivet, inte som sina ingredienser.
 shopping-warning-yield-unit = { $recipe }: receptet { $reference } kunde inte räknas om till { $amount }: dess utbyte anges i { $unit }, så be om det i { $unit }. Det står på listan som det är skrivet, inte som sina ingredienser.
+shopping-warning-non-positive-base = { $recipe }: receptet { $reference } kunde inte räknas om till { $amount }: det deklarerar `{ $declared }`, så det finns inget att räkna om från. Det står på listan som det är skrivet, inte som sina ingredienser.
 shopping-failed-to-add = Misslyckades att lägga till handlingslista
 shopping-error = Fel
 shopping-print = Skriv ut

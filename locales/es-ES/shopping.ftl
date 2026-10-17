@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: no se pudo ajustar la receta { $ref
 shopping-warning-no-servings = { $recipe }: no se pudo ajustar la receta { $reference } a { $amount }: no indica un número entero de raciones, como `servings: 4`. Aparece en la lista tal como está escrita, no como sus ingredientes.
 shopping-warning-no-yield = { $recipe }: no se pudo ajustar la receta { $reference } a { $amount }: no indica cuánto rinde. Añada un rendimiento con el formato número%unidad, como `yield: 500%{ $unit }`. Aparece en la lista tal como está escrita, no como sus ingredientes.
 shopping-warning-yield-unit = { $recipe }: no se pudo ajustar la receta { $reference } a { $amount }: su rendimiento está en { $unit }, así que pídala en { $unit }. Aparece en la lista tal como está escrita, no como sus ingredientes.
+shopping-warning-non-positive-base = { $recipe }: no se pudo ajustar la receta { $reference } a { $amount }: declara `{ $declared }`, así que no hay nada desde lo que ajustar. Aparece en la lista tal como está escrita, no como sus ingredientes.
 shopping-failed-to-add = Error al agregar a la lista de compras
 shopping-error = Error
 shopping-print = Imprimir

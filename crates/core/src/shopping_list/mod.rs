@@ -1109,6 +1109,28 @@ impl Expansion<'_> {
                     // Read before scaling: the servings and yield this is worked
                     // out from are what scaling rewrites.
                     let reached = target_factor(&ref_recipe, target_value, quantity.unit());
+                    // `scale_to_target` divides by the same base and does not
+                    // check it either: `servings: 0` or `yield: -500%g` is a
+                    // `None` here, then an `Ok` scaled by infinity or flipped
+                    // into negative amounts there (#699). Refuse it before
+                    // that, as unscalable.
+                    if let Some(base) = non_positive_base(&ref_recipe, quantity.unit()) {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: \
+                                 it declares `{base}`, so there is nothing to scale from"
+                            ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: UnscalableCause::NonPositiveBase { declared: base },
+                            },
+                        );
+                        continue;
+                    }
                     let scaled = match (is_servings(quantity.unit()), reached) {
                         // `scale_to_target` would round the servings to a
                         // whole number first (cooklang-rs#133): 2.5 servings
@@ -1256,6 +1278,40 @@ fn scale_failure(error: &cooklang::scale::ScaleError, unit: &str) -> String {
     }
 }
 
+/// The base a `unit` target scales the recipe from, when the recipe declares
+/// it and it is not a positive number: `servings: 0` for a servings target,
+/// `yield: 0%unit`, a negative one, or a non-finite spelling Rust's float
+/// parse accepts (`nan`, `inf`) for a target in `unit`. A yield in another
+/// unit is a unit mismatch, not a base problem. Returned as its written
+/// spelling, `servings: 0` / `yield: -500%g`, for the warning.
+///
+/// `scale_to_target` divides by it and answers `Ok` having scaled by
+/// infinity or flipped every amount negative, so the caller lists the
+/// reference unexpanded instead.
+fn non_positive_base(recipe: &Recipe, unit: Option<&str>) -> Option<String> {
+    match unit {
+        Some(unit) if is_servings(Some(unit)) => recipe
+            .metadata
+            .servings()
+            .and_then(|servings| servings.as_number())
+            .filter(|servings| *servings == 0)
+            .map(|servings| format!("servings: {servings}")),
+        Some(unit) => recipe
+            .metadata
+            .get("yield")
+            .and_then(|yield_| yield_.as_str())
+            .and_then(|yield_| yield_.split_once('%'))
+            .filter(|(value, yield_unit)| {
+                *yield_unit == unit
+                    && value
+                        .parse::<f64>()
+                        .is_ok_and(|value| !(value.is_finite() && value > 0.0))
+            })
+            .map(|(value, yield_unit)| format!("yield: {value}%{yield_unit}")),
+        None => None,
+    }
+}
+
 /// [`scale_failure`] as data, for a caller wording the warning itself.
 fn unscalable_cause(error: &cooklang::scale::ScaleError, unit: &str) -> UnscalableCause {
     use cooklang::scale::ScaleError;
@@ -1313,11 +1369,12 @@ fn scale_to_servings(recipe: &mut Recipe, target: f64, factor: f64, converter: &
 /// `unwrap_or(1.0)` is unreachable.
 ///
 /// With one exception, which is why that fallback is a `1` and not an
-/// `expect`: a **zero** base, `servings: 0` or `yield: 0%g`. `cooklang`
-/// divides by it and scales the recipe by infinity; this returns `None` and
-/// what the recipe references is left alone. Both readings of such a recipe
-/// are nonsense, and confining the nonsense to the one recipe `cooklang`
-/// itself scaled beats spreading infinity down the chain.
+/// `expect`: a **non-positive** base, `servings: 0` or `yield: -500%g`.
+/// `cooklang` divides by it and scales the recipe by infinity — an `Ok`,
+/// not a refusal — so the caller refuses such recipes itself through
+/// [`non_positive_base`], and this `None` only reaches the
+/// nested-reference factor, where `1` leaves what the recipe references
+/// alone.
 ///
 /// Unit names are matched exactly, including case, because that is how
 /// `cooklang` matches them — mirroring it is the whole point, and matching
@@ -1337,7 +1394,7 @@ fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64
         // and the factor passed down are both this one.
         Some("servings") | Some("serving") => {
             return match f64::from(recipe.metadata.servings()?.as_number()?) {
-                0.0 => None,
+                base if base <= 0.0 => None,
                 base => Some(target / base),
             }
         }
@@ -1351,7 +1408,7 @@ fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64
         }
     };
 
-    (base != 0.0).then(|| target / base)
+    (base.is_finite() && base > 0.0).then(|| target / base)
 }
 
 /// The warning to raise if expanding `entry` would lead back up its own chain,

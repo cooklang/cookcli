@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe }: Das Rezept { $reference } ließ sic
 shopping-warning-no-servings = { $recipe }: Das Rezept { $reference } ließ sich nicht auf { $amount } umrechnen: Es nennt keine ganze Zahl an Portionen, etwa `servings: 4`. Es steht so auf der Liste, wie es geschrieben ist, nicht als seine Zutaten.
 shopping-warning-no-yield = { $recipe }: Das Rezept { $reference } ließ sich nicht auf { $amount } umrechnen: Es gibt nicht an, wie viel es ergibt. Ergänzen Sie eine Ausbeute im Format Zahl%Einheit, etwa `yield: 500%{ $unit }`. Es steht so auf der Liste, wie es geschrieben ist, nicht als seine Zutaten.
 shopping-warning-yield-unit = { $recipe }: Das Rezept { $reference } ließ sich nicht auf { $amount } umrechnen: Seine Ausbeute ist in { $unit } angegeben, fordern Sie es also in { $unit } an. Es steht so auf der Liste, wie es geschrieben ist, nicht als seine Zutaten.
+shopping-warning-non-positive-base = { $recipe }: Das Rezept { $reference } ließ sich nicht auf { $amount } umrechnen: Es deklariert `{ $declared }`, es gibt also nichts, von dem aus umgerechnet werden könnte. Es steht so auf der Liste, wie es geschrieben ist, nicht als seine Zutaten.
 shopping-failed-to-add = Hinzufügen zur Einkaufsliste fehlgeschlagen
 shopping-error = Fehler
 shopping-print = Drucken

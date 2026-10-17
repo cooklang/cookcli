@@ -30,6 +30,7 @@ shopping-warning-not-a-number = { $recipe } : impossible d'adapter la recette { 
 shopping-warning-no-servings = { $recipe } : impossible d'adapter la recette { $reference } à { $amount } : elle n'indique pas un nombre entier de portions, par exemple `servings: 4`. Elle figure sur la liste telle quelle, pas sous forme de ses ingrédients.
 shopping-warning-no-yield = { $recipe } : impossible d'adapter la recette { $reference } à { $amount } : elle n'indique pas combien elle produit. Ajoutez un rendement au format nombre%unité, par exemple `yield: 500%{ $unit }`. Elle figure sur la liste telle quelle, pas sous forme de ses ingrédients.
 shopping-warning-yield-unit = { $recipe } : impossible d'adapter la recette { $reference } à { $amount } : son rendement est en { $unit }, demandez-la donc en { $unit }. Elle figure sur la liste telle quelle, pas sous forme de ses ingrédients.
+shopping-warning-non-positive-base = { $recipe } : impossible d'adapter la recette { $reference } à { $amount } : elle déclare `{ $declared }`, il n'y a donc rien à partir de quoi adapter. Elle figure sur la liste telle quelle, pas sous forme de ses ingrédients.
 shopping-failed-to-add = Échec de l'ajout à la liste de courses
 shopping-error = Erreur
 shopping-print = Imprimer

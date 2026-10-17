@@ -26,6 +26,7 @@ shopping-warning-not-a-number = { $recipe }: レシピ { $reference } を { $amo
 shopping-warning-no-servings = { $recipe }: レシピ { $reference } を { $amount } に換算できませんでした。`servings: 4` のような整数の人数分が書かれていません。材料ではなく、書かれたとおりにリストに載っています。
 shopping-warning-no-yield = { $recipe }: レシピ { $reference } を { $amount } に換算できませんでした。出来上がり量が書かれていません。`yield: 500%{ $unit }` のように、数値%単位の形で追加してください。材料ではなく、書かれたとおりにリストに載っています。
 shopping-warning-yield-unit = { $recipe }: レシピ { $reference } を { $amount } に換算できませんでした。出来上がり量の単位が { $unit } なので、{ $unit } で指定してください。材料ではなく、書かれたとおりにリストに載っています。
+shopping-warning-non-positive-base = { $recipe }: レシピ { $reference } を { $amount } に換算できませんでした。`{ $declared }` と宣言されているため、換算のもとがありません。材料ではなく、書かれたとおりにリストに載っています。
 shopping-failed-to-add = 買い物リストに追加できませんでした
 shopping-error = エラー
 shopping-print = 印刷

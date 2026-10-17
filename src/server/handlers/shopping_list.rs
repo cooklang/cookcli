@@ -307,12 +307,15 @@ fn warning_text(tr: &Tr, recipe: &str, diagnostic: &Diagnostic) -> Option<String
     else {
         return None;
     };
-    let (key, unit) = match cause {
-        UnscalableCause::NotANumber => ("shopping-warning-not-a-number", ""),
-        UnscalableCause::NoServings => ("shopping-warning-no-servings", ""),
-        UnscalableCause::NoYield { unit } => ("shopping-warning-no-yield", unit.as_str()),
+    let (key, unit, declared) = match cause {
+        UnscalableCause::NotANumber => ("shopping-warning-not-a-number", "", ""),
+        UnscalableCause::NoServings => ("shopping-warning-no-servings", "", ""),
+        UnscalableCause::NoYield { unit } => ("shopping-warning-no-yield", unit.as_str(), ""),
         UnscalableCause::YieldInOtherUnit { unit } => {
-            ("shopping-warning-yield-unit", unit.as_str())
+            ("shopping-warning-yield-unit", unit.as_str(), "")
+        }
+        UnscalableCause::NonPositiveBase { declared } => {
+            ("shopping-warning-non-positive-base", "", declared.as_str())
         }
         _ => return None,
     };
@@ -323,6 +326,7 @@ fn warning_text(tr: &Tr, recipe: &str, diagnostic: &Diagnostic) -> Option<String
             ("reference", reference),
             ("amount", amount),
             ("unit", unit),
+            ("declared", declared),
         ],
     ))
 }
