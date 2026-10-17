@@ -208,7 +208,17 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
     }
     let width = textwrap::termwidth().min(80);
     let options = textwrap::Options::new(width)
-        .word_separator(textwrap::WordSeparator::Custom(component_word_separator));
+        .word_separator(textwrap::WordSeparator::Custom(component_word_separator))
+        // The default HyphenSplitter breaks "extra-virgin" at the dash —
+        // inside a component name that corrupts the recipe on reparse
+        // (`@extra-\nvirgin olive oil` reads back as a different
+        // ingredient), and plain text like "well-known" gets a space it
+        // never had.
+        .word_splitter(textwrap::WordSplitter::NoHyphenation)
+        // And a word wider than the wrap must not be cut mid-word either:
+        // a long component name split at an arbitrary character reads back
+        // as two.
+        .break_words(false);
     let lines = textwrap::wrap(step_str.trim(), options);
     for line in lines {
         writeln!(w, "{line}")?;
@@ -221,7 +231,10 @@ fn w_text_block(w: &mut impl io::Write, text: &str) -> io::Result<()> {
     let indent = "> ";
     let options = textwrap::Options::new(width)
         .initial_indent(indent)
-        .subsequent_indent(indent);
+        .subsequent_indent(indent)
+        .word_separator(textwrap::WordSeparator::AsciiSpace)
+        .word_splitter(textwrap::WordSplitter::NoHyphenation)
+        .break_words(false);
     let lines = textwrap::wrap(text.trim(), options);
     for line in lines {
         writeln!(w, "{line}")?;
@@ -238,12 +251,18 @@ fn component_word_separator<'a>(
 
     let re = {
         static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-        RE.get_or_init(|| regex::Regex::new(r"[@#~][^@#~]*\{[^\}]*\}").unwrap())
+        // The note is part of the component: a break between `}` and `(`
+        // would write the note on its own line, where it reparses as
+        // ordinary step text.
+        RE.get_or_init(|| regex::Regex::new(r"[@#~][^@#~]*\{[^\}]*\}(\([^)]*\))?").unwrap())
     };
 
     let mut words = vec![];
     let mut last_added = 0;
-    let default_separator = textwrap::WordSeparator::new();
+    // AsciiSpace, not the Unicode line-break rules: `/`, em and en dashes
+    // and the rest are not safe to break at — `foo/bar` or `stir—gently`
+    // broken apart reparse as two words where the source had one.
+    let default_separator = textwrap::WordSeparator::AsciiSpace;
 
     for component in re.find_iter(line) {
         if last_added < component.start() {
@@ -809,6 +828,146 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
             },
         );
         assert_eq!(s, "2 1/2", "an exact fraction keeps its display form");
+    }
+
+    /// Hyphenated component names must reach the next line whole: the
+    /// default word splitter breaks "extra-virgin" at the dash, and the
+    /// reparse then sees a different ingredient
+    /// (<https://github.com/cooklang/cookcli/issues/700>).
+    #[test]
+    fn a_hyphenated_name_survives_wrapping() {
+        let source = "Mix @all-purpose flour{1%cup} with @super-fine caster \
+                      sugar{2%tbsp} and @extra-virgin olive oil{1%tbsp} in a bowl.\n";
+        let recipe = parse_recipe(source, "r", 1.0).unwrap().value;
+        let rendered = format_to_string(&recipe);
+
+        let reparsed = parse_recipe(&rendered, "r", 1.0)
+            .unwrap_or_else(|e| panic!("reparse failed:\n{rendered}\n{e}"))
+            .value;
+        let names: Vec<String> = reparsed
+            .ingredients
+            .iter()
+            .map(|i| i.name.to_string())
+            .collect();
+        assert!(
+            names.contains(&"extra-virgin olive oil".to_string()),
+            "the hyphenated name changed\nnames: {names:?}\n--- rendered ---\n{rendered}"
+        );
+    }
+
+    /// Unicode line-breaking also allows breaks after `/`, em dash and en
+    /// dash — all of which split a word the source wrote as one (#700). The
+    /// token has to reach the wrap column for a splitter to matter, so each
+    /// one is swept across the whole line.
+    #[test]
+    fn wrapping_only_breaks_at_spaces() {
+        // No spaces in a token — a space break is a legitimate wrap.
+        for token in ["stir—gently", "foo/bar", "1–2", "well-known"] {
+            for pad in 0..80 {
+                let source = format!(
+                    "{}{token} then keep going on and on and on for a while longer.\n",
+                    "x ".repeat(pad)
+                );
+                let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+                assert!(
+                    rendered.lines().any(|line| line.contains(token)),
+                    "{token} at column {} split\n--- rendered ---\n{rendered}",
+                    pad * 2
+                );
+            }
+        }
+    }
+
+    /// A note is part of its component: broken off at `}(`, it lands on
+    /// its own line and reparses as ordinary step text (#700). The break has
+    /// to land between `}` and `(` to detach it, so the component is swept
+    /// across the wrap column.
+    #[test]
+    fn a_note_stays_attached_to_its_component() {
+        for pad in 0..80 {
+            let source = format!(
+                "{}@salt{{a big pinch}}(or two or more if you like) then stir well.\n",
+                "x ".repeat(pad)
+            );
+            let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+            assert!(
+                rendered
+                    .lines()
+                    .any(|line| line.contains("@salt{a big pinch}(or two or more if you like)")),
+                "pad {pad}: the note detached\n--- rendered ---\n{rendered}"
+            );
+            let reparsed = parse_recipe(&rendered, "r", 1.0)
+                .unwrap_or_else(|e| panic!("pad {pad}: reparse failed:\n{rendered}\n{e}"))
+                .value;
+            assert_eq!(
+                reparsed.ingredients[0].note.as_deref(),
+                Some("or two or more if you like"),
+                "pad {pad}: the note must still be the ingredient's note"
+            );
+        }
+    }
+
+    /// `break_words` would cut a word wider than the wrap at an arbitrary
+    /// character — a long component name would reparse as two (#700). The
+    /// word has to be wider than the wrap for `break_words` to run at all,
+    /// and the check is on the rendered line: splitting `@name` and `{}`
+    /// apart reparses to the same name either way, so it only shows if the
+    /// whole component is required on one line.
+    #[test]
+    fn a_word_wider_than_the_wrap_is_not_split() {
+        let name =
+            "averyverylongingredientnamethatneverendsandkeepsongoingforaverylongreasonindeed";
+        assert!(name.len() > 78, "must not fit under the 80-column wrap");
+        let source = format!("Add @{name}{{2%kg}} to the bowl and mix it in thoroughly.\n");
+        let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+        assert!(
+            rendered
+                .lines()
+                .any(|line| line.contains(&format!("@{name}{{2%kg}}"))),
+            "the component was split\n--- rendered ---\n{rendered}"
+        );
+        let reparsed = parse_recipe(&rendered, "r", 1.0)
+            .unwrap_or_else(|e| panic!("reparse failed:\n{rendered}\n{e}"))
+            .value;
+        assert_eq!(reparsed.ingredients[0].name, name, "{rendered}");
+
+        // A plain-text word with no break opportunities at all exercises
+        // `break_words` itself: it must overflow, not split mid-word.
+        let word = "x".repeat(100);
+        let source = format!("Stir in the {word} until smooth.\n");
+        let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+        assert!(
+            rendered.lines().any(|line| line.contains(&word)),
+            "the word was cut\n--- rendered ---\n{rendered}"
+        );
+    }
+
+    /// A `>` text block takes the same options: it wraps only at spaces,
+    /// keeps every line quoted, and reparses to the same text (#700). The
+    /// risky token is swept across the wrap column.
+    #[test]
+    fn a_text_block_wraps_intact() {
+        for pad in 0..40 {
+            let source = format!(
+                "> {}covered—draft-free if your kitchen runs cold for the best possible rise.\n\n\
+                 Mix @flour{{2%cups}}.\n",
+                "x ".repeat(pad)
+            );
+            let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+            let note_lines: Vec<&str> = rendered
+                .lines()
+                .skip_while(|l| l.is_empty())
+                .take_while(|l| l.starts_with('>'))
+                .collect();
+            assert!(
+                note_lines.iter().all(|l| l.starts_with("> ")),
+                "pad {pad}: every wrapped line keeps the quote: {note_lines:?}"
+            );
+            assert!(
+                rendered.contains("covered—draft-free"),
+                "pad {pad}: the em dash must not split: {rendered}"
+            );
+        }
     }
 
     /// A recipe reference is re-emitted with `/` between its components on
