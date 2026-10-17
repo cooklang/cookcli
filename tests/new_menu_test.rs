@@ -214,13 +214,15 @@ async fn a_recipe_is_still_the_default() {
 }
 
 /// Spaces typed around a name or a folder are not part of it: they used to
-/// make a folder `Mains ` holding ` Stew .cook`.
+/// make a folder `Mains ` holding ` Stew .cook`. Spaces in a row inside a name,
+/// typed or left around a dropped `&`, become one.
 #[tokio::test]
 async fn spaces_around_names_and_folders_are_dropped() {
     let server = start_server().await;
 
     for (typed, kind, file) in [
-        (" Mains / Beef  Stew ", "recipe", "Mains/Beef  Stew.cook"),
+        (" Mains / Beef  Stew ", "recipe", "Mains/Beef Stew.cook"),
+        ("Tarts/Fig & Honey", "recipe", "Tarts/Fig Honey.cook"),
         ("  Plans /Week 13  ", "menu", "Plans/Week 13.menu"),
     ] {
         let resp = server.create(&[("filename", typed), ("kind", kind)]).await;
@@ -238,8 +240,8 @@ async fn spaces_around_names_and_folders_are_dropped() {
         .collect();
     assert!(padded.is_empty(), "{padded:?}");
 
-    let content = std::fs::read_to_string(server.recipes().join("Mains/Beef  Stew.cook")).unwrap();
-    assert_eq!(content, "---\ntitle: Beef  Stew\n---\n\n");
+    let content = std::fs::read_to_string(server.recipes().join("Mains/Beef Stew.cook")).unwrap();
+    assert_eq!(content, "---\ntitle: Beef Stew\n---\n\n");
 
     // Nothing but spaces and slashes is still an empty name.
     let resp = server

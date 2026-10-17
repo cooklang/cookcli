@@ -815,7 +815,11 @@ async fn create_recipe(
 /// Only letters, digits, spaces, `-`, `_` and `/` are kept. Each folder and
 /// the file name is then trimmed and empty ones dropped, so ` Mains / Stew `
 /// becomes `Mains/Stew` rather than a folder `Mains ` holding ` Stew.cook`.
-/// Spaces inside a name are kept as typed.
+///
+/// Runs of spaces inside a name become one, so the spaces around a dropped
+/// `&` do not end up side by side. The shopping list format reads a recipe
+/// path back with its spaces collapsed, so a file named with two spaces in a
+/// row could be opened but never added to the list.
 fn new_file_path(filename: &str) -> String {
     let kept: String = filename
         .chars()
@@ -823,7 +827,7 @@ fn new_file_path(filename: &str) -> String {
         .collect();
 
     kept.split('/')
-        .map(str::trim)
+        .map(|segment| segment.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
         .join("/")
@@ -1238,8 +1242,13 @@ mod new_file_path_tests {
     }
 
     #[test]
-    fn inner_spaces_are_kept() {
-        assert_eq!(new_file_path("Beef  and Beer Stew"), "Beef  and Beer Stew");
+    fn inner_spaces_are_kept_once() {
+        assert_eq!(new_file_path("Beef and Beer Stew"), "Beef and Beer Stew");
+        assert_eq!(new_file_path("Beef  and Beer Stew"), "Beef and Beer Stew");
+        assert_eq!(
+            new_file_path("Dessert/Tarte Passion & Ganache Chocolat Miel"),
+            "Dessert/Tarte Passion Ganache Chocolat Miel"
+        );
     }
 
     #[test]
