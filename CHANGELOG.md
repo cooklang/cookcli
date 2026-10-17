@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.39.0](https://github.com/cooklang/cookcli/compare/v0.38.1...v0.39.0) (2026-10-17)
+
+
+### Features
+
+* a menu can use another menu as one of its meals ([#609](https://github.com/cooklang/cookcli/issues/609)) ([d99192b](https://github.com/cooklang/cookcli/commit/d99192b4c5d39cc48f0d0091ed0fb254add3042e))
+* **format:** show exact fractions the same way in every output ([#677](https://github.com/cooklang/cookcli/issues/677)) ([c0f69f6](https://github.com/cooklang/cookcli/commit/c0f69f627e2574410ee3dba1d6484c15e3ecbfcf))
+* **pantry:** list items as rows, like the aisle page ([#653](https://github.com/cooklang/cookcli/issues/653)) ([ee335c3](https://github.com/cooklang/cookcli/commit/ee335c33ed10776b926538b5d8a977e936cc9355))
+* **pantry:** new sections from Add item, rename sections, edit pantry.conf as text ([#629](https://github.com/cooklang/cookcli/issues/629)) ([2a2ed08](https://github.com/cooklang/cookcli/commit/2a2ed0848a40e8828817f7f8111c99a17b68ad16))
+* publish a JSON Feed at feed.json next to the Atom and RSS feeds ([#679](https://github.com/cooklang/cookcli/issues/679)) ([d22424c](https://github.com/cooklang/cookcli/commit/d22424c8eb7f9c59f063962c7c72b2771a3980ea))
+* **shopping-list:** --from / --to for some days of a menu ([#612](https://github.com/cooklang/cookcli/issues/612)) ([6e22411](https://github.com/cooklang/cookcli/commit/6e224113ed4e8b631f5e3e37d5280ab8546da410))
+* **ui:** open sub-recipes and shopping list recipes at their scale ([#686](https://github.com/cooklang/cookcli/issues/686)) ([7c2f48b](https://github.com/cooklang/cookcli/commit/7c2f48b74c0cfb661d2d75fec32d61ce1c36c002))
+* **web:** ask before leaving a page with unsaved changes ([#674](https://github.com/cooklang/cookcli/issues/674)) ([845a8f2](https://github.com/cooklang/cookcli/commit/845a8f2d5165701aef6357047cbb46fd4cebd856)), closes [#519](https://github.com/cooklang/cookcli/issues/519)
+* **web:** choose optional ingredients for the shopping list ([d3e96bd](https://github.com/cooklang/cookcli/commit/d3e96bdd047be0a39590fe8327a1ec6214ca4476))
+* **web:** choose optional ingredients for the shopping list ([d61c42f](https://github.com/cooklang/cookcli/commit/d61c42fc05194da57c8f7a79ba025626c619a760))
+
+
+### Bug Fixes
+
+* **build:** advertise the web feeds on static pages built with --feed ([#676](https://github.com/cooklang/cookcli/issues/676)) ([94c27e5](https://github.com/cooklang/cookcli/commit/94c27e51845009df4c0625346d8feca9bd9efc1a)), closes [#595](https://github.com/cooklang/cookcli/issues/595)
+* **ci:** build the Linux glibc binary in manylinux_2_28 ([#662](https://github.com/cooklang/cookcli/issues/662)) ([aea109c](https://github.com/cooklang/cookcli/commit/aea109c475c9d2cc4a1af23e0344b616c4349ddb))
+* **ci:** give each release target its own Rust cache ([#657](https://github.com/cooklang/cookcli/issues/657)) ([459a0e9](https://github.com/cooklang/cookcli/commit/459a0e96bbf865b1a9c7f7daa5e2b4ad903b5b18))
+* **cli:** resolve config from -b for every command ([#734](https://github.com/cooklang/cookcli/issues/734)) ([5074ec5](https://github.com/cooklang/cookcli/commit/5074ec5908f5412f7f2cde459e2b6b43a9fff011))
+* **completions:** exit cleanly when the output pipe closes ([4c42a15](https://github.com/cooklang/cookcli/commit/4c42a15acf2ca90620f595de428d4117236bc95a))
+* **completions:** exit cleanly when the output pipe closes ([#708](https://github.com/cooklang/cookcli/issues/708)) ([aedc970](https://github.com/cooklang/cookcli/commit/aedc970c63e4a748e17f66da282f62cdc22ea749))
+* **core:** drop the spurious servings warning on &gt;&gt; metadata ([#713](https://github.com/cooklang/cookcli/issues/713)) ([#743](https://github.com/cooklang/cookcli/issues/743)) ([8442b2b](https://github.com/cooklang/cookcli/commit/8442b2bc712656e7a49731723167c7067accd716))
+* **doctor:** warn once on a unit-less textual timer ([#745](https://github.com/cooklang/cookcli/issues/745)) ([3a4cb02](https://github.com/cooklang/cookcli/commit/3a4cb02a23d8274d04d846562f19ea425796ee49))
+* **editor:** close [- -] comments mid-line, highlight quantities ([#663](https://github.com/cooklang/cookcli/issues/663)) ([3506f6a](https://github.com/cooklang/cookcli/commit/3506f6a5f1e442f609053c1cdb2e609edf63b10f))
+* **editor:** highlight nameless timers, mid-line comments and escapes like the parser ([#667](https://github.com/cooklang/cookcli/issues/667)) ([2700d3d](https://github.com/cooklang/cookcli/commit/2700d3d6acfecca2dbff330dfe7e5e90f6198828))
+* **format:** don't split hyphenated words when wrapping cooklang ([#700](https://github.com/cooklang/cookcli/issues/700)) ([#735](https://github.com/cooklang/cookcli/issues/735)) ([41e5ad9](https://github.com/cooklang/cookcli/commit/41e5ad944d18d89ea864b6fc0aa1690454926b3d))
+* **format:** escape a literal backslash as \textbackslash{} in LaTeX ([#744](https://github.com/cooklang/cookcli/issues/744)) ([4448e2b](https://github.com/cooklang/cookcli/commit/4448e2b5458f97180b302c3779024cb26c7fcb93))
+* **format:** escape for typst string literals, not markup ([#739](https://github.com/cooklang/cookcli/issues/739)) ([b0e62ff](https://github.com/cooklang/cookcli/commit/b0e62ff9bd3f6db8cde7412d0d40763af15becc4))
+* **format:** escape user text in markdown output ([#746](https://github.com/cooklang/cookcli/issues/746)) ([ad1cbb3](https://github.com/cooklang/cookcli/commit/ad1cbb3fc7925fdcdf7bbfdc321b865925882fbd))
+* **format:** keep multiline metadata inside document comments ([#740](https://github.com/cooklang/cookcli/issues/740)) ([218a5b2](https://github.com/cooklang/cookcli/commit/218a5b27157e9155098378c94beb202e57f76657))
+* **format:** re-emit the = scaling lock in cooklang source ([#737](https://github.com/cooklang/cookcli/issues/737)) ([6191ef7](https://github.com/cooklang/cookcli/commit/6191ef7c86df4d4773e1ce1c999c6024b8509cc8))
+* **format:** read schema.org durations through cooklang's parser ([#705](https://github.com/cooklang/cookcli/issues/705)) ([#741](https://github.com/cooklang/cookcli/issues/741)) ([6262693](https://github.com/cooklang/cookcli/commit/62626939a4f1f7333f0084e64e19fedd15ec09a7))
+* **format:** write exact quantities in cooklang source ([#701](https://github.com/cooklang/cookcli/issues/701)) ([#736](https://github.com/cooklang/cookcli/issues/736)) ([a09f41d](https://github.com/cooklang/cookcli/commit/a09f41da345de9b9936e8f782f2e36be047824b8))
+* **import:** escape the scraped title in YAML frontmatter ([#730](https://github.com/cooklang/cookcli/issues/730)) ([892ef64](https://github.com/cooklang/cookcli/commit/892ef64f8b3273b6ed300c5aa566c321da6bc6bb))
+* **logout:** remove a corrupt session file instead of keeping it ([#716](https://github.com/cooklang/cookcli/issues/716)) ([#727](https://github.com/cooklang/cookcli/issues/727)) ([f53a4dd](https://github.com/cooklang/cookcli/commit/f53a4dd8fdd42683ad2fad39c43be0da90f9f615))
+* **pantry:** refuse add collisions with a different kind of entry ([#748](https://github.com/cooklang/cookcli/issues/748)) ([b3d738d](https://github.com/cooklang/cookcli/commit/b3d738d63b4790a395f933b0df0eb8093b74695b))
+* **parser:** strip a UTF-8 BOM before parsing recipes ([#742](https://github.com/cooklang/cookcli/issues/742)) ([c93fd51](https://github.com/cooklang/cookcli/commit/c93fd514d5d8183eb9aafa199eec0bd44d3b879d))
+* point out aisle.conf lines written like a # or -- comment ([#688](https://github.com/cooklang/cookcli/issues/688)) ([1c495d2](https://github.com/cooklang/cookcli/commit/1c495d210bb0d55ec043c1e25e0aef99ef6171a8)), closes [#687](https://github.com/cooklang/cookcli/issues/687)
+* refuse scales and quantities that cannot round-trip ([#722](https://github.com/cooklang/cookcli/issues/722)) ([#755](https://github.com/cooklang/cookcli/issues/755)) ([7366e50](https://github.com/cooklang/cookcli/commit/7366e50d24dc70e24d67505854bd68ee416634e1))
+* **seed:** fail on per-file write errors instead of exiting 0 ([#707](https://github.com/cooklang/cookcli/issues/707)) ([#725](https://github.com/cooklang/cookcli/issues/725)) ([2edb7e8](https://github.com/cooklang/cookcli/commit/2edb7e862d35d304ab45b921512a7e5db8663c3f))
+* **seed:** report create_dir_all failure instead of panicking ([#706](https://github.com/cooklang/cookcli/issues/706)) ([#724](https://github.com/cooklang/cookcli/issues/724)) ([32bac24](https://github.com/cooklang/cookcli/commit/32bac24bcfc61029ae787906cf495b8a7d04ae57))
+* **server:** hold recipe_image to the recipe-extension rule ([#750](https://github.com/cooklang/cookcli/issues/750)) ([5822cf8](https://github.com/cooklang/cookcli/commit/5822cf8b2e3a2003d0d966ca39d4e3143809459c))
+* **server:** keep pantry edits inside /api/pantry ([#666](https://github.com/cooklang/cookcli/issues/666)) ([ad7c9a9](https://github.com/cooklang/cookcli/commit/ad7c9a9da906f64fd3b50e0bbf36da7954d064ae))
+* **server:** keep recipe references inside the collection ([#749](https://github.com/cooklang/cookcli/issues/749)) ([42bcbe2](https://github.com/cooklang/cookcli/commit/42bcbe209a5299c6ad864ba0ad7f3cad4f672abf))
+* **server:** keep the server's paths out of what it sends ([#670](https://github.com/cooklang/cookcli/issues/670)) ([7341a28](https://github.com/cooklang/cookcli/commit/7341a28d90c2aefdc745fc74c25afff993ba0c78))
+* **server:** say on the shopping list when the pantry file could not be used ([#691](https://github.com/cooklang/cookcli/issues/691)) ([73b35fc](https://github.com/cooklang/cookcli/commit/73b35fcaa670bc227dc8283a9f6ea6100fc6d655))
+* **server:** say why a change was refused after signing out ([#683](https://github.com/cooklang/cookcli/issues/683)) ([c18ae1a](https://github.com/cooklang/cookcli/commit/c18ae1ae6c83118d578e6d55308cd4eacfff224b)), closes [#675](https://github.com/cooklang/cookcli/issues/675)
+* **server:** serve only recipes and pictures from the recipe folder ([#668](https://github.com/cooklang/cookcli/issues/668)) ([0b24597](https://github.com/cooklang/cookcli/commit/0b245975ad9f338c3e4bbfd150c1dfbab3baf450)), closes [#658](https://github.com/cooklang/cookcli/issues/658)
+* **shopping-list:** error clearly on a directory without recipes ([#723](https://github.com/cooklang/cookcli/issues/723)) ([#732](https://github.com/cooklang/cookcli/issues/732)) ([5e4e822](https://github.com/cooklang/cookcli/commit/5e4e82260421c750332cd6862071beda1e3efd5a))
+* **shopping-list:** list a reference that cannot be scaled instead of failing ([#684](https://github.com/cooklang/cookcli/issues/684)) ([538a85b](https://github.com/cooklang/cookcli/commit/538a85bcb185f43386c51f7d4216640324ffcfdc))
+* **shopping-list:** merge case variants into one item ([#694](https://github.com/cooklang/cookcli/issues/694)) ([#747](https://github.com/cooklang/cookcli/issues/747)) ([ab74ace](https://github.com/cooklang/cookcli/commit/ab74acef2cb83783d8b3e27a8ede20f8f9726e07))
+* **shopping-list:** refuse -o that would overwrite an input recipe ([#731](https://github.com/cooklang/cookcli/issues/731)) ([9f2aa15](https://github.com/cooklang/cookcli/commit/9f2aa15aa4ee239347288982a25980ea736d523b))
+* **shopping-list:** refuse scaling a recipe that makes nothing ([#752](https://github.com/cooklang/cookcli/issues/752)) ([91cd1e4](https://github.com/cooklang/cookcli/commit/91cd1e4ffab77030eb57ef61f6f97bc8536539b8))
+* **shopping-list:** scale a reference to half servings without rounding ([#681](https://github.com/cooklang/cookcli/issues/681)) ([4abe520](https://github.com/cooklang/cookcli/commit/4abe520f2fbf5293d555628e2a8b0a1d17a15355)), closes [#680](https://github.com/cooklang/cookcli/issues/680)
+* **update:** compare versions semantically, not as strings ([#729](https://github.com/cooklang/cookcli/issues/729)) ([94d7162](https://github.com/cooklang/cookcli/commit/94d7162acea0cb09273e7050bc1e669be2ed2d9d))
+* **update:** error cleanly on an unlisted arch or OS ([#720](https://github.com/cooklang/cookcli/issues/720)) ([#728](https://github.com/cooklang/cookcli/issues/728)) ([ea1abf4](https://github.com/cooklang/cookcli/commit/ea1abf4a8bf98661082e87b566b576e7ab5a8995))
+
 ## [0.38.1](https://github.com/cooklang/cookcli/compare/v0.38.0...v0.38.1) (2026-10-09)
 
 
