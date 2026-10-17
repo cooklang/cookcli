@@ -158,10 +158,16 @@ fn recipe_text(base_path: &Utf8Path, source: RecipeSource) -> Result<String, Cor
         RecipeSource::Path(lookup) => {
             let entry = get_recipe(base_path, lookup.as_str())?;
             let path = entry.path().cloned().unwrap_or(lookup);
-            entry.content().map_err(|source| CoreError::Io {
-                path,
-                source: entry_error(source),
-            })
+            // cooklang-reports parses the text itself, and its frontmatter
+            // fence check runs on the raw text — a BOM would hide the whole
+            // front matter from `{{ title }}` and friends (#712).
+            entry
+                .content()
+                .map(|content| crate::strip_bom(&content).to_string())
+                .map_err(|source| CoreError::Io {
+                    path,
+                    source: entry_error(source),
+                })
         }
     }
 }

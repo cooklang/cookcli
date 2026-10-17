@@ -56,7 +56,7 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
 /// work out the factor from the recipe itself (its `servings`) first.
 pub fn parse_unscaled_recipe_from_entry(entry: &RecipeEntry) -> Result<Recipe> {
     let content = entry.content().context("Failed to read recipe content")?;
-    let parsed = PARSER.parse_with_options(&content, cookcli_core::parser::parse_options());
+    let (content, parsed) = cookcli_core::parser::parse_file(&content);
 
     // Log any warnings
     if parsed.report().has_warnings() {
@@ -76,7 +76,7 @@ pub fn parse_unscaled_recipe_from_entry(entry: &RecipeEntry) -> Result<Recipe> {
         let mut error_output = Vec::new();
         parsed
             .report()
-            .write(&recipe_path, &content, false, &mut error_output)
+            .write(&recipe_path, content, false, &mut error_output)
             .ok();
         let error_details = String::from_utf8_lossy(&error_output);
         return Err(anyhow::anyhow!(

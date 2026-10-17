@@ -17,7 +17,7 @@
 use crate::{
     diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
-    parser::{collect_diagnostics, parse_options, render_report, PARSER},
+    parser::{bom_len, collect_diagnostics, parse_file, render_report, shift_spans, PARSER},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, Span, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -311,14 +311,18 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
         }
     };
 
-    let parsed = PARSER.parse_with_options(&content, parse_options());
+    // Parse the stripped text but report spans in the file's own
+    // coordinates — the BOM is three bytes before everything else.
+    let shift = bom_len(&content);
+    let (content, parsed) = parse_file(&content);
     let mut diagnostics = collect_diagnostics(parsed.report(), Some(&path));
+    shift_spans(&mut diagnostics, shift);
 
     // Textual timer quantities are warnings on top of the shared parser, which
     // accepts them. They are not errors, so the recipe — and its references —
     // are still produced.
     let timer_warnings = if parsed.output().is_some() {
-        textual_timer_warnings(&content, &path)
+        textual_timer_warnings(content, &path)
     } else {
         Vec::new()
     };
@@ -327,13 +331,19 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
     // to skip indexing the source lines of every healthy recipe in a
     // collection, which is the common case. Timer warnings are appended so a
     // recipe whose only finding is one of them still has something to print.
+    // `render_findings` slices the stripped text by span, so it must see the
+    // warnings in stripped coordinates — they move to the file's only after
+    // it has run. (Shifting first sliced 3 bytes too far, which could land
+    // past the end of the text entirely.)
     let rendered = render_findings(
         parsed.report(),
         &timer_warnings,
         path.as_str(),
-        &content,
+        content,
         style,
     );
+    let mut timer_warnings = timer_warnings;
+    shift_spans(&mut timer_warnings, shift);
     diagnostics.extend(timer_warnings);
 
     // No output means no references: `cooklang` produces none for a recipe

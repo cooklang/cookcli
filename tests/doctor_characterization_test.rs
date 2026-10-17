@@ -245,6 +245,50 @@ fn aisle_show_recipes_names_every_recipe_that_writes_the_ingredient() {
         .stdout(predicate::str::contains("--show-recipes to see").not());
 }
 
+/// A BOM'd file validates like any other: the frontmatter fence is not
+/// defeated by the three bytes before it, and the title is not a phantom
+/// step (#712).
+#[test]
+fn validate_a_recipe_starting_with_a_bom() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("bom.cook"),
+        "\u{feff}---\ntitle: BOM'd\n---\n\nCook ~timer{medium heat%min}.\n",
+    )
+    .unwrap();
+
+    cook(dir.path())
+        .args(["doctor", "validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bom.cook"))
+        // The timer warning's span still lands in the file, BOM included.
+        .stdout(predicate::str::contains("Timer value is text"))
+        .stdout(predicate::str::contains("bom.cook:5"));
+}
+
+/// A timer whose text ends within the BOM's width of a newline or the end of
+/// the file: the rendered warning slices the stripped text, so a span in file
+/// coordinates would read past it — or off the end entirely — and panic. The
+/// rendered line number must still be the file's (#712).
+#[test]
+fn a_bom_and_a_timer_near_the_edge_of_the_line() {
+    let dir = TempDir::new().unwrap();
+    for (name, source) in [
+        ("end.cook", "\u{feff}Cook ~{a%min}"),
+        ("multibyte.cook", "\u{feff}Cook ~{a\u{20ac}%min} now."),
+    ] {
+        fs::write(dir.path().join(name), source).unwrap();
+    }
+
+    cook(dir.path())
+        .args(["doctor", "validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("end.cook:1"))
+        .stdout(predicate::str::contains("multibyte.cook:1"));
+}
+
 // ---------------------------------------------------------------------------
 // doctor pantry
 // ---------------------------------------------------------------------------
