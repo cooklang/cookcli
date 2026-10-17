@@ -40,6 +40,7 @@ use crate::{
     shopping_list::{AggregatedList, RawItem},
 };
 use cooklang::quantity::{GroupedQuantity, Quantity, Value};
+use cooklang_format::markdown::escape_md;
 use serde::Serialize;
 use yansi::Paint;
 
@@ -111,13 +112,13 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
     let mut output = String::new();
 
     let format_ingredient = |item: &RawItem| {
-        let ingredient = display_name(item);
+        let ingredient = escape_md(&display_name(item));
         if ingredients_only {
             format!("- {ingredient}\n")
         } else {
             let quantity_string = ordered_components(&item.quantity)
                 .into_iter()
-                .map(quantity_fmt)
+                .map(|q| escape_md(&quantity_fmt(q)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("- *{quantity_string}* {ingredient}\n")
@@ -133,7 +134,7 @@ pub fn build_md_value(list: AggregatedList, plain: bool, ingredients_only: bool)
             if i > 0 {
                 output.push('\n');
             }
-            output.push_str(&format!("# {category}\n"));
+            output.push_str(&format!("# {}\n", escape_md(&category)));
             for item in &items {
                 output.push_str(&format_ingredient(item));
             }
@@ -319,6 +320,8 @@ mod tests {
         assert!(human.contains("chives (optional) 2 g"), "{human}");
 
         let md = build_md_value(optional_list(), true, false);
+        // Parens form no markup on their own, so the marker stays literal —
+        // the same as the recipe Markdown prints it.
         assert_eq!(md, "- *5 g* chives\n- *2 g* chives (optional)\n");
 
         let json = build_json_value(optional_list(), true);
@@ -475,6 +478,35 @@ mod tests {
             !names_only.contains('*'),
             "--ingredients-only drops quantities: {names_only}"
         );
+    }
+
+    /// An ingredient or category name is text, not markup: `special_salt`
+    /// must not render as an emphasis span.
+    #[test]
+    fn markdown_escapes_ingredient_and_category_names() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.cook"), "Add @special_salt{1%tsp}.\n").unwrap();
+
+        let base = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let ctx = Context::new(base).with_aisle(crate::ConfigSource::Inline(
+            "[seasoning*]\nspecial_salt\n".to_string(),
+        ));
+        let list = generate(
+            &ctx,
+            GenerateRequest {
+                recipes: vec![ScaledRecipe::new(RecipeSource::Path("a.cook".into()))],
+                ignore_references: false,
+                extra_items: Vec::new(),
+                include_optional: false,
+            },
+        )
+        .expect("generates")
+        .value;
+
+        let md = build_md_value(list, false, false);
+        // `_` inside a word cannot emphasise, so it stays literal.
+        assert!(md.contains("special_salt"), "{md}");
+        assert!(md.contains("# seasoning\\*"), "{md}");
     }
 
     /// Two units that cannot be added stay side by side — and every writer
