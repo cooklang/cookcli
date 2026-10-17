@@ -141,7 +141,7 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> io::Result<()>
 }
 
 fn write_description(w: &mut impl io::Write, description: &str) -> io::Result<()> {
-    writeln!(w, "% DESCRIPTION: {}", description.replace('\n', " "))?;
+    comment(w, "DESCRIPTION", description)?;
     writeln!(w, r"\begin{{quote}}")?;
     writeln!(w, r"\textit{{{}}}", escape_latex(description))?;
     writeln!(w, r"\end{{quote}}")?;
@@ -151,10 +151,10 @@ fn write_description(w: &mut impl io::Write, description: &str) -> io::Result<()
 
 fn write_tags(w: &mut impl io::Write, tags: &[String]) -> io::Result<()> {
     if !tags.is_empty() {
-        writeln!(w, "% TAGS: {}", tags.join(", "))?;
+        comment(w, "TAGS", &tags.join(", "))?;
         write!(w, r"\textbf{{Tags:}} ")?;
         for (i, tag) in tags.iter().enumerate() {
-            write!(w, r"\texttt{{{}}}", escape_latex(tag))?;
+            write!(w, r"\texttt{{{}}}", escape_latex(&single_line(tag)))?;
             if i < tags.len() - 1 {
                 write!(w, ", ")?;
             }
@@ -169,14 +169,16 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     let mut metadata_items = Vec::new();
 
     if let Some(servings) = recipe.metadata.servings() {
-        writeln!(w, "% SERVINGS: {servings}")?;
+        let servings = single_line(&servings.to_string());
+        comment(w, "SERVINGS", &servings)?;
         metadata_items.push(format!("Servings: {servings}"));
     }
 
     // Get prep time from metadata
     if let Some(prep_time_val) = recipe.metadata.get("prep time") {
         if let Some(prep_time_str) = prep_time_val.as_str() {
-            writeln!(w, "% PREP_TIME: {prep_time_str}")?;
+            let prep_time_str = single_line(prep_time_str);
+            comment(w, "PREP_TIME", &prep_time_str)?;
             metadata_items.push(format!("Prep time: {prep_time_str}"));
         }
     }
@@ -184,7 +186,8 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     // Get cook time from metadata
     if let Some(cook_time_val) = recipe.metadata.get("cook time") {
         if let Some(cook_time_str) = cook_time_val.as_str() {
-            writeln!(w, "% COOK_TIME: {cook_time_str}")?;
+            let cook_time_str = single_line(cook_time_str);
+            comment(w, "COOK_TIME", &cook_time_str)?;
             metadata_items.push(format!("Cook time: {cook_time_str}"));
         }
     }
@@ -192,16 +195,16 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     // Add author if present
     if let Some(author) = recipe.metadata.author() {
         if let Some(author_name) = author.name() {
-            writeln!(w, "% AUTHOR: {author_name}")?;
+            comment(w, "AUTHOR", author_name)?;
         }
     }
 
     // Add source if present
     if let Some(source) = recipe.metadata.source() {
         if let Some(url) = source.url() {
-            writeln!(w, "% SOURCE: {url}")?;
+            comment(w, "SOURCE", url)?;
         } else if let Some(name) = source.name() {
-            writeln!(w, "% SOURCE: {name}")?;
+            comment(w, "SOURCE", name)?;
         }
     }
 
@@ -476,9 +479,80 @@ fn escape_latex(text: &str) -> String {
         .collect()
 }
 
+/// Write `% KEY: value` with the value flattened to a single line.
+///
+/// Every comment that carries metadata text goes through here, so a
+/// newline in a value cannot slip a line past the `%` and be typeset as
+/// arbitrary LaTeX.
+fn comment(w: &mut impl io::Write, key: &str, value: &str) -> io::Result<()> {
+    writeln!(w, "% {key}: {}", single_line(value))
+}
+
+/// Flatten a metadata value to a single line.
+///
+/// Metadata comes from YAML frontmatter, where a block scalar carries
+/// newlines. Written into a `%` comment — or anywhere else a newline
+/// reaches the document — the tail of the value leaves the comment and is
+/// typeset as arbitrary LaTeX.
+fn single_line(text: &str) -> String {
+    text.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::parse_recipe;
+    use cooklang::Converter;
+
+    fn rendered(frontmatter: &str) -> String {
+        let recipe = parse_recipe(frontmatter, "t", 1.0).unwrap().value;
+        let mut out = Vec::new();
+        print_latex(
+            &recipe,
+            "t",
+            1.0,
+            &Converter::default(),
+            &mut out,
+            PaperSize::A4,
+            2.5,
+        )
+        .unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn multiline_metadata_stays_in_the_comment() {
+        let out =
+            rendered("---\nprep time: |\n  10\n  \\textbf{injected}\n---\n\nMix @flour{2%cups}.\n");
+        // Outside a `%` comment the payload may only appear escaped; a bare
+        // `\textbf{injected}` line would run as markup.
+        for line in out.lines() {
+            assert!(
+                line.starts_with('%') || !line.contains(r"\textbf{injected}"),
+                "escaped comment: {line}"
+            );
+        }
+    }
+
+    /// `Servings::Text` accepts any non-numeric string, so a block scalar
+    /// under `servings` reached `% SERVINGS:` raw before (#704).
+    #[test]
+    fn multiline_servings_stays_in_the_comment() {
+        let out = rendered("---\nservings: |\n  4\n  \\input{evil}\n---\n\nMix @flour{2%cups}.\n");
+        for line in out.lines() {
+            assert!(
+                line.starts_with('%') || !line.contains(r"\input{evil}"),
+                "escaped comment: {line}"
+            );
+        }
+    }
+
+    /// A lone `\r` ends a LaTeX input line just like `\n` does.
+    #[test]
+    fn carriage_return_in_metadata_stays_in_the_comment() {
+        let out = rendered("---\nauthor: \"me\\revil\"\n---\n\nMix @flour{2%cups}.\n");
+        assert!(out.lines().any(|l| l == "% AUTHOR: me evil"), "{out}");
+    }
 
     #[test]
     fn a_literal_backslash_escapes_as_textbackslash() {
