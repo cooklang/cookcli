@@ -375,6 +375,47 @@ async fn a_missing_recipe_or_an_escaping_path_is_refused() {
     assert_eq!(status, 400);
 }
 
+/// The lookup opens a name with an extension as it is, so the endpoint must
+/// hold the same `.cook`/`.menu` rule as `/api/recipes/` — otherwise
+/// `GET /api/recipe_image/config/pantry.conf` reads the pantry out and
+/// `PUT`/`DELETE` write and remove files beside it.
+/// <https://github.com/cooklang/cookcli/issues/697>
+#[tokio::test]
+async fn a_non_recipe_file_is_not_a_recipe() {
+    let server = start_server().await;
+    std::fs::create_dir_all(server.file("config")).unwrap();
+    std::fs::write(
+        server.file("config/pantry.conf"),
+        "[dairy]\nmilk = \"1%l\"\n",
+    )
+    .unwrap();
+    std::fs::write(server.file("notes.txt"), "not a recipe").unwrap();
+
+    for path in ["config/pantry.conf", "notes.txt"] {
+        let (status, _) = get(&server, path).await;
+        assert_eq!(status, 404, "GET {path}");
+        let (status, _) = put(&server, path, png(8, 8)).await;
+        assert_eq!(status, 404, "PUT {path}");
+        let (status, _) = delete(&server, path).await;
+        assert_eq!(status, 404, "DELETE {path}");
+    }
+
+    assert_eq!(
+        std::fs::read_to_string(server.file("config/pantry.conf")).unwrap(),
+        "[dairy]\nmilk = \"1%l\"\n",
+        "the file must be untouched"
+    );
+    let written: Vec<_> = std::fs::read_dir(server.file("config"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        written,
+        vec!["pantry.conf"],
+        "no picture written: {written:?}"
+    );
+}
+
 #[tokio::test]
 async fn delete_removes_the_picture_then_reports_there_is_none() {
     let server = start_server().await;
