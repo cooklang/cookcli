@@ -179,6 +179,8 @@ salt = "1%kg"
 
 Item attributes: `quantity`, `low` (threshold), `bought` (date), `expire` (date). Simple format (`item = "quantity"`) is also supported.
 
+A `quantity` or `low` that does not parse as a number — other than `unlim`/`unlimited`, which mean "stocked, not measurable" — is skipped by `depleted`, the stock indicators and the shopping list alike. `cook pantry` warns about such values when the file loads, so a hand-edit cannot hide there.
+
 ## Examples
 
 ```bash
