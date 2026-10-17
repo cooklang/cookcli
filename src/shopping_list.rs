@@ -29,7 +29,7 @@
 // SOFTWARE.
 
 use anyhow::Result;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use chrono::NaiveDate;
 use clap::{Args, ValueEnum};
 use tracing::warn;
@@ -185,6 +185,40 @@ pub struct ShoppingListArgs {
     /// See `--from`. Takes a date (`2026-10-13`) or `today`.
     #[arg(long, value_name = "DATE", value_parser = parse_day)]
     to: Option<NaiveDate>,
+}
+
+/// Refuse to write the shopping list over one of the recipes it was built
+/// from.
+///
+/// The comparison is canonical on both sides: symlinks and `./` segments make
+/// a byte-wise path check unreliable, and the recipe side can be a bare name
+/// that only resolves through `cooklang-find`. An output that does not exist
+/// yet can only be skipped — a missing file is never an input.
+fn refuse_output_over_input(ctx: &Context, output: &Utf8Path, recipes: &[String]) -> Result<()> {
+    let Ok(output_path) = std::fs::canonicalize(output) else {
+        return Ok(());
+    };
+    let Some(output_path) = Utf8PathBuf::from_path_buf(output_path).ok() else {
+        return Ok(());
+    };
+
+    for recipe in recipes {
+        let (name, _) =
+            split_recipe_name_and_scaling_factor(recipe).unwrap_or((recipe.as_str(), 1.0));
+        let Ok(entry) = cookcli_core::find::get_recipe(ctx.base_path(), name) else {
+            continue;
+        };
+        let Some(path) = entry.path() else {
+            continue;
+        };
+        let Ok(canonical) = std::fs::canonicalize(path.as_std_path()) else {
+            continue;
+        };
+        if Utf8Path::from_path(&canonical).is_some_and(|p| p == output_path) {
+            anyhow::bail!("Output path '{output}' is an input recipe; refusing to overwrite it");
+        }
+    }
+    Ok(())
 }
 
 /// A day on the command line: `YYYY-MM-DD`, or `today` in local time.
@@ -366,6 +400,13 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     }
 
     let list = outcome.value;
+
+    // The inputs are read before the output is written, so `-o` could
+    // silently overwrite one of them: `cook sl m5.cook -o m5.cook` replaced
+    // the recipe with its own shopping list.
+    if let Some(output) = args.output.as_deref() {
+        refuse_output_over_input(ctx, output, &expanded_recipes)?;
+    }
 
     write_to_output(args.output.as_deref(), |w| {
         if args.ingredients_only {
