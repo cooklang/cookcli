@@ -499,13 +499,14 @@ Two distinct things live here. `POST /api/shopping_list` is stateless: send reci
 
 Aggregate ingredients across recipes
 
-Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` says why the list is not what its recipes say, one line each in the language of the request (`lang` cookie, then `Accept-Language`), starting with the path of the recipe concerned: for now, a sub-recipe reference that could not be scaled to the amount it asks for, which is then listed as written rather than as its ingredients. Parse warnings of the recipes are not included. Empty when there is nothing to say.
+Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` says why the list is not what its recipes say, one line each in the language of the request (`lang` cookie, then `Accept-Language`), starting with the path of the recipe concerned: for now, a sub-recipe reference that could not be scaled to the amount it asks for, which is then listed as written rather than as its ingredients. Parse warnings of the recipes are not included. Empty when there is nothing to say. A recipe's optional ingredients are left out unless they are listed in `optional_ingredients`; those come back with `optional: true`, as separate items from any required amount of the same ingredient.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `recipe` | body | `string` | yes | Recipe path. The array may hold several. |
 | `scale` | body | `number` | no | Scaling factor for this recipe. Defaults to 1. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit to include all of them. |
+| `optional_ingredients` | body | `{ name: string, quantity?: string }[]` | no | Optional ingredients to include, each with the amount to buy in Cooklang quantity syntax (`2%pinch`). The amount is used as given, not scaled — this is what `GET /api/shopping_list/items` returns for the entry. |
 
 Request body:
 
@@ -526,6 +527,7 @@ Response:
       "items": [
         {
           "name": "ripe tomatoes",
+          "optional": false,
           "quantities": [
             {
               "scalable": true,
@@ -541,6 +543,7 @@ Response:
       "items": [
         {
           "name": "fresh mozzarella",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -551,6 +554,7 @@ Response:
         },
         {
           "name": "mozzarella cheese",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -566,6 +570,7 @@ Response:
       "items": [
         {
           "name": "tipo zero flour",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -576,6 +581,7 @@ Response:
         },
         {
           "name": "fresh yeast",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -591,6 +597,7 @@ Response:
       "items": [
         {
           "name": "salt",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -609,6 +616,7 @@ Response:
         },
         {
           "name": "black pepper",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -624,6 +632,7 @@ Response:
       "items": [
         {
           "name": "Dijon mustard",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -637,6 +646,7 @@ Response:
         },
         {
           "name": "honey",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -650,6 +660,7 @@ Response:
         },
         {
           "name": "red wine vinegar",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -666,6 +677,7 @@ Response:
         { "name": "basil leaves", "quantities": [] },
         {
           "name": "San Marzano tomato sauce",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -689,7 +701,7 @@ Response:
 
 Read the stored recipe list
 
-Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given. `name` is the `title` the recipe or menu declares, or its file name when it declares none or cannot be read; `included_reference_names` names each of `included_references` the same way, in the same order, and `included_reference_scales` gives how many times its own size each is made — from the quantity the recipe asks for against the sub-recipe's servings or yield — or `null` where that cannot be worked out.
+Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given. `name` is the `title` the recipe or menu declares, or its file name when it declares none or cannot be read; `included_reference_names` names each of `included_references` the same way, in the same order, and `included_reference_scales` gives how many times its own size each is made — from the quantity the recipe asks for against the sub-recipe's servings or yield — or `null` where that cannot be worked out. `optional_ingredients` lists the optional ingredients chosen for an entry, with the amounts to buy, and is left out when there are none.
 
 Response:
 
@@ -701,7 +713,8 @@ Response:
     "scale": 2.0,
     "included_references": [],
     "included_reference_names": [],
-    "included_reference_scales": []
+    "included_reference_scales": [],
+    "optional_ingredients": [{ "name": "basil", "quantity": "10%g" }]
   },
   {
     "path": "2 Day Plan.menu",
@@ -764,6 +777,7 @@ Responds `200 OK` with an empty body. The display name is derived from the path 
 | `path` | body | `string` | yes | Recipe path relative to the recipe directory. |
 | `scale` | body | `number` | yes | Scaling factor to store with the entry. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit and no sub-recipes are expanded — unlike the stateless `POST /api/shopping_list`, where omitting this field means "expand all", omitting it here is not preserved through storage and reads back as an explicit empty array. Pass the reference paths explicitly if you want them expanded. |
+| `optional_ingredients` | body | `string[]` | no | Names of the recipe's optional ingredients to buy too. Their amounts are worked out from the recipe at `scale` and stored as `? name{quantity}` lines under the entry; `GET /api/shopping_list/items` returns them as `optional_ingredients`. Omit to buy none of them. |
 
 Request body:
 

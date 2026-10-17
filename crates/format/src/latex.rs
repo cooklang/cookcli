@@ -446,7 +446,7 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
 fn escape_latex(text: &str) -> String {
     text.chars()
         .map(|c| match c {
-            '\\' => r"\\".to_string(),
+            '\\' => r"\textbackslash{}".to_string(),
             '{' => r"\{".to_string(),
             '}' => r"\}".to_string(),
             '$' => r"\$".to_string(),
@@ -552,5 +552,15 @@ mod tests {
     fn carriage_return_in_metadata_stays_in_the_comment() {
         let out = rendered("---\nauthor: \"me\\revil\"\n---\n\nMix @flour{2%cups}.\n");
         assert!(out.lines().any(|l| l == "% AUTHOR: me evil"), "{out}");
+    }
+
+    #[test]
+    fn a_literal_backslash_escapes_as_textbackslash() {
+        // `\\` is a LaTeX line break, not a backslash: the name would lose
+        // the character and gain an unwanted line break.
+        assert_eq!(
+            escape_latex(r"Special 100% \chars"),
+            r"Special 100\% \textbackslash{}chars"
+        );
     }
 }

@@ -46,6 +46,21 @@ impl SyncSession {
         })
     }
 
+    /// Where to send the user when sync answers 402: the door tells cook.md
+    /// the visit came from the CLI, the email prefills its sign-in strip.
+    pub fn pricing_url(&self) -> String {
+        let base = "https://cook.md/pricing?from=cli";
+        match self
+            .email
+            .as_deref()
+            .map(str::trim)
+            .filter(|e| !e.is_empty())
+        {
+            Some(email) => format!("{base}&email={}", urlencoding::encode(email)),
+            None => base.to_string(),
+        }
+    }
+
     /// Load session from the config file, returning None if not found or expired.
     pub fn load(path: &Path) -> Result<Option<Self>> {
         if !path.exists() {
@@ -235,5 +250,33 @@ mod tests {
         let session = SyncSession::from_jwt(jwt).unwrap();
         assert_eq!(session.user_id, "abc-123");
         assert!(jwt_lacks_sync_until_claim(&session.jwt).unwrap());
+    }
+
+    fn session_with(email: Option<&str>) -> SyncSession {
+        SyncSession {
+            jwt: "x".into(),
+            user_id: "1".into(),
+            email: email.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn pricing_url_carries_door_and_email() {
+        assert_eq!(
+            session_with(Some("a+b@example.com")).pricing_url(),
+            "https://cook.md/pricing?from=cli&email=a%2Bb%40example.com"
+        );
+    }
+
+    #[test]
+    fn pricing_url_carries_only_the_door_without_an_email() {
+        assert_eq!(
+            session_with(None).pricing_url(),
+            "https://cook.md/pricing?from=cli"
+        );
+        assert_eq!(
+            session_with(Some(" ")).pricing_url(),
+            "https://cook.md/pricing?from=cli"
+        );
     }
 }

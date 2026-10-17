@@ -890,7 +890,10 @@ pub struct UpdateRequest {
 ///   unsaved buffer on someone's disk.
 /// - [`CoreError::PantryEdit`] if the section or the name is blank, or if the
 ///   section already holds an item of that name, compared exactly once
-///   trimmed. Nothing is written; [`update`] is how an item is changed.
+///   trimmed. Nothing is written; [`update`] is how an item is changed. The
+///   same refusal covers a name taken by a different kind of entry — a
+///   section where a `general` item would go, or a top-level item where a
+///   section would — since inserting there would replace it wholesale.
 /// - [`CoreError::Config`] if the existing file cannot be parsed at all, and
 ///   [`CoreError::Io`] if it cannot be read or the new one cannot be written.
 pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, CoreError> {
@@ -906,6 +909,19 @@ pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, Co
     let path = path_to_create(ctx)?;
     let (mut doc, mut diagnostics) = read_document_or_empty(&path)?;
 
+    // `name_taken_differently` runs first: `item_exists` counts `[[milk]]`
+    // as a `general` item (an array of tables is not table-like), which
+    // would report a section collision as a nonexistent "item 'milk'".
+    if let Some(kind) = edit::name_taken_differently(&doc, &req.section, &req.name) {
+        let taken = if req.section == edit::GENERAL {
+            &req.name
+        } else {
+            &req.section
+        };
+        return Err(CoreError::PantryEdit {
+            message: format!("{kind} named '{taken}' already exists"),
+        });
+    }
     if edit::item_exists(&doc, &req.section, &req.name) {
         return Err(CoreError::PantryEdit {
             message: format!(

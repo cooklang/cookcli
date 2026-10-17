@@ -823,6 +823,145 @@ fn a_servings_target_on_a_recipe_without_servings_is_listed_as_written() {
     unexpanded_warning(&outcome.diagnostics);
 }
 
+/// `servings: 0` is a whole number of servings, so `scale_to_target` does
+/// not refuse it — it divides by zero, scales by infinity and answers `Ok`.
+/// The reference is refused before that, as unscalable (#699).
+#[test]
+fn a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nservings: 0\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "tomatoes"),
+        None,
+        "the recipe below the reference is not expanded, least of all by inf"
+    );
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "servings: 0"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// The yield half of [`a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity`]:
+/// `yield: 0%g` divides by zero the same way.
+#[test]
+fn a_zero_yield_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: 0%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "yield: 0%g"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// `nan` and `inf` are not numbers a yield can mean, but Rust's float parse
+/// accepts them, so `yield: nan%g` passed the positive check and listed
+/// `tomatoes NaN` — or `0`, dividing by `inf` — without a warning.
+#[test]
+fn a_non_finite_yield_is_unscalable_too() {
+    for declared in ["nan", "inf"] {
+        let dir = dir_with(&[
+            (
+                "sauce.cook",
+                &format!("---\nyield: {declared}%g\n---\n\nSimmer @tomatoes{{4}}.\n"),
+            ),
+            ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        ]);
+
+        let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+        assert_eq!(quantities(&outcome.value, "tomatoes"), None, "{declared}");
+        let warning = unexpanded_warning(&outcome.diagnostics);
+        assert!(
+            matches!(
+                &warning.kind,
+                Some(DiagnosticKind::UnscalableReference {
+                    cause: UnscalableCause::NonPositiveBase { declared: d },
+                    ..
+                }) if d == &format!("yield: {declared}%g")
+            ),
+            "{declared}: {warning:?}"
+        );
+    }
+}
+
+/// A negative base flips the sign too: `yield: -500%g` asked for `500%g`
+/// divided to `-4` and listed `tomatoes -4` without a warning before
+/// (#699). It is refused the same way.
+#[test]
+fn a_negative_yield_recipe_is_unscalable_not_sign_flipped() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: -500%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("yield: -500%g"),
+        "the warning names the declared base: {warning:?}"
+    );
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+}
+
 /// The recursion is bounded by the ancestor chain, not by a depth limit, so a
 /// cycle that only closes further down is still caught — and still counted
 /// once rather than looping.
@@ -1422,6 +1561,101 @@ fn the_pantry_is_not_subtracted_twice() {
         vec![
             ("parmesan", true, vec!["50 g".to_string()]),
             ("chives", true, vec!["6 g".to_string()]),
+        ]
+    );
+}
+
+/// The amounts a selection line records are the recipe's optional amounts at
+/// the recipe's scale, added up per ingredient, and split where they do not
+/// add up.
+#[test]
+fn optional_selections_are_scaled_and_summed() {
+    let dir = dir_with(&[(
+        "risotto.cook",
+        "Stir @parmesan{100%g} in.\n\n\
+         Top with @?parmesan{50%g}, then @?parmesan{20%g}.\n\n\
+         Add @?chilli{1%pinch} and @?chilli{2%g}, and @?basil.\n",
+    )]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &ScaledRecipe::scaled(RecipeSource::Path("risotto.cook".into()), 2.0),
+        &[
+            " Parmesan".to_string(),
+            "chilli".to_string(),
+            "basil".to_string(),
+        ],
+    )
+    .expect("reads the recipe")
+    .value;
+
+    let got: Vec<(&str, Option<&str>)> = selections
+        .iter()
+        .map(|s| (s.name.as_str(), s.quantity.as_deref()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan", Some("140%g")),
+            ("chilli", Some("4%g")),
+            ("chilli", Some("2%pinch")),
+            ("basil", None),
+        ]
+    );
+}
+
+/// Only optional ingredients can be selected, and only by a name the recipe
+/// has.
+#[test]
+fn optional_selections_ignore_required_and_unknown_names() {
+    let dir = dir_with(&[("a.cook", "Add @salt{1%tsp} and @?chives.\n")]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &at_path("a.cook"),
+        &["salt".to_string(), "nutmeg".to_string()],
+    )
+    .expect("reads the recipe")
+    .value;
+
+    assert!(selections.is_empty(), "{selections:?}");
+}
+
+/// Stored selections join the optional list as written, not scaled again,
+/// and several lines for one name add up.
+#[test]
+fn stored_selections_are_added_as_optional_amounts() {
+    let mut list = ShoppingIngredients::default();
+    let diagnostics = add_optional_selections(
+        &mut list,
+        &[
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("50%g".to_string()),
+            },
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("20%g".to_string()),
+            },
+            OptionalSelection {
+                name: "chives".to_string(),
+                quantity: None,
+            },
+        ],
+    );
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(list.required.is_empty());
+    let got: Vec<(String, String)> = list
+        .optional
+        .iter()
+        .map(|(name, q)| (name.clone(), q.to_string()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan".to_string(), "70 g".to_string()),
+            ("chives".to_string(), String::new()),
         ]
     );
 }

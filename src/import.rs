@@ -67,7 +67,16 @@ fn generate_frontmatter(name: &str, metadata: &str) -> String {
 
     let mut frontmatter = String::from("---\n");
     if has_name {
-        frontmatter.push_str(&format!("title: {}\n", name));
+        // The title is a scraped string, not trusted YAML: a name containing
+        // a newline or a `key: ` break used to be written out raw, letting a
+        // hostile page inject its own frontmatter keys. Serializing the
+        // `title` entry through serde_yaml quotes, escapes or block-scalars
+        // the value however it needs to stay one string.
+        let mut entry = serde_yaml::Mapping::new();
+        entry.insert("title".into(), name.into());
+        let line =
+            serde_yaml::to_string(&entry).expect("a string-keyed string map always serializes");
+        frontmatter.push_str(&line);
     }
     if has_metadata {
         frontmatter.push_str(metadata);
@@ -153,4 +162,53 @@ pub fn run(_ctx: &Context, args: ImportArgs) -> Result<()> {
 
     println!("{output}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_frontmatter;
+
+    /// The YAML inside the `---` fences.
+    fn inner_yaml(frontmatter: &str) -> serde_yaml::Value {
+        let body = frontmatter
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split("\n---").next())
+            .expect("fenced frontmatter");
+        serde_yaml::from_str(body).expect("emitted frontmatter is valid YAML")
+    }
+
+    /// The frontmatter must parse back and `title` must still be exactly the
+    /// scraped name — whatever YAML-significant characters it carries.
+    fn title_of(frontmatter: &str) -> String {
+        inner_yaml(frontmatter)["title"]
+            .as_str()
+            .expect("a title")
+            .to_string()
+    }
+
+    #[test]
+    fn a_plain_title_is_emitted_unquoted() {
+        let fm = generate_frontmatter("Pancakes", "");
+        assert_eq!(title_of(&fm), "Pancakes");
+    }
+
+    #[test]
+    fn a_title_with_a_newline_stays_one_value() {
+        let hostile = "Pancakes\nservings: 99\nevil: ";
+        let fm = generate_frontmatter(hostile, "");
+        let yaml = inner_yaml(&fm);
+        assert_eq!(yaml["title"].as_str().unwrap(), hostile);
+        assert!(
+            yaml.get("servings").is_none() && yaml.get("evil").is_none(),
+            "the title must not inject frontmatter keys: {fm}"
+        );
+    }
+
+    #[test]
+    fn a_title_looking_like_yaml_is_quoted() {
+        for hostile in ["has: colon", "true", "#hash", "123", "- item"] {
+            let fm = generate_frontmatter(hostile, "");
+            assert_eq!(title_of(&fm), hostile, "round-trips: {fm}");
+        }
+    }
 }

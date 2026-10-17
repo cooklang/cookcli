@@ -93,7 +93,7 @@ fn create_schema_object(recipe: &Recipe, name: &str, scale: f64, converter: &Con
     }
 
     // Add timing information
-    add_time_fields(&mut schema, recipe);
+    add_time_fields(&mut schema, recipe, converter);
 
     // Add nutrition information if present
     add_nutrition_info(&mut schema, recipe);
@@ -139,66 +139,60 @@ fn create_schema_object(recipe: &Recipe, name: &str, scale: f64, converter: &Con
     schema
 }
 
-fn add_time_fields(schema: &mut Value, recipe: &Recipe) {
-    // Get prep time from metadata
-    if let Some(prep_time_val) = recipe.metadata.get("prep time") {
-        if let Some(prep_time_str) = prep_time_val.as_str() {
-            schema["prepTime"] = json!(format_iso_duration(prep_time_str));
+fn add_time_fields(schema: &mut Value, recipe: &Recipe, converter: &Converter) {
+    // `metadata.time` is cooklang's own parser — the same one `human` output
+    // uses — so schema.org durations accept what the rest of the CLI accepts
+    // (a `time:` total, `prep time`/`cook time`, YAML integers) and reject
+    // what it rejects (ranges, unknown units) instead of guessing (#705). It
+    // reports whole minutes, so anything under a minute is dropped.
+    match recipe.metadata.time(converter) {
+        Some(cooklang::metadata::RecipeTime::Total(minutes)) => {
+            schema["totalTime"] = json!(minutes_iso(minutes));
         }
-    }
-
-    // Get cook time from metadata
-    if let Some(cook_time_val) = recipe.metadata.get("cook time") {
-        if let Some(cook_time_str) = cook_time_val.as_str() {
-            schema["cookTime"] = json!(format_iso_duration(cook_time_str));
+        Some(cooklang::metadata::RecipeTime::Composed {
+            prep_time,
+            cook_time,
+        }) => {
+            if let Some(prep) = prep_time {
+                schema["prepTime"] = json!(minutes_iso(prep));
+            }
+            if let Some(cook) = cook_time {
+                schema["cookTime"] = json!(minutes_iso(cook));
+            }
+            if let (Some(prep), Some(cook)) = (prep_time, cook_time) {
+                schema["totalTime"] = json!(minutes_iso(prep.saturating_add(cook)));
+            }
         }
-    }
-
-    // Calculate total time if both prep and cook times are available
-    let has_prep = recipe.metadata.get("prep time").is_some();
-    let has_cook = recipe.metadata.get("cook time").is_some();
-    if has_prep && has_cook {
-        // Simplified - just sum the minutes from both times
-        let mut total_minutes = 0;
-        if let Some(prep_val) = recipe.metadata.get("prep time").and_then(|v| v.as_str()) {
-            total_minutes += extract_number(prep_val).unwrap_or(0);
-        }
-        if let Some(cook_val) = recipe.metadata.get("cook time").and_then(|v| v.as_str()) {
-            total_minutes += extract_number(cook_val).unwrap_or(0);
-        }
-        schema["totalTime"] = json!(format!("PT{}M", total_minutes));
+        None => {}
     }
 }
 
-fn format_iso_duration(time_str: &str) -> String {
-    // Convert time strings like "30 minutes" or "1 hour" to ISO 8601 duration format
-    // This is a simplified implementation
-    let lower = time_str.to_lowercase();
+/// A whole number of minutes as an ISO 8601 duration, decomposed into days,
+/// hours and minutes (`P2D`, `PT1H30M`).
+fn minutes_iso(minutes: u32) -> String {
+    let days = minutes / 1_440;
+    let hours = minutes % 1_440 / 60;
+    let minutes = minutes % 60;
 
-    if lower.contains("hour") {
-        if let Some(hours) = extract_number(&lower) {
-            return format!("PT{hours}H");
-        }
-    } else if lower.contains("min") {
-        if let Some(minutes) = extract_number(&lower) {
-            return format!("PT{minutes}M");
-        }
+    let mut out = String::from("P");
+    if days != 0 {
+        out += &format!("{days}D");
     }
-
-    // Fallback: assume minutes if just a number
-    if let Some(minutes) = extract_number(&lower) {
-        return format!("PT{minutes}M");
+    let mut time = String::new();
+    if hours != 0 {
+        time += &format!("{hours}H");
     }
-
-    "PT0M".to_string()
-}
-
-fn extract_number(s: &str) -> Option<i32> {
-    s.chars()
-        .filter(|c| c.is_numeric())
-        .collect::<String>()
-        .parse::<i32>()
-        .ok()
+    if minutes != 0 {
+        time += &format!("{minutes}M");
+    }
+    if !time.is_empty() {
+        out.push('T');
+        out += &time;
+    }
+    if out == "P" {
+        return "PT0M".to_string();
+    }
+    out
 }
 
 fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) {
@@ -453,4 +447,63 @@ fn create_instructions_list(recipe: &Recipe) -> Vec<Value> {
     }
 
     instructions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn minutes_decompose_into_iso_8601() {
+        assert_eq!(minutes_iso(90), "PT1H30M");
+        assert_eq!(minutes_iso(120), "PT2H");
+        assert_eq!(minutes_iso(30), "PT30M");
+        assert_eq!(minutes_iso(45), "PT45M");
+        assert_eq!(minutes_iso(1_440), "P1D");
+        assert_eq!(minutes_iso(2_880), "P2D");
+        assert_eq!(minutes_iso(0), "PT0M");
+    }
+
+    /// `metadata.time` is cooklang's own parser: it understands the
+    /// `prep time`/`cook time` pair, YAML integers and the `time:` total,
+    /// and refuses what it cannot read rather than guessing (#705).
+    #[test]
+    fn schema_times_come_from_the_shared_parser() {
+        let recipe = crate::test_support::parse_recipe(
+            "---\nprep time: 10 min\ncook time: 30\n---\n\nBoil @water{}.\n",
+            "r",
+            1.0,
+        )
+        .expect("parses")
+        .value;
+        let mut schema = json!({});
+        add_time_fields(&mut schema, &recipe, &Converter::default());
+        assert_eq!(schema["prepTime"], json!("PT10M"), "{schema}");
+        assert_eq!(schema["cookTime"], json!("PT30M"), "{schema}");
+        assert_eq!(schema["totalTime"], json!("PT40M"), "{schema}");
+
+        let recipe = crate::test_support::parse_recipe(
+            "---\ntime: 1h30m\n---\n\nBoil @water{}.\n",
+            "r",
+            1.0,
+        )
+        .expect("parses")
+        .value;
+        let mut schema = json!({});
+        add_time_fields(&mut schema, &recipe, &Converter::default());
+        assert_eq!(schema["totalTime"], json!("PT1H30M"), "{schema}");
+
+        // An unreadable duration is omitted, not emitted as a wrong `PT0M`.
+        let recipe = crate::test_support::parse_recipe(
+            "---\nprep time: about an hour\n---\n\nBoil @water{}.\n",
+            "r",
+            1.0,
+        )
+        .expect("parses")
+        .value;
+        let mut schema = json!({});
+        add_time_fields(&mut schema, &recipe, &Converter::default());
+        assert_eq!(schema["prepTime"], Value::Null, "{schema}");
+        assert_eq!(schema["totalTime"], Value::Null, "{schema}");
+    }
 }

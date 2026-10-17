@@ -17,7 +17,7 @@
 use crate::{
     diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
-    parser::{collect_diagnostics, render_report, PARSER},
+    parser::{collect_diagnostics, parse_options, render_report, PARSER},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, Span, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -311,7 +311,7 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
         }
     };
 
-    let parsed = PARSER.parse(&content);
+    let parsed = PARSER.parse_with_options(&content, parse_options());
     let mut diagnostics = collect_diagnostics(parsed.report(), Some(&path));
 
     // Textual timer quantities are warnings on top of the shared parser, which
@@ -383,8 +383,10 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
 ///
 /// The timers come from a [`PullParser`](cooklang::parser::PullParser) run
 /// with the extensions of [`PARSER`], so each value carries the exact span of
-/// its source, frontmatter included. The unit is irrelevant: `~{1%hr}` is a
-/// number and is not warned about. Range values are turned on for this pass
+/// its source, frontmatter included. Timers without a unit are skipped:
+/// the parser already warns "missing unit" for them at the same spot, so
+/// `~{a while}` reports one defect, not two. `~{1%hr}` is a number and is
+/// not warned about. Range values are turned on for this pass
 /// only, so a range such as `~{10-20%minutes}` comes back as a range, by
 /// cooklang's own rules, and is not warned about either. Its errors are not
 /// collected: the shared parser has already reported on the recipe.
@@ -403,6 +405,12 @@ fn textual_timer_warnings(source: &str, path: &Utf8Path) -> Vec<Diagnostic> {
         let Some(quantity) = timer.quantity.as_ref() else {
             continue;
         };
+        // A unit-less timer already draws the parser's own "missing unit"
+        // warning at the same spot; adding "value is text" as well reports
+        // one defect twice.
+        if quantity.unit.is_none() {
+            continue;
+        }
         let cooklang::Value::Text(text) = quantity.value.value.value() else {
             continue;
         };
@@ -1461,7 +1469,9 @@ mod tests {
         let report = run(&base(&dir));
         let timer = recipe(&report, "timer.cook");
 
-        // `~{overnight}` also has the parser's own missing-unit warning.
+        // `~{overnight}` has no unit, so only the parser's own missing-unit
+        // warning reports it — "value is text" would describe the same defect
+        // a second time.
         let text: Vec<_> = timer
             .diagnostics
             .iter()
@@ -1470,8 +1480,16 @@ mod tests {
             .collect();
         assert_eq!(
             text,
-            ["a few", "overnight", "½", "1 2", "1.2.3", "1/2/3"],
+            ["a few", "½", "1 2", "1.2.3", "1/2/3"],
             "{:?}",
+            timer.diagnostics
+        );
+        assert!(
+            timer
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("missing unit")),
+            "~{{overnight}} keeps the parser's missing-unit warning: {:?}",
             timer.diagnostics
         );
         assert_eq!(timer.count(Severity::Error), 0);
@@ -1523,7 +1541,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         write(
             &base(&dir).join("timer.cook"),
-            "---\ntitle: Bread\n---\nMix.\nProve ~{overnight}.\n",
+            "---\ntitle: Bread\n---\nMix.\nProve ~{a while%minutes}.\n",
         );
         let report = run(&base(&dir));
         let timer = recipe(&report, "timer.cook");
@@ -1531,10 +1549,33 @@ mod tests {
         assert!(
             timer
                 .rendered
-                .contains("Warning: Timer value is text: overnight (timer.cook:5)"),
+                .contains("Warning: Timer value is text: a while (timer.cook:5)"),
             "{}",
             timer.rendered
         );
+    }
+
+    /// A unit-less textual timer is *one* defect: the parser's missing-unit
+    /// warning covers it, and "value is text" must not repeat it.
+    #[test]
+    fn a_unitless_textual_timer_warns_once() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("timer.cook"), "Bake ~{a while}.\n");
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        assert_eq!(
+            timer.count(Severity::Warning),
+            1,
+            "exactly one warning for the timer: {:?}",
+            timer.diagnostics
+        );
+        assert!(
+            timer.diagnostics[0].message.contains("missing unit"),
+            "{:?}",
+            timer.diagnostics[0]
+        );
+        assert_eq!(report.total_warnings(), 1);
     }
 
     /// Ingredient quantities stay on the shared parser. These are text there

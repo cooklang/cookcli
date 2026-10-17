@@ -146,6 +146,44 @@ pub(super) fn item_exists(doc: &DocumentMut, section: &str, name: &str) -> bool 
     }
 }
 
+/// What kind of entry holds the root key `add` wants, when it is not a free
+/// item slot.
+///
+/// [`item_exists`] only sees items, but `general` names share the document
+/// root with sections and section names share it with top-level items, so a
+/// free *item* slot can still be a taken *name*: inserting `milk` into
+/// `general` writes over `[milk]`, and opening `[fridge]` writes over
+/// `fridge = "2%l"`. `remove` and `update` refuse the same collisions by not
+/// finding what they look for; `add` must refuse too rather than `insert`
+/// over it.
+pub(super) fn name_taken_differently(
+    doc: &DocumentMut,
+    section: &str,
+    name: &str,
+) -> Option<&'static str> {
+    if section == GENERAL {
+        return doc
+            .get(name)
+            .is_some_and(|item| item.is_table_like() || item.as_array_of_tables().is_some())
+            .then_some("a section");
+    }
+    match doc.get(section) {
+        // A section already holds the slot, and an array of names is turned
+        // into one by [`normalise_array_section`] rather than overwritten.
+        Some(item)
+            if item.is_table_like()
+                || item
+                    .as_array()
+                    .is_some_and(|a| a.iter().all(|v| v.as_str().is_some())) =>
+        {
+            None
+        }
+        Some(item) if item.as_array_of_tables().is_some() => Some("a section"),
+        Some(_) => Some("a top-level item"),
+        None => None,
+    }
+}
+
 /// The table holding `section`'s items, if it is there.
 fn section_entries<'a>(doc: &'a DocumentMut, section: &str) -> Option<&'a Table> {
     if section == GENERAL {
