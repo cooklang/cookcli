@@ -443,7 +443,7 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
 fn escape_latex(text: &str) -> String {
     text.chars()
         .map(|c| match c {
-            '\\' => r"\\".to_string(),
+            '\\' => r"\textbackslash{}".to_string(),
             '{' => r"\{".to_string(),
             '}' => r"\}".to_string(),
             '$' => r"\$".to_string(),
@@ -474,4 +474,19 @@ fn escape_latex(text: &str) -> String {
             _ => c.to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_literal_backslash_escapes_as_textbackslash() {
+        // `\\` is a LaTeX line break, not a backslash: the name would lose
+        // the character and gain an unwanted line break.
+        assert_eq!(
+            escape_latex(r"Special 100% \chars"),
+            r"Special 100\% \textbackslash{}chars"
+        );
+    }
 }
