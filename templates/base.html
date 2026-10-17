@@ -301,7 +301,10 @@
                         <!-- Inline buttons on md+ screens -->
                         {% if !static_mode %}
                         <a href="{{ prefix }}/preferences" class="icon-btn hidden md:inline-flex {% if active == "preferences" %}bg-accent-soft text-accent-text{% endif %}" aria-label="{{ tr.t("aria-preferences") }}" title="{{ tr.t("aria-preferences") }}">
-                            <span>⚙️</span>
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.827 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <circle cx="12" cy="12" r="3" stroke-width="2"></circle>
+                            </svg>
                         </a>
                         {% endif %}
                         <button onclick="showShortcutsHelp()" class="icon-btn hidden md:inline-flex ml-2 print:hidden" aria-label="{{ tr.t("aria-keyboard-shortcuts") }}" title="{{ tr.t("aria-keyboard-shortcuts") }} (?)">
@@ -337,35 +340,57 @@
                             <div id="more-dropdown" class="hidden absolute right-0 mt-2 w-56 card shadow-[var(--shadow-overlay)] z-50 py-1">
                                 {% if features.show_shopping_list || features.show_pantry %}
                                 <a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="menu-item {% if active == "recipes" %}active{% endif %}">
-                                    <span>🍳</span> <span>{{ tr.t("nav-recipes") }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M5 3.5h12a2 2 0 0 1 2 2V21H7a3 3 0 0 1-3-3V5a1.5 1.5 0 0 1 1.5-1.5Z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 18a3 3 0 0 1 3-3h12M9 8h5M9 11h5"/>
+                                    </svg>
+                                    <span>{{ tr.t("nav-recipes") }}</span>
                                 </a>
                                 {% if features.show_shopping_list && !static_mode %}
                                 <a href="{{ prefix }}/shopping-list" class="menu-item {% if active == "shopping" %}active{% endif %}">
-                                    <span>🛒</span> <span>{{ tr.t("nav-shopping-list") }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                    </svg>
+                                    <span>{{ tr.t("nav-shopping-list") }}</span>
                                 </a>
                                 {% endif %}
                                 {% if features.show_pantry && !static_mode %}
                                 <a href="{{ prefix }}/pantry" class="menu-item {% if active == "pantry" %}active{% endif %}">
-                                    <span>🥫</span> <span>{{ tr.t("nav-pantry") }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16v13H4zM3 4h18v3H3zM8 11h8"></path>
+                                    </svg>
+                                    <span>{{ tr.t("nav-pantry") }}</span>
                                 </a>
                                 {% endif %}
                                 <div class="border-t border-line my-1"></div>
                                 {% endif %}
                                 {% if !static_mode %}
                                 <a href="{{ prefix }}/preferences" class="menu-item">
-                                    <span>⚙️</span> <span>Preferences</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.827 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                        <circle cx="12" cy="12" r="3" stroke-width="2"></circle>
+                                    </svg>
+                                    <span>Preferences</span>
                                 </a>
                                 {% endif %}
                                 {% if !static_mode && viewer.auth_enabled() %}
                                 {% if viewer.is_signed_in() %}
                                 <form action="{{ prefix }}/logout" method="POST">
                                     <button type="submit" class="menu-item w-full" title="{{ tr.t("signed-in-as") }} {{ viewer.username() }}">
-                                        <span>🔓</span> <span>{{ tr.t("sign-out") }} ({{ viewer.username() }})</span>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17l5-5-5-5M15 12H3 M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"></path>
+                                        </svg>
+                                        <span>{{ tr.t("sign-out") }} ({{ viewer.username() }})</span>
                                     </button>
                                 </form>
                                 {% else %}
                                 <a href="{{ prefix }}/login" data-login-link class="menu-item">
-                                    <span>🔒</span> <span>{{ tr.t("sign-in") }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 17l-5-5 5-5M9 12h12 M12 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"></path>
+                                    </svg>
+                                    <span>{{ tr.t("sign-in") }}</span>
                                 </a>
                                 {% endif %}
                                 {% endif %}

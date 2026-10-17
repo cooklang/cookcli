@@ -77,6 +77,7 @@ pub fn start_sync(
 ) -> Result<SyncHandle> {
     let context = SyncContext::new();
     let jwt = session.jwt.clone();
+    let pricing_url = session.pricing_url();
     let namespace_id: i32 = session
         .user_id
         .parse()
@@ -119,7 +120,7 @@ pub fn start_sync(
                             "Sync task failed: account has no sync plan (402 Payment Required)"
                         );
                         eprintln!(
-                            "sync: your account has no sync plan — subscribe at https://cook.md/pricing (your files are untouched)"
+                            "sync: your account has no sync plan — subscribe at {pricing_url} (your files are untouched)"
                         );
                     }
                     e => tracing::error!("Sync task failed: {e:?}"),

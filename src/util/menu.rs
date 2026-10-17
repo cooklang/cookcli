@@ -39,16 +39,15 @@ pub fn parse_menu(entry: &RecipeEntry, menu_path: &Utf8Path) -> Result<Menu> {
     let menu_dir = menu_path.parent().unwrap_or(Utf8Path::new(""));
     for item in menu_items_mut(&mut menu) {
         if let MenuItem::RecipeReference { path, unit, .. } = item {
-            if path.starts_with("../") {
-                match cookcli_core::resolve_reference(menu_dir, path) {
-                    Some(resolved) => *path = resolved.to_string(),
-                    // Climbs out of the recipe directory. The authored path is
-                    // kept so callers can tell (`is_outside_reference`), and
-                    // the unit is dropped so `resolve_scales` does not join
-                    // the path onto the base dir and read a file outside it:
-                    // the target is then used as a raw multiplier.
-                    None => *unit = None,
-                }
+            match cookcli_core::resolve_reference(menu_dir, path) {
+                Some(resolved) => *path = resolved.to_string(),
+                // Climbs out of the recipe directory, or names a drive on
+                // Windows. The authored path is kept so callers can tell
+                // (`is_outside_reference`), and the unit is dropped so
+                // `resolve_scales` does not join the path onto the base dir
+                // and read a file outside it: the target is then used as a
+                // raw multiplier.
+                None => *unit = None,
             }
         }
     }
@@ -207,10 +206,17 @@ pub fn keep_empty_meals(menu: &mut Menu, content: &str) {
 }
 
 /// True for a reference [`load_menu`] could not keep inside the recipe
-/// directory (`@../../etc/passwd{}`).
+/// directory, however the escape is spelled: `../x`, `a/../../x`, `..\x`, an
+/// absolute `/x`, or a drive-relative `C:x` on Windows.
+///
+/// Every reference kept inside was rewritten to what `resolve_reference`
+/// gives, and resolving that again changes nothing; an escape keeps its
+/// authored path, which never resolves to itself. Asking that one question
+/// keeps this in step with `resolve_reference` instead of a second, lexical
+/// rule that a spelling it does not know slips past.
 #[cfg_attr(not(feature = "server"), allow(dead_code))]
 pub fn is_outside_reference(path: &str) -> bool {
-    path.starts_with("../")
+    cookcli_core::resolve_reference(Utf8Path::new(""), path).as_deref() != Some(Utf8Path::new(path))
 }
 
 fn menu_items_mut(menu: &mut Menu) -> impl Iterator<Item = &mut MenuItem> {
@@ -320,5 +326,68 @@ mod tests {
     #[test]
     fn nothing_authored_is_nothing() {
         assert_eq!(scaled_quantity(None, None, 3.0), (None, None));
+    }
+
+    /// References are rewritten against the menu's own directory: `..`
+    /// resolves from it, `./` reads from the root, and anything that would
+    /// land outside keeps its authored path with the unit dropped.
+    /// <https://github.com/cooklang/cookcli/issues/696>
+    #[test]
+    fn references_are_confined_to_the_recipe_directory() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("Evil.menu");
+        std::fs::write(
+            &file,
+            "- @./Sub/../../../outside/Outside{4%servings}\n\
+             - @../Shared/Sauce{2%servings}\n\
+             - @./Local{2%servings}\n",
+        )
+        .unwrap();
+        let entry =
+            RecipeEntry::from_path(camino::Utf8PathBuf::from_path_buf(file).unwrap()).unwrap();
+
+        let menu = parse_menu(&entry, Utf8Path::new("Menus/Evil.menu")).unwrap();
+
+        let refs: Vec<(String, Option<String>)> = menu
+            .recipe_references()
+            .into_iter()
+            .map(|item| match item {
+                MenuItem::RecipeReference { path, unit, .. } => (path.clone(), unit.clone()),
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(
+            refs,
+            vec![
+                // The escape keeps the parsed path so `is_outside_reference`
+                // can tell; the unit is gone so `resolve_scales` never joins
+                // the path onto the recipe directory.
+                ("Sub/../../../outside/Outside".to_string(), None),
+                // `../` steps up from `Menus/`, where the menu lives.
+                ("Shared/Sauce".to_string(), Some("servings".to_string())),
+                ("Local".to_string(), Some("servings".to_string())),
+            ]
+        );
+
+        for outside in [
+            "Sub/../../../outside/Outside",
+            "../Outside",
+            "a/../../Outside",
+            "..\\Outside",
+            "/abs/Outside",
+            "",
+        ] {
+            assert!(is_outside_reference(outside), "{outside}");
+        }
+        // A drive prefix only means something on Windows, where joining one
+        // onto the recipe directory replaces it.
+        if cfg!(windows) {
+            for outside in ["C:/abs/Outside", "C:\\abs\\Outside", "C:x.menu"] {
+                assert!(is_outside_reference(outside), "{outside}");
+            }
+        }
+        for inside in ["Shared/Sauce", "Local"] {
+            assert!(!is_outside_reference(inside), "{inside}");
+        }
     }
 }

@@ -1343,6 +1343,111 @@ fn add_refuses_an_item_the_section_already_holds() {
     );
 }
 
+/// A `general` item whose name is a section's would replace the whole table:
+/// `item_exists` does not see `[milk]` as an item, but inserting `milk` at
+/// the root is where the section sits.
+/// <https://github.com/cooklang/cookcli/issues/695>
+#[test]
+fn add_refuses_a_general_item_named_like_a_section() {
+    let pantry = "[milk]\ncarton = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "general".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'milk' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
+/// `[[milk]]` occupies the same root key `[milk]` would: an array of tables
+/// is not `is_table_like`, so without it being named here the collision
+/// fell through to `item_exists` and reported a nonexistent *item*
+/// 'milk' in `general`.
+#[test]
+fn add_refuses_a_general_item_named_like_an_array_of_tables() {
+    let pantry = "[[milk]]\ncarton = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "general".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'milk' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
+/// The same collision in the other direction: a section whose name is a
+/// top-level item cannot be created over it.
+/// <https://github.com/cooklang/cookcli/issues/695>
+#[test]
+fn add_refuses_a_section_named_like_a_top_level_item() {
+    let pantry = "fridge = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a top-level item named 'fridge' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the item must be untouched");
+}
+
+/// An array-of-tables section is a section too: it is not table-like to
+/// `toml_edit`, so opening `[fridge]` over `[[fridge]]` would replace it.
+#[test]
+fn add_refuses_a_section_named_like_an_array_of_tables() {
+    let pantry = "[[fridge]]\nmilk = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "eggs".to_string(),
+            quantity: Some("3".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'fridge' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
 /// Item names are compared exactly too, so `Flour` and `flour` are two items
 /// in one section rather than a clash. TOML keeps them apart as keys, so this
 /// survives a round trip.

@@ -16,11 +16,11 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    extract_ingredients, recipe_display_name, ExtractOptions, ScaledRecipe, ShoppingIngredients,
-    ShoppingListStore, StoredEntry,
+    add_optional_selections, extract_ingredients, optional_selections, recipe_display_name,
+    subtract_pantry_from_optional, ExtractOptions, OptionalSelection, ScaledRecipe,
+    ShoppingIngredients, ShoppingListStore, StoredEntry,
 };
 use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
-use cooklang::ingredient_list::IngredientList;
 use cooklang::model::Ingredient;
 use cooklang::pantry::PantryConf;
 use serde::Deserialize;
@@ -33,6 +33,10 @@ pub struct RecipeRequest {
     scale: Option<f64>,
     /// Which sub-recipe references to include. `None` = all.
     included_references: Option<Vec<String>>,
+    /// The optional ingredients chosen for this recipe, with the amounts to
+    /// buy, as stored in `.shopping-list`.
+    #[serde(default)]
+    optional_ingredients: Vec<OptionalSelection>,
 }
 
 pub async fn shopping_list(
@@ -69,9 +73,8 @@ pub async fn shopping_list(
             &ExtractOptions {
                 ignore_references: false,
                 included_references: entry.included_references.as_deref(),
-                // The web list has no way to choose optional ingredients yet,
-                // so it keeps listing them alongside the required ones.
-                include_optional: true,
+                // Only what was chosen, below.
+                include_optional: false,
             },
             &mut ingredients,
         )
@@ -79,6 +82,10 @@ pub async fn shopping_list(
             tracing::error!("Error processing recipe: {}", e);
             (StatusCode::BAD_REQUEST, json_error(e))
         })?;
+        let diagnostics = diagnostics.into_iter().chain(add_optional_selections(
+            &mut ingredients,
+            &entry.optional_ingredients,
+        ));
 
         for diagnostic in diagnostics {
             tracing::warn!("Recipe '{}': {}", name, diagnostic.message);
@@ -111,7 +118,7 @@ pub async fn shopping_list(
         }
     }
 
-    let mut list = merged(ingredients);
+    let ShoppingIngredients { required, optional } = ingredients;
 
     // Parse aisle with lenient parsing
     let aisle_content = read_aisle_file(&state);
@@ -128,13 +135,17 @@ pub async fn shopping_list(
     let (pantry_conf, pantry_error) = read_pantry(&state);
 
     // Use common names from aisle configuration
-    list = list.use_common_names(&aisle, PARSER.converter());
+    let required = required.use_common_names(&aisle, PARSER.converter());
+    let optional = optional.use_common_names(&aisle, PARSER.converter());
 
     // Track pantry items that were found and subtracted (excluding zero quantities)
-    let mut pantry_items = Vec::new();
+    let mut pantry_items: Vec<String> = Vec::new();
     if let Some(ref pantry) = pantry_conf {
         // Check which items from the original list are in the pantry with non-zero quantity
-        for (ingredient_name, _) in list.iter() {
+        for (ingredient_name, _) in required.iter().chain(optional.iter()) {
+            if pantry_items.contains(ingredient_name) {
+                continue;
+            }
             if let Some((_, pantry_item)) = pantry.find_ingredient(ingredient_name) {
                 // Check if the pantry item has a non-zero quantity
                 if let Some(qty_str) = pantry_item.quantity() {
@@ -155,37 +166,64 @@ pub async fn shopping_list(
         }
     }
 
-    // Apply pantry subtraction if pantry is available
-    let final_list = if let Some(ref pantry) = pantry_conf {
-        list.subtract_pantry(pantry, PARSER.converter())
+    // Apply pantry subtraction if pantry is available. Stock counts against
+    // the required amount first, so the optional list is worked out from the
+    // required one before that is reduced.
+    let (required, optional) = if let Some(ref pantry) = pantry_conf {
+        let optional = subtract_pantry_from_optional(optional, &required, pantry);
+        (
+            required.subtract_pantry(pantry, PARSER.converter()),
+            optional,
+        )
     } else {
-        list
+        (required, optional)
     };
 
-    let categories = final_list.categorize(&aisle);
+    // Categorise both lists into one, optional items after the required ones
+    // within each category, and categories in the aisle configuration's order.
+    type Item = (String, cooklang::quantity::GroupedQuantity, bool);
+    let mut categories: Vec<(String, Vec<Item>)> = Vec::new();
+    for (list, is_optional) in [(required, false), (optional, true)] {
+        for (category, items) in list.categorize(&aisle) {
+            let items = items
+                .iter()
+                .map(|(name, qty)| (name.clone(), qty.clone(), is_optional));
+            match categories.iter_mut().find(|(c, _)| *c == category) {
+                Some((_, existing)) => existing.extend(items),
+                None => categories.push((category, items.collect())),
+            }
+        }
+    }
+    categories.sort_by_key(|(category, _)| {
+        aisle
+            .categories
+            .iter()
+            .position(|c| c.name == category)
+            .unwrap_or(usize::MAX)
+    });
 
     // Build the response
     let mut shopping_categories = Vec::new();
 
-    for (category, items) in categories {
-        let mut entries: Vec<(String, _)> = items.into_iter().collect();
-
+    for (category, mut entries) in categories {
         // The "other" bucket holds ingredients with no aisle category. They
         // arrive in recipe insertion order, which is unhelpful when scanning
         // a long list — sort alphabetically (case-insensitive) so shoppers
-        // can find items predictably.
+        // can find items predictably. The sort is stable, so a required
+        // item stays ahead of the optional one with the same name.
         if category == "other" {
-            entries.sort_by_key(|(a, _)| a.to_lowercase());
+            entries.sort_by_key(|(a, _, _)| a.to_lowercase());
         }
 
         let mut shopping_items = Vec::new();
-        for (name, qty) in entries {
+        for (name, qty, is_optional) in entries {
             let item_json = serde_json::json!({
                 "name": name,
                 // Not `into_vec()`: that yields the components in the group's
                 // own random order, so an ingredient measured two ways came
                 // back differently on every request.
-                "quantities": crate::util::format::quantity::ordered_components(&qty)
+                "quantities": crate::util::format::quantity::ordered_components(&qty),
+                "optional": is_optional,
             });
             shopping_items.push(item_json);
         }
@@ -269,12 +307,15 @@ fn warning_text(tr: &Tr, recipe: &str, diagnostic: &Diagnostic) -> Option<String
     else {
         return None;
     };
-    let (key, unit) = match cause {
-        UnscalableCause::NotANumber => ("shopping-warning-not-a-number", ""),
-        UnscalableCause::NoServings => ("shopping-warning-no-servings", ""),
-        UnscalableCause::NoYield { unit } => ("shopping-warning-no-yield", unit.as_str()),
+    let (key, unit, declared) = match cause {
+        UnscalableCause::NotANumber => ("shopping-warning-not-a-number", "", ""),
+        UnscalableCause::NoServings => ("shopping-warning-no-servings", "", ""),
+        UnscalableCause::NoYield { unit } => ("shopping-warning-no-yield", unit.as_str(), ""),
         UnscalableCause::YieldInOtherUnit { unit } => {
-            ("shopping-warning-yield-unit", unit.as_str())
+            ("shopping-warning-yield-unit", unit.as_str(), "")
+        }
+        UnscalableCause::NonPositiveBase { declared } => {
+            ("shopping-warning-non-positive-base", "", declared.as_str())
         }
         _ => return None,
     };
@@ -285,6 +326,7 @@ fn warning_text(tr: &Tr, recipe: &str, diagnostic: &Diagnostic) -> Option<String
             ("reference", reference),
             ("amount", amount),
             ("unit", unit),
+            ("declared", declared),
         ],
     ))
 }
@@ -368,13 +410,16 @@ fn reference_scales(
     };
     refs.iter()
         .map(|reference| {
-            // The recipe page stores `./Sauces/Pesto`, as the reference is
-            // written; other clients may leave out the `./` or add `.cook`.
-            let plain = |path: &str| {
-                let path = path.strip_prefix("./").unwrap_or(path);
-                path.strip_suffix(".cook").unwrap_or(path).to_string()
+            // Both sides are resolved first, as core does when it expands the
+            // list: the recipe page stores `Sauces/Pesto` resolved, while older
+            // lists and other clients hold it as written (`./Sauces/Pesto`,
+            // `../Sauces/Pesto`), sometimes with `.cook`.
+            let resolved = |path: &str| {
+                let path = cookcli_core::resolve_reference(dir, path)?;
+                let path = path.as_str();
+                Some(path.strip_suffix(".cook").unwrap_or(path).to_string())
             };
-            let wanted = plain(reference);
+            let wanted = resolved(reference)?;
             let uses: Vec<&Ingredient> = recipe
                 .ingredients
                 .iter()
@@ -382,7 +427,7 @@ fn reference_scales(
                     ingredient.reference.as_ref().is_some_and(|r| {
                         let mut parts = r.components.clone();
                         parts.push(r.name.clone());
-                        plain(&parts.join("/")) == wanted
+                        resolved(&parts.join("/")).as_ref() == Some(&wanted)
                     })
                 })
                 .collect();
@@ -421,6 +466,10 @@ pub struct AddItemRequest {
     pub scale: f64,
     /// Which sub-recipe references to include. `None` = all (menus, backward compat).
     pub included_references: Option<Vec<String>>,
+    /// Names of the recipe's optional ingredients to buy too. The amounts are
+    /// worked out from the recipe at `scale` and stored with them.
+    #[serde(default)]
+    pub optional_ingredients: Vec<String>,
 }
 
 pub async fn add_to_shopping_list(
@@ -440,6 +489,22 @@ pub async fn add_to_shopping_list(
         activity::quoted(&payload.path),
         scaled(payload.scale)
     );
+    let optional_ingredients = if payload.optional_ingredients.is_empty() {
+        Vec::new()
+    } else {
+        let core_ctx = cookcli_core::Context::new(state.base_path.clone());
+        let recipe = ScaledRecipe::scaled(
+            cookcli_core::RecipeSource::Path(payload.path.as_str().into()),
+            payload.scale,
+        );
+        optional_selections(&core_ctx, &recipe, &payload.optional_ingredients)
+            .map_err(|e| {
+                tracing::error!("Failed to read optional ingredients: {e}");
+                (StatusCode::BAD_REQUEST, json_error(e))
+            })?
+            .value
+    };
+
     // `name` is derived from `path` on load — any client-supplied display
     // name would be silently discarded, so it's not accepted here.
     let item = StoredEntry {
@@ -450,6 +515,7 @@ pub async fn add_to_shopping_list(
         included_reference_names: None,
         included_reference_scales: None,
         recipes: None,
+        optional_ingredients,
     };
 
     store.add(item).map_err(|e| {
@@ -671,7 +737,11 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     // Each entry is aggregated independently: the shopping list may
     // legitimately contain the same recipe more than once (e.g. duplicate
     // entries from the legacy format), and that is not a cycle.
-    let mut add = |path: &str, scale: f64, included: Option<&[String]>| -> anyhow::Result<()> {
+    let mut add = |path: &str,
+                   scale: f64,
+                   included: Option<&[String]>,
+                   selections: &[OptionalSelection]|
+     -> anyhow::Result<()> {
         // `.shopping-list` is a file, and one written before these endpoints
         // checked what they stored can still hold a path that leaves the
         // recipe directory. Skipping it costs the compact the ingredients of
@@ -689,11 +759,12 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
             &ExtractOptions {
                 ignore_references: false,
                 included_references: included,
-                include_optional: true,
+                include_optional: false,
             },
             &mut list,
         )
         .with_context(|| format!("aggregating ingredients for {path} at scale {scale}"))?;
+        add_optional_selections(&mut list, selections);
         Ok(())
     };
 
@@ -705,29 +776,38 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                     &recipe.path,
                     recipe.scale,
                     recipe.included_references.as_deref(),
+                    &recipe.optional_ingredients,
                 )?;
             }
         } else {
-            add(&item.path, item.scale, item.included_references.as_deref())?;
+            add(
+                &item.path,
+                item.scale,
+                item.included_references.as_deref(),
+                &item.optional_ingredients,
+            )?;
         }
     }
 
     // The page lists, and so ticks, each ingredient under the name the aisle
     // file gives it (`egg` for a recipe's `eggs`). Keep the recipes' own names
     // as well: a tick made under one, before the aisle file grouped it, still
-    // stands for an ingredient on the list.
-    let list = merged(list);
-    let mut names: Vec<String> = list.iter().map(|(name, _)| name.clone()).collect();
+    // stands for an ingredient on the list. Chosen optional ingredients are
+    // items of their own, ticked like the rest.
     let aisle_content = read_aisle_file(state);
     let aisle = cooklang::aisle::parse_lenient(&aisle_content)
         .output()
         .cloned()
         .unwrap_or_default();
-    names.extend(
-        list.use_common_names(&aisle, PARSER.converter())
-            .iter()
-            .map(|(name, _)| name.clone()),
-    );
+    let mut names = Vec::new();
+    for part in [list.required, list.optional] {
+        names.extend(part.iter().map(|(name, _)| name.clone()));
+        names.extend(
+            part.use_common_names(&aisle, PARSER.converter())
+                .iter()
+                .map(|(name, _)| name.clone()),
+        );
+    }
     Ok(names)
 }
 
@@ -748,19 +828,6 @@ fn read_aisle_file(state: &AppState) -> String {
             String::new()
         }
     }
-}
-
-/// Fold the optional ingredients into the required ones, the way the web list
-/// has always shown them.
-fn merged(ingredients: ShoppingIngredients) -> IngredientList {
-    let ShoppingIngredients {
-        mut required,
-        optional,
-    } = ingredients;
-    for (name, quantity) in optional.iter() {
-        required.add_ingredient(name.clone(), quantity, PARSER.converter());
-    }
-    required
 }
 
 // -- Add menu (bulk) endpoint --
@@ -807,9 +874,20 @@ pub async fn add_menu_to_shopping_list(
 
     for section in &menu.sections {
         for item in section.meals.iter().flat_map(|meal| &meal.items) {
-            let cooklang_find::MenuItem::RecipeReference { path, scale, .. } = item else {
+            let cooklang_find::MenuItem::RecipeReference {
+                path,
+                scale,
+                optional,
+                ..
+            } = item
+            else {
                 continue;
             };
+            // An optional recipe in a menu (`@?./Desserts/Cake{}`) adds nothing
+            // to the list unless someone accepts it, and a menu is added whole.
+            if *optional {
+                continue;
+            }
             if crate::util::menu::is_outside_reference(path) {
                 tracing::warn!(
                     "Skipping recipe reference '{}' in menu '{}': it points outside the \
@@ -864,6 +942,7 @@ pub async fn add_menu_to_shopping_list(
                 included_reference_names: None,
                 included_reference_scales: None,
                 recipes: None,
+                optional_ingredients: Vec::new(),
             });
         }
     }

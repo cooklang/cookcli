@@ -40,7 +40,7 @@ use cooklang::{
     metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
-    quantity::Quantity,
+    quantity::{Number, Quantity, Value},
     Recipe,
 };
 use regex::Regex;
@@ -255,6 +255,63 @@ enum ComponentKind {
     Timer,
 }
 
+/// Write a quantity value exactly as source.
+///
+/// `Value`'s own `Display` rounds every number to 3 decimal places — the
+/// right summary for a person, wrong for a file that will be read back:
+/// `0.0005%g` of saffron came out as `0.001`. Numbers keep enough of
+/// their value to reparse to it; ranges keep their display form.
+fn write_value(w: &mut String, value: &Value) {
+    match value {
+        Value::Number(n) => write_number(w, *n),
+        Value::Range { start, end } => {
+            write_number(w, *start);
+            w.push('-');
+            write_number(w, *end);
+        }
+        Value::Text(t) => w.push_str(t),
+    }
+}
+
+fn write_number(w: &mut String, n: Number) {
+    match n {
+        Number::Regular(v) => w.push_str(&shortest(v)),
+        // A fraction whose `err` is zero displays exactly (`1/2`,
+        // `2 1/2`). One carrying an error — a lossy conversion can attach
+        // it — would lose the error to `Display`, so write its full value
+        // instead.
+        n @ Number::Fraction { err, .. } => {
+            if err == 0.0 {
+                write!(w, "{n}").unwrap()
+            } else {
+                w.push_str(&shortest(n.value()))
+            }
+        }
+    }
+}
+
+/// `v` written the shortest way that reparses to it — `f64`'s `Display` —
+/// except when that carries float noise from scaling: `0.1` scaled by 3
+/// prints `0.30000000000000004`, `1/3` scaled by 2 `0.6666666666666666`.
+/// Ten decimals with the zeros trimmed snaps those back to `0.3` and
+/// `0.6666666667` while `0.0005` and `1e-7` still print exactly. Anything
+/// it would collapse to `0` — a real value below ~1e-10 — keeps the long
+/// form. And `-0` writes as `0`: it means the same amount, and `-0` would
+/// reparse as text.
+fn shortest(v: f64) -> String {
+    if v == 0.0 {
+        return "0".to_string();
+    }
+    let exact = v.to_string();
+    let rounded = format!("{v:.10}");
+    let rounded = rounded.trim_end_matches('0').trim_end_matches('.');
+    if !matches!(rounded, "0" | "-0") && rounded.len() < exact.len() {
+        rounded.to_string()
+    } else {
+        exact
+    }
+}
+
 impl ComponentFormatter<'_> {
     fn format(self, w: &mut String) {
         w.push(match self.kind {
@@ -297,7 +354,7 @@ impl ComponentFormatter<'_> {
             {
                 w.push('=');
             }
-            w.push_str(&q.value().to_string());
+            write_value(w, q.value());
             if let Some(unit) = q.unit() {
                 write!(w, "%{unit}").unwrap();
             }
@@ -543,6 +600,90 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         let rendered = format_to_string(&scaled);
         assert!(rendered.contains("@egg{=2}"), "got: {rendered}");
         assert!(rendered.contains("@milk{1000%ml}"), "got: {rendered}");
+    }
+
+    /// Quantities are written for reparse, not display: rounding to 3
+    /// decimal places silently doubled a 0.0005g saffron measure
+    /// (<https://github.com/cooklang/cookcli/issues/701>).
+    #[test]
+    fn quantities_keep_their_full_precision() {
+        let source =
+            "Add @saffron{0.0005%g} and @water{12.3456%ml} with #spray bottle{0.0000001%l}.\n";
+        let rendered = format_to_string(&parse_recipe(source, "r", 1.0).unwrap().value);
+        assert!(rendered.contains("@saffron{0.0005%g}"), "got: {rendered}");
+        assert!(rendered.contains("@water{12.3456%ml}"), "got: {rendered}");
+        assert!(
+            rendered.contains("#spray bottle{0.0000001%l}"),
+            "got: {rendered}"
+        );
+        // And the rendered text reparses to the same quantities.
+        let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
+        let original = parse_recipe(source, "r", 1.0).unwrap().value;
+        let value = |recipe: &cooklang::Recipe, name: &str| {
+            recipe
+                .ingredients
+                .iter()
+                .find(|i| i.name == name)
+                .and_then(|i| i.quantity.as_ref())
+                .map(|q| q.value().clone())
+        };
+        for name in ["saffron", "water"] {
+            assert_eq!(value(&reparsed, name), value(&original, name), "{name}");
+        }
+    }
+
+    /// Precision does not mean printing float noise: `0.1` scaled by 3 is
+    /// `0.30000000000000004` and `1/3` scaled by 2 `0.6666666666666666`,
+    /// and writing either verbatim is lossless but unreadable (#701).
+    #[test]
+    fn scaled_quantities_do_not_print_float_noise() {
+        let rendered =
+            format_to_string(&parse_recipe("Add @salt{0.1%g}.\n", "r", 3.0).unwrap().value);
+        assert!(rendered.contains("@salt{0.3%g}"), "got: {rendered}");
+
+        let rendered = format_to_string(
+            &parse_recipe("Add @water{1/3%cup}.\n", "r", 2.0)
+                .unwrap()
+                .value,
+        );
+        assert!(
+            rendered.contains("@water{0.6666666667%cup}"),
+            "got: {rendered}"
+        );
+    }
+
+    /// A fraction whose `err` is zero displays exactly; one carrying an
+    /// error would lose it to `Display`, so its full value is written
+    /// instead.
+    #[test]
+    fn a_fractions_error_is_written_into_its_value() {
+        let mut s = String::new();
+        write_number(
+            &mut s,
+            Number::Fraction {
+                whole: 0,
+                num: 1,
+                den: 3,
+                err: 0.001,
+            },
+        );
+        let written: f64 = s.parse().expect("writes a readable number");
+        assert!(
+            (written - (1.0 / 3.0 + 0.001)).abs() < 1e-10,
+            "the error must reach the output: {s}"
+        );
+
+        let mut s = String::new();
+        write_number(
+            &mut s,
+            Number::Fraction {
+                whole: 2,
+                num: 1,
+                den: 2,
+                err: 0.0,
+            },
+        );
+        assert_eq!(s, "2 1/2", "an exact fraction keeps its display form");
     }
 
     /// A recipe reference is re-emitted with `/` between its components on

@@ -130,6 +130,13 @@ pub enum UnscalableCause {
         /// The unit the yield is in.
         unit: String,
     },
+    /// The recipe's base is not a positive number — `servings: 0` or
+    /// `yield: -500%unit`, `nan`, `inf` — so there is nothing to scale
+    /// from.
+    NonPositiveBase {
+        /// The declaration as written, `servings: 0` / `yield: -500%g`.
+        declared: String,
+    },
 }
 
 impl Diagnostic {

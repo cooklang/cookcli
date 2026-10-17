@@ -33,7 +33,7 @@ pub use error::CoreError;
 pub use find::{is_safe_relative_path, resolve_reference, REFERENCE_SEPARATOR};
 pub use format::{PaperSize, Style};
 pub use outcome::Outcome;
-pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};
+pub use parser::{parse_options, parse_recipe, parse_recipe_at, render_report, PARSER};
 
 /// The `cooklang` crate this library was built against.
 ///

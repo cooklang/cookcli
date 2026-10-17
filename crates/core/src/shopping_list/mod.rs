@@ -47,7 +47,7 @@ mod days;
 mod store;
 
 pub use days::{section_date, DayRange};
-pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
+pub use store::{recipe_display_name, OptionalSelection, ShoppingListStore, StoredEntry};
 
 use crate::{
     find,
@@ -436,7 +436,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
 /// the same stock off the optional amount as well would count it twice, so an
 /// ingredient needed both ways keeps its whole optional amount: at worst the
 /// shopper is offered a little more garnish than they need.
-fn subtract_pantry_from_optional(
+pub fn subtract_pantry_from_optional(
     optional: IngredientList,
     required: &IngredientList,
     pantry: &PantryConf,
@@ -735,6 +735,110 @@ pub fn extract_ingredients(
     Ok(diagnostics)
 }
 
+/// The selection lines for the optional ingredients of `recipe` named in
+/// `names`, with the amounts to buy at the recipe's scale.
+///
+/// This is what a shopping list records when someone accepts optional
+/// ingredients while adding a recipe: each named ingredient's optional
+/// occurrences are added up, scaled, and written as the final amount, so a
+/// reader never has to look the recipe up again. Amounts that do not add up
+/// into one quantity (`1 pinch` and `5 g`) become one selection each.
+///
+/// Names are compared case-insensitively with surrounding whitespace trimmed,
+/// against the ingredient's display name. A name that is not an optional
+/// ingredient of the recipe is ignored, and so are optional recipe
+/// references, which a selection line of this kind cannot hold.
+///
+/// # Errors
+///
+/// As [`extract_ingredients`] for reading and parsing the recipe.
+pub fn optional_selections(
+    ctx: &Context,
+    recipe: &ScaledRecipe,
+    names: &[String],
+) -> Result<Outcome<Vec<OptionalSelection>>, CoreError> {
+    let converter = PARSER.converter();
+    let wanted: Vec<String> = names.iter().map(|n| n.trim().to_lowercase()).collect();
+    let (parsed, diagnostics) = parse_source(ctx.base_path(), &recipe.source, recipe.scale)?;
+
+    let mut accepted = IngredientList::new();
+    for entry in parsed.group_ingredients(converter) {
+        let ingredient = entry.ingredient;
+        let name = ingredient.display_name();
+        if ingredient.modifiers().is_optional()
+            && ingredient.reference.is_none()
+            && ingredient.modifiers().should_be_listed()
+            && wanted.contains(&name.trim().to_lowercase())
+        {
+            accepted.add_ingredient(name.into_owned(), &entry.quantity, converter);
+        }
+    }
+
+    let mut selections = Vec::new();
+    for (name, quantity) in accepted.iter() {
+        let components = ordered_components(quantity);
+        if components.is_empty() {
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: None,
+            });
+        }
+        for component in components {
+            let quantity = match component.unit() {
+                Some(unit) => format!("{}%{unit}", component.value()),
+                None => component.value().to_string(),
+            };
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: Some(quantity),
+            });
+        }
+    }
+    Ok(Outcome::with_diagnostics(selections, diagnostics))
+}
+
+/// Add stored selection lines to the optional ingredients of `list`.
+///
+/// Each amount is used as written — it is already the amount to buy — and
+/// several lines for one name add up. A quantity that does not parse is
+/// reported and the ingredient is added without one, so the shopper still
+/// sees it.
+pub fn add_optional_selections(
+    list: &mut ShoppingIngredients,
+    selections: &[OptionalSelection],
+) -> Vec<Diagnostic> {
+    let converter = PARSER.converter();
+    let mut diagnostics = Vec::new();
+    for selection in selections {
+        let quantity = match &selection.quantity {
+            None => GroupedQuantity::default(),
+            Some(quantity) => {
+                let line = format!("@x{{{quantity}}}");
+                match parse_unscaled(&line, &selection.name, None) {
+                    Ok(outcome) => outcome
+                        .value
+                        .group_ingredients(converter)
+                        .into_iter()
+                        .next()
+                        .map(|entry| entry.quantity)
+                        .unwrap_or_default(),
+                    Err(_) => {
+                        diagnostics.push(Diagnostic::warning(format!(
+                            "Optional ingredient '{}' has an amount that is not a Cooklang \
+                             quantity: '{quantity}'. It is listed without one",
+                            selection.name
+                        )));
+                        GroupedQuantity::default()
+                    }
+                }
+            }
+        };
+        list.optional
+            .add_ingredient(selection.name.clone(), &quantity, converter);
+    }
+    diagnostics
+}
+
 /// A recipe reference [`add_ingredients`] left to follow: its index in
 /// [`Recipe::ingredients`], and whether what it adds is optional.
 type PendingReference = (usize, bool);
@@ -893,7 +997,7 @@ impl Expansion<'_> {
             // Where the reference points, as a path relative to the recipe
             // directory. `..` is resolved against the directory of the recipe
             // writing it, and a reference that climbs out of the collection —
-            // or names an absolute path of its own — resolves to nothing. See
+            // or names a drive on Windows — resolves to nothing. See
             // [`find::resolve_reference`].
             let from = self.reference_dir(ancestors);
             let Some(ref_path) = find::resolve_reference(&from, &ref_display_path) else {
@@ -1005,6 +1109,28 @@ impl Expansion<'_> {
                     // Read before scaling: the servings and yield this is worked
                     // out from are what scaling rewrites.
                     let reached = target_factor(&ref_recipe, target_value, quantity.unit());
+                    // `scale_to_target` divides by the same base and does not
+                    // check it either: `servings: 0` or `yield: -500%g` is a
+                    // `None` here, then an `Ok` scaled by infinity or flipped
+                    // into negative amounts there (#699). Refuse it before
+                    // that, as unscalable.
+                    if let Some(base) = non_positive_base(&ref_recipe, quantity.unit()) {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: \
+                                 it declares `{base}`, so there is nothing to scale from"
+                            ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: UnscalableCause::NonPositiveBase { declared: base },
+                            },
+                        );
+                        continue;
+                    }
                     let scaled = match (is_servings(quantity.unit()), reached) {
                         // `scale_to_target` would round the servings to a
                         // whole number first (cooklang-rs#133): 2.5 servings
@@ -1152,6 +1278,40 @@ fn scale_failure(error: &cooklang::scale::ScaleError, unit: &str) -> String {
     }
 }
 
+/// The base a `unit` target scales the recipe from, when the recipe declares
+/// it and it is not a positive number: `servings: 0` for a servings target,
+/// `yield: 0%unit`, a negative one, or a non-finite spelling Rust's float
+/// parse accepts (`nan`, `inf`) for a target in `unit`. A yield in another
+/// unit is a unit mismatch, not a base problem. Returned as its written
+/// spelling, `servings: 0` / `yield: -500%g`, for the warning.
+///
+/// `scale_to_target` divides by it and answers `Ok` having scaled by
+/// infinity or flipped every amount negative, so the caller lists the
+/// reference unexpanded instead.
+fn non_positive_base(recipe: &Recipe, unit: Option<&str>) -> Option<String> {
+    match unit {
+        Some(unit) if is_servings(Some(unit)) => recipe
+            .metadata
+            .servings()
+            .and_then(|servings| servings.as_number())
+            .filter(|servings| *servings == 0)
+            .map(|servings| format!("servings: {servings}")),
+        Some(unit) => recipe
+            .metadata
+            .get("yield")
+            .and_then(|yield_| yield_.as_str())
+            .and_then(|yield_| yield_.split_once('%'))
+            .filter(|(value, yield_unit)| {
+                *yield_unit == unit
+                    && value
+                        .parse::<f64>()
+                        .is_ok_and(|value| !(value.is_finite() && value > 0.0))
+            })
+            .map(|(value, yield_unit)| format!("yield: {value}%{yield_unit}")),
+        None => None,
+    }
+}
+
 /// [`scale_failure`] as data, for a caller wording the warning itself.
 fn unscalable_cause(error: &cooklang::scale::ScaleError, unit: &str) -> UnscalableCause {
     use cooklang::scale::ScaleError;
@@ -1209,11 +1369,12 @@ fn scale_to_servings(recipe: &mut Recipe, target: f64, factor: f64, converter: &
 /// `unwrap_or(1.0)` is unreachable.
 ///
 /// With one exception, which is why that fallback is a `1` and not an
-/// `expect`: a **zero** base, `servings: 0` or `yield: 0%g`. `cooklang`
-/// divides by it and scales the recipe by infinity; this returns `None` and
-/// what the recipe references is left alone. Both readings of such a recipe
-/// are nonsense, and confining the nonsense to the one recipe `cooklang`
-/// itself scaled beats spreading infinity down the chain.
+/// `expect`: a **non-positive** base, `servings: 0` or `yield: -500%g`.
+/// `cooklang` divides by it and scales the recipe by infinity — an `Ok`,
+/// not a refusal — so the caller refuses such recipes itself through
+/// [`non_positive_base`], and this `None` only reaches the
+/// nested-reference factor, where `1` leaves what the recipe references
+/// alone.
 ///
 /// Unit names are matched exactly, including case, because that is how
 /// `cooklang` matches them — mirroring it is the whole point, and matching
@@ -1233,7 +1394,7 @@ fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64
         // and the factor passed down are both this one.
         Some("servings") | Some("serving") => {
             return match f64::from(recipe.metadata.servings()?.as_number()?) {
-                0.0 => None,
+                base if base <= 0.0 => None,
                 base => Some(target / base),
             }
         }
@@ -1247,7 +1408,7 @@ fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64
         }
     };
 
-    (base != 0.0).then(|| target / base)
+    (base.is_finite() && base > 0.0).then(|| target / base)
 }
 
 /// The warning to raise if expanding `entry` would lead back up its own chain,

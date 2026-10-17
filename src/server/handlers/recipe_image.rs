@@ -12,7 +12,7 @@ use crate::server::activity;
 use crate::server::{
     fs_atomic,
     handlers::{
-        common::{check_path, json_error},
+        common::{check_path, is_recipe_request, json_error},
         recipe_rename::RECIPE_FILES,
     },
     title_image::{self, PrepareError},
@@ -350,6 +350,17 @@ fn step_slot(
 
 fn find_recipe(state: &AppState, path: &str) -> Result<RecipeEntry, ApiError> {
     check_path(path)?;
+    // The lookup opens a name with an extension as it is, so without the
+    // recipe-extension rule `/api/recipe_image/config/pantry.conf` read the
+    // pantry configuration — and PUT/DELETE wrote and removed files beside
+    // it. `/api/recipes/` applies the same rule (#658).
+    if !is_recipe_request(path) {
+        tracing::error!("Recipe not found: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe not found: {path}")),
+        ));
+    }
     cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path)).map_err(|e| {
         tracing::error!("Recipe not found: {path}");
         (
