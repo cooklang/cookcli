@@ -323,6 +323,24 @@ fn timer_duration_seconds(quantity: &cooklang::quantity::Quantity) -> Option<i64
     Some((n.value() * multiplier).round() as i64)
 }
 
+/// A reference as the page links it: resolved against `recipe_dir`, the
+/// directory of the recipe writing it — the rule `resolve_scales` and the
+/// shopping list apply as well. `None` when it points out of the collection,
+/// so a `@../outside/x{}` links nowhere and is never looked up: looking it up
+/// is what would read outside the recipe directory.
+fn reference_link_path(
+    recipe_dir: &Utf8Path,
+    reference: &cooklang::model::RecipeReference,
+) -> Option<String> {
+    // For web URLs - always use forward slash
+    let authored = if reference.components.is_empty() {
+        reference.name.clone()
+    } else {
+        format!("{}/{}", reference.components.join("/"), reference.name)
+    };
+    cookcli_core::resolve_reference(recipe_dir, &authored).map(|p| p.to_string())
+}
+
 /// The factor a recipe or menu page applies, and its servings stepper.
 ///
 /// A recipe that declares a whole, non-zero number of `servings` gets the
@@ -377,6 +395,12 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     }
 
     let recipe_path_buf = Utf8PathBuf::from(recipe_path);
+    // Recipe references step up from the directory of the file writing them,
+    // the rule `resolve_scales` and the shopping list apply as well.
+    let recipe_dir = recipe_path_buf
+        .parent()
+        .map(Utf8Path::to_owned)
+        .unwrap_or_default();
     tracing::info!(
         "Looking for recipe at path: {}, extension: {:?}",
         recipe_path,
@@ -499,14 +523,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     for ((display_name, optional), (quantity, ingredient_list)) in sorted_ingredients {
         // Use the first ingredient's data for reference path and notes
         let first_ingredient = ingredient_list[0];
-        let reference_path = first_ingredient.reference.as_ref().map(|r| {
-            // For web URLs - always use forward slash
-            if r.components.is_empty() {
-                r.name.clone()
-            } else {
-                format!("{}/{}", r.components.join("/"), r.name)
-            }
-        });
+        let reference_path = first_ingredient
+            .reference
+            .as_ref()
+            .and_then(|r| reference_link_path(&recipe_dir, r));
 
         let reference_query = reference_path
             .as_deref()
@@ -606,14 +626,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                 section_ingredient_indices.insert(*index);
                                 cooking_mode_ingredient_indices.push(*index);
                                 if let Some(ing) = recipe.ingredients.get(*index) {
-                                    let reference_path = ing.reference.as_ref().map(|r| {
-                                        // For web URLs - always use forward slash
-                                        if r.components.is_empty() {
-                                            r.name.clone()
-                                        } else {
-                                            format!("{}/{}", r.components.join("/"), r.name)
-                                        }
-                                    });
+                                    let reference_path = ing
+                                        .reference
+                                        .as_ref()
+                                        .and_then(|r| reference_link_path(&recipe_dir, r));
 
                                     let reference_query = reference_path
                                         .as_deref()
@@ -766,14 +782,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 sorted_section_ingredients
             {
                 let first_ingredient = ingredient_list[0];
-                let reference_path = first_ingredient.reference.as_ref().map(|r| {
-                    // For web URLs - always use forward slash
-                    if r.components.is_empty() {
-                        r.name.clone()
-                    } else {
-                        format!("{}/{}", r.components.join("/"), r.name)
-                    }
-                });
+                let reference_path = first_ingredient
+                    .reference
+                    .as_ref()
+                    .and_then(|r| reference_link_path(&recipe_dir, r));
 
                 let reference_query = reference_path
                     .as_deref()
@@ -1067,9 +1079,17 @@ fn build_menu_template_inner(
                         ..
                     } => {
                         let factor = factor.unwrap_or(1.0);
-                        let info = ref_info_cache
-                            .entry(path.clone())
-                            .or_insert_with(|| ref_info_or_default(base_path, path, path));
+                        let info = ref_info_cache.entry(path.clone()).or_insert_with(|| {
+                            // A reference out of the recipe directory is
+                            // not looked up: there is nothing inside to
+                            // find, and the lookup is what would reach
+                            // outside.
+                            if crate::util::menu::is_outside_reference(path) {
+                                RecipeInfo::default()
+                            } else {
+                                ref_info_or_default(base_path, path, path)
+                            }
+                        });
 
                         // Display-only: a x1 badge on every unscaled reference
                         // would be pure noise, so suppress it. The number
@@ -1785,10 +1805,10 @@ mod reference_link_tests {
     }
 
     /// The query every link to `name` carries — the ingredient list and the
-    /// step both link to it, and must agree. The link keeps the `./` the
-    /// reference is written with.
+    /// step both link to it, and must agree. The link is the reference
+    /// resolved root-relative, so the `./` it is written with is gone.
     fn query<'a>(html: &'a str, name: &str) -> &'a str {
-        let prefix = format!(r#"href="/recipe/./{name}"#);
+        let prefix = format!(r#"href="/recipe/{name}"#);
         let queries: Vec<&str> = html
             .match_indices(&prefix)
             .map(|(at, _)| {

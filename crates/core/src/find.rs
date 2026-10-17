@@ -37,8 +37,10 @@ pub fn is_safe_relative_path(path: &str) -> bool {
 ///
 /// `reference` is the reference as the recipe writes it — `./Shared/Sauce`,
 /// `../sauces/tomato`. The parser only produces one from a name starting `./`
-/// or `../`, so it always opens with a dot component and can never be an
-/// absolute path of its own.
+/// or `../`, but a menu's items are not parsed by it, so a leading `/` can
+/// arrive here too. It is read from the collection root, like `./`, the same
+/// on every platform: `/etc/passwd` is `etc/passwd` inside the collection. A
+/// drive prefix on Windows resolves to nothing, see [`is_safe_relative_path`].
 ///
 /// **A reference that steps up does so from the directory of the file that
 /// writes it; one that does not is read from the collection root.** That is
@@ -449,6 +451,27 @@ mod tests {
     #[test]
     fn a_dot_in_front_of_a_step_up_does_not_re_anchor_it() {
         assert_eq!(resolved("Breakfast", "./../Secret"), Some("Secret".into()));
+    }
+
+    /// A menu's references do not come through the recipe parser, so a
+    /// leading `/` can arrive here. Empty components are dropped, so it is
+    /// read from the root, the same on every platform, and what comes back
+    /// stays inside the collection.
+    #[test]
+    fn a_leading_slash_is_read_from_the_root() {
+        assert_eq!(resolved("", "/etc/passwd"), Some("etc/passwd".to_string()));
+        assert_eq!(
+            resolved("Menus", "/tmp/x.cook"),
+            Some("tmp/x.cook".to_string())
+        );
+        assert_eq!(
+            resolved("", r"\\attacker\share\x.cook"),
+            Some("attacker/share/x.cook".to_string())
+        );
+        if cfg!(windows) {
+            assert_eq!(resolved("", "C:/Windows/win.ini"), None);
+            assert_eq!(resolved("", r"C:\Windows\win.ini"), None);
+        }
     }
 
     /// A reference is written in a recipe file, which is not always ours: an

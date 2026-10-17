@@ -406,13 +406,16 @@ fn reference_scales(
     };
     refs.iter()
         .map(|reference| {
-            // The recipe page stores `./Sauces/Pesto`, as the reference is
-            // written; other clients may leave out the `./` or add `.cook`.
-            let plain = |path: &str| {
-                let path = path.strip_prefix("./").unwrap_or(path);
-                path.strip_suffix(".cook").unwrap_or(path).to_string()
+            // Both sides are resolved first, as core does when it expands the
+            // list: the recipe page stores `Sauces/Pesto` resolved, while older
+            // lists and other clients hold it as written (`./Sauces/Pesto`,
+            // `../Sauces/Pesto`), sometimes with `.cook`.
+            let resolved = |path: &str| {
+                let path = cookcli_core::resolve_reference(dir, path)?;
+                let path = path.as_str();
+                Some(path.strip_suffix(".cook").unwrap_or(path).to_string())
             };
-            let wanted = plain(reference);
+            let wanted = resolved(reference)?;
             let uses: Vec<&Ingredient> = recipe
                 .ingredients
                 .iter()
@@ -420,7 +423,7 @@ fn reference_scales(
                     ingredient.reference.as_ref().is_some_and(|r| {
                         let mut parts = r.components.clone();
                         parts.push(r.name.clone());
-                        plain(&parts.join("/")) == wanted
+                        resolved(&parts.join("/")).as_ref() == Some(&wanted)
                     })
                 })
                 .collect();

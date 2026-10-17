@@ -997,7 +997,7 @@ impl Expansion<'_> {
             // Where the reference points, as a path relative to the recipe
             // directory. `..` is resolved against the directory of the recipe
             // writing it, and a reference that climbs out of the collection —
-            // or names an absolute path of its own — resolves to nothing. See
+            // or names a drive on Windows — resolves to nothing. See
             // [`find::resolve_reference`].
             let from = self.reference_dir(ancestors);
             let Some(ref_path) = find::resolve_reference(&from, &ref_display_path) else {

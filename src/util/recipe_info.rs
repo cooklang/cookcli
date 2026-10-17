@@ -30,6 +30,12 @@ pub struct RecipeInfo {
 }
 
 pub fn resolve_recipe_info(base_path: &Utf8Path, recipe_path: &str) -> anyhow::Result<RecipeInfo> {
+    // The path is joined onto `base_path` by the lookup, so it must name
+    // something inside the recipe directory. Every caller resolves a
+    // reference through `resolve_reference` first; this is the backstop.
+    if !crate::util::is_safe_relative_path(recipe_path) {
+        anyhow::bail!("reference '{recipe_path}' points outside the recipe directory");
+    }
     let entry = crate::util::get_recipe(base_path, recipe_path)?;
     let is_menu = entry.is_menu();
     let recipe = crate::util::parse_recipe_from_entry(&entry, 1.0)?;
