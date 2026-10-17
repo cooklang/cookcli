@@ -7,15 +7,47 @@
 use crate::{CoreError, Diagnostic, Location, Outcome, Severity, Span};
 use camino::Utf8Path;
 use cooklang::{
+    analysis::CheckResult,
     error::{SourceDiag, SourceReport},
-    Converter, CooklangParser, Extensions, Recipe,
+    metadata::StdKey,
+    Converter, CooklangParser, Extensions, ParseOptions, Recipe,
 };
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 /// The shared parser. Matches CookCLI's configuration exactly: no extensions,
 /// default converter for unit support.
 pub static PARSER: LazyLock<CooklangParser> =
     LazyLock::new(|| CooklangParser::new(Extensions::empty(), Converter::default()));
+
+/// The [`ParseOptions`] CookCLI parses with.
+///
+/// Carries a `metadata_validator` working around an upstream quirk: a `>>`
+/// metadata value always reaches the std checks as a YAML *string*, so
+/// `>> servings: 4` fails the "expected number" check and warns. When the
+/// string parses to a `u32` — which is exactly what `Metadata::servings()`
+/// accepts — the warning is spurious and the std check is suppressed for
+/// that entry only. `>> servings: many` still warns, as does
+/// `servings: "many"` in YAML front matter. Quoted `servings: "4"` in front
+/// matter is suppressed too, harmlessly: `servings()` reads it the same way.
+/// Other keys are left alone: suppressing e.g. `time` would also hide the
+/// real "Time overridden" warning.
+pub fn parse_options() -> ParseOptions<'static> {
+    ParseOptions {
+        metadata_validator: Some(Box::new(|key, value, action| {
+            let (Some(key_str), Some(value_str)) = (key.as_str(), value.as_str()) else {
+                return CheckResult::Ok;
+            };
+            if matches!(StdKey::from_str(key_str), Ok(StdKey::Servings))
+                && value_str.parse::<u32>().is_ok()
+            {
+                action.run_std_checks(false);
+            }
+            CheckResult::Ok
+        })),
+        ..Default::default()
+    }
+}
 
 /// Parse recipe text, scale it, and collect diagnostics.
 ///
@@ -71,7 +103,7 @@ pub(crate) fn parse_unscaled(
     name: &str,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    let parsed = PARSER.parse(text);
+    let parsed = PARSER.parse_with_options(text, parse_options());
     let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
     let parse_error = |report: &SourceReport| CoreError::Parse {
         name: name.to_string(),
@@ -280,6 +312,71 @@ mod tests {
             );
         }
         assert!(!outcome.has_errors());
+    }
+
+    /// `>>` metadata values reach upstream's std checks as strings, so
+    /// `>> servings: 4` used to warn "Unsupported value for key" even though
+    /// the value is a perfectly good servings count. The validator in
+    /// [`parse_options`] suppresses the check only when the string parses to
+    /// a `u32`, matching `Metadata::servings()` exactly. The deprecation
+    /// warning must remain.
+    #[test]
+    fn legacy_numeric_metadata_does_not_warn() {
+        let text = ">> servings: 4\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .all(|d| !d.message.contains("Unsupported value")),
+            "no spurious type warning: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.severity == Severity::Warning),
+            "the deprecation warning itself must remain"
+        );
+    }
+
+    /// A `>>` value that is not a valid `u32` must still warn — suppression
+    /// is for the spurious string-typing, not for bad input. `4 # x` matters:
+    /// it must not be validated by a YAML re-parse, since `servings()` itself
+    /// would reject it.
+    #[test]
+    fn legacy_bad_numeric_metadata_still_warns() {
+        for text in [
+            ">> servings: many\n\nBoil @water{}.\n",
+            ">> servings: 4 # x\n\nBoil @water{}.\n",
+        ] {
+            let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+            assert!(
+                outcome
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("Unsupported value")),
+                "bad value must keep its warning: {:?}",
+                outcome.diagnostics
+            );
+        }
+    }
+
+    /// The validator only touches `servings`; warnings for other keys must be
+    /// unaffected. `time` plus `prep time` keeps its "Time overridden".
+    #[test]
+    fn legacy_time_override_warning_is_preserved() {
+        let text = ">> time: 30\n>> prep time: 10\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("Time overridden")),
+            "time override warning must survive: {:?}",
+            outcome.diagnostics
+        );
     }
 
     /// Pins the severity mapping in both directions at once, so that inverting

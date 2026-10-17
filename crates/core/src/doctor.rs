@@ -17,7 +17,7 @@
 use crate::{
     diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
-    parser::{collect_diagnostics, render_report, PARSER},
+    parser::{collect_diagnostics, parse_options, render_report, PARSER},
     ConfigSource, Context, CoreError, Diagnostic, Outcome, Span, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -311,7 +311,7 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
         }
     };
 
-    let parsed = PARSER.parse(&content);
+    let parsed = PARSER.parse_with_options(&content, parse_options());
     let mut diagnostics = collect_diagnostics(parsed.report(), Some(&path));
 
     // Textual timer quantities are warnings on top of the shared parser, which
