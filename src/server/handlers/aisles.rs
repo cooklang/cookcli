@@ -584,7 +584,12 @@ pub async fn get_uncategorized(
 
     let outcome = tokio::task::spawn_blocking(move || {
         let ctx = cookcli_core::Context::discover(base).with_aisle(aisle);
-        cookcli_core::doctor::aisle_coverage(&ctx, Default::default())
+        // The walk follows links; a guest must not learn what it finds there.
+        let request = cookcli_core::doctor::CoverageRequest {
+            confined: true,
+            ..Default::default()
+        };
+        cookcli_core::doctor::aisle_coverage(&ctx, request)
     })
     .await
     .map_err(|e| {

@@ -4,13 +4,14 @@ use crate::{
     server::{
         handlers::{
             common::{
-                check_path, is_recipe_request, json_error, normalize_tags, recipe_file, RecipeFile,
+                check_path, is_recipe_request, json_error, normalize_tags, not_found, recipe_file,
+                RecipeFile,
             },
             recipe_rename::RECIPE_FILES,
         },
         AppState,
     },
-    util::PARSER,
+    util::{inside_collection, PARSER},
 };
 use axum::{
     extract::{Extension, Path, Query, State},
@@ -37,12 +38,15 @@ pub struct SearchQuery {
 pub async fn all_recipes(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let recipes = cooklang_find::build_tree(&state.base_path).map_err(|e| {
+    let mut tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
         tracing::error!("Failed to build recipe tree: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    // The glob walk follows linked folders; a listing must not publish the
+    // names of files outside the collection (#698).
+    crate::web::builders::prune_outside(&mut tree, &state.base_path);
 
-    let mut recipes = serde_json::to_value(recipes).map_err(|e| {
+    let mut recipes = serde_json::to_value(tree).map_err(|e| {
         tracing::error!("Failed to serialize recipes: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
@@ -122,6 +126,18 @@ pub async fn recipe(
             )
         })?;
 
+    // `get_recipe` follows links, so `Link/Secret.cook` through a
+    // `Link -> /outside` symlink is a hit (#698). It answers exactly as a
+    // missing recipe does: a different refusal would reveal there is a file
+    // at the link's far end.
+    if entry
+        .path()
+        .is_some_and(|file| !inside_collection(&state.base_path, file))
+    {
+        tracing::error!("{path:?} resolves outside the recipe directory");
+        return Err(not_found("Recipe", &path));
+    }
+
     let recipe =
         crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0)).map_err(|e| {
             tracing::error!("Failed to parse recipe: {e}");
@@ -176,12 +192,19 @@ pub async fn recipe_raw(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
-    let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
-        tracing::error!("Recipe file not found: {path}");
-        return Err((
-            StatusCode::NOT_FOUND,
-            json_error(format!("Recipe file not found: {path}")),
-        ));
+    // The lexical check keeps its own refusal; after it, one answer for
+    // "not there" and "not inside": a different one would say which it was
+    // (#698).
+    check_path(&path)?;
+    let file_path = match recipe_file(&state.base_path, &path) {
+        Ok(RecipeFile::Existing(file_path)) => file_path,
+        _ => {
+            tracing::error!("Recipe file not found: {path}");
+            return Err((
+                StatusCode::NOT_FOUND,
+                json_error(format!("Recipe file not found: {path}")),
+            ));
+        }
     };
 
     tokio::fs::read_to_string(&file_path).await.map_err(|e| {
@@ -283,7 +306,7 @@ pub async fn search(
     // with `cook search`. Calling the library here left the web UI on the old
     // union-over-terms behaviour after the CLI moved to AND (#425), which is
     // the kind of split the two would never have been noticed to have.
-    let hits = cookcli_core::search::search(
+    let mut hits = cookcli_core::search::search(
         &cookcli_core::Context::new(state.base_path.clone()),
         cookcli_core::search::SearchRequest {
             query: query.q.clone(),
@@ -295,6 +318,9 @@ pub async fn search(
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?
     .into_value();
+
+    // The search walk follows linked folders too (#698).
+    hits.retain(|hit| inside_collection(&state.base_path, &hit.path));
 
     let results = hits
         .into_iter()

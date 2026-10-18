@@ -23,14 +23,14 @@ pub fn load_menu(
     base_path: &Utf8Path,
     scale: f64,
 ) -> Result<Menu> {
-    let mut menu = parse_menu(entry, menu_path)?;
+    let mut menu = parse_menu(entry, menu_path, base_path)?;
     menu.resolve_scales(&[base_path], scale);
     Ok(menu)
 }
 
 /// [`load_menu`] without resolving scales, for the page, which needs the
 /// menu's own `servings` to pick the scale first.
-pub fn parse_menu(entry: &RecipeEntry, menu_path: &Utf8Path) -> Result<Menu> {
+pub fn parse_menu(entry: &RecipeEntry, menu_path: &Utf8Path, base_path: &Utf8Path) -> Result<Menu> {
     let mut menu = entry
         .menu()
         .ok_or_else(|| anyhow!("not a menu file"))?
@@ -40,7 +40,22 @@ pub fn parse_menu(entry: &RecipeEntry, menu_path: &Utf8Path) -> Result<Menu> {
     for item in menu_items_mut(&mut menu) {
         if let MenuItem::RecipeReference { path, unit, .. } = item {
             match cookcli_core::resolve_reference(menu_dir, path) {
-                Some(resolved) => *path = resolved.to_string(),
+                Some(resolved) => {
+                    // Lexically inside is not containment: `Linked/Secret`
+                    // can be a link out. If it resolves to a file outside
+                    // `base_path`, `resolve_scales` would read that file's
+                    // servings — so the unit is dropped exactly as for a
+                    // `../` reference, and the quantity is a raw multiplier.
+                    let lands_outside =
+                        cookcli_core::find::get_recipe(base_path, resolved.as_str())
+                            .ok()
+                            .and_then(|entry| entry.path().cloned())
+                            .is_some_and(|file| !crate::util::inside_collection(base_path, &file));
+                    *path = resolved.to_string();
+                    if lands_outside {
+                        *unit = None;
+                    }
+                }
                 // Climbs out of the recipe directory, or names a drive on
                 // Windows. The authored path is kept so callers can tell
                 // (`is_outside_reference`), and the unit is dropped so
@@ -346,7 +361,12 @@ mod tests {
         let entry =
             RecipeEntry::from_path(camino::Utf8PathBuf::from_path_buf(file).unwrap()).unwrap();
 
-        let menu = parse_menu(&entry, Utf8Path::new("Menus/Evil.menu")).unwrap();
+        let menu = parse_menu(
+            &entry,
+            Utf8Path::new("Menus/Evil.menu"),
+            &camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
 
         let refs: Vec<(String, Option<String>)> = menu
             .recipe_references()

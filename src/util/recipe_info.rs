@@ -138,6 +138,27 @@ pub fn combined_quantity(uses: &[&Ingredient]) -> Option<Quantity> {
     }
 }
 
+/// `ref_info_or_default`, but a reference that resolves outside `base_path`
+/// once links are followed reads as missing: its `servings`/`yield` are not
+/// this server's to spend on a link target outside the collection (#698).
+pub fn ref_info_or_default_inside(
+    base_path: &Utf8Path,
+    lookup: &str,
+    ref_display: &str,
+) -> RecipeInfo {
+    let inside = cookcli_core::find::get_recipe(base_path, lookup)
+        .ok()
+        .and_then(|entry| entry.path().cloned())
+        // Missing resolves "inside" — `ref_info_or_default` answers it with
+        // its own warn-and-default, unchanged.
+        .is_none_or(|file| crate::util::inside_collection(base_path, &file));
+    if inside {
+        ref_info_or_default(base_path, lookup, ref_display)
+    } else {
+        RecipeInfo::default()
+    }
+}
+
 /// Read a referenced recipe's metadata, degrading to defaults (and a warning)
 /// when the file cannot be found or parsed.
 pub fn ref_info_or_default(base_path: &Utf8Path, lookup: &str, ref_display: &str) -> RecipeInfo {

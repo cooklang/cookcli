@@ -38,7 +38,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
@@ -338,7 +338,10 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
                     header::CACHE_CONTROL,
                     HeaderValue::from_static("no-cache"),
                 ))
-                .layer(axum::middleware::from_fn(static_files::only_pictures)),
+                .layer(axum::middleware::from_fn_with_state(
+                    Arc::clone(&state),
+                    static_files::only_pictures,
+                )),
         )
         // Inside the prefix nest, so it sees paths without the prefix; after
         // every route, so it covers them all.
@@ -834,28 +837,6 @@ async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResp
                 .body(Body::from("404 Not Found"))
                 .unwrap()
         })
-}
-
-/// `path` canonicalized, or, when it does not exist yet, its nearest existing
-/// ancestor canonicalized with the rest appended.
-fn canonical_or_nearest(path: &Utf8Path) -> Utf8PathBuf {
-    let mut missing = Vec::new();
-    let mut current = path;
-    loop {
-        if let Ok(canonical) = current.canonicalize_utf8() {
-            return missing
-                .iter()
-                .rev()
-                .fold(canonical, |acc: Utf8PathBuf, part| acc.join(part));
-        }
-        match (current.parent(), current.file_name()) {
-            (Some(parent), Some(name)) => {
-                missing.push(name);
-                current = parent;
-            }
-            _ => return path.to_path_buf(),
-        }
-    }
 }
 
 #[cfg(test)]

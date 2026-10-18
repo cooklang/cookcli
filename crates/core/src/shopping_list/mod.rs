@@ -179,6 +179,11 @@ pub struct ExtractOptions<'a> {
     /// Collect optional ingredients into [`ShoppingIngredients::optional`]
     /// instead of leaving them out. See [`GenerateRequest::include_optional`].
     pub include_optional: bool,
+    /// Resolve recipes only inside `base_path`: a name or a reference that
+    /// lands outside once links are followed answers as not found. For lists
+    /// built on someone else's behalf — the server sets it; the CLI reads
+    /// under the user's own permissions and leaves it off (#698).
+    pub confined: bool,
 }
 
 /// What [`extract_ingredients`] accumulates into: the ingredients the recipes
@@ -417,6 +422,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         ignore_references: req.ignore_references,
         included_references: None,
         include_optional: req.include_optional,
+        confined: false,
     };
 
     let mut list = ShoppingIngredients::default();
@@ -675,10 +681,17 @@ pub fn extract_ingredients(
     let base_path = ctx.base_path();
     let converter = PARSER.converter();
 
-    let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
+    let (parsed, mut diagnostics) =
+        parse_source(base_path, &recipe.source, recipe.scale, options.confined)?;
 
     let starting_entry = match &recipe.source {
-        RecipeSource::Path(path) => find::get_recipe(base_path, path.as_str()).ok(),
+        RecipeSource::Path(path) => {
+            if options.confined {
+                find::get_recipe_inside(base_path, path.as_str()).ok()
+            } else {
+                find::get_recipe(base_path, path.as_str()).ok()
+            }
+        }
         // An unsaved buffer is no file, so nothing can reference it.
         RecipeSource::Content { .. } => None,
     };
@@ -748,6 +761,7 @@ pub fn extract_ingredients(
             list,
             diagnostics: &mut diagnostics,
             include_optional: options.include_optional,
+            confined: options.confined,
         }
         .expand(
             &parsed,
@@ -782,10 +796,12 @@ pub fn optional_selections(
     ctx: &Context,
     recipe: &ScaledRecipe,
     names: &[String],
+    confined: bool,
 ) -> Result<Outcome<Vec<OptionalSelection>>, CoreError> {
     let converter = PARSER.converter();
     let wanted: Vec<String> = names.iter().map(|n| n.trim().to_lowercase()).collect();
-    let (parsed, diagnostics) = parse_source(ctx.base_path(), &recipe.source, recipe.scale)?;
+    let (parsed, diagnostics) =
+        parse_source(ctx.base_path(), &recipe.source, recipe.scale, confined)?;
 
     let mut accepted = IngredientList::new();
     for entry in parsed.group_ingredients(converter) {
@@ -955,6 +971,20 @@ struct Expansion<'a> {
     diagnostics: &'a mut Vec<Diagnostic>,
     /// See [`ExtractOptions::include_optional`].
     include_optional: bool,
+    /// See [`ExtractOptions::confined`].
+    confined: bool,
+}
+
+impl Expansion<'_> {
+    /// [`find::get_recipe`], or [`find::get_recipe_inside`] when the list is
+    /// confined to the recipe directory.
+    fn get_recipe(&self, name: &str) -> Result<RecipeEntry, CoreError> {
+        if self.confined {
+            find::get_recipe_inside(self.base_path, name)
+        } else {
+            find::get_recipe(self.base_path, name)
+        }
+    }
 }
 
 impl Expansion<'_> {
@@ -1085,7 +1115,7 @@ impl Expansion<'_> {
                 continue;
             }
 
-            let ref_entry = find::get_recipe(self.base_path, &ref_path)?;
+            let ref_entry = self.get_recipe(&ref_path)?;
 
             if let Some(cycle) = cycle_warning(ancestors, &ref_entry, &ref_path) {
                 self.diagnostics.push(cycle);
@@ -1488,10 +1518,15 @@ fn parse_source(
     base_path: &Utf8Path,
     source: &RecipeSource,
     scale: f64,
+    confined: bool,
 ) -> Result<(Recipe, Vec<Diagnostic>), CoreError> {
     match source {
         RecipeSource::Path(path) => {
-            let entry = find::get_recipe(base_path, path.as_str())?;
+            let entry = if confined {
+                find::get_recipe_inside(base_path, path.as_str())?
+            } else {
+                find::get_recipe(base_path, path.as_str())?
+            };
             parse_entry(&entry, path.as_str(), Some(scale))
         }
         RecipeSource::Content { text, name } => {

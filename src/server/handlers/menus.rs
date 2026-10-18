@@ -1,5 +1,6 @@
-use super::common::{check_path, json_error, normalize_tags};
+use super::common::{check_path, json_error, normalize_tags, not_found};
 use crate::server::AppState;
+use crate::util::inside_collection;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -45,10 +46,13 @@ pub fn collect_menus(
 pub async fn list_menus(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<MenuListItem>>, (StatusCode, Json<serde_json::Value>)> {
-    let tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
+    let mut tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
         tracing::error!("Failed to build recipe tree: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    // The glob walk follows linked folders; a listing must not publish the
+    // names of files outside the collection (#698).
+    crate::web::builders::prune_outside(&mut tree, &state.base_path);
 
     let mut menus = Vec::new();
     collect_menus(&tree, &state.base_path, &mut menus);
@@ -131,6 +135,17 @@ pub async fn get_menu(
         )
     })?;
 
+    // `get_recipe` follows links, so `Link/Week.menu` through a
+    // `Link -> /outside` symlink is a hit (#698).
+    if entry
+        .path()
+        .is_some_and(|file| !inside_collection(&state.base_path, file))
+    {
+        // Same answer a missing menu gives, so the link reveals nothing.
+        tracing::error!("{path:?} resolves outside the recipe directory");
+        return Err(not_found("Menu", &path));
+    }
+
     if !entry.is_menu() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -209,10 +224,16 @@ fn api_item(
             scale: factor,
             ..
         } => {
-            // A reference out of the recipe directory is not looked up.
+            // A reference out of the recipe directory is not looked up —
+            // nor one that leaves it through a link once resolved (#698).
             let menu = !crate::util::menu::is_outside_reference(path)
                 && *is_menu.entry(path.clone()).or_insert_with(|| {
-                    crate::util::get_recipe(base_path, path).is_ok_and(|entry| entry.is_menu())
+                    crate::util::get_recipe(base_path, path).is_ok_and(|entry| {
+                        entry.is_menu()
+                            && entry
+                                .path()
+                                .is_some_and(|file| inside_collection(base_path, file))
+                    })
                 });
             // The file the reference names: a recipe's `.cook`, or the
             // `.menu` of a menu used as a meal of this one.

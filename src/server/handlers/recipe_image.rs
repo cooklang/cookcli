@@ -12,12 +12,13 @@ use crate::server::activity;
 use crate::server::{
     fs_atomic,
     handlers::{
-        common::{check_path, is_recipe_request, json_error},
+        common::{check_path, is_recipe_request, json_error, not_found},
         recipe_rename::RECIPE_FILES,
     },
     title_image::{self, PrepareError},
     AppState,
 };
+use crate::util::inside_collection;
 use crate::web::viewer::Viewer;
 use axum::{
     body::Bytes,
@@ -75,7 +76,7 @@ pub async fn recipe_image_get(
     match requested {
         None => picture_state(&state, &path),
         Some((section, step)) => {
-            let slot = step_slot(&find_recipe(&state, &path)?, section, step, &path)?;
+            let slot = step_slot(&find_recipe(&state, &path, false)?, section, step, &path)?;
             step_state(&state, &path, &slot)
         }
     }
@@ -96,7 +97,7 @@ pub async fn recipe_image_put(
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let requested = requested_step(&query)?;
-    let entry = find_recipe(&state, &path)?;
+    let entry = find_recipe(&state, &path, true)?;
     let recipe = recipe_file(&entry, &path)?;
     let slot = requested
         .map(|(section, step)| step_slot(&entry, section, step, &path))
@@ -154,7 +155,7 @@ pub async fn recipe_image_delete(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let _writing = RECIPE_FILES.lock().await;
     let requested = requested_step(&query)?;
-    let entry = find_recipe(&state, &path)?;
+    let entry = find_recipe(&state, &path, true)?;
     let recipe = recipe_file(&entry, &path)?;
     let slot = requested
         .map(|(section, step)| step_slot(&entry, section, step, &path))
@@ -348,7 +349,10 @@ fn step_slot(
     })
 }
 
-fn find_recipe(state: &AppState, path: &str) -> Result<RecipeEntry, ApiError> {
+/// `for_write`: a read answers an outside path like a missing recipe, so the
+/// link reveals nothing; a write refuses plainly, as the recipe's own write
+/// endpoints do.
+fn find_recipe(state: &AppState, path: &str, for_write: bool) -> Result<RecipeEntry, ApiError> {
     check_path(path)?;
     // The lookup opens a name with an extension as it is, so without the
     // recipe-extension rule `/api/recipe_image/config/pantry.conf` read the
@@ -361,13 +365,35 @@ fn find_recipe(state: &AppState, path: &str) -> Result<RecipeEntry, ApiError> {
             json_error(format!("Recipe not found: {path}")),
         ));
     }
-    cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path)).map_err(|e| {
-        tracing::error!("Recipe not found: {path}");
-        (
-            StatusCode::NOT_FOUND,
-            json_error(format!("Recipe not found: {path}: {e}")),
-        )
-    })
+    let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(path))
+        .map_err(|e| {
+            tracing::error!("Recipe not found: {path}");
+            (
+                StatusCode::NOT_FOUND,
+                json_error(format!("Recipe not found: {path}: {e}")),
+            )
+        })?;
+    // `get_recipe` follows links, so `Link/Secret.cook` through a
+    // `Link -> /outside` symlink is a hit; its title and step pictures would
+    // sit beside it, outside too (#698). Same answer a missing recipe gives,
+    // so the link reveals nothing.
+    if entry
+        .path()
+        .is_some_and(|file| !inside_collection(&state.base_path, file))
+    {
+        tracing::error!("{path:?} resolves outside the recipe directory");
+        return Err(if for_write {
+            (
+                StatusCode::BAD_REQUEST,
+                json_error(format!(
+                    "{path} is not inside the recipe directory once links are followed"
+                )),
+            )
+        } else {
+            not_found("Recipe", path)
+        });
+    }
+    Ok(entry)
 }
 
 fn recipe_file(entry: &RecipeEntry, path: &str) -> Result<Utf8PathBuf, ApiError> {
@@ -388,7 +414,7 @@ fn recipe_file(entry: &RecipeEntry, path: &str) -> Result<Utf8PathBuf, ApiError>
 /// `sections` lists every section that has steps, with each step's text and
 /// picture, so the editor draws its step picker from one request.
 fn picture_state(state: &AppState, path: &str) -> Result<Json<serde_json::Value>, ApiError> {
-    let entry = find_recipe(state, path)?;
+    let entry = find_recipe(state, path, false)?;
     let image = entry
         .title_image()
         .clone()
@@ -447,7 +473,7 @@ fn step_state(
     path: &str,
     slot: &StepSlot,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let entry = find_recipe(state, path)?;
+    let entry = find_recipe(state, path, false)?;
     let image =
         crate::web::builders::step_image(&entry, slot.section, slot.step, slot.overall - slot.step)
             .and_then(|image| url_of(state, image.clone()));
