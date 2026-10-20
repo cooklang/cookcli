@@ -66,7 +66,7 @@ jobs:
       # Ubuntu's own rustc is too old for this crate, and unlike rpmbuild,
       # dpkg-deb does not check build dependencies, so rustup is fine here.
       - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
 
