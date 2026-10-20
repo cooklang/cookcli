@@ -1699,9 +1699,9 @@ fn add_accepts_the_quantities_and_dates_readers_use() {
         (Some("500 g"), None, None),
         (Some(".5%kg"), None, None),
         (Some("2%kg"), Some("2025-01-02"), Some("02.01.2026")),
-        // `01/13/2026` is unambiguous: month 13 is not a day, so only the
-        // `%m/%d/%Y` format can read it — `01/02` would parse as `%d/%m/%Y`
-        // first and leave that one untested.
+        // `01/13/2026` is unambiguous: 13 is a day but not a month, so only
+        // the `%m/%d/%Y` format can read it — `01/02` would parse as
+        // `%d/%m/%Y` first and leave that one untested.
         (Some("12"), Some("02/01/2025"), Some("01/13/2026")),
         (Some("1%l"), Some("2025.01.02"), Some("02-01-2026")),
     ] {
@@ -1731,7 +1731,8 @@ fn load_warns_on_a_value_nothing_can_read_back() {
         "[pantry]\n\
          flour = { quantity = \"0g\" }\n\
          salt = { quantity = \"1%kg\", low = \"sometimes\" }\n\
-         sugar = { quantity = \"unlim\" }\n",
+         sugar = { quantity = \"unlim\" }\n\
+         forged = { quantity = \"x\\nWARN looks real\" }\n",
     ))
     .expect("an unreadable value is not fatal");
 
@@ -1743,13 +1744,13 @@ fn load_warns_on_a_value_nothing_can_read_back() {
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("'flour' has a quantity that cannot be read back: 0g")),
+            .any(|m| m.contains("'flour' has a quantity that cannot be read back: \"0g\"")),
         "{messages:?}"
     );
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("'salt' has a low that cannot be read back: sometimes")),
+            .any(|m| m.contains("'salt' has a low that cannot be read back: \"sometimes\"")),
         "{messages:?}"
     );
     // `unlim` is a spelling, not junk.
@@ -1757,6 +1758,14 @@ fn load_warns_on_a_value_nothing_can_read_back() {
         !messages.iter().any(|m| m.contains("'sugar'")),
         "{messages:?}"
     );
+    // A value carrying a newline must stay one message line, escaped.
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("\"x\\nWARN looks real\"")),
+        "{messages:?}"
+    );
+    assert!(!messages.iter().any(|m| m.contains('\n')), "{messages:?}");
 }
 
 /// The `low` refusal must not suggest `unlim` — it is exactly what was just

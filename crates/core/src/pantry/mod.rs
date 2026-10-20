@@ -277,8 +277,10 @@ pub fn load(ctx: &Context) -> Result<Outcome<PantryContents>, CoreError> {
                     if parsed_quantity(value).is_none()
                         && !matches!(value.as_str(), "unlim" | "unlimited")
                     {
+                        // `value` is quoted so a hand-edited newline cannot
+                        // smuggle a second, forged warning into the line.
                         let mut diagnostic = Diagnostic::warning(format!(
-                            "'{}' has a {key} that cannot be read back: {value}",
+                            "'{}' has a {key} that cannot be read back: {value:?}",
                             item.name
                         ));
                         if let Some(path) = path {
