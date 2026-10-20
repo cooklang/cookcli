@@ -100,8 +100,18 @@ pub struct ServerArgs {
     /// --url-prefix "/cook" will make the server available at /cook/ instead
     /// of /. This is useful when running behind a reverse proxy like nginx
     /// that maps a subpath to this server. The prefix must start with "/".
+    /// For a proxy that removes the prefix before forwarding, add
+    /// --proxy-strips-prefix.
     #[arg(long)]
     url_prefix: Option<String>,
+
+    /// The reverse proxy removes --url-prefix before forwarding requests
+    ///
+    /// Routes stay at / while links, redirects and cookies still carry the
+    /// prefix, as Home Assistant ingress, Traefik's StripPrefix or nginx's
+    /// `proxy_pass http://127.0.0.1:9080/;` need.
+    #[arg(long, requires = "url_prefix")]
+    proxy_strips_prefix: bool,
 
     /// Automatically open the web interface in your default browser
     ///
@@ -233,17 +243,27 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
     )?);
 
     let listens_beyond_localhost = args.host.is_some();
+    let proxy_strips_prefix = args.proxy_strips_prefix;
     let state = build_state(ctx, args, Arc::clone(&cors))?;
 
-    if state.url_prefix.is_empty() {
-        println!("Listening on http://{addr}");
+    // Where the server itself answers: without the prefix when the proxy
+    // strips it.
+    let route_prefix = if proxy_strips_prefix {
+        ""
     } else {
-        println!("Listening on http://{addr}{}", state.url_prefix);
+        state.url_prefix.as_str()
+    };
+    println!("Listening on http://{addr}{route_prefix}");
+    if proxy_strips_prefix {
+        println!(
+            "Links start with {}, for a proxy that strips it.",
+            state.url_prefix
+        );
     }
 
     // #[cfg(feature = "ui")]
     if open {
-        let url = format!("http://{addr}{}", state.url_prefix);
+        let url = format!("http://{addr}{route_prefix}");
         println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -350,10 +370,10 @@ async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
             auth::middleware::middleware,
         ));
 
-    let app = if state.url_prefix.is_empty() {
+    let app = if route_prefix.is_empty() {
         inner
     } else {
-        Router::new().nest(&state.url_prefix, inner)
+        Router::new().nest(route_prefix, inner)
     };
 
     // Capture url_prefix before state is consumed by with_state.
