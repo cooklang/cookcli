@@ -877,6 +877,12 @@ async fn pantry_page(
             .with_pantry(cookcli_core::ConfigSource::Path(path));
         match tokio::task::spawn_blocking(move || cookcli_core::pantry::load(&ctx)).await {
             Ok(Ok(outcome)) => {
+                for diagnostic in &outcome.diagnostics {
+                    match diagnostic.location.as_ref().and_then(|l| l.file.as_ref()) {
+                        Some(file) => tracing::warn!("{file}: {}", diagnostic.message),
+                        None => tracing::warn!("{}", diagnostic.message),
+                    }
+                }
                 (sections, counts) =
                     pantry_sections(&outcome.value, chrono::Local::now().date_naive());
             }

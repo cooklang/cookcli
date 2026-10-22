@@ -1687,8 +1687,9 @@ fn pantry() -> ApiSection {
         "pantry",
         "Pantry",
         "Reads and writes `pantry.conf`, a TOML file of what you already have at home. \
-         Quantities are typically `VALUE%UNIT`, e.g. `250%g`, but the field is just a string — \
-         `unlim` and plain counts like `12` appear untouched in the seed data. Every endpoint \
+         Quantities are typically `VALUE%UNIT`, e.g. `250%g`; `unlim` and plain counts like \
+         `12` appear in the seed data, and writes refuse a value nothing could parse back. \
+         Every endpoint \
          here returns 404 when no pantry file is configured. Changes edit only the entry \
          concerned, so comments, blank lines and formatting elsewhere in the file are kept; \
          they need the `shopper` role when sign-in is on.",
@@ -1759,7 +1760,8 @@ fn pantry() -> ApiSection {
                     "body",
                     "string",
                     false,
-                    "Amount as `VALUE%UNIT`, or any other string such as `unlim`.",
+                    "Amount as `VALUE%UNIT` (e.g. `250%g`), a plain count like `12`, or \
+                     `unlim`/`unlimited`. `400` for a value the pantry cannot read back.",
                 ),
                 param(
                     "bought",
@@ -1810,15 +1812,41 @@ fn pantry() -> ApiSection {
                 "Update an item",
                 "Only the fields present in the body are changed; omitted fields keep their \
                  current values, and a body with none of them writes nothing. `404` if the \
-                 section or the item does not exist.",
+                 section or the item does not exist. `400` for a `quantity`, `low`, `bought` \
+                 or `expire` value the pantry cannot read back — the same forms as \
+                 `POST /api/pantry/add` accepts.",
             )
             .params(vec![
                 path_param("section", "Section containing the item."),
                 path_param("name", "Item name."),
-                param("quantity", "body", "string", false, "New amount."),
-                param("bought", "body", "string", false, "New purchase date."),
-                param("expire", "body", "string", false, "New expiry date."),
-                param("low", "body", "string", false, "New low threshold."),
+                param(
+                    "quantity",
+                    "body",
+                    "string",
+                    false,
+                    "New amount, the same forms as `POST /api/pantry/add`.",
+                ),
+                param(
+                    "bought",
+                    "body",
+                    "string",
+                    false,
+                    "New purchase date, the same formats as `POST /api/pantry/add`.",
+                ),
+                param(
+                    "expire",
+                    "body",
+                    "string",
+                    false,
+                    "New expiry date, the same formats as `POST /api/pantry/add`.",
+                ),
+                param(
+                    "low",
+                    "body",
+                    "string",
+                    false,
+                    "New low threshold — a readable amount, never `unlim`.",
+                ),
             ])
             .request(
                 r#"

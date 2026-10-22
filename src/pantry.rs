@@ -168,7 +168,7 @@ pub struct AddArgs {
     /// Name of the ingredient to add
     pub name: String,
 
-    /// Quantity on hand (e.g. "2%kg", "500%ml", "12")
+    /// Quantity on hand (e.g. "2%kg", "500%ml", "12", "unlim")
     #[arg(long)]
     pub quantity: Option<String>,
 
@@ -202,7 +202,7 @@ pub struct UpdateArgs {
     /// Name of the ingredient to update
     pub name: String,
 
-    /// New quantity value (e.g. "2%kg")
+    /// New quantity value (e.g. "2%kg", "unlim")
     #[arg(long)]
     pub quantity: Option<String>,
 
@@ -314,19 +314,20 @@ pub fn run(ctx: &AppContext, args: PantryArgs) -> Result<()> {
 }
 
 fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> Result<()> {
-    let depleted_items: Vec<DepletedItem> =
-        core::depleted(ctx, core::DepletedRequest { all: args.all })
-            .map_err(cli_error)?
-            .into_value()
-            .into_iter()
-            .map(|item| DepletedItem {
-                is_low: item.is_low(),
-                name: item.name,
-                section: item.section,
-                quantity: item.quantity,
-                low_threshold: item.low,
-            })
-            .collect();
+    let outcome =
+        core::depleted(ctx, core::DepletedRequest { all: args.all }).map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let depleted_items: Vec<DepletedItem> = outcome
+        .into_value()
+        .into_iter()
+        .map(|item| DepletedItem {
+            is_low: item.is_low(),
+            name: item.name,
+            section: item.section,
+            quantity: item.quantity,
+            low_threshold: item.low,
+        })
+        .collect();
 
     match format {
         OutputFormat::Human => {
@@ -371,24 +372,26 @@ fn run_depleted(ctx: &AppContext, args: DepletedArgs, format: OutputFormat) -> R
 }
 
 fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> Result<()> {
-    let expiring_list: Vec<ExpiringItem> = core::expiring(
+    let outcome = core::expiring(
         ctx,
         core::ExpiringRequest {
             days: args.days,
             include_unknown: args.include_unknown,
         },
     )
-    .map_err(cli_error)?
-    .into_value()
-    .into_iter()
-    .map(|expiring| ExpiringItem {
-        status: expiry_status(expiring.days_until_expiry),
-        expire_date: expiring.expire_date,
-        days_until_expiry: expiring.days_until_expiry,
-        name: expiring.item.name,
-        section: expiring.item.section,
-    })
-    .collect();
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let expiring_list: Vec<ExpiringItem> = outcome
+        .into_value()
+        .into_iter()
+        .map(|expiring| ExpiringItem {
+            status: expiry_status(expiring.days_until_expiry),
+            expire_date: expiring.expire_date,
+            days_until_expiry: expiring.days_until_expiry,
+            name: expiring.item.name,
+            section: expiring.item.section,
+        })
+        .collect();
 
     match format {
         OutputFormat::Human => {
@@ -446,14 +449,15 @@ fn run_expiring(ctx: &AppContext, args: ExpiringArgs, format: OutputFormat) -> R
 }
 
 fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Result<()> {
-    let matches = core::recipes(
+    let outcome = core::recipes(
         ctx,
         core::RecipesRequest {
             threshold: args.threshold,
         },
     )
-    .map_err(cli_error)?
-    .into_value();
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let matches = outcome.into_value();
 
     let full_matches = matches.full;
     // Core reports partial matches whether or not they were asked for; showing
@@ -541,15 +545,16 @@ fn run_recipes(ctx: &AppContext, args: RecipesArgs, format: OutputFormat) -> Res
 }
 
 fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()> {
-    let plan = core::plan(
+    let outcome = core::plan(
         ctx,
         core::PlanRequest {
             max_ingredients: args.max_ingredients,
             allow_missing: args.allow_missing,
         },
     )
-    .map_err(cli_error)?
-    .into_value();
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let plan = outcome.into_value();
 
     let total_recipes = plan.total_recipes;
     let cookable_count = plan.cookable_recipes();
@@ -691,31 +696,33 @@ fn run_plan(ctx: &AppContext, args: PlanArgs, format: OutputFormat) -> Result<()
 // ---------------------------------------------------------------------------
 
 fn run_list(ctx: &AppContext, args: ListArgs, format: OutputFormat) -> Result<()> {
-    let sections: Vec<ListSection> = core::list(
+    let outcome = core::list(
         ctx,
         core::ListRequest {
             section: args.section.clone(),
         },
     )
-    .map_err(cli_error)?
-    .into_value()
-    .sections
-    .into_iter()
-    .map(|section| ListSection {
-        name: section.name,
-        items: section
-            .items
-            .into_iter()
-            .map(|item| ListItem {
-                name: item.name,
-                quantity: item.quantity,
-                bought: item.bought,
-                expire: item.expire,
-                low: item.low,
-            })
-            .collect(),
-    })
-    .collect();
+    .map_err(cli_error)?;
+    log_diagnostics(&outcome.diagnostics);
+    let sections: Vec<ListSection> = outcome
+        .into_value()
+        .sections
+        .into_iter()
+        .map(|section| ListSection {
+            name: section.name,
+            items: section
+                .items
+                .into_iter()
+                .map(|item| ListItem {
+                    name: item.name,
+                    quantity: item.quantity,
+                    bought: item.bought,
+                    expire: item.expire,
+                    low: item.low,
+                })
+                .collect(),
+        })
+        .collect();
 
     // Core reports what is there and leaves this to the caller: asking for a
     // section that is not in the file is an error here, and always has been.
