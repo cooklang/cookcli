@@ -862,6 +862,28 @@ async fn shopping_list_page(
     }
 }
 
+/// Logs the pantry file's warnings, unless they are the ones already logged:
+/// a page someone keeps open, or reloads, would otherwise repeat them on
+/// every view.
+fn log_pantry_warnings(state: &AppState, diagnostics: &[cookcli_core::Diagnostic]) {
+    let lines: Vec<String> = diagnostics
+        .iter()
+        .map(
+            |diagnostic| match diagnostic.location.as_ref().and_then(|l| l.file.as_ref()) {
+                Some(file) => format!("{file}: {}", diagnostic.message),
+                None => diagnostic.message.clone(),
+            },
+        )
+        .collect();
+    let mut logged = state.pantry_warnings.lock().unwrap();
+    if *logged != lines {
+        for line in &lines {
+            tracing::warn!("{line}");
+        }
+        *logged = lines;
+    }
+}
+
 async fn pantry_page(
     State(state): State<Arc<AppState>>,
     Extension(lang): Extension<LanguageIdentifier>,
@@ -877,12 +899,7 @@ async fn pantry_page(
             .with_pantry(cookcli_core::ConfigSource::Path(path));
         match tokio::task::spawn_blocking(move || cookcli_core::pantry::load(&ctx)).await {
             Ok(Ok(outcome)) => {
-                for diagnostic in &outcome.diagnostics {
-                    match diagnostic.location.as_ref().and_then(|l| l.file.as_ref()) {
-                        Some(file) => tracing::warn!("{file}: {}", diagnostic.message),
-                        None => tracing::warn!("{}", diagnostic.message),
-                    }
-                }
+                log_pantry_warnings(&state, &outcome.diagnostics);
                 (sections, counts) =
                     pantry_sections(&outcome.value, chrono::Local::now().date_naive());
             }

@@ -596,6 +596,7 @@ fn build_state(
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         aisle_lock: tokio::sync::Mutex::new(()),
         pantry_lock: tokio::sync::Mutex::new(()),
+        pantry_warnings: std::sync::Mutex::new(Vec::new()),
         shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
@@ -671,6 +672,9 @@ pub struct AppState {
     pub aisle_lock: tokio::sync::Mutex<()>,
     /// The same for the pantry file.
     pub pantry_lock: tokio::sync::Mutex<()>,
+    /// The pantry file's warnings as last logged, so the pantry page logs
+    /// them once rather than on every view, and again only once they change.
+    pub pantry_warnings: std::sync::Mutex<Vec<String>>,
     /// Broadcasts filesystem changes to `.shopping-list` / `.shopping-checked`
     /// to every open SSE subscriber. `None` means watcher init failed; SSE
     /// clients can still connect but will never receive events.

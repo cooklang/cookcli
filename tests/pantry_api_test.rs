@@ -47,6 +47,15 @@ impl ServerGuard {
         self.dir.path().join("recipes/config/pantry.conf")
     }
 
+    /// How many lines the server has logged so far that contain `text`.
+    fn logged(&self, text: &str) -> usize {
+        std::fs::read_to_string(self.dir.path().join("server-stderr.log"))
+            .expect("read the server log")
+            .lines()
+            .filter(|line| line.contains(text))
+            .count()
+    }
+
     fn pantry_text(&self) -> String {
         std::fs::read_to_string(self.pantry_file()).expect("read pantry.conf")
     }
@@ -114,9 +123,10 @@ async fn try_start_server(pantry: &str) -> Option<ServerGuard> {
         .arg(&recipes)
         .arg("--port")
         .arg(port.to_string());
+    let log = std::fs::File::create(dir.path().join("server-stderr.log")).expect("server log");
     let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(log)
         .spawn()
         .expect("spawn cook server");
 
@@ -435,4 +445,34 @@ async fn the_page_marks_stock_and_expiry_as_the_cli_judges_them() {
     assert!(page.contains(&pill("Running low", 2)));
     assert!(page.contains(&pill("Out of stock", 1)));
     assert!(page.contains(&pill("Expiring soon", 2)));
+}
+
+/// Viewing the pantry page logs the file's warnings once, not on every view,
+/// and again once they change.
+#[tokio::test]
+async fn the_page_logs_a_warning_once_until_it_changes() {
+    let server = start_server("[fridge]\nbutter = \"0g\"\n").await;
+    let view = || async {
+        let resp = reqwest::get(server.url("/pantry")).await.expect("GET");
+        assert_eq!(resp.status(), StatusCode::OK);
+    };
+
+    for _ in 0..3 {
+        view().await;
+    }
+    assert_eq!(server.logged("\"butter\" has a quantity"), 1);
+
+    std::fs::write(
+        server.pantry_file(),
+        "[fridge]\nbutter = \"0g\"\nmilk = \"lots\"\n",
+    )
+    .unwrap();
+    view().await;
+    view().await;
+    assert_eq!(server.logged("\"milk\" has a quantity"), 1);
+    assert_eq!(
+        server.logged("\"butter\" has a quantity"),
+        2,
+        "the new set of warnings is logged whole"
+    );
 }
