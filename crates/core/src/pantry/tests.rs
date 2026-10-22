@@ -1837,7 +1837,8 @@ fn load_warns_on_a_value_nothing_can_read_back() {
          flour = { quantity = \"0g\" }\n\
          salt = { quantity = \"1%kg\", low = \"sometimes\" }\n\
          sugar = { quantity = \"unlim\" }\n\
-         forged = { quantity = \"x\\nWARN looks real\" }\n",
+         forged = { quantity = \"x\\nWARN looks real\" }\n\
+         \"named\\nWARN looks real\" = { quantity = \"0g\" }\n",
     ))
     .expect("an unreadable value is not fatal");
 
@@ -1849,25 +1850,32 @@ fn load_warns_on_a_value_nothing_can_read_back() {
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("'flour' has a quantity that cannot be read back: \"0g\"")),
+            .any(|m| m.contains("\"flour\" has a quantity that cannot be read back: \"0g\"")),
         "{messages:?}"
     );
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("'salt' has a low that cannot be read back: \"sometimes\"")),
+            .any(|m| m.contains("\"salt\" has a low that cannot be read back: \"sometimes\"")),
         "{messages:?}"
     );
     // `unlim` is a spelling, not junk.
     assert!(
-        !messages.iter().any(|m| m.contains("'sugar'")),
+        !messages.iter().any(|m| m.contains("\"sugar\"")),
         "{messages:?}"
     );
-    // A value carrying a newline must stay one message line, escaped.
+    // A value or a name carrying a newline must stay one message line,
+    // escaped.
     assert!(
         messages
             .iter()
             .any(|m| m.contains("\"x\\nWARN looks real\"")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.starts_with("\"named\\nWARN looks real\" has a quantity")),
         "{messages:?}"
     );
     assert!(!messages.iter().any(|m| m.contains('\n')), "{messages:?}");
