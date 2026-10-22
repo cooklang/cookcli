@@ -27,6 +27,8 @@ cook server hash-password
 |--------|-------------|
 | `--host [<ADDRESS>]` | Allow connections from external hosts (default: localhost only). Optionally bind to a specific address. |
 | `-p, --port <PORT>` | Port number (default: 9080) |
+| `--url-prefix <PREFIX>` | Serve the web UI under a subpath, such as `/cook`, behind a reverse proxy. Every route moves under the prefix, and every link, redirect and cookie the server sends starts with it. |
+| `--proxy-strips-prefix` | With `--url-prefix`, for a proxy that removes the prefix before forwarding: routes stay at `/`, while links, redirects and cookies still start with the prefix. See [Behind a proxy that strips the prefix](#behind-a-proxy-that-strips-the-prefix). |
 | `--open` | Automatically open the web interface in your default browser |
 | `--cors-origin <ORIGIN>` | Origin allowed to make cross-origin browser requests, and whose host the server answers at. Repeatable. `*` lets any origin read. Default: none, same-origin only. |
 | `--cors-allow-credentials` | Allow cross-origin requests to carry cookies and credentials. Requires an explicit `--cors-origin`. |
@@ -74,6 +76,12 @@ cook server --cors-origin http://localhost:3000
 # Behind a reverse proxy that passes Host through, name the public origin
 cook server --cors-origin https://cook.example.com
 
+# At https://example.com/cook/, behind a proxy that forwards the /cook prefix
+cook server --url-prefix /cook --cors-origin https://example.com
+
+# The same, behind a proxy that removes /cook before forwarding
+cook server --url-prefix /cook --proxy-strips-prefix --cors-origin https://example.com
+
 # Require sign-in before anyone can change recipes
 cook server user add alice
 cook server --host
@@ -95,6 +103,20 @@ cook server --host
 - A menu can use another menu as a meal (`- @./Brunches/Sunday.menu{}`): its link opens that menu, marked **Menu**, and **Add All to Shopping List** adds what that menu needs too. The editor's **Add recipe** offers menus as well as recipes
 - The UI language is negotiated per request from the browser's `Accept-Language` header — each visitor sees the interface in their own language (supported: `en-US`, `de-DE`, `nl-NL`, `fr-FR`, `es-ES`, `eu-ES`, `sv-SE`, `it-IT`, `ja-JP`). For static sites, see the `--lang` flag of [`cook build web`](build.md#localization).
 - Mobile-friendly responsive layout
+
+## Behind a proxy that strips the prefix
+
+`--url-prefix /cook` assumes the proxy forwards `/cook/recipe/Pizza` as it is, as nginx's `location /cook/ { proxy_pass http://127.0.0.1:9080; }` does. Some proxies remove the prefix instead and forward `/recipe/Pizza`: Traefik's `StripPrefix`, nginx's `proxy_pass http://127.0.0.1:9080/;` (note the trailing `/`), and Home Assistant ingress. Add `--proxy-strips-prefix` for those. The server then answers at `/`, while every link, redirect and cookie it sends still starts with `/cook`, so the browser stays under the proxy's path.
+
+A Home Assistant add-on is shown at `/api/hassio_ingress/<token>/` and can read that path from the Supervisor at start-up:
+
+```bash
+cook server /recipes --host --port 8099 \
+  --url-prefix "$(bashio::addon.ingress_entry)" --proxy-strips-prefix \
+  --cors-origin http://homeassistant.local:8123
+```
+
+As with any proxy that rewrites `Host`, saving from the web UI needs the address you open Home Assistant at named with `--cors-origin` (see [Notes](#notes)).
 
 ## Containers
 

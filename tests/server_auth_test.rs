@@ -204,9 +204,11 @@ async fn try_start(
     envs: &[(&str, &str)],
 ) -> Result<ServerGuard, Fixture> {
     let port = free_port();
+    // Where the server answers: at `/` when a proxy is meant to strip the prefix.
     let prefix = args
         .iter()
         .position(|arg| *arg == "--url-prefix")
+        .filter(|_| !args.contains(&"--proxy-strips-prefix"))
         .map(|i| args[i + 1].to_string())
         .unwrap_or_default();
     let mut cmd = fixture.cook();
@@ -1069,6 +1071,54 @@ async fn sign_in_works_under_a_url_prefix() {
         .await
         .unwrap();
     assert!(home.contains("Sign out"));
+}
+
+/// Home Assistant ingress and other proxies that strip the prefix: routes
+/// stay at `/`, everything the browser is sent still starts with the prefix.
+#[tokio::test]
+async fn a_prefix_stripped_by_the_proxy_is_kept_in_links_only() {
+    let fixture = Fixture::new();
+    fixture.write_users(&[("alice", "secret")]);
+    let server = start(
+        fixture,
+        &["--url-prefix", "/cook", "--proxy-strips-prefix"],
+        &[],
+    )
+    .await;
+
+    let home = get_page(&server, "/", None).await;
+    assert_eq!(home.status(), StatusCode::OK);
+    let html = home.text().await.unwrap();
+    assert!(html.contains("\"/cook/static/favicon.ico\""), "{html}");
+
+    assert_eq!(
+        get_page(&server, "/static/favicon.ico", None)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        get_page(&server, "/cook/static/favicon.ico", None)
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+
+    let edit = get_page(&server, "/edit/Recipe.cook", None).await;
+    assert_eq!(location(&edit), "/cook/login?next=%2Fedit%2FRecipe.cook");
+
+    let resp = sign_in(&server, "alice", "secret", "/").await;
+    assert_eq!(location(&resp), "/cook/");
+    let set_cookie = session_set_cookie(&resp).unwrap();
+    assert!(set_cookie.contains("Path=/cook;"), "{set_cookie}");
+    let cookie = session_cookie(&resp);
+
+    assert_eq!(
+        put_recipe(&server, "Stripped", Some(&cookie))
+            .await
+            .status(),
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
