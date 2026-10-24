@@ -15,7 +15,13 @@ jobs:
   claude-review:
     # A draft is still being worked on, and every push to it would post a
     # fresh review comment. Review once it is marked ready instead.
-    if: ${{ !github.event.pull_request.draft }}
+    #
+    # release-please opens its release PR as github-actions[bot], which the
+    # action refuses (see allowed_bots below), so the check failed on every
+    # release. The PR is a version bump and a generated changelog, and the
+    # changes it lists were each reviewed in their own PR: skip it rather than
+    # allow the bot.
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.login != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
