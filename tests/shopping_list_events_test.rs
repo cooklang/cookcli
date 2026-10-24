@@ -13,6 +13,8 @@
 
 #![cfg(feature = "server")]
 
+mod common;
+
 use serde_json::{json, Value};
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
@@ -75,11 +77,12 @@ async fn try_start_server() -> Option<ServerGuard> {
     write_fixture(&dir);
 
     let port = free_port();
-    let child = Command::new(assert_cmd::cargo::cargo_bin("cook"))
-        .arg("server")
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin("cook"));
+    cmd.arg("server")
         .arg(dir.path())
         .arg("--port")
-        .arg(port.to_string())
+        .arg(port.to_string());
+    let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -117,9 +120,16 @@ struct Events {
 }
 
 impl Events {
-    /// Subscribe. The server subscribes a connection before answering it, so
-    /// every change made after this returns is announced on this stream.
+    /// Subscribe, once the fixture's own writes have passed. The server
+    /// subscribes a connection before answering it, so every change made after
+    /// this returns is announced on this stream.
     async fn open(server: &ServerGuard) -> Events {
+        let mut events = Events::subscribe(server).await;
+        events.settle().await;
+        events
+    }
+
+    async fn subscribe(server: &ServerGuard) -> Events {
         let response = reqwest::get(server.url("/api/shopping_list/events"))
             .await
             .expect("open the event stream");
@@ -132,6 +142,23 @@ impl Events {
             response,
             unread: String::new(),
         }
+    }
+
+    /// Discard changes until none arrives for a second.
+    ///
+    /// The fixture is written just before the server starts its watcher.
+    /// inotify only reports what happens after a watch is added, but macOS
+    /// FSEvents can still deliver writes made moments before its stream
+    /// started, so a `list` change nobody made would otherwise reach the
+    /// first assertion — both tests failed that way on macOS runners now and
+    /// then. A second is five times the watcher's 200 ms debounce.
+    async fn settle(&mut self) {
+        for _ in 0..10 {
+            if self.next_change(Duration::from_secs(1)).await.is_none() {
+                return;
+            }
+        }
+        panic!("the event stream kept announcing changes nobody made");
     }
 
     /// The data of the next `change` event, or `None` if none arrives within
