@@ -47,6 +47,10 @@
                         class="language-btn btn {% if tr.lang_string() == "ja-JP" %}btn-primary{% endif %}">
                     🇯🇵 日本語
                 </button>
+                <button onclick="setLanguage('el-GR')" aria-pressed="{% if tr.lang_string() == "el-GR" %}true{% else %}false{% endif %}"
+                        class="language-btn btn {% if tr.lang_string() == "el-GR" %}btn-primary{% endif %}">
+                    🇬🇷 Ελληνικά
+                </button>
             </div>
             <p class="text-sm text-muted mt-3">Your language preference will be saved in a cookie.</p>
         </div>
