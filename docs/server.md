@@ -193,7 +193,7 @@ menus, follow the feeds and pick a language, and nothing else:
 
 - The shopping list and pantry links, the editing controls and the
   **Add to shopping list** buttons are gone, and the preferences page only
-  offers the language.
+  offers the language and [how to browse](#browsing-by-course-and-tag).
 - Every other page and API, including any file in the recipe directory that
   is not a picture, answers as if it needed sign-in: a page sends the browser
   to sign in and back, an API request gets `401`.
@@ -319,6 +319,31 @@ no time zone data, so it logs in UTC unless you mount the host's zone, e.g.
 `-v /etc/localtime:/etc/localtime:ro`.
 
 Changes made to the files directly, outside the server, are not listed.
+
+## Browsing by course and tag
+
+The recipe list shows the recipe directory's folders. On the preferences page,
+**Browse recipes by → Course** switches the front page, for that browser only,
+to one card per course that recipes declare in their front matter, plus one for
+the recipes that declare none:
+
+```yaml
+---
+course: dessert
+tags: [chocolate, quick]
+---
+```
+
+`category` is read too, and a recipe listing several courses (`course: [side,
+lunch]` or `course: side, lunch`) appears under each. Courses are matched
+without regard to case. A folder opened by its link still lists the folder.
+
+Every course has its page at `/course/<course>`, and the recipes without one
+are at `/no-course`. Each tag likewise lists its recipes at `/tag/<tag>`: tags
+on recipe cards and recipe pages, and a recipe's course, link to them. These
+pages list recipes from every folder, each card naming the folder it is in. A
+static site built with `cook build web` has no such pages, and its tags are not
+links.
 
 ## Meal plans
 

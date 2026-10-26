@@ -79,3 +79,7 @@ sort-modified = Ändrad
 sort-created = Skapad
 sort-direction-toggle = Byt sorteringsriktning
 random-recipe = Slumpmässigt recept
+
+# Course and tag lists
+course-none = Utan rätt
+recipe-list-empty = Inga recept hittades.

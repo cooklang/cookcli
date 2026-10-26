@@ -26,3 +26,9 @@ pref-upload-error = Fel vid uppladdning av konfiguration
 # Features
 pref-features = Funktioner
 pref-features-desc = Välj vilka funktioner som visas i navigeringsfältet.
+
+# Browse recipes by
+pref-browse-by = Bläddra bland recept efter
+pref-browse-by-desc = Välj hur receptlistan ordnas: efter mapp, eller efter den rätt som varje recept anger.
+browse-by-folder = Mapp
+browse-by-course = Rätt

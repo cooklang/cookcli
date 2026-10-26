@@ -223,6 +223,11 @@ mod filters {
     use askama::Result;
     use url::Url;
 
+    /// A course or tag as one URL path segment: `/` and `?` included.
+    pub fn urlpart(value: &str) -> Result<String> {
+        Ok(urlencoding::encode(value).into_owned())
+    }
+
     pub fn hostname(url: &str) -> Result<String> {
         Ok(Url::parse(url)
             .ok()
@@ -309,6 +314,26 @@ pub struct SearchTemplate {
     /// The query as typed, trimmed. Never empty: an empty search goes to the
     /// recipe list instead.
     pub query: String,
+    pub items: Vec<RecipeItem>,
+    /// `items.len()`, for `tr.tn`.
+    pub count: usize,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    pub viewer: Viewer,
+}
+
+/// A list of recipes from across the collection: one course, the recipes
+/// declaring none, or one tag.
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "recipe_list.html")]
+pub struct RecipeListTemplate {
+    pub active: String,
+    /// The heading: the course as recipes write it, `#tag`, or "No course".
+    pub title: String,
     pub items: Vec<RecipeItem>,
     /// `items.len()`, for `tr.tn`.
     pub count: usize,
@@ -923,6 +948,10 @@ pub struct RecipeItem {
     /// from different folders sit side by side. `None` in a folder listing.
     #[serde(default)]
     pub folder: Option<String>,
+    /// Where a directory card leads when it is not a folder: a course on the
+    /// course index. `None` links `/directory/{path}`.
+    #[serde(default)]
+    pub href: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1236,6 +1265,7 @@ impl_into_response!(
     ErrorTemplate,
     RecipesTemplate,
     SearchTemplate,
+    RecipeListTemplate,
     RecipeTemplate,
     MenuTemplate,
     ShoppingListTemplate,

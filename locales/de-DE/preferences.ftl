@@ -26,3 +26,9 @@ pref-upload-error = Fehler beim Hochladen der Konfiguration
 # Features
 pref-features = Funktionen
 pref-features-desc = Wähle, welche Funktionen in der Navigationsleiste angezeigt werden.
+
+# Browse recipes by
+pref-browse-by = Rezepte ordnen nach
+pref-browse-by-desc = Wähle, wie die Rezeptliste geordnet ist: nach Ordner oder nach dem Gang, den jedes Rezept angibt.
+browse-by-folder = Ordner
+browse-by-course = Gang

@@ -33,6 +33,10 @@ pub struct FeatureFlags {
     /// advertise them for feed-reader autodiscovery. Always on for `cook server`; `cook build
     /// web` writes the feeds only with `--feed`.
     pub feeds: bool,
+    /// The `browse_by=course` cookie: the recipe list opens on the courses
+    /// recipes declare in their `course` metadata instead of the folders.
+    /// A static site has no course pages, so `cook build web` leaves it off.
+    pub browse_by_course: bool,
 }
 
 impl Default for FeatureFlags {
@@ -41,6 +45,7 @@ impl Default for FeatureFlags {
             show_shopping_list: true,
             show_pantry: true,
             feeds: true,
+            browse_by_course: false,
         }
     }
 }
@@ -48,6 +53,7 @@ impl Default for FeatureFlags {
 /// Parse feature flag cookies from request headers.
 /// Absent cookie → feature enabled (default true).
 /// Cookie value "0" → disabled. Any other value → enabled.
+/// `browse_by` is the exception: only `course` turns it on.
 #[cfg(feature = "server")]
 pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
     let mut flags = FeatureFlags::default();
@@ -60,6 +66,7 @@ pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
                     match parts[0] {
                         "show_shopping_list" => flags.show_shopping_list = parts[1] != "0",
                         "show_pantry" => flags.show_pantry = parts[1] != "0",
+                        "browse_by" => flags.browse_by_course = parts[1] == "course",
                         _ => {}
                     }
                 }
@@ -206,6 +213,14 @@ pub async fn features_middleware(
             },
         ),
         ("show_pantry", if features.show_pantry { "1" } else { "0" }),
+        (
+            "browse_by",
+            if features.browse_by_course {
+                "course"
+            } else {
+                "folder"
+            },
+        ),
     ] {
         let cookie = format!("{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax");
         if let Ok(header_val) = cookie.parse() {
@@ -320,5 +335,13 @@ mod tests {
         // Anything that isn't "0" is truthy
         let flags = parse_feature_flags(&make_cookie_headers("show_shopping_list=yes"));
         assert!(flags.show_shopping_list);
+    }
+
+    #[test]
+    fn test_browse_by_course_only_from_its_own_value() {
+        assert!(!parse_feature_flags(&HeaderMap::new()).browse_by_course);
+        assert!(parse_feature_flags(&make_cookie_headers("browse_by=course")).browse_by_course);
+        assert!(!parse_feature_flags(&make_cookie_headers("browse_by=folder")).browse_by_course);
+        assert!(!parse_feature_flags(&make_cookie_headers("browse_by=1")).browse_by_course);
     }
 }

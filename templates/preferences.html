@@ -51,7 +51,27 @@
             <p class="text-sm text-muted mt-3">Your language preference will be saved in a cookie.</p>
         </div>
 
-        {# --recipes-only: a guest only picks a language. #}
+        {# A static site has no course pages to browse by. #}
+        {% if !static_mode %}
+        <div class="card p-6">
+            <h2 class="text-title font-semibold mb-2 text-text">{{ tr.t("pref-browse-by") }}</h2>
+            <p class="text-sm text-muted mb-4">{{ tr.t("pref-browse-by-desc") }}</p>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="setBrowseBy('folder')" id="browse-by-folder"
+                        aria-pressed="{% if features.browse_by_course %}false{% else %}true{% endif %}"
+                        class="btn {% if !features.browse_by_course %}btn-primary{% endif %}">
+                    📁 {{ tr.t("browse-by-folder") }}
+                </button>
+                <button onclick="setBrowseBy('course')" id="browse-by-course"
+                        aria-pressed="{% if features.browse_by_course %}true{% else %}false{% endif %}"
+                        class="btn {% if features.browse_by_course %}btn-primary{% endif %}">
+                    🍽️ {{ tr.t("browse-by-course") }}
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+        {# --recipes-only: a guest only picks a language and how to browse. #}
         {% if !viewer.recipes_only() %}
         <!-- Features -->
         {% if !static_mode %}
@@ -216,6 +236,12 @@
         const val = current ? '0' : '1';
         const maxAge = 365 * 24 * 60 * 60;
         document.cookie = `${name}=${val}; path={{ prefix }}/; max-age=${maxAge}; SameSite=Lax`;
+        window.location.reload();
+    }
+
+    function setBrowseBy(value) {
+        const maxAge = 365 * 24 * 60 * 60;
+        document.cookie = `browse_by=${value}; path={{ prefix }}/; max-age=${maxAge}; SameSite=Lax`;
         window.location.reload();
     }
 

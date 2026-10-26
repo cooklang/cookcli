@@ -26,3 +26,9 @@ pref-upload-error = 設定をアップロードできませんでした
 # Features
 pref-features = 機能
 pref-features-desc = ナビゲーションバーに表示する機能を選んでください。
+
+# Browse recipes by
+pref-browse-by = レシピの表示方法
+pref-browse-by-desc = レシピ一覧の分け方を選んでください：フォルダごと、または各レシピの種類ごと。
+browse-by-folder = フォルダ
+browse-by-course = 種類

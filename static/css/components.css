@@ -505,6 +505,15 @@
         color: var(--text-muted);
     }
 
+    /* A tag or course that opens the list of its recipes. */
+    a.tag,
+    a.metadata-pill { text-decoration: none; }
+    a.tag:hover,
+    a.metadata-pill:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
+
     /* Neutral bordered pill. The metadata-* key classes stay in the markup as
        hooks but carry no colour of their own any more. */
     .metadata-pill {
@@ -552,6 +561,29 @@
     }
 
     .recipe-card:hover { border-color: var(--border-strong); }
+
+    /* A recipe card is a box, not a link, so its tags can link to their own
+       pages: the title's link covers the card, the tags sit above it, and the
+       card shows the title link's focus. A folder card is still a link. */
+    div.recipe-card { position: relative; }
+    .recipe-card-link {
+        color: inherit;
+        text-decoration: none;
+    }
+    .recipe-card-link::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+    }
+    .recipe-card-link:focus-visible { outline: none; }
+    .recipe-card:has(.recipe-card-link:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .recipe-card .tag-link {
+        position: relative;
+        z-index: 1;
+    }
 
     .recipe-card-icon {
         width: 64px;

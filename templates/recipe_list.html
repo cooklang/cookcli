@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Cook{% endblock %}
+
+{% block content %}
+<div>
+    <nav class="mb-4">
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
+        </ol>
+    </nav>
+
+    <h1 class="text-display font-bold text-text mb-2">{{ title }}</h1>
+
+    {% if items.is_empty() %}
+    <p id="recipe-list-summary" class="text-faint text-center py-8">{{ tr.t("recipe-list-empty") }}</p>
+    {% else %}
+    <p id="recipe-list-summary" class="text-sm text-muted mb-8">{{ tr.tn("recipes-count", count) }}</p>
+    <div id="recipe-list-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for item in items %}
+        {% include "recipe_card.html" %}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

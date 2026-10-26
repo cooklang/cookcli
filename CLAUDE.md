@@ -311,7 +311,7 @@ Component classes live in `static/css/components.css` and resolve every colour t
 - `.btn`, `.btn-primary`, `.btn-danger`, `.btn-sm` - 40px controls (32px compact); one accent-filled primary per view
 - `.icon-btn` - 36px icon-only control
 - `.nav-card`, `.nav-pill`, `.menu-item` - Navigation card, pills, and small-screen menu rows
-- `.recipe-card`, `.recipe-card-icon`, `.recipe-card-title` - Index cards with a flat icon disc
+- `.recipe-card`, `.recipe-card-icon`, `.recipe-card-title` - Index cards with a flat icon disc; a recipe card is a `div` whose title link (`.recipe-card-link`) covers it, so its tags can be links of their own (folder cards are still `a`)
 - `.ingredient-badge`, `.cookware-badge`, `.timer-badge` - Inline recipe entities (tint, dotted underline, chip)
 - `.metadata-pill`, `.tag` - Neutral bordered pills
 - `.step-box`, `.step-number`, `.step-body`, `.step-refs` - Boxed recipe steps

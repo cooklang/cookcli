@@ -124,7 +124,11 @@
             {% if !tags.is_empty() %}
             <div class="flex flex-wrap gap-2">
                 {% for tag in tags %}
+                {% if static_mode %}
                 <span class="tag">#{{ tag }}</span>
+                {% else %}
+                <a href="{{ prefix }}/tag/{{ tag|urlpart }}" class="tag tag-link">#{{ tag }}</a>
+                {% endif %}
                 {% endfor %}
             </div>
             {% endif %}
@@ -182,7 +186,11 @@
 
                 {% match metadata.course %}
                 {% when Some with (course) %}
+                {% if static_mode %}
                 <span class="metadata-pill metadata-course">🍽️ {{ course }}</span>
+                {% else %}
+                <a href="{{ prefix }}/course/{{ course|urlpart }}" class="metadata-pill metadata-course">🍽️ {{ course }}</a>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 

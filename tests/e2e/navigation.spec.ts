@@ -20,13 +20,14 @@ test.describe('Navigation', () => {
   });
 
   test('should navigate to recipe details', async ({ page }) => {
-    // Find recipes that are not directories
-    const recipeCards = page.locator('a.recipe-card[href^="/recipe/"]');
+    // Find recipes that are not directories: a recipe card is linked by its
+    // title, which covers the card.
+    const recipeCards = page.locator('a.recipe-card-link[href^="/recipe/"]');
     const count = await recipeCards.count();
 
     if (count > 0) {
       const firstRecipe = recipeCards.first();
-      const recipeName = await firstRecipe.locator('.recipe-card-title').textContent();
+      const recipeName = await firstRecipe.textContent();
 
       await firstRecipe.click();
       await page.waitForLoadState('networkidle');
@@ -139,7 +140,7 @@ test.describe('Navigation', () => {
     const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops"]');
     await expect(simpleRecipeCard).toBeVisible();
 
-    const recipeName = await simpleRecipeCard.locator('.recipe-card-title').textContent();
+    const recipeName = await simpleRecipeCard.textContent();
     expect(recipeName).toContain('Sicilian-style Scottadito Lamb Chops');
 
     await simpleRecipeCard.click();

@@ -71,3 +71,7 @@ sort-modified = 更新日
 sort-created = 作成日
 sort-direction-toggle = 昇順・降順を切り替え
 random-recipe = ランダムなレシピ
+
+# Course and tag lists
+course-none = 種類なし
+recipe-list-empty = レシピが見つかりません。

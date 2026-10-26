@@ -75,3 +75,7 @@ sort-modified = Aldatua
 sort-created = Sortua
 sort-direction-toggle = Ordena aldatu
 random-recipe = Ausazko errezeta
+
+# Course and tag lists
+course-none = Platerik gabe
+recipe-list-empty = Ez da errezetarik aurkitu.

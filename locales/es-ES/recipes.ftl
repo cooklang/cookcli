@@ -79,3 +79,7 @@ sort-modified = Modificado
 sort-created = Creado
 sort-direction-toggle = Invertir orden
 random-recipe = Receta al azar
+
+# Course and tag lists
+course-none = Sin plato
+recipe-list-empty = No se encontraron recetas.

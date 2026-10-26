@@ -26,3 +26,9 @@ pref-upload-error = Fout bij het uploaden van configuratie
 # Features
 pref-features = Functies
 pref-features-desc = Kies welke functies in de navigatiebalk worden weergegeven.
+
+# Browse recipes by
+pref-browse-by = Recepten bekijken per
+pref-browse-by-desc = Kies hoe de receptenlijst is ingedeeld: per map, of per gang die elk recept opgeeft.
+browse-by-folder = Map
+browse-by-course = Gang

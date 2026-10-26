@@ -59,6 +59,9 @@ const WRITES: &[(&str, Capability)] = &[
 /// a route added later included, is out of their reach.
 const RECIPE_READS: &[&str] = &[
     "/directory",
+    "/course",
+    "/no-course",
+    "/tag",
     "/random",
     "/recipe",
     "/search",
@@ -154,10 +157,15 @@ pub async fn middleware(
             };
         }
         // Leaves the visitor's own choice in its cookie alone, for when they
-        // sign in.
+        // sign in. How they browse recipes is theirs to keep.
+        let browse_by_course = request
+            .extensions()
+            .get::<FeatureFlags>()
+            .is_some_and(|features| features.browse_by_course);
         request.extensions_mut().insert(FeatureFlags {
             show_shopping_list: false,
             show_pantry: false,
+            browse_by_course,
             ..FeatureFlags::default()
         });
     }
@@ -384,6 +392,9 @@ mod tests {
         for path in [
             "/",
             "/directory/Mains",
+            "/course/dessert",
+            "/no-course",
+            "/tag/quick",
             "/random",
             "/random/Mains",
             "/recipe/Soup.cook",
@@ -429,6 +440,8 @@ mod tests {
             "/api/anything-added-later",
             // Look-alikes of allowed paths.
             "/recipes",
+            "/courses",
+            "/tags",
             "/preferences-backup",
             "/api/searchx",
             "/searchx",

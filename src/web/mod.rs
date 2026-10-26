@@ -29,6 +29,7 @@
 
 use rust_embed::RustEmbed;
 
+pub mod browse;
 pub mod builders;
 pub(crate) mod i18n;
 pub mod language;

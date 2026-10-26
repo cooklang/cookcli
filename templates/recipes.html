@@ -96,10 +96,10 @@
     <div id="recipes-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for item in items %}
         {% if item.is_directory %}
-        <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
+        <a href="{% if let Some(href) = item.href %}{{ href }}{% else %}{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
             <div class="p-6 flex-1">
                 <div class="recipe-card-icon">
-                    <span>📁</span>
+                    <span>{% if item.href.is_some() %}🍽️{% else %}📁{% endif %}</span>
                 </div>
                 <h2 class="recipe-card-title">{{ item.name }}</h2>
                 {% match item.count %}

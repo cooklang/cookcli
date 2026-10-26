@@ -1,7 +1,9 @@
-{#- One recipe or menu as a card: the folder listing and the search results.
-    Expects `item` (a `RecipeItem`), `prefix` and `static_mode` in scope. -#}
-<a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
-   data-type="recipe"
+{#- One recipe or menu as a card: the folder listing, search results, and the
+    course and tag lists. Expects `item` (a `RecipeItem`), `prefix` and
+    `static_mode` in scope.
+    The title link stretches over the whole card (`.recipe-card-link`), so the
+    card is not itself a link: the tags inside it link to their own pages. -#}
+<div data-type="recipe"
    data-name="{{ item.name }}"
    {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
    {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
@@ -19,7 +21,7 @@
         </div>
     {% endmatch %}
         <div class="flex flex-wrap items-center gap-2">
-            <h2 class="recipe-card-title">{{ item.name }}</h2>
+            <h2 class="recipe-card-title"><a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}" class="recipe-card-link">{{ item.name }}</a></h2>
             {% if item.is_menu %}
             <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
             {% endif %}
@@ -35,7 +37,11 @@
         {% if !item.tags.is_empty() %}
         <div class="mt-3 flex flex-wrap gap-2">
             {% for tag in item.tags.iter().take(3) %}
+            {% if static_mode %}
             <span class="tag">{{ tag }}</span>
+            {% else %}
+            <a href="{{ prefix }}/tag/{{ tag|urlpart }}" class="tag tag-link">{{ tag }}</a>
+            {% endif %}
             {% endfor %}
             {% if item.tags.len() > 3 %}
             <span class="text-xs text-faint">+{{ item.tags.len() - 3 }}</span>
@@ -43,4 +49,4 @@
         </div>
         {% endif %}
     </div>
-</a>
+</div>

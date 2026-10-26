@@ -79,3 +79,7 @@ sort-modified = Modified
 sort-created = Created
 sort-direction-toggle = Toggle sort direction
 random-recipe = Random recipe
+
+# Course and tag lists
+course-none = No course
+recipe-list-empty = No recipes found.

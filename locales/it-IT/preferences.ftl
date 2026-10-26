@@ -26,3 +26,9 @@ pref-upload-error = Errore durante il caricamento della configurazione
 # Features
 pref-features = Funzionalità
 pref-features-desc = Scegli quali funzionalità mostrare nella barra di navigazione.
+
+# Browse recipes by
+pref-browse-by = Sfoglia le ricette per
+pref-browse-by-desc = Scegli come organizzare l'elenco delle ricette: per cartella o per la portata indicata da ogni ricetta.
+browse-by-folder = Cartella
+browse-by-course = Portata

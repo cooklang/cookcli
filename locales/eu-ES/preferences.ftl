@@ -26,3 +26,9 @@ pref-upload-error = Errorea konfigurazioa igotzerakoan
 # Features
 pref-features = Eginbideak
 pref-features-desc = Aukeratu nabigazio-barran zer eginbide erakutsi nahi duzun.
+
+# Browse recipes by
+pref-browse-by = Arakatu errezetak honen arabera
+pref-browse-by-desc = Aukeratu nola antolatu errezeten zerrenda: karpetaren arabera, edo errezeta bakoitzak adierazten duen plateraren arabera.
+browse-by-folder = Karpeta
+browse-by-course = Platera

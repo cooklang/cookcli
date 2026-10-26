@@ -26,3 +26,9 @@ pref-upload-error = Error uploading configuration
 # Features
 pref-features = Features
 pref-features-desc = Choose which features appear in the navigation bar.
+
+# Browse recipes by
+pref-browse-by = Browse recipes by
+pref-browse-by-desc = Choose how the recipe list is organized: by folder, or by the course each recipe declares.
+browse-by-folder = Folder
+browse-by-course = Course

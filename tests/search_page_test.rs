@@ -141,7 +141,7 @@ async fn lists_every_match_with_its_folder() {
     assert!(page.contains("📁 Mains/Rice Dishes"), "{page}");
     assert!(page.contains(r#"href="/recipe/Mains/Roast%20Chicken.cook""#));
     assert!(
-        page.contains(r#"<span class="tag">dinner</span>"#),
+        page.contains(r#"<a href="/tag/dinner" class="tag tag-link">dinner</a>"#),
         "{page}"
     );
     // The menu mentions the roast, and is marked as a menu.

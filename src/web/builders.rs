@@ -163,6 +163,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             modified_at,
             created_at,
             folder: None,
+            href: None,
         });
     }
 
@@ -171,6 +172,13 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         (false, true) => std::cmp::Ordering::Greater,
         _ => natural_cmp(&a.name, &b.name),
     });
+
+    // Browsing by course, the front page lists the courses recipes declare
+    // instead of its folders, read from the tree walked above. A static site
+    // has no course pages to link to.
+    if features.browse_by_course && sub_path.is_none() && !static_mode {
+        items = crate::web::browse::course_cards(&tree, base_path, url_prefix, &lang);
+    }
 
     let todays_menu = if sub_path.is_none() {
         // The date search follows links; on the server a menu it finds
@@ -252,6 +260,49 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     })
 }
 
+/// A recipe or menu as a card in a list drawn from several folders — search
+/// results, a course, a tag — labelled with the folder it sits in.
+/// `relative_path` is the file's path from `base_path`; `entry` gives the
+/// tags and picture, and is `None` when its front matter could not be read.
+pub(crate) fn listed_recipe_item(
+    base_path: &Utf8Path,
+    url_prefix: &str,
+    entry: Option<&cooklang_find::RecipeEntry>,
+    relative_path: &Utf8Path,
+    name: String,
+) -> RecipeItem {
+    // Joined with `/` whatever the platform's separator is.
+    let url_path = |path: &Utf8Path| {
+        path.components()
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let folder = relative_path
+        .parent()
+        .map(url_path)
+        .filter(|parent| !parent.is_empty());
+
+    RecipeItem {
+        name,
+        path: crate::util::encode_url_path(&url_path(relative_path)),
+        is_directory: false,
+        count: None,
+        description: None,
+        tags: entry.map(|e| e.tags()).unwrap_or_default(),
+        image_path: entry.and_then(|e| {
+            e.title_image()
+                .clone()
+                .and_then(|img| get_image_path(base_path, url_prefix, img))
+        }),
+        is_menu: relative_path.extension() == Some("menu"),
+        modified_at: None,
+        created_at: None,
+        folder,
+        href: None,
+    }
+}
+
 /// One chunk of a name for natural sorting: a run of digits compared by
 /// value, or a run of anything else compared as lowercase text.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -303,7 +354,7 @@ fn natural_key(name: &str) -> Vec<NaturalChunk> {
 
 /// Case-insensitive natural ordering. Ties (names that differ only in case
 /// or leading zeros) fall back to byte order so the sort stays deterministic.
-fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub(crate) fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     natural_key(a).cmp(&natural_key(b)).then_with(|| a.cmp(b))
 }
 

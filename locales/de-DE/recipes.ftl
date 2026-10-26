@@ -79,3 +79,7 @@ sort-modified = Geändert
 sort-created = Erstellt
 sort-direction-toggle = Sortierrichtung umkehren
 random-recipe = Zufälliges Rezept
+
+# Course and tag lists
+course-none = Ohne Gang
+recipe-list-empty = Keine Rezepte gefunden.

@@ -40,6 +40,9 @@ pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
         .route("/directory/{*path}", get(recipes_directory))
+        .route("/course/{course}", get(course_page))
+        .route("/no-course", get(no_course_page))
+        .route("/tag/{tag}", get(tag_page))
         .route("/random", get(random_recipe_page))
         .route("/random/{*path}", get(random_recipe_directory))
         .route("/recipe/{*path}", get(recipe_page))
@@ -107,6 +110,75 @@ async fn recipes_handler(
     }
 }
 
+async fn course_page(
+    Path(course): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let course = course.trim().to_string();
+    let filter = crate::web::browse::RecipeFilter::Course(&course);
+    let title = crate::web::browse::course_title(&course);
+    recipe_list_page(&state, filter, title, lang, features, viewer)
+}
+
+async fn no_course_page(
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    use fluent_templates::Loader;
+    let title = crate::web::i18n::LOCALES.lookup(&lang, "course-none");
+    let filter = crate::web::browse::RecipeFilter::NoCourse;
+    recipe_list_page(&state, filter, title, lang, features, viewer)
+}
+
+async fn tag_page(
+    Path(tag): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let tag = tag.trim().to_string();
+    let filter = crate::web::browse::RecipeFilter::Tag(&tag);
+    recipe_list_page(&state, filter, format!("#{tag}"), lang, features, viewer)
+}
+
+fn recipe_list_page(
+    state: &AppState,
+    filter: crate::web::browse::RecipeFilter<'_>,
+    title: String,
+    lang: LanguageIdentifier,
+    features: FeatureFlags,
+    viewer: Viewer,
+) -> axum::response::Response {
+    let items =
+        match crate::web::browse::filtered_items(&state.base_path, &state.url_prefix, filter) {
+            Ok(items) => items,
+            Err(e) => {
+                tracing::error!("Failed to list recipes: {:?}", e);
+                return error_page(lang, &state.url_prefix, &e, features, viewer);
+            }
+        };
+
+    RecipeListTemplate {
+        active: "recipes".to_string(),
+        title,
+        count: items.len(),
+        items,
+        tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
+        static_mode: false,
+        repo_url: None,
+        features,
+        viewer,
+    }
+    .into_response()
+}
+
 #[derive(Deserialize)]
 struct SearchPageQuery {
     #[serde(default)]
@@ -163,40 +235,18 @@ fn search_result_item(
     // The search has read the file already; this reads its front matter
     // again for the tags and picture, which `SearchHit` does not carry.
     let entry = cooklang_find::RecipeEntry::from_path(hit.path.clone()).ok();
-    // Joined with `/` whatever the platform's separator is.
-    let url_path = |path: &camino::Utf8Path| {
-        path.components()
-            .map(|c| c.as_str())
-            .collect::<Vec<_>>()
-            .join("/")
-    };
-    let folder = hit
-        .relative_path
-        .parent()
-        .map(url_path)
-        .filter(|parent| !parent.is_empty());
-
-    RecipeItem {
-        name: hit
-            .name
-            .clone()
-            .or_else(|| hit.path.file_stem().map(str::to_string))
-            .unwrap_or_default(),
-        path: crate::util::encode_url_path(&url_path(&hit.relative_path)),
-        is_directory: false,
-        count: None,
-        description: None,
-        tags: entry.as_ref().map(|e| e.tags()).unwrap_or_default(),
-        image_path: entry.as_ref().and_then(|e| {
-            e.title_image()
-                .clone()
-                .and_then(|img| crate::web::builders::get_image_path(base_path, url_prefix, img))
-        }),
-        is_menu: hit.path.extension() == Some("menu"),
-        modified_at: None,
-        created_at: None,
-        folder,
-    }
+    let name = hit
+        .name
+        .clone()
+        .or_else(|| hit.path.file_stem().map(str::to_string))
+        .unwrap_or_default();
+    crate::web::builders::listed_recipe_item(
+        base_path,
+        url_prefix,
+        entry.as_ref(),
+        &hit.relative_path,
+        name,
+    )
 }
 
 async fn random_recipe_page(
