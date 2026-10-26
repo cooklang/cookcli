@@ -300,6 +300,26 @@ pub struct ErrorTemplate {
     pub viewer: Viewer,
 }
 
+/// The `/search` results page.
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "search.html")]
+pub struct SearchTemplate {
+    pub active: String,
+    /// The query as typed, trimmed. Never empty: an empty search goes to the
+    /// recipe list instead.
+    pub query: String,
+    pub items: Vec<RecipeItem>,
+    /// `items.len()`, for `tr.tn`.
+    pub count: usize,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    pub viewer: Viewer,
+}
+
 pub struct TodaysMenu {
     pub menu_name: String,
     pub menu_path: String,
@@ -899,6 +919,10 @@ pub struct RecipeItem {
     pub is_menu: bool,
     pub modified_at: Option<u64>,
     pub created_at: Option<u64>,
+    /// The folder the recipe sits in, shown on search results where hits
+    /// from different folders sit side by side. `None` in a folder listing.
+    #[serde(default)]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1211,6 +1235,7 @@ macro_rules! impl_into_response {
 impl_into_response!(
     ErrorTemplate,
     RecipesTemplate,
+    SearchTemplate,
     RecipeTemplate,
     MenuTemplate,
     ShoppingListTemplate,

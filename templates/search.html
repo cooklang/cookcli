@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ query }} - {{ tr.t("search-results-title") }} - Cook{% endblock %}
+
+{% block search_query %}{{ query }}{% endblock %}
+
+{% block content %}
+<div>
+    <h1 class="text-display font-bold text-text mb-2">{{ tr.t("search-results-title") }}</h1>
+
+    {% if items.is_empty() %}
+    <p id="search-summary" class="text-faint text-center py-8">{{ tr.t("search-no-results") }}</p>
+    {% else %}
+    <p id="search-summary" class="text-sm text-muted mb-8">{{ tr.tn("search-results-count", count) }}</p>
+    <div id="search-results-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for item in items %}
+        {% include "recipe_card.html" %}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

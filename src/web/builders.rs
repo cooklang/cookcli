@@ -162,6 +162,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             is_menu,
             modified_at,
             created_at,
+            folder: None,
         });
     }
 

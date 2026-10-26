@@ -7,6 +7,13 @@ nav-preferences = Einstellungen
 # Search
 search-placeholder = Rezepte suchen...
 search-no-results = Keine Rezepte gefunden
+search-all-results = Alle Ergebnisse anzeigen
+search-results-title = Suchergebnisse
+search-results-count =
+    { $count ->
+        [one] { $count } Rezept gefunden
+       *[other] { $count } Rezepte gefunden
+    }
 
 # Common Actions
 action-add = Hinzufügen

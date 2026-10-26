@@ -43,6 +43,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/random", get(random_recipe_page))
         .route("/random/{*path}", get(random_recipe_directory))
         .route("/recipe/{*path}", get(recipe_page))
+        .route("/search", get(search_page))
         .route("/edit/{*path}", get(edit_page))
         .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
@@ -103,6 +104,98 @@ async fn recipes_handler(
             tracing::error!("Failed to build recipes template: {:?}", e);
             error_page(lang, &state.url_prefix, &e, features, viewer)
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct SearchPageQuery {
+    #[serde(default)]
+    q: String,
+}
+
+async fn search_page(
+    Query(query): Query<SearchPageQuery>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let query = query.q.trim().to_string();
+    // Searching for nothing is asking for every recipe.
+    if query.is_empty() {
+        return axum::response::Redirect::to(&format!("{}/", state.url_prefix)).into_response();
+    }
+
+    let items: Vec<RecipeItem> =
+        match crate::server::handlers::recipes::search_hits(&state.base_path, &query) {
+            Ok(hits) => hits
+                .iter()
+                .map(|hit| search_result_item(&state.base_path, &state.url_prefix, hit))
+                .collect(),
+            Err(e) => {
+                tracing::error!("Failed to search recipes: {:?}", e);
+                return error_page(lang, &state.url_prefix, &e, features, viewer);
+            }
+        };
+
+    SearchTemplate {
+        active: "recipes".to_string(),
+        query,
+        count: items.len(),
+        items,
+        tr: Tr::new(lang),
+        prefix: state.url_prefix.clone(),
+        static_mode: false,
+        repo_url: None,
+        features,
+        viewer,
+    }
+    .into_response()
+}
+
+/// A search hit as a recipe card, with the picture and tags the folder
+/// listing shows and the folder it sits in.
+fn search_result_item(
+    base_path: &camino::Utf8Path,
+    url_prefix: &str,
+    hit: &cookcli_core::search::SearchHit,
+) -> RecipeItem {
+    // The search has read the file already; this reads its front matter
+    // again for the tags and picture, which `SearchHit` does not carry.
+    let entry = cooklang_find::RecipeEntry::from_path(hit.path.clone()).ok();
+    // Joined with `/` whatever the platform's separator is.
+    let url_path = |path: &camino::Utf8Path| {
+        path.components()
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let folder = hit
+        .relative_path
+        .parent()
+        .map(url_path)
+        .filter(|parent| !parent.is_empty());
+
+    RecipeItem {
+        name: hit
+            .name
+            .clone()
+            .or_else(|| hit.path.file_stem().map(str::to_string))
+            .unwrap_or_default(),
+        path: crate::util::encode_url_path(&url_path(&hit.relative_path)),
+        is_directory: false,
+        count: None,
+        description: None,
+        tags: entry.as_ref().map(|e| e.tags()).unwrap_or_default(),
+        image_path: entry.as_ref().and_then(|e| {
+            e.title_image()
+                .clone()
+                .and_then(|img| crate::web::builders::get_image_path(base_path, url_prefix, img))
+        }),
+        is_menu: hit.path.extension() == Some("menu"),
+        modified_at: None,
+        created_at: None,
+        folder,
     }
 }
 

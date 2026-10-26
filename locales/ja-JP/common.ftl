@@ -7,6 +7,9 @@ nav-preferences = 設定
 # Search
 search-placeholder = レシピを検索…
 search-no-results = レシピが見つかりません
+search-all-results = すべての結果を表示
+search-results-title = 検索結果
+search-results-count = { $count } 件のレシピ
 
 # Common Actions
 action-add = 追加

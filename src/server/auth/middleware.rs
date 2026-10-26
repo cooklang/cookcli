@@ -61,6 +61,7 @@ const RECIPE_READS: &[&str] = &[
     "/directory",
     "/random",
     "/recipe",
+    "/search",
     "/preferences",
     "/atom.xml",
     "/rss.xml",
@@ -387,6 +388,7 @@ mod tests {
             "/random/Mains",
             "/recipe/Soup.cook",
             "/recipe/Week.menu",
+            "/search",
             "/preferences",
             "/atom.xml",
             "/rss.xml",
@@ -429,6 +431,7 @@ mod tests {
             "/recipes",
             "/preferences-backup",
             "/api/searchx",
+            "/searchx",
             "/loginx",
         ] {
             assert!(!browses_recipes(&Method::GET, path), "{path}");

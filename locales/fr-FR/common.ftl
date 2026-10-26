@@ -7,6 +7,13 @@ nav-preferences = Préférences
 # Search
 search-placeholder = Rechercher des recettes...
 search-no-results = Aucune recette trouvée
+search-all-results = Voir tous les résultats
+search-results-title = Résultats de recherche
+search-results-count =
+    { $count ->
+        [one] { $count } recette trouvée
+       *[other] { $count } recettes trouvées
+    }
 
 # Common Actions
 action-add = Ajouter

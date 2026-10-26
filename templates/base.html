@@ -261,7 +261,11 @@
                         <img src="{{ prefix }}/static/android-chrome-192x192.png" alt="Cook" class="brand-mark h-8 w-8 rounded-md" width="32" height="32">
                     </a>
 
+                    {% if !static_mode %}
+                    <form action="{{ prefix }}/search" method="get" role="search" class="relative z-50 order-2 flex-1 min-w-0 mr-2 md:ml-2 md:mr-4" id="search-container">
+                    {% else %}
                     <div class="relative z-50 order-2 flex-1 min-w-0 mr-2 md:ml-2 md:mr-4" id="search-container">
+                    {% endif %}
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-5 w-5 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -269,13 +273,19 @@
                         </div>
                         <input type="text"
                                id="search-input"
+                               {% if !static_mode %}name="q" autocomplete="off" value="{% block search_query %}{% endblock %}"{% endif %}
                                placeholder="{{ tr.t("search-placeholder") }}"
+                               aria-label="{{ tr.t("search-placeholder") }}"
                                class="search-input">
                         <div id="search-results"
                              class="absolute top-full mt-2 w-full card shadow-[var(--shadow-overlay)] hidden max-h-96 overflow-y-auto"
                              style="z-index: 9999;">
                         </div>
+                    {% if !static_mode %}
+                    </form>
+                    {% else %}
                     </div>
+                    {% endif %}
 
                     <div class="order-3 flex items-center gap-1 lg:gap-2">
                         {% if features.show_shopping_list || features.show_pantry %}
@@ -455,7 +465,8 @@
     <script>
         // Translations for JavaScript
         const translations = {
-            noRecipes: {{ tr.t("search-no-results")|json|safe }}
+            noRecipes: {{ tr.t("search-no-results")|json|safe }},
+            allResults: {{ tr.t("search-all-results")|json|safe }}
         };
 
         const searchInput = document.getElementById('search-input');
@@ -502,7 +513,10 @@
                             `<a href="{{ prefix }}/recipe/${escapeHtml(recipe.path)}" class="search-result block px-4 py-3 hover:bg-sunk border-b border-line last:border-b-0">
                                 <div class="font-medium text-text">${escapeHtml(recipe.name)}</div>
                             </a>`
-                        ).join('');
+                        ).join('') +
+                            `<a href="{{ prefix }}/search?q=${encodeURIComponent(query)}" id="search-all-results" class="sticky bottom-0 -mt-px block px-4 py-3 bg-surface hover:bg-sunk border-t border-line text-sm font-medium text-accent-text">
+                                ${escapeHtml(translations.allResults)}
+                            </a>`;
                     }
                     searchResults.classList.remove('hidden');
                 } catch (error) {

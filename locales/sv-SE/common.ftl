@@ -7,6 +7,13 @@ nav-preferences = Egenskaper
 # Search
 search-placeholder = Sök recept...
 search-no-results = Inga recept hittades
+search-all-results = Visa alla resultat
+search-results-title = Sökresultat
+search-results-count =
+    { $count ->
+        [one] { $count } recept hittades
+       *[other] { $count } recept hittades
+    }
 
 # Common Actions
 action-add = Lägg till

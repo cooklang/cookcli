@@ -66,6 +66,45 @@ test.describe('Search Functionality', () => {
     }
   });
 
+  test('Enter opens the results page with every match', async ({ page }) => {
+    await helpers.searchRecipe('pizza');
+
+    await expect(page).toHaveURL(/\/search\?q=pizza$/);
+    await expect(page.locator('h1')).toHaveText('Search results');
+    await expect(page.getByPlaceholder('Search recipes...')).toHaveValue('pizza');
+
+    const cards = page.locator('#search-results-grid .recipe-card');
+    await expect(cards.filter({ hasText: 'Neapolitan Pizza' })).toHaveCount(1);
+    // Hits in a folder say which one.
+    await expect(cards.filter({ hasText: 'Pizza Dough' })).toContainText('Shared');
+    await expect(page.locator('#search-summary')).toHaveText(`${await cards.count()} recipes match`);
+
+    await cards.filter({ hasText: 'Neapolitan Pizza' }).click();
+    await expect(page).toHaveURL(/\/recipe\/Neapolitan%20Pizza\.cook$/);
+  });
+
+  test('the dropdown links to all results', async ({ page }) => {
+    await page.getByPlaceholder('Search recipes...').fill('pizza');
+
+    const all = page.locator('#search-results #search-all-results');
+    await expect(all).toBeVisible();
+    await all.click();
+
+    await expect(page).toHaveURL(/\/search\?q=pizza$/);
+    await expect(page.locator('#search-results-grid .recipe-card').first()).toBeVisible();
+  });
+
+  test('Enter on a highlighted result still opens that recipe', async ({ page }) => {
+    const searchInput = page.getByPlaceholder('Search recipes...');
+    await searchInput.fill('pizza');
+    await expect(page.locator('#search-results a.search-result').first()).toBeVisible();
+
+    await searchInput.press('ArrowDown');
+    await searchInput.press('Enter');
+
+    await expect(page).toHaveURL(/\/recipe\//);
+  });
+
   test('should render inline result names as text, not markup', async ({ page }) => {
     // Fabricate a result whose name is markup; a raw innerHTML interpolation
     // would run the onerror handler and set the marker.

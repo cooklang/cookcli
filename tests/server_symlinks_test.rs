@@ -415,7 +415,12 @@ async fn listings_search_and_stats_do_not_publish_linked_files() {
     std::fs::write(server.outside().join("Week.menu"), "= Week\n").unwrap();
     server.link(&server.outside(), "Linked");
 
-    for path in ["/api/recipes", "/api/menus", "/api/search?q=secret"] {
+    for path in [
+        "/api/recipes",
+        "/api/menus",
+        "/api/search?q=secret",
+        "/search?q=secret",
+    ] {
         let body = server.body(path).await;
         assert!(
             !body.contains("Secret") && !body.contains("Linked"),

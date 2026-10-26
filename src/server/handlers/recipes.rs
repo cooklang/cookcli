@@ -302,25 +302,10 @@ pub async fn search(
     State(state): State<Arc<AppState>>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, Json<serde_json::Value>)> {
-    // Through core rather than `cooklang_find::search` directly, so this agrees
-    // with `cook search`. Calling the library here left the web UI on the old
-    // union-over-terms behaviour after the CLI moved to AND (#425), which is
-    // the kind of split the two would never have been noticed to have.
-    let mut hits = cookcli_core::search::search(
-        &cookcli_core::Context::new(state.base_path.clone()),
-        cookcli_core::search::SearchRequest {
-            query: query.q.clone(),
-            base_dir: None,
-        },
-    )
-    .map_err(|e| {
+    let hits = search_hits(&state.base_path, &query.q).map_err(|e| {
         tracing::error!("Failed to search recipes: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
-    })?
-    .into_value();
-
-    // The search walk follows linked folders too (#698).
-    hits.retain(|hit| inside_collection(&state.base_path, &hit.path));
+    })?;
 
     let results = hits
         .into_iter()
@@ -333,6 +318,33 @@ pub async fn search(
         .collect();
 
     Ok(Json(results))
+}
+
+/// The recipes and menus in the collection matching `query`, best first.
+///
+/// Shared by `/api/search` and the `/search` page so the dropdown and the
+/// results page always agree.
+pub(crate) fn search_hits(
+    base_path: &Utf8Path,
+    query: &str,
+) -> Result<Vec<cookcli_core::search::SearchHit>, cookcli_core::CoreError> {
+    // Through core rather than `cooklang_find::search` directly, so this agrees
+    // with `cook search`. Calling the library here left the web UI on the old
+    // union-over-terms behaviour after the CLI moved to AND (#425), which is
+    // the kind of split the two would never have been noticed to have.
+    let mut hits = cookcli_core::search::search(
+        &cookcli_core::Context::new(base_path.to_path_buf()),
+        cookcli_core::search::SearchRequest {
+            query: query.to_string(),
+            base_dir: None,
+        },
+    )?
+    .into_value();
+
+    // The search walk follows linked folders too (#698).
+    hits.retain(|hit| inside_collection(base_path, &hit.path));
+
+    Ok(hits)
 }
 
 pub async fn recipe_delete(

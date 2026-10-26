@@ -7,6 +7,13 @@ nav-preferences = Ezarpenak
 # Search
 search-placeholder = Bilatu errezetak...
 search-no-results = Ez da errezetarik topatu
+search-all-results = Ikusi emaitza guztiak
+search-results-title = Bilaketaren emaitzak
+search-results-count =
+    { $count ->
+        [one] Errezeta { $count } aurkitu da
+       *[other] { $count } errezeta aurkitu dira
+    }
 
 # Common Actions
 action-add = Gehitu

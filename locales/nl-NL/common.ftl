@@ -7,6 +7,13 @@ nav-preferences = Voorkeuren
 # Search
 search-placeholder = Recepten zoeken...
 search-no-results = Geen recepten gevonden
+search-all-results = Alle resultaten bekijken
+search-results-title = Zoekresultaten
+search-results-count =
+    { $count ->
+        [one] { $count } recept gevonden
+       *[other] { $count } recepten gevonden
+    }
 
 # Common Actions
 action-add = Toevoegen
