@@ -102,6 +102,28 @@ test.describe('Aisles', () => {
     expect(fs.readFileSync(AISLE_FILE, 'utf8')).toBe(original);
   });
 
+  test('takes no typing or Save in the text tab until the file is in', async ({ page }) => {
+    // Held until the checks below, so the load is as slow as it needs to be.
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/aisles/raw', async route => {
+      if (route.request().method() === 'GET') await held;
+      await route.continue();
+    });
+    await page.goto('/aisles');
+
+    await page.getByRole('tab', { name: 'Text' }).click();
+    const text = page.locator('#aisles-text');
+    const save = page.getByRole('button', { name: 'Save file' });
+    await expect(text).not.toBeEditable();
+    await expect(save).toBeDisabled();
+
+    release();
+    await expect(text).toHaveValue(original);
+    await expect(text).toBeEditable();
+    await expect(save).toBeEnabled();
+  });
+
   test('points out lines written like a # comment until they use //', async ({ page }) => {
     fs.writeFileSync(AISLE_FILE, original.replace('[fruit and veg]\n', '[fruit and veg]\n# fruit first\n'));
     await page.goto('/aisles');
