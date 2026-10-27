@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tr.t("tags-title") }} - Cook{% endblock %}
+
+{% block content %}
+<div>
+    <nav class="mb-4">
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
+        </ol>
+    </nav>
+
+    <h1 class="text-display font-bold text-text mb-8">{{ tr.t("tags-title") }}</h1>
+
+    {% if tags.is_empty() %}
+    <p class="text-faint text-center py-8">{{ tr.t("tags-empty") }}</p>
+    {% else %}
+    <ul id="tags-list" class="flex flex-wrap gap-3">
+        {% for tag in tags %}
+        <li>
+            <a href="{{ prefix }}/tag/{{ tag.slug|urlencode }}{% if static_mode %}.html{% endif %}" class="metadata-pill tag-link gap-2">
+                <span>#{{ tag.name }}</span>
+                <span class="text-faint tabular-nums">{{ tag.count }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endblock %}

@@ -79,3 +79,8 @@ sort-modified = Gewijzigd
 sort-created = Aangemaakt
 sort-direction-toggle = Sorteervolgorde omdraaien
 random-recipe = Willekeurig recept
+
+# Tag pages
+tags-title = Labels
+tags-empty = Nog geen labels. Voeg een tags-regel toe aan de frontmatter van een recept, zoals tags: diner, pasta, om het hier te tonen.
+tag-empty = Geen enkel recept heeft dit label.

@@ -40,6 +40,8 @@ pub fn ui() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(recipes_page))
         .route("/directory/{*path}", get(recipes_directory))
+        .route("/tags", get(tags_page))
+        .route("/tag/{tag}", get(tag_page))
         .route("/random", get(random_recipe_page))
         .route("/random/{*path}", get(random_recipe_directory))
         .route("/recipe/{*path}", get(recipe_page))
@@ -104,6 +106,75 @@ async fn recipes_handler(
             error_page(lang, &state.url_prefix, &e, features, viewer)
         }
     }
+}
+
+fn tags_build_input(
+    state: &AppState,
+    lang: LanguageIdentifier,
+    features: FeatureFlags,
+    viewer: Viewer,
+) -> crate::web::tags::TagsBuildInput<'_> {
+    crate::web::tags::TagsBuildInput {
+        url_prefix: &state.url_prefix,
+        lang,
+        static_mode: false,
+        repo_url: None,
+        features,
+        viewer,
+    }
+}
+
+/// Every tag of the collection, with how many recipes carry it.
+async fn tags_page(
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    match crate::web::tags::collect_tags(&state.base_path, &state.url_prefix, false, None) {
+        Ok(groups) => crate::web::tags::build_tags_template(
+            tags_build_input(&state, lang, features, viewer),
+            &groups,
+        )
+        .into_response(),
+        Err(e) => {
+            tracing::error!("Failed to collect tags: {:?}", e);
+            error_page(lang, &state.url_prefix, &e, features, viewer)
+        }
+    }
+}
+
+/// Every recipe and menu carrying one tag, from any folder. `/tag/Dinner`
+/// is the same page as `/tag/dinner`; a tag nothing carries is a `404` with
+/// the page's empty state.
+async fn tag_page(
+    Path(tag): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let groups =
+        match crate::web::tags::collect_tags(&state.base_path, &state.url_prefix, false, None) {
+            Ok(groups) => groups,
+            Err(e) => {
+                tracing::error!("Failed to collect tags: {:?}", e);
+                return error_page(lang, &state.url_prefix, &e, features, viewer);
+            }
+        };
+    let slug = crate::web::tags::tag_slug(&tag);
+    let group = groups.into_iter().find(|group| group.slug == slug);
+    let status = if group.is_some() {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    let page = crate::web::tags::build_tag_template(
+        tags_build_input(&state, lang, features, viewer),
+        &tag,
+        group,
+    );
+    (status, page).into_response()
 }
 
 async fn random_recipe_page(

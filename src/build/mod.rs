@@ -231,6 +231,10 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         String::new(),
     )?;
 
+    let tag_slugs =
+        renderer::render_tags(&source, &output, &tree, base_url, repo_url, &lang, features)?;
+    let tag_count = tag_slugs.len();
+
     let aisle = ctx.aisle().path().map(camino::Utf8Path::to_path_buf);
     let recipe_count = walk_recipes(
         &tree,
@@ -261,7 +265,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
 
     // The URL was already validated near the top of run_web.
     let sitemap_written = if let Some(base) = sitemap_base {
-        sitemap::write_sitemap(&output, base, &tree)?;
+        sitemap::write_sitemap(&output, base, &tree, &tag_slugs)?;
         true
     } else {
         false
@@ -293,7 +297,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         None => String::new(),
     };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{feed_note}{compressed_note}"
+        "Wrote index, directories, {tag_count} tag pages, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{feed_note}{compressed_note}"
     );
     Ok(())
 }

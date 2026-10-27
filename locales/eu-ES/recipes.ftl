@@ -75,3 +75,8 @@ sort-modified = Aldatua
 sort-created = Sortua
 sort-direction-toggle = Ordena aldatu
 random-recipe = Ausazko errezeta
+
+# Tag pages
+tags-title = Etiketak
+tags-empty = Oraindik ez dago etiketarik. Gehitu tags lerro bat errezeta baten goiburuan, adibidez tags: afaria, pasta, hemen ager dadin.
+tag-empty = Ez dago etiketa hau duen errezetarik.

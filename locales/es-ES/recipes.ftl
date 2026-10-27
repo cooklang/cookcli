@@ -79,3 +79,8 @@ sort-modified = Modificado
 sort-created = Creado
 sort-direction-toggle = Invertir orden
 random-recipe = Receta al azar
+
+# Tag pages
+tags-title = Etiquetas
+tags-empty = Todavía no hay etiquetas. Añade una línea tags al encabezado de una receta, como tags: cena, pasta, para que aparezca aquí.
+tag-empty = Ninguna receta tiene esta etiqueta.

@@ -79,3 +79,8 @@ sort-modified = Ändrad
 sort-created = Skapad
 sort-direction-toggle = Byt sorteringsriktning
 random-recipe = Slumpmässigt recept
+
+# Tag pages
+tags-title = Taggar
+tags-empty = Inga taggar än. Lägg till en tags-rad i ett recepts frontmatter, till exempel tags: middag, pasta, för att visa det här.
+tag-empty = Inget recept har den här taggen.

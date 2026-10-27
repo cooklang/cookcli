@@ -505,6 +505,16 @@
         color: var(--text-muted);
     }
 
+    /* A tag or tag pill that links to its tag page. */
+    .tag-link {
+        text-decoration: none;
+    }
+
+    .tag-link:hover {
+        color: var(--text);
+        border-color: var(--text-faint);
+    }
+
     /* Neutral bordered pill. The metadata-* key classes stay in the markup as
        hooks but carry no colour of their own any more. */
     .metadata-pill {

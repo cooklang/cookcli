@@ -79,3 +79,8 @@ sort-modified = Data di modifica
 sort-created = Data di creazione
 sort-direction-toggle = Inverti l'ordine
 random-recipe = Ricetta a caso
+
+# Tag pages
+tags-title = Etichette
+tags-empty = Ancora nessuna etichetta. Aggiungi una riga tags all'intestazione di una ricetta, per esempio tags: cena, pasta, per vederla qui.
+tag-empty = Nessuna ricetta ha questa etichetta.
