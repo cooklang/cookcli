@@ -6,7 +6,7 @@ ARG CARGO_PROFILE=release
 # --- Front-end assets ---
 # A stage of its own so the Rust builder needs no Node.js, and so Rust-only
 # edits don't rebuild the CSS and JS.
-FROM node:26.12.0-bookworm-slim AS assets
+FROM node:26.12.1-bookworm-slim AS assets
 
 WORKDIR /usr/src/cookcli
 
