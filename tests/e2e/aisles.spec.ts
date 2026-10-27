@@ -114,9 +114,13 @@ test.describe('Aisles', () => {
 
     await page.getByRole('tab', { name: 'Text' }).click();
     const text = page.locator('#aisles-text');
+    // The tab fetches the file when opened: read it before then and the edit
+    // is lost, or an empty file is saved.
+    await expect(text).toHaveValue(/# fruit first/);
     await text.fill((await text.inputValue()).replace('# fruit first', '// fruit first'));
     await page.getByRole('button', { name: 'Save file' }).click();
     await expect(comments).toBeHidden();
+    expect(fs.readFileSync(AISLE_FILE, 'utf8')).toContain('[fruit and veg]\n// fruit first\n');
   });
 
   test('assigns an aisle from the shopping list', async ({ page }) => {
