@@ -70,14 +70,16 @@ test.describe('Pantry file', () => {
   test('writes a date picked in the item editor', async ({ page }) => {
     await page.goto('/pantry');
 
+    // Far enough ahead never to come within the week: an item expiring soon,
+    // or expired, shows a tag in place of the date line.
     await row(page, 'fridge', 'milk').getByRole('button', { name: /Edit item/ }).click();
     const editor = page.locator('.pantry-editor');
-    await editor.getByLabel('Expiry Date').fill('2026-11-02');
+    await editor.getByLabel('Expiry Date').fill('2099-11-02');
     await editor.getByRole('button', { name: 'Save' }).click();
 
     await expect(editor).toHaveCount(0);
-    await expect(row(page, 'fridge', 'milk').locator('.pantry-meta')).toContainText('2026-11-02');
-    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toContain('milk = { quantity = "2%l", expire = "2026-11-02" }');
+    await expect(row(page, 'fridge', 'milk').locator('.pantry-meta')).toContainText('2099-11-02');
+    expect(fs.readFileSync(PANTRY_FILE, 'utf8')).toContain('milk = { quantity = "2%l", expire = "2099-11-02" }');
   });
 
   test('shows a date in the picker and keeps its spelling unless it changes', async ({ page }) => {
