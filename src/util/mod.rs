@@ -205,13 +205,36 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
     };
 
     // Normalize the path by resolving all components
-    std::fs::canonicalize(&absolute)
-        .with_context(|| format!("Base path not found: {absolute}"))?
-        .try_into()
-        .map_err(|e| {
-            tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
-            anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
-        })
+    let canonical = std::fs::canonicalize(&absolute)
+        .with_context(|| format!("Base path not found: {absolute}"))?;
+
+    // On Windows that is a `\\?\` path, and `glob`, which every
+    // `cooklang_find` walk uses, finds nothing under one other than
+    // `\\?\C:\…`: a collection on a mapped network drive or share
+    // (`\\?\UNC\…`) listed and searched as empty (#783). Drop the prefix
+    // where Windows allows it, and keep the path as given where it cannot
+    // be spelled without one (`\\?\Volume{…}\…`).
+    let resolved = dunce::simplified(&canonical);
+    let resolved = if has_verbatim_prefix(resolved) {
+        std::path::absolute(&absolute)?
+    } else {
+        resolved.to_path_buf()
+    };
+    resolved.try_into().map_err(|e| {
+        tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
+        anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
+    })
+}
+
+/// Whether `path` starts with a `\\?\` prefix other than `\\?\C:\`.
+fn has_verbatim_prefix(path: &std::path::Path) -> bool {
+    use std::path::{Component, Prefix};
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => {
+            prefix.kind().is_verbatim() && !matches!(prefix.kind(), Prefix::VerbatimDisk(_))
+        }
+        _ => false,
+    }
 }
 
 /// Whether a request-supplied path, joined to a directory, stays inside it.

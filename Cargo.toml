@@ -94,6 +94,8 @@ cooklang-reports = { version = "0.7.0" }
 # resolves from crates.io.
 cookcli-core = { version = "0.39.0", path = "crates/core" }
 directories = "6"
+# Spells a canonical Windows path without `\\?\` where it can, for `glob` (#783).
+dunce = "1"
 flate2 = "1"
 fluent = "0.17"
 fastrand = { version = "2", optional = true }
