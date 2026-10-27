@@ -354,6 +354,20 @@ Dinner: \
   - The page reloads after each change. If the plan was changed elsewhere since the page was loaded (in the editor, another tab, or on disk), the change is refused and the page asks for a reload, rather than overwrite it.
   - A meal whose lines the calendar cannot match one for one with the file, such as one with free text between bullets, can still be added to, but its lines are only changed in the editor. The calendar uses [`POST /api/plans/{*path}`](api.md).
 
+## Tags
+
+A folder gives a recipe one place. Its `tags` give it as many as it has:
+
+```yaml
+---
+tags: [lunch, dinner, pasta, easy]
+---
+```
+
+`/tags` lists every tag in the collection with how many recipes carry it. The **Tags** button on the recipe listing links to it. `/tag/dinner` shows every recipe and menu tagged `dinner`, whatever its folder, and each card shows the folder the recipe is in. The tags on a recipe page link to their tag pages.
+
+Tags are matched without regard to case or surrounding spaces, so `Dinner` and `dinner` are one tag. The page shows the spelling most recipes use. In the URL, the tag is lowercased, and a character that cannot go in a file name, such as `/`, `:` or `?`, becomes `-`. A tag nothing carries answers `404`. [`cook build web`](build.md) writes the same pages as `tags.html` and `tag/<tag>.html`.
+
 ## Web feeds
 
 The server publishes an Atom feed at `/atom.xml`, an RSS 2.0 feed at `/rss.xml` and a [JSON Feed](https://jsonfeed.org/version/1.1) at `/feed.json`, with one item per recipe and menu, newest first. They are built from the recipe files on each request, so they are always up to date. Every page advertises them with `<link rel="alternate">` tags, so a feed reader finds them from the site's address alone.

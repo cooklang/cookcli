@@ -223,6 +223,11 @@ mod filters {
     use askama::Result;
     use url::Url;
 
+    /// The `/tag/<slug>` segment of a tag, for linking a recipe's tags.
+    pub fn tag_slug(tag: &str) -> Result<String> {
+        Ok(crate::web::tags::tag_slug(tag))
+    }
+
     pub fn hostname(url: &str) -> Result<String> {
         Ok(Url::parse(url)
             .ok()
@@ -325,6 +330,44 @@ pub struct RecipesTemplate {
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
     /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+/// One tag on the `/tags` page.
+pub struct TagSummary {
+    pub name: String,
+    /// The tag as it appears in `/tag/<slug>`: see [`crate::web::tags::tag_slug`].
+    pub slug: String,
+    pub count: usize,
+}
+
+#[derive(Template)]
+#[template(path = "tags.html")]
+pub struct TagsTemplate {
+    pub active: String,
+    pub tags: Vec<TagSummary>,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    pub viewer: Viewer,
+}
+
+#[derive(Template)]
+#[template(path = "tag.html")]
+pub struct TagTemplate {
+    pub active: String,
+    /// The tag's spelling, or the requested slug when no recipe carries it.
+    pub name: String,
+    pub items: Vec<RecipeItem>,
+    /// `items.len()`, for the plural rules of the count line.
+    pub count: usize,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
     pub viewer: Viewer,
 }
 
@@ -899,6 +942,9 @@ pub struct RecipeItem {
     pub is_menu: bool,
     pub modified_at: Option<u64>,
     pub created_at: Option<u64>,
+    /// The folder the recipe is in, on pages that gather recipes from
+    /// several folders; `None` in a folder's own listing.
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1211,6 +1257,8 @@ macro_rules! impl_into_response {
 impl_into_response!(
     ErrorTemplate,
     RecipesTemplate,
+    TagsTemplate,
+    TagTemplate,
     RecipeTemplate,
     MenuTemplate,
     ShoppingListTemplate,

@@ -79,3 +79,8 @@ sort-modified = Geändert
 sort-created = Erstellt
 sort-direction-toggle = Sortierrichtung umkehren
 random-recipe = Zufälliges Rezept
+
+# Tag pages
+tags-title = Schlagwörter
+tags-empty = Noch keine Schlagwörter. Füge dem Frontmatter eines Rezepts eine tags-Zeile hinzu, etwa tags: Abendessen, Pasta, damit es hier erscheint.
+tag-empty = Kein Rezept hat dieses Schlagwort.

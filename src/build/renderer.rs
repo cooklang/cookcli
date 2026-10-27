@@ -5,6 +5,7 @@ use crate::web::builders::{
     RecipesBuildInput,
 };
 use crate::web::language::FeatureFlags;
+use crate::web::tags::{build_tag_template, build_tags_template, group_by_tag, TagsBuildInput};
 use anyhow::Result;
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -62,6 +63,47 @@ pub fn render_directory(
     })?;
     let html = template.render()?;
     write_html(output, &relpath, &html)
+}
+
+/// Render `tags.html` and one `tag/<slug>.html` per tag of `tree`, which is
+/// already pruned of the output directory. Returns the slugs written.
+pub fn render_tags(
+    source: &Utf8Path,
+    output: &Utf8Path,
+    tree: &cooklang_find::RecipeTree,
+    base_url: Option<&str>,
+    repo_url: Option<&str>,
+    lang: &LanguageIdentifier,
+    features: FeatureFlags,
+) -> Result<Vec<String>> {
+    let input = |prefix| TagsBuildInput {
+        url_prefix: prefix,
+        lang: lang.clone(),
+        static_mode: true,
+        repo_url: repo_url.map(String::from),
+        features,
+        viewer: Default::default(),
+    };
+
+    // A slug holds no `/`, so every tag page sits one folder down and one
+    // prefix serves the pictures of all their cards.
+    let tag_prefix = compute_prefix(base_url, Utf8Path::new("tag/index.html"));
+    let groups = group_by_tag(tree, source, &tag_prefix);
+
+    let relpath = Utf8PathBuf::from("tags.html");
+    let prefix = compute_prefix(base_url, &relpath);
+    let html = build_tags_template(input(&prefix), &groups).render()?;
+    write_html(output, &relpath, &html)?;
+
+    let mut slugs = Vec::with_capacity(groups.len());
+    for group in groups {
+        let relpath = Utf8PathBuf::from(format!("tag/{}.html", group.slug));
+        let slug = group.slug.clone();
+        let html = build_tag_template(input(&tag_prefix), &slug, Some(group)).render()?;
+        write_html(output, &relpath, &html)?;
+        slugs.push(slug);
+    }
+    Ok(slugs)
 }
 
 fn compute_prefix(base_url: Option<&str>, relpath: &Utf8Path) -> String {
