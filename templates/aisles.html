@@ -105,7 +105,7 @@
             {% if viewer.can_edit_lists() %}
             <div class="flex items-center justify-end gap-3 mt-3">
                 <span id="aisles-text-status" class="text-sm text-muted" aria-live="polite"></span>
-                <button type="button" id="aisles-text-save" class="btn btn-primary">{{ tr.t("aisles-text-save") }}</button>
+                <button type="button" id="aisles-text-save" class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{{ tr.t("aisles-text-save") }}</button>
             </div>
             {% endif %}
         </section>
@@ -770,6 +770,13 @@
 
     async function loadText() {
         const textarea = document.getElementById('aisles-text');
+        const save = document.getElementById('aisles-text-save');
+        // Until the file is in, typing would be replaced by it, and Save would
+        // send what the box holds with no revision, which the server writes
+        // over whatever is there: an empty file.
+        textarea.readOnly = true;
+        textarea.setAttribute('aria-busy', 'true');
+        if (save) save.disabled = true;
         try {
             const raw = await request('GET', '/api/aisles/raw');
             textarea.value = raw.content;
@@ -777,6 +784,12 @@
             delete textarea.dataset.dirty;
         } catch (e) {
             showError(e.message);
+        } finally {
+            // Readers have no Save button and keep the box read-only.
+            const loaded = !!textarea.dataset.revision;
+            textarea.readOnly = !save || !loaded;
+            textarea.removeAttribute('aria-busy');
+            if (save) save.disabled = !loaded;
         }
     }
 
