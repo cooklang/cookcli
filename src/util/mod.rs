@@ -338,4 +338,52 @@ mod tests {
             None
         );
     }
+
+    /// A collection with a recipe one folder down, as in #783.
+    #[cfg(windows)]
+    fn collection() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("French")).unwrap();
+        std::fs::write(dir.path().join("French").join("Crepes.cook"), "@eggs{2}\n").unwrap();
+        dir
+    }
+
+    #[cfg(windows)]
+    fn lists_crepes(base: &Utf8Path) -> bool {
+        let tree = cooklang_find::build_tree(base).unwrap();
+        tree.children
+            .get("French")
+            .is_some_and(|folder| folder.children.contains_key("Crepes"))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolved_base_path_has_no_verbatim_prefix() {
+        let dir = collection();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        let resolved = resolve_to_absolute_path(base).unwrap();
+        assert!(!resolved.as_str().starts_with(r"\\?\"), "{resolved}");
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
+    }
+
+    /// A mapped network drive or share canonicalizes to `\\?\UNC\…`, under
+    /// which `glob` (and so every `cooklang_find` walk) finds nothing: the
+    /// home page and search came up empty while a recipe's URL still opened
+    /// it (#783). The admin share reaches a local folder the same way.
+    #[cfg(windows)]
+    #[test]
+    fn lists_recipes_in_a_collection_on_a_network_share() {
+        let dir = collection();
+        let local = dir.path().to_str().unwrap();
+        let Some((drive, rest)) = local.split_once(":\\") else {
+            panic!("temp dir {local} has no drive letter");
+        };
+        let share = format!(r"\\localhost\{drive}$\{rest}");
+        if !std::path::Path::new(&share).is_dir() {
+            eprintln!("skipped: the admin share {share} is not reachable");
+            return;
+        }
+        let resolved = resolve_to_absolute_path(Utf8Path::new(&share)).unwrap();
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
+    }
 }
