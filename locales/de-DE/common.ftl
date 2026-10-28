@@ -34,6 +34,9 @@ editor-unsaved-changes = Ungespeicherte Änderungen
 editor-saved = Gespeichert
 editor-saving = Speichern...
 editor-save-failed = Speichern fehlgeschlagen
+editor-not-saved-gone = Nicht gespeichert: anderswo umbenannt oder gelöscht
+editor-save-failed-detail = Speichern fehlgeschlagen: %s
+editor-file-gone = Diese Datei wurde in einem anderen Tab oder auf einem anderen Gerät umbenannt oder gelöscht. Deine Änderungen wurden nicht gespeichert: Kopiere sie, bevor du die Seite verlässt.
 editor-placeholder = Geben Sie hier Ihr Rezept ein...
 
 # Editor toolbar

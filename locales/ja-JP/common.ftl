@@ -34,6 +34,9 @@ editor-unsaved-changes = 未保存の変更があります
 editor-saved = 保存しました
 editor-saving = 保存中…
 editor-save-failed = 保存できませんでした
+editor-not-saved-gone = 保存されていません: 他の場所で名前が変更されたか削除されました
+editor-save-failed-detail = 保存できませんでした: %s
+editor-file-gone = このファイルは別のタブまたは別の端末で名前が変更されたか削除されました。変更は保存されていません。ページを離れる前にコピーしてください。
 editor-placeholder = ここにレシピを入力…
 
 # Editor toolbar
