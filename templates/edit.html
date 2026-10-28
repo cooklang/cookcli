@@ -1109,7 +1109,10 @@ function sendLspNotification(method, params) {
 }
 
 function openDocument() {
-    documentUri = 'file://' + recipePath;
+    // Only a key for this document: the server pins the workspace root. It
+    // must still parse as a URL, or the language server refuses every request
+    // naming it: `file://` + `Pasta Carbonara.cook` read the name as a host.
+    documentUri = 'file:///' + recipePath.split('/').map(encodeURIComponent).join('/');
     documentVersion = 1;
     sendLspNotification('textDocument/didOpen', {
         textDocument: {
