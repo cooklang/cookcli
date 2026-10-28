@@ -34,6 +34,9 @@ editor-unsaved-changes = Osparade ändringar
 editor-saved = Sparad
 editor-saving = Sparar...
 editor-save-failed = Spara misslyckades
+editor-not-saved-gone = Inte sparad: bytt namn eller borttagen på annat håll
+editor-save-failed-detail = Kunde inte spara: %s
+editor-file-gone = Filen har bytt namn eller tagits bort i en annan flik eller på en annan enhet. Dina ändringar har inte sparats: kopiera dem innan du lämnar sidan.
 editor-placeholder = Ange ditt recept här...
 
 # Editor toolbar

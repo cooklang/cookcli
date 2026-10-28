@@ -34,6 +34,9 @@ editor-unsaved-changes = Gorde gabeko aldaketak
 editor-saved = Gordeta
 editor-saving = Gordetzen...
 editor-save-failed = Errorea gordetzerakoan
+editor-not-saved-gone = Gorde gabe: beste nonbait berrizendatu edo ezabatu da
+editor-save-failed-detail = Ezin izan da gorde: %s
+editor-file-gone = Fitxategi hau beste fitxa batean edo beste gailu batean berrizendatu edo ezabatu da. Zure aldaketak ez dira gorde: kopiatu itzazu orritik irten aurretik.
 editor-placeholder = Idatzi hemen zure errezeta...
 
 # Editor toolbar
