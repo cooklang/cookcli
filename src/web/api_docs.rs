@@ -413,7 +413,11 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
                  the request path verbatim and does not report that resolved filename. The \
                  parent directory must already exist: writing into a directory that is not \
                  there returns a 500 whose message talks about permissions even when the \
-                 real cause is the missing directory.",
+                 real cause is the missing directory. Send `If-Match: *` to write only over \
+                 a file that exists: a missing one is then refused with `412` instead of \
+                 created. The editor does, so a recipe renamed or deleted in another tab is \
+                 not written back under its old name. No entity tags are issued, so any \
+                 other `If-Match` value is refused with `412` too.",
             )
             .params(vec![path_param(
                 "path",

@@ -297,6 +297,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function updateSaveStatus(state) {
     const status = document.getElementById('save-status');
+    // Typing goes on saying `modified`; the file stays gone.
+    if (fileGone) state = 'gone';
     switch (state) {
         case 'modified':
             status.textContent = 'Modified';
@@ -312,6 +314,10 @@ function updateSaveStatus(state) {
             break;
         case 'error':
             status.textContent = 'Save failed';
+            status.className = 'text-sm text-danger';
+            break;
+        case 'gone':
+            status.textContent = 'Not saved: renamed or deleted elsewhere';
             status.className = 'text-sm text-danger';
             break;
     }
@@ -337,9 +343,15 @@ function showToast(message, type = 'error') {
 // come back beside the renamed one.
 let renaming = false;
 
+// Set once a save finds the file gone: renamed or deleted in another tab or
+// on another device. Saves are sent with `If-Match: *`, which the server
+// refuses for a missing file instead of creating it again under the old name.
+// Saving stops there, and the text stays unsaved, so leaving asks first.
+let fileGone = false;
+
 // Resolves to whether the editor's text is now on disk.
 async function saveRecipe() {
-    if (isSaving || renaming) return false;
+    if (isSaving || renaming || fileGone) return false;
 
     const content = window.CooklangEditor.getContent(editorView);
     if (content === originalContent) return true;
@@ -352,6 +364,7 @@ async function saveRecipe() {
             method: 'PUT',
             headers: {
                 'Content-Type': 'text/plain',
+                'If-Match': '*',
             },
             body: content
         });
@@ -360,6 +373,11 @@ async function saveRecipe() {
             originalContent = content;
             updateSaveStatus('saved');
             return true;
+        } else if (response.status === 412) {
+            fileGone = true;
+            updateSaveStatus('gone');
+            showToast(await errorMessage(response));
+            return false;
         } else {
             updateSaveStatus('error');
             const errorText = await errorMessage(response);
@@ -559,7 +577,7 @@ async function renameRecipe(event) {
         try {
             const response = await fetch(`{{ prefix }}/api/recipes/${encodeURIComponent(result.path)}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'text/plain' },
+                headers: { 'Content-Type': 'text/plain', 'If-Match': '*' },
                 body: content
             });
             saved = response.ok;

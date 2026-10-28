@@ -1,8 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 declare const editorView: any;
+declare function hasUnsavedChanges(): boolean;
 
 // Seed directory used by the dev server started by Playwright's `webServer`.
 const SEED_DIR = path.resolve(__dirname, '../../seed');
@@ -94,4 +95,55 @@ test.describe('Renaming from the editor', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
   });
+
+  // Another tab still open on the old name used to autosave to it, and the
+  // save endpoint created the missing file: the old name came back beside
+  // the new one. Saves now ask for an existing file (`If-Match: *`).
+  for (const [how, takeAway] of [
+    ['renamed', async (page: Page) => {
+      await page.getByRole('button', { name: 'Rename', exact: true }).click();
+      await page.getByLabel('New name').fill('Race Renamed');
+      await page.getByLabel('New name').press('Enter');
+      await expect(page).toHaveURL(/\/edit\/E2E%20Rename\/Race%20Renamed\.cook$/);
+    }],
+    ['deleted', async (page: Page) => {
+      const resp = await page.request.delete('/api/recipes/E2E Rename/Race.cook');
+      expect(resp.ok()).toBe(true);
+    }],
+  ] as const) {
+    test(`a tab open on a file ${how} in another does not write it back`, async ({ page, context }) => {
+      fs.writeFileSync(file('Race.cook'), 'Stir.\n');
+      fs.rmSync(file('Race Renamed.cook'), { force: true });
+      const other = await context.newPage();
+      for (const tab of [page, other]) {
+        await tab.goto('/edit/E2E Rename/Race.cook');
+        await expect(tab.locator('#editor-container .cm-editor')).toBeVisible();
+      }
+      const saves: string[] = [];
+      other.on('request', request => {
+        if (request.method() === 'PUT') saves.push(request.url());
+      });
+
+      await takeAway(page);
+      await other.evaluate(() => {
+        editorView.dispatch({ changes: { from: editorView.state.doc.length, insert: 'Typed here.\n' } });
+      });
+
+      await expect(other.locator('#save-status')).toHaveText('Not saved: renamed or deleted elsewhere');
+      expect(fs.existsSync(file('Race.cook'))).toBe(false);
+      if (how === 'renamed') {
+        expect(fs.readFileSync(file('Race Renamed.cook'), 'utf8')).toBe('Stir.\n');
+      }
+
+      // No more saves after the first refusal, and the text is still unsaved.
+      await other.evaluate(() => {
+        editorView.dispatch({ changes: { from: editorView.state.doc.length, insert: 'More.\n' } });
+      });
+      await other.waitForTimeout(1500);
+      expect(saves).toHaveLength(1);
+      expect(fs.existsSync(file('Race.cook'))).toBe(false);
+      await expect(other.locator('#save-status')).toHaveText('Not saved: renamed or deleted elsewhere');
+      expect(await other.evaluate(() => hasUnsavedChanges())).toBe(true);
+    });
+  }
 });

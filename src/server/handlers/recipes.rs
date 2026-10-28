@@ -15,7 +15,7 @@ use crate::{
 };
 use axum::{
     extract::{Extension, Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     Json,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -220,6 +220,7 @@ pub async fn recipe_save(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
     Extension(viewer): Extension<Viewer>,
+    headers: HeaderMap,
     body: String,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let _writing = RECIPE_FILES.lock().await;
@@ -227,6 +228,29 @@ pub async fn recipe_save(
         RecipeFile::Existing(file_path) => (file_path, false),
         RecipeFile::Missing(file_path) => (file_path, true),
     };
+
+    // `If-Match: *` saves only over a file that is there. The editor sends
+    // it: a file it opened that is gone was renamed or deleted meanwhile, in
+    // another tab or on another device, and writing it would bring the old
+    // name back beside the new one. Checked under the lock rename and delete
+    // take. No entity tags are issued, so no other `If-Match` can match.
+    if let Some(condition) = headers.get(header::IF_MATCH) {
+        if condition.as_bytes().trim_ascii() != b"*" {
+            return Err((
+                StatusCode::PRECONDITION_FAILED,
+                json_error("Only `If-Match: *` is supported"),
+            ));
+        }
+        if created {
+            return Err((
+                StatusCode::PRECONDITION_FAILED,
+                json_error(format!(
+                    "{path} is no longer there: it was renamed or deleted. \
+                     Your changes are still in the editor."
+                )),
+            ));
+        }
+    }
 
     // Atomic write: write to temp file, then rename
     let temp_path = file_path.with_extension("tmp");
