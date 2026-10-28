@@ -12,8 +12,9 @@ use axum::{
     routing::{get, post},
     Form, Router,
 };
+use regex::Regex;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use unic_langid::LanguageIdentifier;
 
 pub(crate) fn error_page(
@@ -802,11 +803,13 @@ async fn create_recipe(
         format_args!("created {}", activity::file(&state.base_path, &file_path)),
     );
 
-    // Redirect to editor
+    // Redirect to editor, encoded: `Redirect` panics on a non-ASCII
+    // `Location`, which a name like `Crêpes` used to hit after the file was
+    // already written.
     axum::response::Redirect::to(&format!(
         "{}/edit/{}.{}",
         state.url_prefix,
-        recipe_path,
+        crate::util::encode_url_path(&recipe_path),
         kind.extension()
     ))
     .into_response()
@@ -815,18 +818,20 @@ async fn create_recipe(
 /// The path, without extension, that `POST /new` creates for the name typed
 /// into the form.
 ///
-/// Only letters, digits, spaces, `-`, `_` and `/` are kept. Each folder and
-/// the file name is then trimmed and empty ones dropped, so ` Mains / Stew `
-/// becomes `Mains/Stew` rather than a folder `Mains ` holding ` Stew.cook`.
+/// Only letters, marks and digits of any script, spaces, `-`, `_` and `/` are
+/// kept: [`NEW_FILE_CHAR`], which the form's `pattern` in `templates/new.html`
+/// repeats. Each folder and the file name is then trimmed and empty ones
+/// dropped, so ` Mains / Stew ` becomes `Mains/Stew` rather than a folder
+/// `Mains ` holding ` Stew.cook`.
 ///
 /// Runs of spaces inside a name become one, so the spaces around a dropped
 /// `&` do not end up side by side. The shopping list format reads a recipe
 /// path back with its spaces collapsed, so a file named with two spaces in a
 /// row could be opened but never added to the list.
 fn new_file_path(filename: &str) -> String {
-    let kept: String = filename
-        .chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '/'))
+    let kept: String = NEW_FILE_CHAR
+        .find_iter(filename)
+        .map(|m| m.as_str())
         .collect();
 
     kept.split('/')
@@ -835,6 +840,18 @@ fn new_file_path(filename: &str) -> String {
         .collect::<Vec<_>>()
         .join("/")
 }
+
+/// One character [`new_file_path`] keeps. Marks (`\p{M}`) are not
+/// alphanumeric to `char::is_alphanumeric`, yet Thai tone marks, the
+/// Devanagari or Tamil virama and a decomposed Vietnamese accent are part of
+/// the word: dropping them turned `ต้มยำกุ้ง` into `ตมยำกุง`.
+///
+/// The zero-width joiners Persian or Sinhala may type (U+200C, U+200D) are
+/// dropped, as renaming refuses them (`handlers::common::is_invisible`): a
+/// name holding one looks like another name. The form still accepts them, so
+/// an invisible character does not make it refuse what looks like a word.
+static NEW_FILE_CHAR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[\p{L}\p{M}\p{N}_ /\-]").unwrap());
 
 /// `recipe` -> `Recipe`, for an error message that opens with the noun.
 fn capitalize(word: &str) -> String {
@@ -1278,6 +1295,49 @@ mod new_file_path_tests {
             new_file_path("Dessert/Tarte Passion & Ganache Chocolat Miel"),
             "Dessert/Tarte Passion Ganache Chocolat Miel"
         );
+    }
+
+    #[test]
+    fn letters_of_any_script_are_kept() {
+        for name in [
+            "Desserts/Crêpes Suzette",
+            "Bœuf bourguignon",
+            "Kanelbullar för två",
+            "Μουσακάς",
+            "Борщ",
+            "麻婆豆腐",
+            "カレーライス",
+            "김치찌개",
+            "كبسة",
+            "שקשוקה",
+        ] {
+            assert_eq!(new_file_path(name), name);
+        }
+    }
+
+    /// Combining marks are not alphanumeric, but dropping them changes the
+    /// word.
+    #[test]
+    fn marks_are_kept() {
+        for name in [
+            "ต้มยำกุ้ง",                      // Thai tone marks
+            "मक्खन चिकन",                   // Devanagari virama
+            "சாம்பார்",                        // Tamil virama
+            "Pho\u{31b}\u{309} bo\u{300}", // Vietnamese, decomposed
+            "කිරිබත්",                        // Sinhala virama
+        ] {
+            assert_eq!(new_file_path(name), name);
+        }
+    }
+
+    #[test]
+    fn punctuation_and_invisible_characters_are_dropped_in_any_script() {
+        assert_eq!(new_file_path("Pasta.cook"), "Pastacook");
+        assert_eq!(new_file_path("Mom's «Pie»"), "Moms Pie");
+        assert_eq!(new_file_path("麻婆豆腐。"), "麻婆豆腐");
+        assert_eq!(new_file_path("Zero\u{200b}Width"), "ZeroWidth");
+        // As renaming refuses them.
+        assert_eq!(new_file_path("قورمه\u{200c}سبزی"), "قورمهسبزی");
     }
 
     #[test]

@@ -129,7 +129,7 @@ async fn a_menu_is_created_with_a_first_day_and_meal() {
         .await;
 
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(location(&resp), "/edit/Plans/Week 12.menu");
+    assert_eq!(location(&resp), "/edit/Plans/Week%2012.menu");
     let content = std::fs::read_to_string(server.recipes().join("Plans/Week 12.menu"))
         .expect("the menu file must exist");
     assert_eq!(
@@ -213,6 +213,39 @@ async fn a_recipe_is_still_the_default() {
     assert!(!page.contains(r#"data-action="add-recipe""#));
 }
 
+/// A name in any script is created as typed, and the editor redirect is
+/// percent-encoded: `Redirect` panics on a non-ASCII `Location`, so the file
+/// used to be written and the request then dropped.
+#[tokio::test]
+async fn names_in_any_script_are_created_and_opened() {
+    let server = start_server().await;
+
+    for (typed, url) in [
+        ("Desserts/Crêpes", "Desserts/Cr%C3%AApes"),
+        (
+            "Μουσακάς",
+            "%CE%9C%CE%BF%CF%85%CF%83%CE%B1%CE%BA%CE%AC%CF%82",
+        ),
+        ("ต้มยำ", "%E0%B8%95%E0%B9%89%E0%B8%A1%E0%B8%A2%E0%B8%B3"),
+    ] {
+        let resp = server.create(&[("filename", typed)]).await;
+
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER, "{typed:?}");
+        assert_eq!(location(&resp), format!("/edit/{url}.cook"), "{typed:?}");
+        let content = std::fs::read_to_string(server.recipes().join(format!("{typed}.cook")))
+            .expect("the recipe file must exist");
+        let title = typed.rsplit('/').next().unwrap();
+        assert_eq!(content, format!("---\ntitle: {title}\n---\n\n"));
+
+        let page = client()
+            .get(server.url(&format!("/edit/{url}.cook")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(page.status(), StatusCode::OK, "{typed:?}");
+    }
+}
+
 /// Spaces typed around a name or a folder are not part of it: they used to
 /// make a folder `Mains ` holding ` Stew .cook`. Spaces in a row inside a name,
 /// typed or left around a dropped `&`, become one.
@@ -220,15 +253,30 @@ async fn a_recipe_is_still_the_default() {
 async fn spaces_around_names_and_folders_are_dropped() {
     let server = start_server().await;
 
-    for (typed, kind, file) in [
-        (" Mains / Beef  Stew ", "recipe", "Mains/Beef Stew.cook"),
-        ("Tarts/Fig & Honey", "recipe", "Tarts/Fig Honey.cook"),
-        ("  Plans /Week 13  ", "menu", "Plans/Week 13.menu"),
+    for (typed, kind, file, url) in [
+        (
+            " Mains / Beef  Stew ",
+            "recipe",
+            "Mains/Beef Stew.cook",
+            "Mains/Beef%20Stew.cook",
+        ),
+        (
+            "Tarts/Fig & Honey",
+            "recipe",
+            "Tarts/Fig Honey.cook",
+            "Tarts/Fig%20Honey.cook",
+        ),
+        (
+            "  Plans /Week 13  ",
+            "menu",
+            "Plans/Week 13.menu",
+            "Plans/Week%2013.menu",
+        ),
     ] {
         let resp = server.create(&[("filename", typed), ("kind", kind)]).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER, "{typed:?}");
-        assert_eq!(location(&resp), format!("/edit/{file}"), "{typed:?}");
+        assert_eq!(location(&resp), format!("/edit/{url}"), "{typed:?}");
         assert!(server.recipes().join(file).is_file(), "{file} must exist");
     }
     // Listed rather than probed with `exists()`: Windows drops trailing
