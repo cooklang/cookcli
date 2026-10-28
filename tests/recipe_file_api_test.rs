@@ -253,6 +253,56 @@ async fn save_writes_only_recipes_and_menus() {
     }
 }
 
+/// `PUT` with `If-Match` as the editor sends it.
+async fn save_if_match(server: &ServerGuard, file: &str, condition: &str) -> (StatusCode, String) {
+    let resp = reqwest::Client::new()
+        .put(server.url(&format!("/api/recipes/{}", encoded(file))))
+        .header(reqwest::header::CONTENT_TYPE, "text/plain")
+        .header(reqwest::header::IF_MATCH, condition)
+        .body("Boil @water{1%l}.\n")
+        .send()
+        .await
+        .unwrap();
+    (resp.status(), resp.text().await.unwrap())
+}
+
+/// The editor saves with `If-Match: *`: a recipe renamed or deleted in another
+/// tab is refused, not written back under its old name beside the new one.
+#[tokio::test]
+async fn save_with_if_match_never_creates_a_file() {
+    let server = start_server().await;
+
+    let (status, body) = save_if_match(&server, "Pasta.cook", "*").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        server.read("Pasta.cook").as_deref(),
+        Some("Boil @water{1%l}.\n")
+    );
+
+    for file in ["Renamed Away.cook", "Gone.menu"] {
+        let (status, body) = save_if_match(&server, file, "*").await;
+        assert_eq!(status, StatusCode::PRECONDITION_FAILED, "{file}: {body}");
+        assert!(body.contains("renamed or deleted"), "{file}: {body}");
+        assert_eq!(server.read(file), None, "{file} must not be created");
+    }
+
+    // No entity tags are issued, so no other condition can hold.
+    let (status, body) = save_if_match(&server, "Week.menu", "\"abc\"").await;
+    assert_eq!(status, StatusCode::PRECONDITION_FAILED, "{body}");
+    assert_eq!(server.read("Week.menu").as_deref(), Some(MENU));
+
+    // Without the header, a missing recipe is still created.
+    let (status, body) = send(
+        &server,
+        reqwest::Method::PUT,
+        &format!("/api/recipes/{}", encoded("Fresh.cook")),
+        Some("New.\n"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(server.read("Fresh.cook").as_deref(), Some("New.\n"));
+}
+
 #[tokio::test]
 async fn delete_removes_only_recipes_and_menus() {
     let server = start_server().await;
