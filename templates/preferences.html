@@ -220,9 +220,10 @@
     }
 
     function setLanguage(lang) {
-        // Set cookie for 1 year
+        // Set cookie for 1 year. Not `lang`: cookies ignore the port, so
+        // another app on this host could own that one (#799).
         const maxAge = 365 * 24 * 60 * 60;
-        document.cookie = `lang=${lang}; path={{ prefix }}/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `cook_lang=${lang}; path={{ prefix }}/; max-age=${maxAge}; SameSite=Lax`;
 
         // Reload page to apply new language
         window.location.reload();

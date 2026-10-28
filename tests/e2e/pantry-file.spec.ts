@@ -159,7 +159,7 @@ test.describe('Pantry file', () => {
   });
 
   test('speaks the page language for its own words', async ({ context, page }) => {
-    await context.addCookies([{ name: 'lang', value: 'fr-FR', url: 'http://localhost:9080' }]);
+    await context.addCookies([{ name: 'cook_lang', value: 'fr-FR', url: 'http://localhost:9080' }]);
     await page.goto('/pantry');
 
     await expect(head(page, 'general').locator('.pantry-section-title')).toHaveText(/^Général \d+$/);
