@@ -112,27 +112,40 @@ pub fn system_language() -> LanguageIdentifier {
     language_from_system_locale(env_locale.or_else(sys_locale::get_locale))
 }
 
+/// The cookie the language picker on `/preferences` writes. Cookies are
+/// shared by every port of a host, so a plain `lang` set by another app on
+/// the same machine used to shadow the picker's choice (#799).
+pub const LANG_COOKIE: &str = "cook_lang";
+
+/// The cookie older versions wrote, still read so nobody loses their choice.
+#[cfg(feature = "server")]
+const LEGACY_LANG_COOKIE: &str = "lang";
+
+/// The first supported language a cookie called `name` carries.
+#[cfg(feature = "server")]
+fn language_cookie(headers: &HeaderMap, name: &str) -> Option<LanguageIdentifier> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|cookies| cookies.split(';'))
+        .filter_map(|cookie| cookie.trim().split_once('='))
+        .filter(|(key, _)| *key == name)
+        .filter_map(|(_, value)| value.parse::<LanguageIdentifier>().ok())
+        .find(|lang| SUPPORTED_LANGUAGES.contains(lang))
+}
+
 /// Get the preferred language from headers
-/// 1. Check for 'lang' cookie
+/// 1. Check for the `cook_lang` cookie, then the legacy `lang` one
 /// 2. Parse Accept-Language header
 /// 3. Fall back to EN_US
 #[cfg(feature = "server")]
 pub fn get_preferred_language(headers: &HeaderMap) -> LanguageIdentifier {
-    // First, check for language cookie
-    if let Some(cookie_header) = headers.get(header::COOKIE) {
-        if let Ok(cookie_str) = cookie_header.to_str() {
-            for cookie in cookie_str.split(';') {
-                let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
-                if parts.len() == 2 && parts[0] == "lang" {
-                    if let Ok(lang) = parts[1].parse::<LanguageIdentifier>() {
-                        // Check if it's a supported language
-                        if SUPPORTED_LANGUAGES.contains(&lang) {
-                            return lang;
-                        }
-                    }
-                }
-            }
-        }
+    if let Some(lang) = [LANG_COOKIE, LEGACY_LANG_COOKIE]
+        .iter()
+        .find_map(|name| language_cookie(headers, name))
+    {
+        return lang;
     }
 
     // Next, check Accept-Language header
@@ -320,5 +333,38 @@ mod tests {
         // Anything that isn't "0" is truthy
         let flags = parse_feature_flags(&make_cookie_headers("show_shopping_list=yes"));
         assert!(flags.show_shopping_list);
+    }
+
+    #[test]
+    fn test_language_from_cook_lang_cookie() {
+        let headers = make_cookie_headers("cook_lang=fr-FR");
+        assert_eq!(get_preferred_language(&headers), FR_FR);
+    }
+
+    #[test]
+    fn test_cook_lang_beats_a_foreign_lang_cookie() {
+        // Another app on the same host (any port) set its own `lang` (#799).
+        let headers = make_cookie_headers("lang=en-US; cook_lang=fr-FR");
+        assert_eq!(get_preferred_language(&headers), FR_FR);
+    }
+
+    #[test]
+    fn test_legacy_lang_cookie_still_read() {
+        let headers = make_cookie_headers("lang=de-DE");
+        assert_eq!(get_preferred_language(&headers), DE_DE);
+    }
+
+    #[test]
+    fn test_language_cookie_in_a_second_cookie_header() {
+        let mut headers = make_cookie_headers("show_pantry=1");
+        headers.append(header::COOKIE, "cook_lang=ja-JP".parse().unwrap());
+        assert_eq!(get_preferred_language(&headers), JA_JP);
+    }
+
+    #[test]
+    fn test_unsupported_cook_lang_falls_back_to_accept_language() {
+        let mut headers = make_cookie_headers("cook_lang=xx-XX");
+        headers.insert(header::ACCEPT_LANGUAGE, "sv".parse().unwrap());
+        assert_eq!(get_preferred_language(&headers), SV_SE);
     }
 }

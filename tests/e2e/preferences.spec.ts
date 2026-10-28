@@ -265,3 +265,22 @@ test.describe('Feature toggles in preferences', () => {
     await expect(page.locator('nav a.nav-pill', { hasText: /Shopping/i })).toBeVisible();
   });
 });
+
+test.describe('Language picker', () => {
+  test('wins over a lang cookie set by another app on the same host', async ({ context, page }) => {
+    // Cookies ignore the port: an app elsewhere on this host can own `lang`,
+    // and as HttpOnly the page cannot even overwrite it (#799).
+    await context.addCookies([
+      { name: 'lang', value: 'en-US', url: 'http://localhost:9080', httpOnly: true },
+    ]);
+    await page.goto('/preferences');
+
+    await Promise.all([
+      page.waitForEvent('load'),
+      page.getByRole('button', { name: /Français/ }).click(),
+    ]);
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr-FR');
+    await expect(page.getByRole('button', { name: /Français/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+});

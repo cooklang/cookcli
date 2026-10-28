@@ -365,7 +365,7 @@ async fn the_items_above_the_first_section_are_listed_under_a_translated_name() 
         async move {
             reqwest::Client::new()
                 .get(url)
-                .header("Cookie", format!("lang={lang}"))
+                .header("Cookie", format!("cook_lang={lang}"))
                 .send()
                 .await
                 .unwrap()
