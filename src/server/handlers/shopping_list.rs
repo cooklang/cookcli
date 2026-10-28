@@ -38,6 +38,9 @@ pub struct RecipeRequest {
     /// buy, as stored in `.shopping-list`.
     #[serde(default)]
     optional_ingredients: Vec<OptionalSelection>,
+    /// The menu this recipe is listed under on the stored list, so a nested
+    /// menu leading back to it does not count it twice.
+    menu: Option<String>,
 }
 
 pub async fn shopping_list(
@@ -73,6 +76,16 @@ pub async fn shopping_list(
                 json_error(format!("recipe not found: {name}")),
             ));
         }
+        // The menu is looked up too, so it gets the same checks first.
+        if let Some(menu) = &entry.menu {
+            check_path(menu)?;
+            if !inside_collection(&state.base_path, &state.base_path.join(menu)) {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    json_error(format!("recipe not found: {menu}")),
+                ));
+            }
+        }
         let recipe = ScaledRecipe::scaled(
             cookcli_core::RecipeSource::Path(name.as_str().into()),
             entry.scale.unwrap_or(1.0),
@@ -87,6 +100,7 @@ pub async fn shopping_list(
                 // Only what was chosen, below.
                 include_optional: false,
                 confined: true,
+                within: entry.menu.as_deref(),
             },
             &mut ingredients,
         )
@@ -806,7 +820,8 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     let mut add = |path: &str,
                    scale: f64,
                    included: Option<&[String]>,
-                   selections: &[OptionalSelection]|
+                   selections: &[OptionalSelection],
+                   menu: Option<&str>|
      -> anyhow::Result<()> {
         // `.shopping-list` is a file, and one written before these endpoints
         // checked what they stored can still hold a path that leaves the
@@ -830,6 +845,8 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 included_references: included,
                 include_optional: false,
                 confined: true,
+                // Only a menu path that could be a recipe here is looked up.
+                within: menu.filter(|menu| crate::util::is_safe_relative_path(menu)),
             },
             &mut list,
         )
@@ -840,13 +857,14 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
 
     for item in &items {
         if let Some(recipes) = &item.recipes {
-            // Menu/plan entry — expand each nested recipe.
+            // Menu/plan entry — expand each nested recipe, as part of it.
             for recipe in recipes {
                 add(
                     &recipe.path,
                     recipe.scale,
                     recipe.included_references.as_deref(),
                     &recipe.optional_ingredients,
+                    Some(&item.path),
                 )?;
             }
         } else {
@@ -855,6 +873,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 item.scale,
                 item.included_references.as_deref(),
                 &item.optional_ingredients,
+                None,
             )?;
         }
     }

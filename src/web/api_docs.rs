@@ -954,6 +954,16 @@ fn shopping_list() -> ApiSection {
                      quantity syntax (`2%pinch`). The amount is used as given, not scaled — \
                      this is what `GET /api/shopping_list/items` returns for the entry.",
                 ),
+                param(
+                    "menu",
+                    "body",
+                    "string",
+                    false,
+                    "The menu this recipe is listed under on the stored list (the `path` \
+                     of its `add_menu` entry). The recipe is expanded as part of it, so a \
+                     menu used as a meal whose references lead back to this menu does not \
+                     count it a second time. Omit for a recipe added on its own.",
+                ),
             ])
             .request(
                 r#"
