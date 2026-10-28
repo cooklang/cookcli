@@ -205,13 +205,36 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
     };
 
     // Normalize the path by resolving all components
-    std::fs::canonicalize(&absolute)
-        .with_context(|| format!("Base path not found: {absolute}"))?
-        .try_into()
-        .map_err(|e| {
-            tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
-            anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
-        })
+    let canonical = std::fs::canonicalize(&absolute)
+        .with_context(|| format!("Base path not found: {absolute}"))?;
+
+    // On Windows that is a `\\?\` path, and `glob`, which every
+    // `cooklang_find` walk uses, finds nothing under one other than
+    // `\\?\C:\…`: a collection on a mapped network drive or share
+    // (`\\?\UNC\…`) listed and searched as empty (#783). Drop the prefix
+    // where Windows allows it, and keep the path as given where it cannot
+    // be spelled without one (`\\?\Volume{…}\…`).
+    let resolved = dunce::simplified(&canonical);
+    let resolved = if has_verbatim_prefix(resolved) {
+        std::path::absolute(&absolute)?
+    } else {
+        resolved.to_path_buf()
+    };
+    resolved.try_into().map_err(|e| {
+        tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
+        anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
+    })
+}
+
+/// Whether `path` starts with a `\\?\` prefix other than `\\?\C:\`.
+fn has_verbatim_prefix(path: &std::path::Path) -> bool {
+    use std::path::{Component, Prefix};
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => {
+            prefix.kind().is_verbatim() && !matches!(prefix.kind(), Prefix::VerbatimDisk(_))
+        }
+        _ => false,
+    }
 }
 
 /// Whether a request-supplied path, joined to a directory, stays inside it.
@@ -337,5 +360,53 @@ mod tests {
             split_recipe_name_and_scaling_factor("recipe.cook:abc"),
             None
         );
+    }
+
+    /// A collection with a recipe one folder down, as in #783.
+    #[cfg(windows)]
+    fn collection() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("French")).unwrap();
+        std::fs::write(dir.path().join("French").join("Crepes.cook"), "@eggs{2}\n").unwrap();
+        dir
+    }
+
+    #[cfg(windows)]
+    fn lists_crepes(base: &Utf8Path) -> bool {
+        let tree = cooklang_find::build_tree(base).unwrap();
+        tree.children
+            .get("French")
+            .is_some_and(|folder| folder.children.contains_key("Crepes"))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolved_base_path_has_no_verbatim_prefix() {
+        let dir = collection();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        let resolved = resolve_to_absolute_path(base).unwrap();
+        assert!(!resolved.as_str().starts_with(r"\\?\"), "{resolved}");
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
+    }
+
+    /// A mapped network drive or share canonicalizes to `\\?\UNC\…`, under
+    /// which `glob` (and so every `cooklang_find` walk) finds nothing: the
+    /// home page and search came up empty while a recipe's URL still opened
+    /// it (#783). The admin share reaches a local folder the same way.
+    #[cfg(windows)]
+    #[test]
+    fn lists_recipes_in_a_collection_on_a_network_share() {
+        let dir = collection();
+        let local = dir.path().to_str().unwrap();
+        let Some((drive, rest)) = local.split_once(":\\") else {
+            panic!("temp dir {local} has no drive letter");
+        };
+        let share = format!(r"\\localhost\{drive}$\{rest}");
+        if !std::path::Path::new(&share).is_dir() {
+            eprintln!("skipped: the admin share {share} is not reachable");
+            return;
+        }
+        let resolved = resolve_to_absolute_path(Utf8Path::new(&share)).unwrap();
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
     }
 }

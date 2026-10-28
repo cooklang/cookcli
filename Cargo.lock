@@ -720,6 +720,7 @@ dependencies = [
  "cooklang-reports",
  "cooklang-sync-client",
  "directories",
+ "dunce",
  "fastrand",
  "flate2",
  "fluent",
