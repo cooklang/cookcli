@@ -52,6 +52,22 @@ fn write_fixture(root: &Path) {
         "- @./Loop A.menu{} \\\n- @rice{1%cup}\n",
     )
     .unwrap();
+    // Three menus in a ring: A → B → C → A.
+    std::fs::write(
+        root.join("Ring A.menu"),
+        "- @./Ring B.menu{} \\\n- @./Eggs{}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("Ring B.menu"),
+        "- @./Ring C.menu{} \\\n- @rice{1%cup}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("Ring C.menu"),
+        "- @./Ring A.menu{} \\\n- @beans{1%cup}\n",
+    )
+    .unwrap();
 }
 
 /// Kills the spawned server when the test ends, pass or panic.
@@ -169,11 +185,13 @@ async fn list_for_menu(server: &ServerGuard, menu: &str) -> BTreeMap<String, (f6
         requests.push(
             json!({ "recipe": item["path"], "scale": item["scale"], "included_references": [] }),
         );
+        // As the page sends them: each meal as part of its menu.
         for recipe in item["recipes"].as_array().unwrap() {
             requests.push(json!({
                 "recipe": recipe["path"],
                 "scale": recipe["scale"],
                 "included_references": recipe["included_references"],
+                "menu": item["path"],
             }));
         }
     }
@@ -284,6 +302,20 @@ async fn menus_that_reference_each_other_are_counted_once() {
     let loop_b = &items[0]["recipes"][0];
     assert_eq!(loop_b["path"], "Loop B.menu");
     assert_eq!(loop_b["included_references"], json!([]));
+}
+
+/// B, stored under A, goes on through C and back into A. Expanded as part of
+/// A, that reference is refused: A's eggs used to be counted twice.
+#[tokio::test]
+async fn menus_in_a_ring_of_three_are_counted_once() {
+    let server = start_server().await;
+
+    let totals = list_for_menu(&server, "Ring A.menu").await;
+
+    // As `cook shopping-list` counts them.
+    assert_eq!(totals["eggs"], amount(2.0, ""));
+    assert_eq!(totals["rice"], amount(1.0, "cup"));
+    assert_eq!(totals["beans"], amount(1.0, "cup"));
 }
 
 fn cook(dir: &Path, args: &[&str]) -> std::process::Output {
