@@ -26,7 +26,7 @@ test.describe('New recipe names', () => {
       'שקשוקה',
       'ต้มยำกุ้ง',
       'मक्खन चिकन',
-      'قورمه‌سبزی',
+      'قورمه\u200cسبزی',
     ]) {
       expect(await valid(name), name).toBe(true);
     }
