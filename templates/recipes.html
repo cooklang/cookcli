@@ -51,7 +51,7 @@
                 {{ tr.t("new-plan") }}
             </a>
             <a href="{{ new_recipe_url }}" class="btn btn-primary">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
                 {{ tr.t("new-recipe") }}
@@ -84,7 +84,7 @@
             </div>
             <a href="{{ prefix }}/{% if static_mode %}menu{% else %}recipe{% endif %}/{{ menu.menu_path }}{% if static_mode %}.html{% endif %}" class="btn self-start sm:self-center">
                 {{ tr.t("todays-menu-view") }}
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>

@@ -7,13 +7,13 @@
     <div id="aisles-error-banner" class="hidden mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft" role="alert">
         <div class="flex items-start gap-3">
             <div class="shrink-0 text-danger">
-                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
             </div>
             <p id="aisles-error-message" class="flex-1 text-text text-sm font-mono whitespace-pre-wrap"></p>
             <button type="button" onclick="document.getElementById('aisles-error-banner').classList.add('hidden')" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
@@ -203,6 +203,7 @@
         svg.setAttribute('fill', 'none');
         svg.setAttribute('stroke', 'currentColor');
         svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('stroke-linecap', 'round');
         path.setAttribute('stroke-linejoin', 'round');
