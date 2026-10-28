@@ -5,13 +5,13 @@
     <div id="pantry-error-banner" role="alert" class="{% if load_error.is_none() %}hidden {% endif %}mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
         <div class="flex items-start gap-3">
             <div class="shrink-0 text-danger">
-                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
             </div>
             <p id="pantry-error-message" class="flex-1 text-text text-sm font-mono whitespace-pre-wrap">{% if let Some(error) = load_error %}{{ tr.t("pantry-unreadable") }}: {{ error }}{% endif %}</p>
             <button type="button" onclick="document.getElementById('pantry-error-banner').classList.add('hidden')" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
@@ -60,7 +60,7 @@
                     {% if viewer.can_edit_lists() && section.name != "general" %}
                     <button type="button" class="rename-section-btn icon-btn shrink-0"
                             title="{{ tr.t("pantry-rename-section") }}" aria-label="{{ tr.t("pantry-rename-section") }}">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536 9 17l.464-3.536z"></path>
                         </svg>
                     </button>
@@ -104,12 +104,12 @@
                     {% if viewer.can_edit_lists() %}
                     <div class="pantry-actions flex items-center gap-1 shrink-0">
                         <button type="button" class="edit-item icon-btn" title="{{ tr.t("pantry-edit-item") }}" aria-label="{{ tr.t("pantry-edit-item") }}: {{ item.name }}">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536 9 17l.464-3.536z"></path>
                             </svg>
                         </button>
                         <button type="button" class="remove-item icon-btn" title="{{ tr.t("pantry-remove-item") }}" aria-label="{{ tr.t("pantry-remove-item") }}: {{ item.name }}">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"></path>
                             </svg>
                         </button>
@@ -119,9 +119,9 @@
                 {% endfor %}
                 {% if viewer.can_edit_lists() %}
                 <form class="row pantry-add py-3" data-unsaved data-section="{{ section.name }}">
-                    <input type="text" name="name" autocomplete="off" aria-label="{{ tr.t("pantry-item-name") }}" placeholder="{{ tr.t("pantry-item-name") }}"
+                    <input type="text" name="name" autocomplete="off" aria-label="{{ tr.t("pantry-item-name") }} ({% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %})" placeholder="{{ tr.t("pantry-item-name") }}"
                            class="flex-1 min-w-0 h-8 px-2 text-sm rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
-                    <input type="text" name="quantity" autocomplete="off" aria-label="{{ tr.t("pantry-item-quantity") }}" placeholder="{{ tr.t("pantry-item-quantity") }}" title="{{ tr.t("pantry-placeholder-quantity") }}"
+                    <input type="text" name="quantity" autocomplete="off" aria-label="{{ tr.t("pantry-item-quantity") }} ({% if section.name == "general" %}{{ tr.t("pantry-section-general") }}{% else %}{{ section.name }}{% endif %})" placeholder="{{ tr.t("pantry-item-quantity") }}" title="{{ tr.t("pantry-placeholder-quantity") }}"
                            class="w-24 sm:w-32 shrink-0 h-8 px-2 text-sm rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent">
                     <button type="submit" class="btn btn-sm">{{ tr.t("pantry-add") }}</button>
                 </form>

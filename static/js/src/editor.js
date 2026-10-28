@@ -147,7 +147,8 @@ export function setCursorPositionCallback(callback) {
 // `menu`: the file is a `.menu`, where Enter continues the current meal (see
 // `continueMeal`). Ahead of the default Enter, but behind autocompletion,
 // which takes Enter while its list is open.
-export function initEditor(container, initialContent, onChange, { menu = false } = {}) {
+// `labelledBy` is the id of the element naming the text box for screen readers.
+export function initEditor(container, initialContent, onChange, { menu = false, labelledBy = null } = {}) {
   const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged && onChange) {
       onChange(update.state.doc.toString());
@@ -185,7 +186,8 @@ export function initEditor(container, initialContent, onChange, { menu = false }
       ]),
       menu ? Prec.high(keymap.of([{ key: "Enter", run: continueMeal }])) : [],
       updateListener,
-      EditorView.lineWrapping
+      EditorView.lineWrapping,
+      labelledBy ? EditorView.contentAttributes.of({ "aria-labelledby": labelledBy }) : []
     ]
   });
 
