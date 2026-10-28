@@ -19,9 +19,10 @@ pub const EU_ES: LanguageIdentifier = langid!("eu-ES");
 pub const SV_SE: LanguageIdentifier = langid!("sv-SE");
 pub const IT_IT: LanguageIdentifier = langid!("it-IT");
 pub const JA_JP: LanguageIdentifier = langid!("ja-JP");
+pub const EL_GR: LanguageIdentifier = langid!("el-GR");
 
 pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[
-    EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT, JA_JP,
+    EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT, JA_JP, EL_GR,
 ];
 
 /// Per-request feature visibility flags, read from cookies.
@@ -274,6 +275,14 @@ mod locale_tests {
         assert_eq!(
             language_from_system_locale(Some("ja_JP.UTF-8".into())),
             JA_JP
+        );
+    }
+
+    #[test]
+    fn test_system_locale_greek() {
+        assert_eq!(
+            language_from_system_locale(Some("el_GR.UTF-8".into())),
+            EL_GR
         );
     }
 
