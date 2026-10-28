@@ -272,16 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Send didChange to LSP with debouncing to avoid overwhelming the server
         if (lspInitialized && documentUri) {
             if (lspDebounceTimer) clearTimeout(lspDebounceTimer);
-            lspDebounceTimer = setTimeout(() => {
-                documentVersion++;
-                sendLspNotification('textDocument/didChange', {
-                    textDocument: {
-                        uri: documentUri,
-                        version: documentVersion
-                    },
-                    contentChanges: [{ text: newContent }]
-                });
-            }, LSP_DEBOUNCE_MS);
+            lspDebounceTimer = setTimeout(flushLspChange, LSP_DEBOUNCE_MS);
         }
     }, { menu: {{ is_menu }}, labelledBy: 'edit-heading' });
 
@@ -1028,6 +1019,24 @@ let pendingCompletions = new Map();
 let lspDebounceTimer = null;
 const LSP_DEBOUNCE_MS = 150;
 
+// Send the editor's text to the language server now, if a change is still
+// waiting for its debounce. A completion request goes out at once, so it
+// flushes first: otherwise the server answered from text a keystroke or
+// more behind, and typing fast after `@` listed nothing.
+function flushLspChange() {
+    if (!lspDebounceTimer) return;
+    clearTimeout(lspDebounceTimer);
+    lspDebounceTimer = null;
+    documentVersion++;
+    sendLspNotification('textDocument/didChange', {
+        textDocument: {
+            uri: documentUri,
+            version: documentVersion
+        },
+        contentChanges: [{ text: window.CooklangEditor.getContent(editorView) }]
+    });
+}
+
 function connectLsp() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}{{ prefix }}/api/ws/lsp`;
@@ -1215,6 +1224,7 @@ window.CooklangEditor.setCompletionResolver(async (line, character) => {
             return;
         }
 
+        flushLspChange();
         const id = sendLspRequest('textDocument/completion', {
             textDocument: { uri: documentUri },
             position: { line: line, character: character }
