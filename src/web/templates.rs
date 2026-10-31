@@ -563,7 +563,14 @@ fn step_text(step: &StepData) -> String {
         match item {
             StepItem::Text(t) => out.push_str(t),
             StepItem::Ingredient { name, .. } => out.push_str(name),
-            StepItem::Cookware(c) => out.push_str(c),
+            StepItem::Cookware { name, note } => {
+                out.push_str(name);
+                if let Some(n) = note {
+                    out.push_str(" (");
+                    out.push_str(n);
+                    out.push(')');
+                }
+            }
             StepItem::Timer { display, .. } => out.push_str(display),
             StepItem::Quantity(q) => out.push_str(q),
             StepItem::LineBreak => out.push(' '),
@@ -943,6 +950,9 @@ pub struct IngredientData {
 #[derive(Debug, Clone, Serialize)]
 pub struct CookwareData {
     pub name: String,
+    /// Preparation or descriptive note from Cooklang shorthand notation,
+    /// e.g. `#pot{}(big)` -> "big".
+    pub note: Option<String>,
     /// Marked optional in the recipe (`#?splatter guard{}`).
     pub optional: bool,
 }
@@ -994,7 +1004,10 @@ pub enum StepItem {
         /// As on [`IngredientData::reference_query`].
         reference_query: String,
     },
-    Cookware(String),
+    Cookware {
+        name: String,
+        note: Option<String>,
+    },
     Timer {
         display: String,
         seconds: Option<i64>,

@@ -626,6 +626,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
         cookware.push(CookwareData {
             name: item.cookware.name.to_string(),
+            note: item.cookware.note.clone(),
             optional: item.cookware.modifiers().is_optional(),
         });
     }
@@ -695,7 +696,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             }
                             Item::Cookware { index } => {
                                 if let Some(cw) = recipe.cookware.get(*index) {
-                                    step_items.push(StepItem::Cookware(cw.name.to_string()));
+                                    step_items.push(StepItem::Cookware {
+                                        name: cw.name.to_string(),
+                                        note: cw.note.clone(),
+                                    });
                                 }
                             }
                             Item::Timer { index } => {
