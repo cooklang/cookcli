@@ -781,6 +781,7 @@ dependencies = [
  "cooklang-format",
  "cooklang-reports",
  "directories",
+ "libc",
  "regex",
  "serde",
  "serde_json",

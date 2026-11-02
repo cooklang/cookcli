@@ -53,6 +53,11 @@ toml_edit = "0.25"
 tracing = "0.1"
 yansi = "1"
 
+# `statfs`, to tell a network share from a local disk before replacing a file
+# on it (`fs_atomic`, #814).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 # Only the tests strip escape codes now; the formatters that emit them moved to
 # `cooklang-format`.
