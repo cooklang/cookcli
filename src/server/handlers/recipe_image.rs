@@ -506,29 +506,19 @@ fn prepare_error(e: PrepareError) -> ApiError {
 }
 
 /// Writes beside `target` and renames over it, so a reader never sees half a
-/// picture. The temporary name is hidden and ends in `.tmp`, which
-/// `cooklang-find` and cook.md sync both pass over.
+/// picture, or through it when a rename would change its owner (#814). The
+/// temporary name is hidden and ends in `.tmp`, which `cooklang-find` and
+/// cook.md sync both pass over.
 async fn write_atomically(target: &Utf8Path, bytes: Vec<u8>) -> Result<(), ApiError> {
-    let name = target.file_name().unwrap_or("picture");
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or_default();
-    let temp = target.with_file_name(format!(".{name}.{}-{nanos}.tmp", std::process::id()));
-
-    let failed = |e: std::io::Error| {
-        tracing::error!("Failed to save picture {target}: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to save the picture: {e}")),
-        )
-    };
-    tokio::fs::write(&temp, bytes).await.map_err(failed)?;
-    if let Err(e) = fs_atomic::rename_replace_async(temp.clone(), target.to_owned()).await {
-        let _ = tokio::fs::remove_file(&temp).await;
-        return Err(failed(e));
-    }
-    Ok(())
+    fs_atomic::write_replace_async(target.to_owned(), bytes)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to save picture {target}: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error(format!("Failed to save the picture: {e}")),
+            )
+        })
 }
 
 /// Removes `file`, reporting whether there was one.

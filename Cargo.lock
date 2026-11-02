@@ -729,6 +729,7 @@ dependencies = [
  "hmac",
  "image",
  "insta",
+ "libc",
  "libsqlite3-sys",
  "mime_guess",
  "notify",

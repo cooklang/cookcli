@@ -23,7 +23,6 @@ use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 
 #[derive(Deserialize)]
 pub struct RecipeQuery {
@@ -252,48 +251,19 @@ pub async fn recipe_save(
         }
     }
 
-    // Atomic write: write to temp file, then rename
-    let temp_path = file_path.with_extension("tmp");
-
-    let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
-        tracing::error!("Failed to create temp file {}: {}", temp_path, e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!(
-                "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
-            )),
-        )
-    })?;
-
-    temp_file.write_all(body.as_bytes()).await.map_err(|e| {
-        tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
-        // Fire-and-forget cleanup - spawn so we don't block the error path
-        let temp_path_clone = temp_path.clone();
-        tokio::spawn(async move {
-            let _ = tokio::fs::remove_file(&temp_path_clone).await;
-        });
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to write recipe: {e}")),
-        )
-    })?;
-
-    // Replace the original file with the temp file. `rename_replace_async`
-    // uses an atomic rename on capable platforms but copies + removes on
-    // Android, where the aarch64 `rename()` libc wrapper hits the
-    // seccomp-blocked `renameat2` syscall (SIGSYS / "Bad system call").
-    // See https://github.com/cooklang/cookcli/issues/349.
-    crate::server::fs_atomic::rename_replace_async(temp_path.clone(), file_path.clone())
+    // Written beside the recipe and renamed over it, so a reader never sees
+    // half a file — or through it, when a rename would change its owner
+    // (#814). Either way `write_replace` avoids the `rename()` that Android's
+    // seccomp filter kills the process for (#349).
+    crate::server::fs_atomic::write_replace_async(file_path.clone(), body.into_bytes())
         .await
         .map_err(|e| {
-            tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
-            let temp_path_clone = temp_path.clone();
-            tokio::spawn(async move {
-                let _ = tokio::fs::remove_file(&temp_path_clone).await;
-            });
+            tracing::error!("Failed to save {}: {}", file_path, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                json_error(format!("Failed to save recipe: {e}")),
+                json_error(format!(
+                    "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
+                )),
             )
         })?;
 
