@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.40.0](https://github.com/cooklang/cookcli/compare/v0.39.0...v0.40.0) (2026-11-03)
+
+
+### Features
+
+* **i18n:** add Greek translation ([bee3326](https://github.com/cooklang/cookcli/commit/bee3326e76e7847121ce39b84064641e33a671da))
+
+
+### Bug Fixes
+
+* **aisles:** take no typing or Save in the text tab until the file is in ([#797](https://github.com/cooklang/cookcli/issues/797)) ([dc979e0](https://github.com/cooklang/cookcli/commit/dc979e0ded2e51f346e107258b2cc16d0b9531b2))
+* **build:** write the search index in path order ([#807](https://github.com/cooklang/cookcli/issues/807)) ([93b7385](https://github.com/cooklang/cookcli/commit/93b7385df3eb344caf1df9cc8ed53319f3a080cf))
+* **editor:** never write back a recipe renamed or deleted in another tab ([#809](https://github.com/cooklang/cookcli/issues/809)) ([df83728](https://github.com/cooklang/cookcli/commit/df83728e08c12630eada2fd1feefd1652545c02f))
+* **editor:** send the pending text before asking for completions ([#805](https://github.com/cooklang/cookcli/issues/805)) ([7a2cd0e](https://github.com/cooklang/cookcli/commit/7a2cd0e387c51a51d465c1223c7982229cd29378))
+* **editor:** show the save status in the page's language ([d3825e6](https://github.com/cooklang/cookcli/commit/d3825e61f4dc827fcf85bbf104b6dbe69a3dc142))
+* empty the checked log on Clear instead of removing it ([#814](https://github.com/cooklang/cookcli/issues/814)) ([88d1c53](https://github.com/cooklang/cookcli/commit/88d1c539247b0f96158c126066c5cd138122db0e))
+* keep the shopping list's owner when rewriting it ([#814](https://github.com/cooklang/cookcli/issues/814)) ([2af46db](https://github.com/cooklang/cookcli/commit/2af46dbb0b10a231e07a09bae9aa991504e8e85e))
+* list recipes when the collection is on a Windows network drive ([#787](https://github.com/cooklang/cookcli/issues/787)) ([f0b7c94](https://github.com/cooklang/cookcli/commit/f0b7c9491ad55c4e1d80b76e89e60fe76b7c207f))
+* recipe and ingredient names in any script ([#803](https://github.com/cooklang/cookcli/issues/803)) ([6d02b05](https://github.com/cooklang/cookcli/commit/6d02b05c5a16316ec1c8aba8feeb2fc87f615d25))
+* **server:** keep a file's owner when the server rewrites it ([#814](https://github.com/cooklang/cookcli/issues/814)) ([900149d](https://github.com/cooklang/cookcli/commit/900149dbdb78ea6c658cb1b57a88c1535f23566c))
+* **server:** name the language cookie cook_lang so other apps can't shadow it ([#800](https://github.com/cooklang/cookcli/issues/800)) ([af5410f](https://github.com/cooklang/cookcli/commit/af5410fbda1f23d436e23b20194ba06eceb16279)), closes [#799](https://github.com/cooklang/cookcli/issues/799)
+* **web:** name every form field and hide decorative icons from screen readers ([#801](https://github.com/cooklang/cookcli/issues/801)) ([cc43366](https://github.com/cooklang/cookcli/commit/cc43366aa1ddcbc42b0d310f51b2d536a03b718f))
+
 ## [0.39.0](https://github.com/cooklang/cookcli/compare/v0.38.1...v0.39.0) (2026-10-24)
 
 
