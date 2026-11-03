@@ -276,7 +276,7 @@ The web UI uses server-side rendering with Askama templates:
 ### Translations
 - UI strings are Fluent messages in `locales/<lang>/*.ftl` (`aisles`, `common`,
   `pantry`, `preferences`, `recipes`, `shopping`), one folder per locale: de-DE,
-  en-US, es-ES, eu-ES, fr-FR, it-IT, ja-JP, nl-NL, sv-SE
+  el-GR, en-US, es-ES, eu-ES, fr-FR, it-IT, ja-JP, nl-NL, sv-SE
 - A literal `{` in a message is written `{"{"}`
 - Templates call `tr.t("key")`, `tr.tn("key", count)` (plurals) and
   `tr.tf("key", factor)`, defined on `Tr` in `src/web/templates.rs`; askama passes
