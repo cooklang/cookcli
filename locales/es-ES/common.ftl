@@ -34,6 +34,9 @@ editor-unsaved-changes = Cambios sin guardar
 editor-saved = Guardado
 editor-saving = Guardando...
 editor-save-failed = Error al guardar
+editor-not-saved-gone = No guardado: renombrado o eliminado en otro lugar
+editor-save-failed-detail = Error al guardar: %s
+editor-file-gone = Este archivo se ha renombrado o eliminado en otra pestaña o en otro dispositivo. Tus cambios no se han guardado: cópialos antes de salir de la página.
 editor-placeholder = Escribe tu receta aquí...
 
 # Editor toolbar

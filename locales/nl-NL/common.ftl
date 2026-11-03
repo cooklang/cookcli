@@ -34,6 +34,9 @@ editor-unsaved-changes = Niet-opgeslagen wijzigingen
 editor-saved = Opgeslagen
 editor-saving = Opslaan...
 editor-save-failed = Opslaan mislukt
+editor-not-saved-gone = Niet opgeslagen: elders hernoemd of verwijderd
+editor-save-failed-detail = Opslaan mislukt: %s
+editor-file-gone = Dit bestand is in een ander tabblad of op een ander apparaat hernoemd of verwijderd. Je wijzigingen zijn niet opgeslagen: kopieer ze voordat je de pagina verlaat.
 editor-placeholder = Voer hier uw recept in...
 
 # Editor toolbar

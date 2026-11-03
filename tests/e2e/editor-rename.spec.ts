@@ -146,4 +146,25 @@ test.describe('Renaming from the editor', () => {
       expect(await other.evaluate(() => hasUnsavedChanges())).toBe(true);
     });
   }
+
+  test('says so in the language of the page', async ({ page, context }) => {
+    await context.addCookies([{ name: 'cook_lang', value: 'fr-FR', url: 'http://localhost:9080' }]);
+    fs.writeFileSync(file('Race.cook'), 'Stir.\n');
+    await page.goto('/edit/E2E Rename/Race.cook');
+    await expect(page.locator('#editor-container .cm-editor')).toBeVisible();
+
+    await page.evaluate(() => {
+      editorView.dispatch({ changes: { from: editorView.state.doc.length, insert: 'Typed here.\n' } });
+    });
+    await expect(page.locator('#save-status')).toHaveText('Enregistré');
+
+    const resp = await page.request.delete('/api/recipes/E2E Rename/Race.cook');
+    expect(resp.ok()).toBe(true);
+    await page.evaluate(() => {
+      editorView.dispatch({ changes: { from: editorView.state.doc.length, insert: 'More.\n' } });
+    });
+    await expect(page.locator('#save-status')).toHaveText('Non enregistré : renommé ou supprimé ailleurs');
+    await expect(page.getByText('Ce fichier a été renommé ou supprimé')).toBeVisible();
+    expect(fs.existsSync(file('Race.cook'))).toBe(false);
+  });
 });

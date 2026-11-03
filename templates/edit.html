@@ -295,29 +295,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// The save status and its notices, in the page's language. `%s` is filled in.
+const saveText = {
+    modified: {{ tr.t("editor-unsaved-changes")|json|safe }},
+    saving: {{ tr.t("editor-saving")|json|safe }},
+    saved: {{ tr.t("editor-saved")|json|safe }},
+    failed: {{ tr.t("editor-save-failed")|json|safe }},
+    gone: {{ tr.t("editor-not-saved-gone")|json|safe }},
+    failedDetail: {{ tr.t("editor-save-failed-detail")|json|safe }},
+    fileGone: {{ tr.t("editor-file-gone")|json|safe }}
+};
+
 function updateSaveStatus(state) {
     const status = document.getElementById('save-status');
     // Typing goes on saying `modified`; the file stays gone.
     if (fileGone) state = 'gone';
     switch (state) {
         case 'modified':
-            status.textContent = 'Modified';
+            status.textContent = saveText.modified;
             status.className = 'text-sm text-accent-text';
             break;
         case 'saving':
-            status.textContent = 'Saving...';
+            status.textContent = saveText.saving;
             status.className = 'text-sm text-muted';
             break;
         case 'saved':
-            status.textContent = 'Saved';
+            status.textContent = saveText.saved;
             status.className = 'text-sm text-ok';
             break;
         case 'error':
-            status.textContent = 'Save failed';
+            status.textContent = saveText.failed;
             status.className = 'text-sm text-danger';
             break;
         case 'gone':
-            status.textContent = 'Not saved: renamed or deleted elsewhere';
+            status.textContent = saveText.gone;
             status.className = 'text-sm text-danger';
             break;
     }
@@ -376,19 +387,20 @@ async function saveRecipe() {
         } else if (response.status === 412) {
             fileGone = true;
             updateSaveStatus('gone');
-            showToast(await errorMessage(response));
+            // The page's own words, not the server's English.
+            showToast(saveText.fileGone);
             return false;
         } else {
             updateSaveStatus('error');
             const errorText = await errorMessage(response);
             console.error('Save failed:', errorText);
-            showToast(`Save failed: ${errorText || 'Unknown error'}`);
+            showToast(saveText.failedDetail.replace('%s', errorText || response.status));
             return false;
         }
     } catch (error) {
         updateSaveStatus('error');
         console.error('Save failed:', error.message);
-        showToast(`Save failed: ${error.message}`);
+        showToast(saveText.failedDetail.replace('%s', error.message));
         return false;
     } finally {
         isSaving = false;
@@ -545,7 +557,7 @@ async function renameRecipe(event) {
     // Write what is in the editor first, under the old name, and keep any
     // later autosave from writing that name again.
     if (!(await saveNow())) {
-        renameFailed('Save failed');
+        renameFailed(saveText.failed);
         return;
     }
     renaming = true;

@@ -34,6 +34,9 @@ editor-unsaved-changes = Modifications non enregistrées
 editor-saved = Enregistré
 editor-saving = Enregistrement...
 editor-save-failed = Échec de l'enregistrement
+editor-not-saved-gone = Non enregistré : renommé ou supprimé ailleurs
+editor-save-failed-detail = Échec de l'enregistrement : %s
+editor-file-gone = Ce fichier a été renommé ou supprimé dans un autre onglet ou sur un autre appareil. Vos modifications n'ont pas été enregistrées : copiez-les avant de quitter la page.
 editor-placeholder = Entrez votre recette ici...
 
 # Editor toolbar

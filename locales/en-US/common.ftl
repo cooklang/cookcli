@@ -34,6 +34,9 @@ editor-unsaved-changes = Unsaved changes
 editor-saved = Saved
 editor-saving = Saving...
 editor-save-failed = Save failed
+editor-not-saved-gone = Not saved: renamed or deleted elsewhere
+editor-save-failed-detail = Save failed: %s
+editor-file-gone = This file was renamed or deleted in another tab or on another device. Your changes have not been saved: copy them before leaving the page.
 editor-placeholder = Enter your recipe here...
 
 # Editor toolbar
