@@ -389,11 +389,10 @@ impl ShoppingListStore {
     /// Empty the shopping list and forget everything that was ticked off.
     pub fn clear(&self) -> Result<(), CoreError> {
         self.save_list(&ShoppingList::default())?;
+        // Emptied rather than removed: a file recreated by the next tick would
+        // belong to whoever `cook` runs as, not to the file's owner (#814).
         if self.checked_path.exists() {
-            fs::remove_file(&self.checked_path).map_err(|source| CoreError::Io {
-                path: self.checked_path.clone(),
-                source,
-            })?;
+            write_atomically(&self.checked_path, b"")?;
         }
         Ok(())
     }

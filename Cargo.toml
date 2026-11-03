@@ -34,6 +34,7 @@ server = [
     "dep:console",
     "dep:toml_edit",
     "dep:same-file",
+    "dep:libc",
 ]
 # `cook import` - scrape a recipe from a website.
 import = ["dep:cooklang-import", "dep:reqwest"]
@@ -148,6 +149,11 @@ url = "2.5"
 walkdir = "2"
 uuid = { version = "1", features = ["v4"], optional = true }
 yansi = "1"
+
+# `statfs`, to tell a network share from a local disk before replacing a file
+# on it (`server::fs_atomic`, #814).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

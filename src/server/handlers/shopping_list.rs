@@ -670,7 +670,7 @@ pub async fn clear_shopping_list(
     Extension(viewer): Extension<Viewer>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     // Acquire the checked-log lock so a concurrent check/uncheck can't
-    // recreate `.shopping-checked` between our remove_file and the caller's
+    // add a tick to `.shopping-checked` between our emptying it and the caller's
     // view of a cleared list.
     let _guard = state.checked_log_lock.lock().await;
     let store = ShoppingListStore::new(&state.base_path);

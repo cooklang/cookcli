@@ -358,9 +358,10 @@ fn clear_empties_the_list_and_the_checked_log() {
 
     assert!(store.load().unwrap().is_empty());
     assert!(store.checked_set().unwrap().is_empty());
-    assert!(
-        !base(&dir).join(".shopping-checked").exists(),
-        "the checked log is removed, not emptied"
+    assert_eq!(
+        std::fs::read_to_string(base(&dir).join(".shopping-checked").as_std_path()).unwrap(),
+        "",
+        "the checked log is emptied, not removed, so it keeps its owner"
     );
 }
 

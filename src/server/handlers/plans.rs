@@ -248,31 +248,20 @@ pub async fn plan_edit(
     })))
 }
 
-/// Writes `text` to a temporary file next to `file_path`, then renames it
-/// over the plan, as saving from the editor does.
+/// Writes `text` over the plan through `fs_atomic::write_replace`, as saving
+/// from the editor does.
 async fn write_atomically(file_path: &Utf8Path, text: &str) -> Result<(), ApiError> {
-    let temp_path = file_path.with_extension("tmp");
-    let failed = |e: std::io::Error| {
-        tracing::error!("Failed to save {file_path}: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!(
-                "Failed to save the plan: {e}. Check that the recipes folder has write permissions."
-            )),
-        )
-    };
-    if let Err(e) = tokio::fs::write(&temp_path, text).await {
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        return Err(failed(e));
-    }
-    if let Err(e) =
-        crate::server::fs_atomic::rename_replace_async(temp_path.clone(), file_path.to_owned())
-            .await
-    {
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        return Err(failed(e));
-    }
-    Ok(())
+    crate::server::fs_atomic::write_replace_async(file_path.to_owned(), text.as_bytes().to_vec())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to save {file_path}: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json_error(format!(
+                    "Failed to save the plan: {e}. Check that the recipes folder has write permissions."
+                )),
+            )
+        })
 }
 
 /// Gives `plan` what the page needs to change it: the file's version, and

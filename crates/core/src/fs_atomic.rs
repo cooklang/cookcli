@@ -35,6 +35,15 @@ use camino::Utf8Path;
 /// - **The temporary file is fsynced** before the rename, so a crash right
 ///   after it cannot leave a file that has been renamed into place but whose
 ///   contents never reached the disk.
+/// - **The owner is kept.** A renamed file belongs to whoever `cook` runs as.
+///   When that would hand the file to someone else — a different owner or
+///   group than the target has, or a network share, whose server decides
+///   ownership and ACLs whatever the client reports — the target is
+///   overwritten in place instead, once the temporary file has shown the
+///   bytes fit on the disk. Otherwise a container writing to a share takes the
+///   shopping list away from the account the sync client and the share's other
+///   users write as, and their next write fails with "Permission denied"
+///   (#814). Only a crash during that overwrite can leave it partly written.
 ///
 /// A failure leaves no temporary file behind unless removing it fails too, and
 /// names the target as the caller gave it rather than wherever the symlinks and
@@ -73,9 +82,17 @@ pub(crate) fn write_atomically(
             file.flush()?;
         }
         file.sync_all()?;
-        drop(file);
         if let Ok(metadata) = std::fs::metadata(&target) {
+            if !rename_keeps_owner(&metadata, &file, &target) {
+                drop(file);
+                // Removed first, so the space it took is free for the overwrite.
+                std::fs::remove_file(&temp)?;
+                return overwrite(&target, contents.as_ref());
+            }
+            drop(file);
             std::fs::set_permissions(&temp, metadata.permissions())?;
+        } else {
+            drop(file);
         }
         rename_replace(&temp, &target)
     })();
@@ -87,6 +104,66 @@ pub(crate) fn write_atomically(
         return Err(failed(source));
     }
     Ok(())
+}
+
+/// Whether renaming the freshly written `temp` over `target` leaves `target`
+/// with the owner and group it has now.
+#[cfg(unix)]
+fn rename_keeps_owner(target: &std::fs::Metadata, temp: &std::fs::File, path: &Utf8Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let Ok(ours) = temp.metadata() else {
+        return false;
+    };
+    target.uid() == ours.uid() && target.gid() == ours.gid() && !on_network_share(path)
+}
+
+#[cfg(not(unix))]
+fn rename_keeps_owner(_: &std::fs::Metadata, _: &std::fs::File, _: &Utf8Path) -> bool {
+    true
+}
+
+/// Whether `path` lives on SMB/CIFS or NFS. Their clients report an owner of
+/// their own choosing (`uid=` on a CIFS mount) while the server gives a new
+/// file to the account the share was mounted as.
+#[cfg(target_os = "linux")]
+fn on_network_share(path: &Utf8Path) -> bool {
+    const NETWORK: [i64; 4] = [
+        0xFF53_4D42, // CIFS
+        0xFE53_4D42, // SMB2
+        0x517B,      // SMB
+        0x6969,      // NFS
+    ];
+    let Ok(c_path) = std::ffi::CString::new(path.as_str()) else {
+        return false;
+    };
+    let mut stats = std::mem::MaybeUninit::<libc::statfs>::uninit();
+    // SAFETY: `c_path` is a valid C string and `stats` is large enough for
+    // `statfs` to fill; it is only read when the call succeeded.
+    if unsafe { libc::statfs(c_path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return false;
+    }
+    // `f_type` is 32 bits wide on some targets, where CIFS's magic is negative.
+    // SAFETY: `statfs` succeeded, so it filled `stats`.
+    #[allow(clippy::unnecessary_cast)]
+    let kind = (unsafe { stats.assume_init() }.f_type as i64) & 0xFFFF_FFFF;
+    NETWORK.contains(&kind)
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn on_network_share(_: &Utf8Path) -> bool {
+    false
+}
+
+/// Writes `contents` through the existing file at `path`, keeping its inode
+/// and with it the owner, group and ACL.
+fn overwrite(path: &Utf8Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+    file.write_all(contents)?;
+    file.set_len(contents.len() as u64)?;
+    file.sync_all()
 }
 
 /// Move `from` onto `to`, replacing `to` if it is there.
@@ -175,5 +252,39 @@ mod tests {
         }
 
         assert_eq!(names_in(&base), ["a-directory"], "no temporary file left");
+    }
+
+    /// A file someone else owns stays theirs: it is written through, not
+    /// replaced by one belonging to whoever `cook` runs as (#814). Changing a
+    /// file's owner needs root, so elsewhere this checks nothing.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_owned_by_someone_else_is_written_in_place() {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        let target = base.join(".shopping-list");
+        std::fs::write(target.as_std_path(), "a much longer previous list\n").unwrap();
+        if std::os::unix::fs::chown(target.as_std_path(), Some(4242), Some(4242)).is_err() {
+            eprintln!("skipped: changing a file's owner needs root");
+            return;
+        }
+        let before = std::fs::metadata(target.as_std_path()).unwrap();
+
+        write_atomically(&target, b"./Soup\n").expect("writes");
+
+        let after = std::fs::metadata(target.as_std_path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(target.as_std_path()).unwrap(),
+            "./Soup\n"
+        );
+        assert_eq!((after.uid(), after.gid()), (4242, 4242), "owner kept");
+        assert_eq!(after.ino(), before.ino(), "the same file, written through");
+        assert_eq!(
+            names_in(&base),
+            [".shopping-list"],
+            "no temporary file left"
+        );
     }
 }

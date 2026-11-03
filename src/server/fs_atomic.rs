@@ -13,7 +13,7 @@
 //! `cookcli-core` carries the same workaround in its own `fs_atomic` module,
 //! for the pantry and shopping list files it writes. Kept separate because that
 //! one is crate-private (a library about recipes should not publish filesystem
-//! helpers) and has no async runtime to offer [`rename_replace_async`], which
+//! helpers) and has no async runtime to offer [`write_replace_async`], which
 //! is what this copy is really here for.
 
 use camino::Utf8PathBuf;
@@ -37,14 +37,6 @@ pub fn rename_replace(from: &Path, to: &Path) -> io::Result<()> {
     {
         std::fs::rename(from, to)
     }
-}
-
-/// Async wrapper around [`rename_replace`], run on the blocking pool so it does
-/// not stall the async runtime.
-pub async fn rename_replace_async(from: Utf8PathBuf, to: Utf8PathBuf) -> io::Result<()> {
-    tokio::task::spawn_blocking(move || rename_replace(from.as_std_path(), to.as_std_path()))
-        .await
-        .map_err(io::Error::other)?
 }
 
 /// Move `from` to `to`, failing with [`io::ErrorKind::AlreadyExists`] rather
@@ -137,27 +129,112 @@ pub async fn move_file_async(from: Utf8PathBuf, to: Utf8PathBuf) -> io::Result<(
 ///
 /// The temporary file is opened with `create_new` under a random name, so it
 /// cannot be another file that happened to sit there.
+///
+/// When the rename would hand the file to someone else — a different owner or
+/// group than it has now, or a network share, whose server decides ownership
+/// whatever the client reports — the temporary file only shows that the bytes
+/// fit on the disk: it is removed and `path` is overwritten in place, keeping
+/// its owner, group and ACL. Otherwise a container writing to a share takes the
+/// file away from the share's other users and the sync client (#814).
+/// `cookcli-core`'s `fs_atomic::write_atomically` does the same.
 pub fn write_replace(path: &Path, contents: &[u8]) -> io::Result<()> {
     use std::io::Write;
 
     let temporary = hidden_sibling(path, "tmp");
+    let existing = std::fs::metadata(path).ok();
     let written = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temporary)?;
-        if let Ok(metadata) = std::fs::metadata(path) {
+        if let Some(metadata) = &existing {
             file.set_permissions(metadata.permissions())?;
         }
         file.write_all(contents)?;
-        file.sync_all()
+        file.sync_all()?;
+        Ok(existing
+            .as_ref()
+            .is_none_or(|metadata| rename_keeps_owner(metadata, &file, path)))
     })();
 
-    written
-        .and_then(|()| rename_replace(&temporary, path))
-        .inspect_err(|_| {
-            let _ = std::fs::remove_file(&temporary);
-        })
+    let renamed = match written {
+        Ok(true) => rename_replace(&temporary, path),
+        Ok(false) => {
+            // Removed first, so the space it took is free for the overwrite.
+            std::fs::remove_file(&temporary)?;
+            return overwrite(path, contents);
+        }
+        Err(e) => Err(e),
+    };
+    renamed.inspect_err(|_| {
+        let _ = std::fs::remove_file(&temporary);
+    })
+}
+
+/// Whether renaming the freshly written `temporary` over `path`, whose
+/// metadata is `existing`, leaves `path` with the owner and group it has now.
+#[cfg(unix)]
+fn rename_keeps_owner(
+    existing: &std::fs::Metadata,
+    temporary: &std::fs::File,
+    path: &Path,
+) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let Ok(ours) = temporary.metadata() else {
+        return false;
+    };
+    existing.uid() == ours.uid() && existing.gid() == ours.gid() && !on_network_share(path)
+}
+
+#[cfg(not(unix))]
+fn rename_keeps_owner(_: &std::fs::Metadata, _: &std::fs::File, _: &Path) -> bool {
+    true
+}
+
+/// Whether `path` lives on SMB/CIFS or NFS. Their clients report an owner of
+/// their own choosing (`uid=` on a CIFS mount) while the server gives a new
+/// file to the account the share was mounted as.
+#[cfg(target_os = "linux")]
+fn on_network_share(path: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    const NETWORK: [i64; 4] = [
+        0xFF53_4D42, // CIFS
+        0xFE53_4D42, // SMB2
+        0x517B,      // SMB
+        0x6969,      // NFS
+    ];
+    let Ok(c_path) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let mut stats = std::mem::MaybeUninit::<libc::statfs>::uninit();
+    // SAFETY: `c_path` is a valid C string and `stats` is large enough for
+    // `statfs` to fill; it is only read when the call succeeded.
+    if unsafe { libc::statfs(c_path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return false;
+    }
+    // `f_type` is 32 bits wide on some targets, where CIFS's magic is negative.
+    // SAFETY: `statfs` succeeded, so it filled `stats`.
+    #[allow(clippy::unnecessary_cast)]
+    let kind = (unsafe { stats.assume_init() }.f_type as i64) & 0xFFFF_FFFF;
+    NETWORK.contains(&kind)
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn on_network_share(_: &Path) -> bool {
+    false
+}
+
+/// Writes `contents` through the existing file at `path`, keeping its inode
+/// and with it the owner, group and ACL.
+fn overwrite(path: &Path, contents: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+
+    let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+    file.write_all(contents)?;
+    file.set_len(contents.len() as u64)?;
+    file.sync_all()
 }
 
 /// Async wrapper around [`write_replace`], run on the blocking pool.
@@ -207,21 +284,6 @@ mod tests {
         rename_replace(&from, &to).unwrap();
 
         assert_eq!(fs::read_to_string(&to).unwrap(), "contents");
-        assert!(!from.exists());
-    }
-
-    #[tokio::test]
-    async fn async_wrapper_replaces_destination() {
-        let dir = TempDir::new().unwrap();
-        let from = Utf8PathBuf::from_path_buf(dir.path().join("from.tmp")).unwrap();
-        let to = Utf8PathBuf::from_path_buf(dir.path().join("to.cook")).unwrap();
-        fs::write(&from, b"async contents").unwrap();
-
-        rename_replace_async(from.clone(), to.clone())
-            .await
-            .unwrap();
-
-        assert_eq!(fs::read_to_string(&to).unwrap(), "async contents");
         assert!(!from.exists());
     }
 
@@ -321,5 +383,35 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&path).unwrap(), "new");
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// A file someone else owns stays theirs: it is written through, not
+    /// replaced by one belonging to whoever `cook` runs as (#814). Changing a
+    /// file's owner needs root, so elsewhere this checks nothing.
+    #[cfg(unix)]
+    #[test]
+    fn write_replace_keeps_a_file_owned_by_someone_else() {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("Pasta.cook");
+        fs::write(&path, b"a much longer previous recipe").unwrap();
+        if std::os::unix::fs::chown(&path, Some(4242), Some(4242)).is_err() {
+            eprintln!("skipped: changing a file's owner needs root");
+            return;
+        }
+        let before = fs::metadata(&path).unwrap();
+
+        write_replace(&path, b"new").unwrap();
+
+        let after = fs::metadata(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!((after.uid(), after.gid()), (4242, 4242), "owner kept");
+        assert_eq!(after.ino(), before.ino(), "the same file, written through");
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "no temporary file left"
+        );
     }
 }
