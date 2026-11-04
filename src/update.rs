@@ -29,9 +29,9 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         .build()?
         .fetch()?;
 
-    let latest = releases.first().context("No releases found")?;
+    let latest = releases.latest().context("No releases found")?;
 
-    let latest_version = latest.version.trim_start_matches('v');
+    let latest_version = latest.version().trim_start_matches('v');
 
     if !args.force && !version_is_newer(latest_version, current_version) {
         println!("You are already on the latest version!");
@@ -50,7 +50,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     // Pick the archive by its exact name: a substring match would also take
     // its `.sha256`, depending on the order GitHub lists the assets in.
     let name = asset_name(latest_version)?;
-    let find = |name: &str| latest.assets.iter().find(|asset| asset.name == name);
+    let find = |name: &str| latest.assets().iter().find(|asset| asset.name() == name);
     let Some(archive) = find(&name) else {
         bail!(
             "Release {latest_version} has no {name} for this platform. \
@@ -58,8 +58,8 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         );
     };
 
-    let tmp_dir = self_update::TempDir::new()?;
-    let archive_path = tmp_dir.path().join(&archive.name);
+    let tmp_dir = tempfile::TempDir::new()?;
+    let archive_path = tmp_dir.path().join(archive.name());
     download(archive, fs::File::create(&archive_path)?, true)?;
 
     match find(&format!("{name}.sha256")) {
@@ -80,7 +80,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     Extract::from_source(&archive_path)
         .extract_file(tmp_dir.path(), bin_name)
         .with_context(|| format!("Could not extract {bin_name} from {name}"))?;
-    self_update::self_replace::self_replace(tmp_dir.path().join(bin_name))?;
+    self_replace::self_replace(tmp_dir.path().join(bin_name))?;
 
     println!("Successfully updated to version {latest_version}");
 
@@ -109,9 +109,9 @@ pub fn check_for_updates() -> Result<Option<String>> {
         .build()?
         .fetch()?;
 
-    let latest = releases.first().context("No releases found")?;
+    let latest = releases.latest().context("No releases found")?;
 
-    let latest_version = latest.version.trim_start_matches('v');
+    let latest_version = latest.version().trim_start_matches('v');
 
     if version_is_newer(latest_version, current_version) {
         Ok(Some(latest_version.to_string()))
@@ -140,11 +140,11 @@ fn version_is_newer(latest: &str, current: &str) -> bool {
 fn download(asset: &ReleaseAsset, dest: impl std::io::Write, show_progress: bool) -> Result<()> {
     // `download_url` is the API URL of the asset, which serves the file itself
     // only when asked for octet-stream.
-    Download::from_url(&asset.download_url)
-        .set_header(reqwest::header::ACCEPT, "application/octet-stream".parse()?)
-        .show_progress(show_progress)
+    Download::from_url(asset.download_url())
+        .request_header(reqwest::header::ACCEPT, "application/octet-stream")
+        .show_download_progress(show_progress)
         .download_to(dest)
-        .with_context(|| format!("Could not download {}", asset.name))
+        .with_context(|| format!("Could not download {}", asset.name()))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -246,5 +246,27 @@ mod tests {
     fn unparseable_versions_fall_back_to_string_order() {
         assert!(version_is_newer("zeta", "alpha"));
         assert!(!version_is_newer("alpha", "zeta"));
+    }
+
+    /// The Windows release is packed with `7z a`, which deflates `cook.exe`.
+    /// Without zip's `deflate` the updater refused it: "Compression method
+    /// not supported". The fixture is packed the same way.
+    #[test]
+    fn extracts_cook_from_a_deflated_zip() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/update/cook-deflated.zip"
+        );
+        let dir = tempfile::TempDir::new().unwrap();
+        let archive = dir.path().join("cook-1.2.3-windows-x86_64.zip");
+        fs::copy(fixture, &archive).unwrap();
+
+        Extract::from_source(&archive)
+            .extract_file(dir.path(), "cook.exe")
+            .unwrap();
+
+        let cook = fs::read(dir.path().join("cook.exe")).unwrap();
+        assert!(cook.starts_with(b"MZ"));
+        assert_eq!(cook.len(), 1090);
     }
 }
