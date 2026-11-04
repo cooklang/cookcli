@@ -123,7 +123,11 @@ fn section_convention_wins_over_linear_for_same_step() {
 fn cookware_notes_are_preserved_in_the_template() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = Utf8Path::from_path(tmp.path()).unwrap();
-    std::fs::write(dir.join("Cookware.cook"), "Heat a #pot{}(big) on the stove.\n").unwrap();
+    std::fs::write(
+        dir.join("Cookware.cook"),
+        "Heat a #pot{}(big) on the stove.\n",
+    )
+    .unwrap();
 
     let template = build(dir, "Cookware");
     assert_eq!(template.cookware.len(), 1);
