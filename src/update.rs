@@ -247,4 +247,26 @@ mod tests {
         assert!(version_is_newer("zeta", "alpha"));
         assert!(!version_is_newer("alpha", "zeta"));
     }
+
+    /// The Windows release is packed with `7z a`, which deflates `cook.exe`.
+    /// Without zip's `deflate` the updater refused it: "Compression method
+    /// not supported". The fixture is packed the same way.
+    #[test]
+    fn extracts_cook_from_a_deflated_zip() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/update/cook-deflated.zip"
+        );
+        let dir = tempfile::TempDir::new().unwrap();
+        let archive = dir.path().join("cook-1.2.3-windows-x86_64.zip");
+        fs::copy(fixture, &archive).unwrap();
+
+        Extract::from_source(&archive)
+            .extract_file(dir.path(), "cook.exe")
+            .unwrap();
+
+        let cook = fs::read(dir.path().join("cook.exe")).unwrap();
+        assert!(cook.starts_with(b"MZ"));
+        assert_eq!(cook.len(), 1090);
+    }
 }
