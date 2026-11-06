@@ -184,6 +184,12 @@ pub struct ExtractOptions<'a> {
     /// built on someone else's behalf — the server sets it; the CLI reads
     /// under the user's own permissions and leaves it off (#698).
     pub confined: bool,
+    /// The menu this recipe is listed under, by path, when it comes from one
+    /// on a stored shopping list. It heads the chain of ancestors (see
+    /// "Cycles" on [`extract_ingredients`]), so a nested menu whose
+    /// references lead back to it — `A` → `B` → `C` → `A` — does not count
+    /// `A` a second time. `None` for a recipe added on its own.
+    pub within: Option<&'a str>,
 }
 
 /// What [`extract_ingredients`] accumulates into: the ingredients the recipes
@@ -423,6 +429,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         included_references: None,
         include_optional: req.include_optional,
         confined: false,
+        within: None,
     };
 
     let mut list = ShoppingIngredients::default();
@@ -742,10 +749,22 @@ pub fn extract_ingredients(
     // would lead back up its own chain, so it is refused rather than followed.
     // See "Cycles" above for why this is the ancestor chain and not every
     // recipe seen.
-    let ancestors: Vec<Utf8PathBuf> = starting_entry
-        .as_ref()
-        .and_then(|entry| entry.path().cloned())
-        .into_iter()
+    //
+    // A recipe listed under a menu is expanded as part of it, so the menu
+    // heads the chain. Without it, a menu `B` used as a meal of `A` was
+    // expanded on its own: `B` → `C` → `A` went on into `A`, whose recipes
+    // were already on the list, and counted them twice.
+    let within_entry = options.within.and_then(|menu| {
+        if options.confined {
+            find::get_recipe_inside(base_path, menu).ok()
+        } else {
+            find::get_recipe(base_path, menu).ok()
+        }
+    });
+    let ancestors: Vec<Utf8PathBuf> = within_entry
+        .iter()
+        .chain(starting_entry.iter())
+        .filter_map(|entry| entry.path().cloned())
         .collect();
 
     tracing::debug!(

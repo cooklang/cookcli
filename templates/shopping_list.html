@@ -477,7 +477,9 @@ async function generateList() {
                         included_references: []
                     };
                     const recipeRequests = item.recipes.map(recipe => {
-                        const req = { recipe: recipe.path, scale: recipe.scale };
+                        // Expanded as part of the menu, so a nested menu
+                        // leading back to it does not count it twice.
+                        const req = { recipe: recipe.path, scale: recipe.scale, menu: item.path };
                         if (recipe.included_references) {
                             req.included_references = recipe.included_references;
                         }
