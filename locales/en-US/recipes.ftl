@@ -79,3 +79,8 @@ sort-modified = Modified
 sort-created = Created
 sort-direction-toggle = Toggle sort direction
 random-recipe = Random recipe
+
+# Tag pages
+tags-title = Tags
+tags-empty = No tags yet. Add a tags line to a recipe's frontmatter, like tags: dinner, pasta, to list it here.
+tag-empty = No recipe has this tag.

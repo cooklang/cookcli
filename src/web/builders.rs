@@ -53,6 +53,53 @@ pub fn prune_outside(tree: &mut cooklang_find::RecipeTree, base: &Utf8Path) {
     }
 }
 
+/// The card of one recipe or menu in a listing: its tags, title image, kind
+/// and file timestamps. `path` is the URL path, without the extension.
+pub(crate) fn recipe_item(
+    base_path: &Utf8Path,
+    url_prefix: &str,
+    name: &str,
+    path: String,
+    recipe: &cooklang_find::RecipeEntry,
+) -> RecipeItem {
+    let image_path = recipe
+        .title_image()
+        .clone()
+        .and_then(|img| get_image_path(base_path, url_prefix, img));
+
+    let (modified_at, created_at) = recipe
+        .path()
+        .map(|p| {
+            let meta = std::fs::metadata(p).ok();
+            let modified = meta
+                .as_ref()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
+            let created = meta
+                .as_ref()
+                .and_then(|m| m.created().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
+            (modified, created)
+        })
+        .unwrap_or((None, None));
+
+    RecipeItem {
+        name: name.to_string(),
+        path,
+        is_directory: false,
+        count: None,
+        description: None,
+        tags: recipe.tags(),
+        image_path,
+        is_menu: recipe.is_menu(),
+        modified_at,
+        created_at,
+        folder: None,
+    }
+}
+
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
 pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTemplate> {
     let RecipesBuildInput {
@@ -110,58 +157,27 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             }
         };
 
-        // Extract tags, image, is_menu, and file timestamps if this is a recipe
-        let (tags, image_path, is_menu, modified_at, created_at) =
-            if let Some(ref recipe) = child.recipe {
-                let img_path = recipe
-                    .title_image()
-                    .clone()
-                    .and_then(|img| get_image_path(base_path, url_prefix, img));
-
-                let (modified_at, created_at) = recipe
-                    .path()
-                    .map(|p| {
-                        let meta = std::fs::metadata(p).ok();
-                        let modified = meta
-                            .as_ref()
-                            .and_then(|m| m.modified().ok())
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs());
-                        let created = meta
-                            .as_ref()
-                            .and_then(|m| m.created().ok())
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs());
-                        (modified, created)
-                    })
-                    .unwrap_or((None, None));
-
-                (
-                    recipe.tags(),
-                    img_path,
-                    recipe.is_menu(),
-                    modified_at,
-                    created_at,
-                )
-            } else {
-                (Vec::new(), None, false, None, None)
-            };
-
-        items.push(RecipeItem {
-            name: name.to_string(),
-            path: item_path,
-            is_directory: is_dir,
-            count: if is_dir {
-                count_recipes_tree(child)
-            } else {
-                None
+        items.push(match child.recipe {
+            Some(ref recipe) if !is_dir => {
+                recipe_item(base_path, url_prefix, name, item_path, recipe)
+            }
+            _ => RecipeItem {
+                name: name.to_string(),
+                path: item_path,
+                is_directory: is_dir,
+                count: if is_dir {
+                    count_recipes_tree(child)
+                } else {
+                    None
+                },
+                description: None,
+                tags: Vec::new(),
+                image_path: None,
+                is_menu: false,
+                modified_at: None,
+                created_at: None,
+                folder: None,
             },
-            description: None,
-            tags,
-            image_path,
-            is_menu,
-            modified_at,
-            created_at,
         });
     }
 
@@ -302,7 +318,7 @@ fn natural_key(name: &str) -> Vec<NaturalChunk> {
 
 /// Case-insensitive natural ordering. Ties (names that differ only in case
 /// or leading zeros) fall back to byte order so the sort stays deterministic.
-fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub(crate) fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     natural_key(a).cmp(&natural_key(b)).then_with(|| a.cmp(b))
 }
 

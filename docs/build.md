@@ -103,6 +103,8 @@ Note that only the UI chrome (navigation, headings, labels) is translated — yo
 |--------|----------|
 | `index.html` | Root recipe listing |
 | `directory/<path>.html` | One listing page per subdirectory |
+| `tags.html` | Every tag of the collection, with how many recipes carry it |
+| `tag/<tag>.html` | One page per tag, listing every recipe and menu that carries it, whatever its folder |
 | `recipe/<path>.html` | One page per `.cook` recipe (URL uses the file stem, not the title metadata) |
 | `recipe/<path>.cook` | Raw `.cook` source for each recipe — exposed as a download link on the recipe page |
 | `menu/<path>.html` | One page per `.menu` file |

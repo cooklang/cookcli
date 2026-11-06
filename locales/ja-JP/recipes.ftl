@@ -71,3 +71,8 @@ sort-modified = 更新日
 sort-created = 作成日
 sort-direction-toggle = 昇順・降順を切り替え
 random-recipe = ランダムなレシピ
+
+# Tag pages
+tags-title = タグ
+tags-empty = タグはまだありません。レシピのフロントマターに tags: 夕食, パスタ のような行を追加すると、ここに表示されます。
+tag-empty = このタグが付いたレシピはありません。

@@ -79,3 +79,8 @@ sort-modified = Modifié
 sort-created = Créé
 sort-direction-toggle = Inverser l'ordre
 random-recipe = Recette au hasard
+
+# Tag pages
+tags-title = Étiquettes
+tags-empty = Aucune étiquette pour l'instant. Ajoutez une ligne tags à l'en-tête d'une recette, par exemple tags: dîner, pâtes, pour la retrouver ici.
+tag-empty = Aucune recette ne porte cette étiquette.

@@ -124,7 +124,7 @@
             {% if !tags.is_empty() %}
             <div class="flex flex-wrap gap-2">
                 {% for tag in tags %}
-                <span class="tag">#{{ tag }}</span>
+                <a href="{{ prefix }}/tag/{{ tag|tag_slug|urlencode }}{% if static_mode %}.html{% endif %}" class="tag tag-link">#{{ tag }}</a>
                 {% endfor %}
             </div>
             {% endif %}

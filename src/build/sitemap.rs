@@ -78,12 +78,27 @@ fn file_lastmod(path: &Utf8Path) -> Option<NaiveDate> {
 /// rendering, so an on-disk existence check keeps the sitemap free of 404s.
 /// Entries are sorted by path so repeated builds produce a stable, diff-friendly
 /// file (the underlying tree iteration order is non-deterministic).
-fn build_sitemap_entries(tree: &RecipeTree, output: &Utf8Path) -> Vec<SitemapUrl> {
+fn build_sitemap_entries(
+    tree: &RecipeTree,
+    tag_slugs: &[String],
+    output: &Utf8Path,
+) -> Vec<SitemapUrl> {
     let mut out = vec![SitemapUrl {
         relpath: String::new(),
         lastmod: None,
     }];
     collect(tree, String::new(), output, &mut out);
+    // The tag pages, which the tree does not list.
+    let tag_pages = std::iter::once("tags.html".to_string())
+        .chain(tag_slugs.iter().map(|slug| format!("tag/{slug}.html")));
+    for relpath in tag_pages {
+        if output.join(&relpath).exists() {
+            out.push(SitemapUrl {
+                relpath,
+                lastmod: None,
+            });
+        }
+    }
     out.sort_by(|a, b| a.relpath.cmp(&b.relpath));
     out
 }
@@ -154,8 +169,13 @@ fn collect(tree: &RecipeTree, prefix: String, output: &Utf8Path, out: &mut Vec<S
 }
 
 /// Build and write `sitemap.xml` to the output root.
-pub fn write_sitemap(output: &Utf8Path, base: &str, tree: &RecipeTree) -> Result<()> {
-    let entries = build_sitemap_entries(tree, output);
+pub fn write_sitemap(
+    output: &Utf8Path,
+    base: &str,
+    tree: &RecipeTree,
+    tag_slugs: &[String],
+) -> Result<()> {
+    let entries = build_sitemap_entries(tree, tag_slugs, output);
     let xml = render_sitemap_xml(base, &entries);
     crate::build::writer::write_bytes(output, Utf8Path::new("sitemap.xml"), xml.as_bytes())
 }
@@ -193,7 +213,7 @@ mod tests {
         fs::create_dir_all(out_root.join("directory")).unwrap();
         fs::write(out_root.join("directory/Breakfast.html"), "x").unwrap();
 
-        let entries = build_sitemap_entries(&tree, out_root);
+        let entries = build_sitemap_entries(&tree, &[], out_root);
         let paths: Vec<&str> = entries.iter().map(|e| e.relpath.as_str()).collect();
 
         // Homepage first, then sorted; Soup is excluded because no file was written.
