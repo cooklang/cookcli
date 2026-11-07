@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.41.0](https://github.com/cooklang/cookcli/compare/v0.40.0...v0.41.0) (2026-11-07)
+
+
+### Features
+
+* add some days of a meal plan to the shopping list ([#611](https://github.com/cooklang/cookcli/issues/611)) ([c53c97f](https://github.com/cooklang/cookcli/commit/c53c97f053de7b6dbc4961b28dd3411950c3b525))
+* **server:** search results page with recipe cards and pictures ([#829](https://github.com/cooklang/cookcli/issues/829)) ([d94b10f](https://github.com/cooklang/cookcli/commit/d94b10fe2d2dcc76b5087ecab31daa15fad0efb9)), closes [#828](https://github.com/cooklang/cookcli/issues/828)
+
+
+### Bug Fixes
+
+* **deps:** update self_update to 1.3, so zip moves past its advisories ([#827](https://github.com/cooklang/cookcli/issues/827)) ([d1455f4](https://github.com/cooklang/cookcli/commit/d1455f4f58d88070d7056bbef9080b44f6a0ffe7))
+* **i18n:** repair Greek locale on main ([#821](https://github.com/cooklang/cookcli/issues/821)) ([d1b078d](https://github.com/cooklang/cookcli/commit/d1b078deddc01233a955e84825ca6e89922b0724))
+* **server:** render cookware notes in web frontend ([#815](https://github.com/cooklang/cookcli/issues/815)) ([79a95f3](https://github.com/cooklang/cookcli/commit/79a95f31149b86a3bc3124dcbf225d5678015f88))
+
 ## [0.40.0](https://github.com/cooklang/cookcli/compare/v0.39.0...v0.40.0) (2026-11-03)
 
 
