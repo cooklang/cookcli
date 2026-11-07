@@ -23,6 +23,7 @@ shopping-in-pantry = I ditt skafferi
 shopping-pantry-unused = Skafferifilen kunde inte läsas, så inget i ditt skafferi har dragits av från den här listan.
 shopping-pantry-open = Öppna skafferiet för att rätta det
 shopping-remove = Radera
+shopping-extra-items = Extra varor
 shopping-add-recipes-first = Vänligen lägg till recept först
 shopping-failed-to-generate = Misslyckades att generera handlingslista
 shopping-warnings = Några recept behöver ses över, listan kan sakna något:

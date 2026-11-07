@@ -353,6 +353,7 @@ Dinner: \
   - Only the lines concerned change: comments, notes and the rest of the file are left as they are. Removing a meal's only line leaves an empty bullet, so the meal keeps its slot.
   - The page reloads after each change. If the plan was changed elsewhere since the page was loaded (in the editor, another tab, or on disk), the change is refused and the page asks for a reload, rather than overwrite it.
   - A meal whose lines the calendar cannot match one for one with the file, such as one with free text between bullets, can still be added to, but its lines are only changed in the editor. The calendar uses [`POST /api/plans/{*path}`](api.md).
+- **Some days to the shopping list.** Those who may change the shopping list get a checkbox on each day, with **All**, **Next 7 days** and **None** shortcuts, and **Add days to shopping list**. Only those days' recipes go on the list, at the plan's servings, and the ingredients written straight into those days (`@almonds{50%g}`) go on as items of their own, added up when several days name them. **Add All to Shopping List** still adds the whole plan as one entry. Both are written in the `.shopping-list` format the Cooklang apps share: the days' recipes as ordinary recipe lines and their ingredients as free-hand lines, so the list removes them one by one rather than as a menu.
 
 ## Web feeds
 

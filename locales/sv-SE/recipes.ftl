@@ -66,6 +66,11 @@ plan-changed = Planen har ändrats sedan sidan laddades. Ladda om för att se de
 plan-save-failed = Det gick inte att spara planen.
 plan-saved = Planen sparad
 plan-reload = Ladda om
+plan-pick-label = Dagar till inköpslistan
+plan-pick-all = Alla
+plan-pick-week = Nästa 7 dagar
+plan-pick-none = Inga
+plan-add-days = Lägg till dagarna i inköpslistan
 
 # Today's Menu Banner
 todays-menu-title = Dagens meny

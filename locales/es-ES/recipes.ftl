@@ -66,6 +66,11 @@ plan-changed = El plan ha cambiado desde que se cargó la página. Recárgala pa
 plan-save-failed = No se pudo guardar el plan.
 plan-saved = Plan guardado
 plan-reload = Recargar
+plan-pick-label = Días para la lista de la compra
+plan-pick-all = Todos
+plan-pick-week = Próximos 7 días
+plan-pick-none = Ninguno
+plan-add-days = Añadir días a la lista de la compra
 
 # Today's Menu Banner
 todays-menu-title = Menú de Hoy

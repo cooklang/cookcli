@@ -58,6 +58,11 @@ plan-changed = このページを読み込んだ後に計画が変更されま�
 plan-save-failed = 計画を保存できませんでした。
 plan-saved = 計画を保存しました
 plan-reload = 再読み込み
+plan-pick-label = 買い物リストに入れる日
+plan-pick-all = すべて
+plan-pick-week = 今後7日間
+plan-pick-none = なし
+plan-add-days = 選んだ日を買い物リストに追加
 
 # Today's Menu Banner
 todays-menu-title = 今日の献立

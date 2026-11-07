@@ -66,6 +66,11 @@ plan-changed = Het plan is gewijzigd sinds deze pagina is geladen. Laad opnieuw 
 plan-save-failed = Het plan kon niet worden opgeslagen.
 plan-saved = Plan opgeslagen
 plan-reload = Opnieuw laden
+plan-pick-label = Dagen voor de boodschappenlijst
+plan-pick-all = Alle
+plan-pick-week = Komende 7 dagen
+plan-pick-none = Geen
+plan-add-days = Dagen aan boodschappenlijst toevoegen
 
 # Today's Menu Banner
 todays-menu-title = Menu van Vandaag

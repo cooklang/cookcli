@@ -23,6 +23,7 @@ shopping-in-pantry = En su despensa
 shopping-pantry-unused = No se pudo leer el archivo de la despensa, así que no se ha descontado nada de su despensa en esta lista.
 shopping-pantry-open = Abrir la despensa para corregirlo
 shopping-remove = Eliminar
+shopping-extra-items = Artículos adicionales
 shopping-add-recipes-first = Por favor, agregue primero algunas recetas
 shopping-failed-to-generate = Error al generar la lista de compras
 shopping-warnings = Conviene revisar algunas recetas; puede que falte algo en la lista:

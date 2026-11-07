@@ -62,6 +62,11 @@ plan-changed = Plana aldatu egin da orria kargatu zenetik. Kargatu berriro ikust
 plan-save-failed = Ezin izan da plana gorde.
 plan-saved = Plana gordeta
 plan-reload = Kargatu berriro
+plan-pick-label = Erosketa-zerrendarako egunak
+plan-pick-all = Guztiak
+plan-pick-week = Hurrengo 7 egunak
+plan-pick-none = Bat ere ez
+plan-add-days = Gehitu egunak erosketa-zerrendara
 
 # Today's Menu Banner
 todays-menu-title = Gaurko menua

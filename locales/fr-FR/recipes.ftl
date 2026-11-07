@@ -66,6 +66,11 @@ plan-changed = Le planning a changé depuis le chargement de la page. Rechargez-
 plan-save-failed = Impossible d'enregistrer le planning.
 plan-saved = Planning enregistré
 plan-reload = Recharger
+plan-pick-label = Jours pour la liste de courses
+plan-pick-all = Tous
+plan-pick-week = 7 prochains jours
+plan-pick-none = Aucun
+plan-add-days = Ajouter les jours à la liste de courses
 
 # Today's Menu Banner
 todays-menu-title = Menu du Jour
