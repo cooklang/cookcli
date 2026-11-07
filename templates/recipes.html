@@ -110,47 +110,7 @@
             </div>
         </a>
         {% else %}
-        <a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
-           data-type="recipe"
-           data-name="{{ item.name }}"
-           {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
-           {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
-           class="recipe-card">
-            {% match item.image_path %}
-            {% when Some with (img) %}
-            <div class="h-48 bg-sunk overflow-hidden">
-                <img src="{{ img }}" alt="{{ item.name }}" class="w-full h-full object-cover">
-            </div>
-            <div class="p-6">
-            {% when None %}
-            <div class="p-6">
-                <div class="recipe-card-icon">
-                    <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
-                </div>
-            {% endmatch %}
-                <div class="flex flex-wrap items-center gap-2">
-                    <h2 class="recipe-card-title">{{ item.name }}</h2>
-                    {% if item.is_menu %}
-                    <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
-                    {% endif %}
-                </div>
-                {% match item.description %}
-                {% when Some with (description) %}
-                <p class="text-muted text-sm">{{ description }}</p>
-                {% when None %}
-                {% endmatch %}
-                {% if !item.tags.is_empty() %}
-                <div class="mt-3 flex flex-wrap gap-2">
-                    {% for tag in item.tags.iter().take(3) %}
-                    <span class="tag">{{ tag }}</span>
-                    {% endfor %}
-                    {% if item.tags.len() > 3 %}
-                    <span class="text-xs text-faint">+{{ item.tags.len() - 3 }}</span>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </a>
+        {% include "recipe_card.html" %}
         {% endif %}
         {% endfor %}
 

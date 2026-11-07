@@ -44,6 +44,7 @@ pub fn ui() -> Router<Arc<AppState>> {
         .route("/random", get(random_recipe_page))
         .route("/random/{*path}", get(random_recipe_directory))
         .route("/recipe/{*path}", get(recipe_page))
+        .route("/search", get(search_page))
         .route("/edit/{*path}", get(edit_page))
         .route("/new", get(new_page).post(create_recipe))
         .route("/shopping-list", get(shopping_list_page))
@@ -185,6 +186,99 @@ fn random_recipe_handler(
         crate::util::encode_url_path(&url_path)
     ))
     .into_response()
+}
+
+#[derive(Deserialize)]
+struct SearchPageQuery {
+    q: Option<String>,
+}
+
+/// What pressing Enter in the search box opens: every hit, as cards (#828).
+async fn search_page(
+    Query(query): Query<SearchPageQuery>,
+    State(state): State<Arc<AppState>>,
+    Extension(lang): Extension<LanguageIdentifier>,
+    Extension(features): Extension<FeatureFlags>,
+    Extension(viewer): Extension<Viewer>,
+) -> axum::response::Response {
+    let prefix = &state.url_prefix;
+    let query = query.q.unwrap_or_default().trim().to_string();
+    // Nothing to look for: Enter in an emptied box goes back to the recipes.
+    if query.is_empty() {
+        return axum::response::Redirect::to(&format!("{prefix}/")).into_response();
+    }
+
+    // Through core, like `/api/search`, so the page, the dropdown and
+    // `cook search` find the same recipes in the same order.
+    let hits = match cookcli_core::search::search(
+        &cookcli_core::Context::new(state.base_path.clone()),
+        cookcli_core::search::SearchRequest {
+            query: query.clone(),
+            base_dir: None,
+        },
+    ) {
+        Ok(hits) => hits.into_value(),
+        Err(e) => {
+            tracing::error!("Failed to search recipes: {:?}", e);
+            let page = error_page(lang, prefix, &e, features, viewer);
+            return (StatusCode::INTERNAL_SERVER_ERROR, page).into_response();
+        }
+    };
+
+    let items: Vec<RecipeItem> = hits
+        .into_iter()
+        // The search walk follows linked folders too (#698).
+        .filter(|hit| crate::util::inside_collection(&state.base_path, &hit.path))
+        .map(|hit| search_card(&state.base_path, prefix, hit))
+        .collect();
+
+    SearchTemplate {
+        active: "recipes".to_string(),
+        count: items.len(),
+        query,
+        items,
+        tr: Tr::new(lang),
+        prefix: prefix.to_string(),
+        static_mode: false,
+        repo_url: None,
+        features,
+        viewer,
+    }
+    .into_response()
+}
+
+/// A search hit as a recipe index card, its picture and tags read from the
+/// file's front matter.
+fn search_card(
+    base_path: &camino::Utf8Path,
+    prefix: &str,
+    hit: cookcli_core::search::SearchHit,
+) -> RecipeItem {
+    let entry = cooklang_find::RecipeEntry::from_path(hit.path.clone()).ok();
+    let image_path = entry
+        .as_ref()
+        .and_then(|entry| entry.title_image().clone())
+        .and_then(|img| crate::web::builders::get_image_path(base_path, prefix, img));
+    let is_menu = hit.path.extension() == Some("menu");
+    // The same link as the dropdown's: the path with its extension, which
+    // tells a recipe from a menu of the same name, and `/` on every platform.
+    let path = hit.relative_path.iter().collect::<Vec<_>>().join("/");
+    let name = hit
+        .name
+        .unwrap_or_else(|| hit.path.file_stem().unwrap_or_default().to_string());
+
+    RecipeItem {
+        name,
+        path,
+        is_directory: false,
+        count: None,
+        description: None,
+        tags: entry.map(|entry| entry.tags()).unwrap_or_default(),
+        image_path,
+        is_menu,
+        modified_at: None,
+        created_at: None,
+    }
 }
 
 #[derive(Deserialize)]

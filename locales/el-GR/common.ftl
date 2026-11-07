@@ -7,6 +7,8 @@ nav-preferences = Ρυθμίσεις
 # Search
 search-placeholder = Αναζήτηση συνταγών...
 search-no-results = Δεν βρέθηκαν συνταγές
+search-title = Αποτελέσματα αναζήτησης
+search-see-all = Όλα τα αποτελέσματα
 
 # Common Actions
 action-add = Προσθήκη
