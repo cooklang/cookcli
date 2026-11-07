@@ -328,6 +328,25 @@ pub struct RecipesTemplate {
     pub viewer: Viewer,
 }
 
+/// The `/search` page: every hit of the search box's query, best first, as
+/// the recipe index's cards.
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "search.html")]
+pub struct SearchTemplate {
+    pub active: String,
+    pub query: String,
+    pub count: usize,
+    pub items: Vec<RecipeItem>,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
 /// The servings stepper of a recipe that declares a number of servings.
 pub struct ServingsScale {
     /// The recipe's own `servings`.
@@ -1211,6 +1230,7 @@ macro_rules! impl_into_response {
 impl_into_response!(
     ErrorTemplate,
     RecipesTemplate,
+    SearchTemplate,
     RecipeTemplate,
     MenuTemplate,
     ShoppingListTemplate,

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ query }} - {{ tr.t("search-title") }} - Cook{% endblock %}
+
+{% block content %}
+<div>
+    <div class="mb-8">
+        <h1 class="text-display font-bold text-text">{{ tr.t("search-title") }}</h1>
+        <p id="search-summary" class="mt-2 text-muted">
+            <span class="font-medium text-text">{{ query }}</span>
+            <span aria-hidden="true">·</span>
+            {{ tr.tn("recipes-count", count) }}
+        </p>
+    </div>
+
+    <div id="search-page-results" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for item in items %}
+        {% include "recipe_card.html" %}
+        {% endfor %}
+
+        {% if items.is_empty() %}
+        <div class="text-faint text-center py-8 md:col-span-2 lg:col-span-3">
+            {{ tr.t("search-no-results") }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Keep the query in the box, so it can be refined from here.
+    (function () {
+        const input = document.getElementById('search-input');
+        if (input) input.value = {{ query|json|safe }};
+    })();
+</script>
+{% endblock %}

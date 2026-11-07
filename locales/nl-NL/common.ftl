@@ -7,6 +7,8 @@ nav-preferences = Voorkeuren
 # Search
 search-placeholder = Recepten zoeken...
 search-no-results = Geen recepten gevonden
+search-title = Zoekresultaten
+search-see-all = Alle resultaten bekijken
 
 # Common Actions
 action-add = Toevoegen

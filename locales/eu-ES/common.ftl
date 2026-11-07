@@ -7,6 +7,8 @@ nav-preferences = Ezarpenak
 # Search
 search-placeholder = Bilatu errezetak...
 search-no-results = Ez da errezetarik topatu
+search-title = Bilaketaren emaitzak
+search-see-all = Ikusi emaitza guztiak
 
 # Common Actions
 action-add = Gehitu

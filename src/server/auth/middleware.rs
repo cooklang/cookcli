@@ -61,6 +61,7 @@ const RECIPE_READS: &[&str] = &[
     "/directory",
     "/random",
     "/recipe",
+    "/search",
     "/preferences",
     "/atom.xml",
     "/rss.xml",
