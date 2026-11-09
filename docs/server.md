@@ -36,6 +36,7 @@ cook server hash-password
 | `--max-lsp-sessions <N>` | Language server sessions to run at once (default: 8). `0` disables the editor's language server. |
 | `--users-file <PATH>` | Users who may sign in to make changes. Defaults to `COOK_USERS_FILE`, then `users.toml` in the configuration directory. See [Signing in to make changes](#signing-in-to-make-changes). |
 | `--recipes-only` | Show visitors who are not signed in only the recipes: no shopping list, pantry, editor or preferences beyond the language. Signed-in users keep everything their role allows. See [Showing guests only the recipes](#showing-guests-only-the-recipes). |
+| `--inline-quantities` | Show each ingredient's scaled quantity inside the step, "4 cups water" rather than "water". The line under the step then lists only the ingredients with a preparation note. See [Quantities inside the steps](#quantities-inside-the-steps). |
 
 ## Environment
 
@@ -43,6 +44,7 @@ cook server hash-password
 |----------|-------------|
 | `COOK_CORS_ORIGIN` | Origins allowed to make cross-origin browser requests, and whose hosts the server answers at, separated by commas. Same values as `--cors-origin`, which overrides it. For containers, where passing a flag means restating the image's whole command. An empty value means "unset". |
 | `COOK_RECIPES_ONLY` | `1`, `true` or `yes` turns on `--recipes-only`. Anything else, an empty value included, leaves it to the flag. |
+| `COOK_INLINE_QUANTITIES` | `1`, `true` or `yes` turns on `--inline-quantities`, the same way. |
 | `COOK_CONFIG_DIR` | Global configuration directory, holding `aisle.conf`, `pantry.conf`, the cook.md session and the sync database. See [the README](../README.md#cook_config_dir). |
 
 No other option can be set this way; `COOK_USERS_FILE` is covered under [Signing in to make changes](#signing-in-to-make-changes). `--no-csrf-check` in particular has to be passed on the command line.
@@ -354,6 +356,19 @@ Dinner: \
   - The page reloads after each change. If the plan was changed elsewhere since the page was loaded (in the editor, another tab, or on disk), the change is refused and the page asks for a reload, rather than overwrite it.
   - A meal whose lines the calendar cannot match one for one with the file, such as one with free text between bullets, can still be added to, but its lines are only changed in the editor. The calendar uses [`POST /api/plans/{*path}`](api.md).
 - **Some days to the shopping list.** Those who may change the shopping list get a checkbox on each day, with **All**, **Next 7 days** and **None** shortcuts, and **Add days to shopping list**. Only those days' recipes go on the list, at the plan's servings, and the ingredients written straight into those days (`@almonds{50%g}`) go on as items of their own, added up when several days name them. **Add All to Shopping List** still adds the whole plan as one entry. Both are written in the `.shopping-list` format the Cooklang apps share: the days' recipes as ordinary recipe lines and their ingredients as free-hand lines, so the list removes them one by one rather than as a menu.
+
+## Quantities inside the steps
+
+By default a step names its ingredients, "Bring **water** to a boil", and
+the line under the step gives the amounts: "water: 4 cups". With
+`--inline-quantities` (or `COOK_INLINE_QUANTITIES=1`) the amount moves into
+the step itself, "Bring **4 cups water** to a boil", scaled along with the
+recipe. The line under the step then only keeps the preparation notes, such
+as "garlic (lightly smashed)", so nothing shows twice.
+
+```bash
+cook server --inline-quantities
+```
 
 ## Web feeds
 

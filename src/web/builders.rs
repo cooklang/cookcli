@@ -329,6 +329,19 @@ pub enum RecipeBuildOutput {
     Menu(Box<MenuTemplate>),
 }
 
+/// An ingredient's formatted quantity and its unit, as the page shows them.
+fn quantity_and_unit(
+    quantity: Option<&cooklang::quantity::Quantity>,
+) -> (Option<String>, Option<String>) {
+    let Some(quantity) = quantity else {
+        return (None, None);
+    };
+    (
+        crate::util::format::number::format_quantity_value(quantity),
+        quantity.unit().as_ref().map(|u| u.to_string()),
+    )
+}
+
 /// Converts a timer's quantity to a whole number of seconds, if its unit is a
 /// recognized time unit. Returns `None` for ranges, text values, or units this
 /// simple lookup doesn't recognize.
@@ -674,24 +687,33 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                         .as_deref()
                                         .map(|path| link_query(path, ing.quantity.as_ref()))
                                         .unwrap_or_default();
+                                    let (quantity, unit) = quantity_and_unit(ing.quantity.as_ref());
+                                    let inline = input.features.inline_quantities;
+                                    let label = if inline {
+                                        [quantity.as_deref(), unit.as_deref(), Some(&ing.name)]
+                                            .into_iter()
+                                            .flatten()
+                                            .collect::<Vec<_>>()
+                                            .join(" ")
+                                    } else {
+                                        ing.name.to_string()
+                                    };
                                     step_items.push(StepItem::Ingredient {
                                         name: ing.name.to_string(),
+                                        label,
                                         reference_path,
                                         reference_query,
                                     });
 
-                                    // Also add to step ingredients list
-                                    step_ingredients.push(StepIngredient {
-                                        name: ing.name.to_string(),
-                                        quantity: ing.quantity.as_ref().and_then(|q| {
-                                            crate::util::format::number::format_quantity_value(q)
-                                        }),
-                                        unit: ing
-                                            .quantity
-                                            .as_ref()
-                                            .and_then(|q| q.unit().as_ref().map(|u| u.to_string())),
-                                        note: ing.note.clone(),
-                                    });
+                                    // Inline, the line under the step keeps notes only.
+                                    if !inline || ing.note.is_some() {
+                                        step_ingredients.push(StepIngredient {
+                                            name: ing.name.to_string(),
+                                            quantity: quantity.filter(|_| !inline),
+                                            unit: unit.filter(|_| !inline),
+                                            note: ing.note.clone(),
+                                        });
+                                    }
                                 }
                             }
                             Item::Cookware { index } => {
@@ -1907,5 +1929,100 @@ mod reference_link_tests {
         assert_eq!(reference_query(Some(1.0 / 3.0), None), "?scale=0.333");
         assert_eq!(reference_query(None, Some(4)), "");
         assert_eq!(reference_query(Some(f64::NAN), None), "");
+    }
+}
+
+#[cfg(test)]
+mod inline_quantity_tests {
+    use super::*;
+    use askama::Template;
+
+    /// Two steps: one with a noted ingredient, one without.
+    const TOAST: &str = "Rub @garlic{2%cloves}(lightly smashed) over @bread{1}, add @salt.\n\n\
+        Toast for ~{5%minutes}, then add @butter{10%g}.\n";
+
+    /// The page for `Toast`, scaled by two, with `inline_quantities` as given.
+    fn toast(inline_quantities: bool) -> (RecipeTemplate, String) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        std::fs::write(base.join("Toast.cook"), TOAST).unwrap();
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Toast",
+            aisle_path: None,
+            scale: 2.0,
+            servings: None,
+            lang: "en-US".parse().unwrap(),
+            static_mode: false,
+            repo_url: None,
+            features: FeatureFlags {
+                inline_quantities,
+                ..FeatureFlags::default()
+            },
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        let RecipeBuildOutput::Recipe(template) = output else {
+            panic!("Toast.cook is not a menu");
+        };
+        let html = template.render().unwrap();
+        (*template, html)
+    }
+
+    /// A step's summary line as `(name, quantity, note)` triples.
+    type Summary<'a> = Vec<(&'a str, Option<&'a str>, Option<&'a str>)>;
+
+    fn summaries(template: &RecipeTemplate) -> Vec<Summary<'_>> {
+        template.sections[0]
+            .items
+            .iter()
+            .map(|item| match item {
+                RecipeSectionItem::Step(step) => step
+                    .ingredients
+                    .iter()
+                    .map(|i| (i.name.as_str(), i.quantity.as_deref(), i.note.as_deref()))
+                    .collect(),
+                RecipeSectionItem::Note(_) => panic!("Toast has no notes"),
+            })
+            .collect()
+    }
+
+    /// The text of every `.ingredient-badge`, in order.
+    fn badges(html: &str) -> Vec<&str> {
+        html.split("class=\"ingredient-badge\">")
+            .skip(1)
+            .map(|rest| rest.split('<').next().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn by_default_the_summary_line_carries_the_amounts() {
+        let (template, html) = toast(false);
+        assert_eq!(badges(&html), ["garlic", "bread", "salt", "butter"]);
+        assert_eq!(
+            summaries(&template),
+            [
+                vec![
+                    ("garlic", Some("4"), Some("lightly smashed")),
+                    ("bread", Some("2"), None),
+                    ("salt", None, None),
+                ],
+                vec![("butter", Some("20"), None)],
+            ]
+        );
+    }
+
+    #[test]
+    fn inline_the_badge_carries_the_amount_and_the_summary_line_keeps_notes_only() {
+        let (template, html) = toast(true);
+        assert_eq!(
+            badges(&html),
+            ["4 cloves garlic", "2 bread", "salt", "20 g butter"]
+        );
+        assert_eq!(
+            summaries(&template),
+            [vec![("garlic", None, Some("lightly smashed"))], vec![]]
+        );
     }
 }

@@ -195,6 +195,16 @@ pub struct ServerArgs {
     /// setting COOK_RECIPES_ONLY to 1, true or yes.
     #[arg(long)]
     recipes_only: bool,
+
+    /// Show each ingredient's quantity inside the recipe step
+    ///
+    /// A step reads "Bring 4 cups water to a boil" rather than "Bring water
+    /// to a boil", scaled with the recipe. The line under the step then
+    /// lists only the ingredients with a preparation note, so nothing shows
+    /// twice. Also turned on by setting COOK_INLINE_QUANTITIES to 1, true
+    /// or yes.
+    #[arg(long)]
+    inline_quantities: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -480,7 +490,19 @@ const RECIPES_ONLY_ENV: &str = "COOK_RECIPES_ONLY";
 
 /// Whether `--recipes-only` is on: the flag, or `COOK_RECIPES_ONLY`.
 fn recipes_only(args: &ServerArgs) -> bool {
-    args.recipes_only || std::env::var(RECIPES_ONLY_ENV).is_ok_and(|value| env_flag(&value))
+    args.recipes_only || env_switch(RECIPES_ONLY_ENV)
+}
+
+/// Turns `--inline-quantities` on from the environment, for containers.
+const INLINE_QUANTITIES_ENV: &str = "COOK_INLINE_QUANTITIES";
+
+/// Whether `--inline-quantities` is on: the flag, or `COOK_INLINE_QUANTITIES`.
+fn inline_quantities(args: &ServerArgs) -> bool {
+    args.inline_quantities || env_switch(INLINE_QUANTITIES_ENV)
+}
+
+fn env_switch(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|value| env_flag(&value))
 }
 
 /// Whether an environment variable's value turns its switch on. An empty or
@@ -497,6 +519,7 @@ fn build_state(
     cors: Arc<cors::CorsConfig>,
 ) -> Result<Arc<AppState>> {
     let recipes_only = recipes_only(&args);
+    let inline_quantities = inline_quantities(&args);
     let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
@@ -592,6 +615,7 @@ fn build_state(
         cors,
         auth,
         recipes_only,
+        inline_quantities,
         lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
         aisle_lock: tokio::sync::Mutex::new(()),
@@ -658,6 +682,8 @@ pub struct AppState {
     pub auth: Option<Arc<auth::Auth>>,
     /// `--recipes-only`: whoever is not signed in only browses recipes.
     pub recipes_only: bool,
+    /// `--inline-quantities`: recipe steps show each ingredient's quantity.
+    pub inline_quantities: bool,
     /// How many LSP websockets — and so how many `cook lsp` subprocesses —
     /// may run at once. Set by `--max-lsp-sessions`.
     pub lsp_sessions: lsp_bridge::SessionLimit,
