@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.1](https://github.com/cooklang/cookcli/compare/v0.41.0...v0.41.1) (2026-11-09)
+
+
+### Continuous Integration
+
+* **release:** build the Apple Silicon binary on macos-15 ([#831](https://github.com/cooklang/cookcli/issues/831)) ([542275b](https://github.com/cooklang/cookcli/commit/542275bb4c1c744e888c53e785a64e647ccb580a)), closes [#830](https://github.com/cooklang/cookcli/issues/830)
+
 ## [0.41.0](https://github.com/cooklang/cookcli/compare/v0.40.0...v0.41.0) (2026-11-07)
 
 
