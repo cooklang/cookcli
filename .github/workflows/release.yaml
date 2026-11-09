@@ -80,8 +80,10 @@ jobs:
             ext: tar.gz
             notarize: true
 
+          # GitHub retired the macos-14 images on 2026-11-02. The runner's
+          # macOS does not limit users: rustc still targets macOS 11.0 here.
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
             platform: macos-aarch64
             ext: tar.gz
             notarize: true
