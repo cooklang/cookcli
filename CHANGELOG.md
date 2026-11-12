@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.2](https://github.com/cooklang/cookcli/compare/v0.41.1...v0.41.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* **import:** cooklang-import 0.12.0, off the models OpenAI removes on 2027-01-14 ([#834](https://github.com/cooklang/cookcli/issues/834)) ([3804be4](https://github.com/cooklang/cookcli/commit/3804be47b0ce25a3e2bade23a43df4cfd8152413))
+
 ## [0.41.1](https://github.com/cooklang/cookcli/compare/v0.41.0...v0.41.1) (2026-11-09)
 
 
