@@ -957,27 +957,34 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let metadata = if recipe.metadata.map.is_empty() {
         None
     } else {
-        // Get standard metadata fields (handle both string and number types)
-        let get_field = |key: &str| -> Option<String> {
-            recipe.metadata.get(key).and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s.to_string())
-                } else if let Some(n) = v.as_i64() {
-                    Some(n.to_string())
-                } else {
-                    v.as_f64().map(crate::util::format::number::format_number)
-                }
-            })
-        };
+        // Get standard metadata fields (handle string, number and boolean types)
+        fn value_to_text(value: &serde_yaml::Value) -> Option<String> {
+            if let Some(s) = value.as_str() {
+                Some(s.to_string())
+            } else if let Some(n) = value.as_i64() {
+                Some(n.to_string())
+            } else if let Some(b) = value.as_bool() {
+                Some(b.to_string())
+            } else {
+                value
+                    .as_f64()
+                    .map(crate::util::format::number::format_number)
+            }
+        }
+        let get_field =
+            |key: &str| -> Option<String> { recipe.metadata.get(key).and_then(value_to_text) };
 
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
-            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+            if let Some(key_str) = key.as_str() {
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
 
-                custom_metadata.push((key_str.to_string(), val_str.to_string()));
+                // #838: numbers and booleans get the same pill as text
+                if let Some(val_str) = value_to_text(value) {
+                    custom_metadata.push((key_str.to_string(), val_str));
+                }
             }
         }
 
@@ -1223,7 +1230,20 @@ fn build_menu_template_inner(
             .into_iter()
             .flatten()
             .filter(|(key, _)| key.parse::<cooklang::metadata::StdKey>().is_err())
-            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .filter_map(|(key, value)| {
+                let text = if let Some(s) = value.as_str() {
+                    s.to_string()
+                } else if let Some(n) = value.as_i64() {
+                    n.to_string()
+                } else if let Some(b) = value.as_bool() {
+                    b.to_string()
+                } else {
+                    value
+                        .as_f64()
+                        .map(crate::util::format::number::format_number)?
+                };
+                Some((key.clone(), text))
+            })
             .collect();
         custom_metadata.sort();
 
@@ -1582,6 +1602,32 @@ mod servings_tests {
         assert!(html.contains(r#"data-base-servings="4""#));
         assert!(!html.contains(r#"id="scale""#));
         assert!(html.contains("👥 4 servings"));
+    }
+
+    /// #838: custom metadata whose value YAML reads as a number or a boolean
+    /// used to be dropped from the page, while `cook recipe` printed it.
+    #[test]
+    fn custom_metadata_pills_cover_numbers_and_booleans() {
+        let template = page(
+            "---\ntitle: Test\nrating: 4\ntested: true\nprecision: 4.5\nrated: 4/5\n---\n\nMix @flour{200%g}.\n",
+            1.0,
+            None,
+        );
+        let custom = &template.recipe.metadata.as_ref().unwrap().custom;
+        let get = |k: &str| {
+            custom
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(get("rating").as_deref(), Some("4"));
+        assert_eq!(get("tested").as_deref(), Some("true"));
+        assert_eq!(get("precision").as_deref(), Some("4 1/2")); // format_number, as for standard fields
+        assert_eq!(get("rated").as_deref(), Some("4/5"));
+
+        let html = template.render().unwrap();
+        assert!(html.contains("rating: 4"), "{html}");
+        assert!(html.contains("tested: true"), "{html}");
     }
 
     #[test]
