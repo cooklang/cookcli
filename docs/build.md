@@ -135,6 +135,12 @@ cook build web && git -C _site init && git -C _site add . && \
 
 # Netlify drop: drag and drop _site/ into the Netlify UI
 
+# deed.page: upload a tarball of _site/ in one request, no account needed.
+# The JSON reply has the URL and a token (shown once) for later updates.
+tar -C _site -czf site.tar.gz . && \
+  curl -T site.tar.gz "https://deed.page/v1/sites?slug=my-recipes" \
+    -H "Content-Type: application/gzip"
+
 # Static S3 bucket
 aws s3 sync _site/ s3://my-recipes-bucket --delete
 
