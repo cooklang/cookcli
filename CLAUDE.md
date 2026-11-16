@@ -30,7 +30,19 @@ cargo build -p cookcli
 
 # Run without building
 cargo run -- [command] [args]
+
+# Docker image for local testing (thin-LTO `docker-dev` profile, much faster
+# rebuilds than `make docker-build`, which uses `release`)
+make docker-build-dev
 ```
+
+`build.rs` stops the build until `static/css/output.css` and
+`static/js/editor.bundle.js` exist. They are gitignored, so a fresh clone or git
+worktree needs `npm ci && npm run build-css && npm run build-js` before `cargo`.
+
+In debug builds rust-embed reads `static/` from the source tree at runtime
+(`src/web/mod.rs`), so a debug `cook` copied or mounted at a different path
+serves pages without CSS or JS.
 
 ### Testing
 ```bash
@@ -105,7 +117,14 @@ The `Context` struct (in `src/main.rs`) provides:
 
 Configuration search order:
 1. `./config/[aisle.conf|pantry.conf]` - Local to recipe directory
-2. `~/Library/Application Support/cook/` (macOS) or `~/.config/cook/` (Linux)
+2. The global config directory, resolved by `cookcli_core::global_config_path`:
+   - `$COOK_CONFIG_DIR` when set to a non-empty value
+   - otherwise `~/.config/cook/` (Linux), `~/Library/Application Support/cook/`
+     (macOS), `%APPDATA%\cook\config\` (Windows)
+
+`global_config_path` also resolves `session.json` (`src/login.rs`,
+`src/logout.rs`, `src/server/mod.rs`) and `sync.db` (`sync::sync_db_path`), so
+`COOK_CONFIG_DIR` moves the whole of CookCLI's global state at once.
 
 ### Command Modules
 
@@ -119,6 +138,7 @@ Configuration search order:
 - `seed`: Initialize with example recipes
 - `report`: Generate custom outputs using Jinja2 templates
 - `update`: Self-update the CookCLI binary to the latest version (can be disabled with --no-self-update feature)
+- `completions`: Print a shell completion script (bash, zsh, fish, powershell, elvish) generated from the clap definition
 
 #### Utility Modules
 - `util/`: Shared utilities for parsing, conversion, and output formatting
@@ -133,7 +153,48 @@ Configuration search order:
 - Styling: Tailwind CSS with custom components
 - API handlers in `src/server/handlers/`
 - Static files served from `static/` directory
-- Shopping list stored as tab-delimited files in `/tmp/`
+- Shopping list stored as `.shopping-list` and `.shopping-checked` at the root
+  of the recipe directory (`ShoppingListStore`); `server/shopping_list_watcher.rs`
+  pushes outside edits to open pages
+- Opt-in sign-in in `src/server/auth/`: a `users.toml` in the config dir (or
+  `--users-file` / `COOK_USERS_FILE`) turns it on. Each user has a role
+  (`reader` < `shopper` < `editor` < `admin`; a bare hash is `admin`).
+  `auth::middleware::required_capability` is the one place deciding which
+  `Capability` a request needs — every non-GET route except an explicit
+  allowlist, plus a few GETs (`/edit`, `/new`, `/api/ws/lsp`, `/api/sync`).
+  A write route not listed in its `WRITES` table needs `Administer`, so list
+  a new one there at the capability it deserves. A GET handler must never
+  change anything. Guests get `401`, signed-in users whose role falls short
+  `403`; on `/api` both are translated and marked `X-Cook-Refused`, which
+  `static/js/sign-in-notice.js` turns into a notice (with a sign-in link for
+  `401`) for any page's write. Templates get a `Viewer` (`src/web/viewer.rs`) and hide controls
+  with `viewer.can_edit_lists()` / `can_edit_recipes()` / `can_admin()`
+- `--recipes-only` / `COOK_RECIPES_ONLY`: whoever is not signed in (everyone
+  without a users file) only reads recipes. `auth::middleware::browses_recipes`
+  is an allowlist (`RECIPE_READS`) of what they may request; anything else, a new route
+  included, asks them to sign in (`404` without sign-in). Their `Viewer` can
+  do nothing and `viewer.recipes_only()` hides the rest in templates
+- Leaving a page with something unsaved asks first (`static/js/unsaved.js`,
+  loaded by `base.html`). A write sent with `fetch` counts on its own until it
+  answers. Mark what holds typed data: `data-unsaved` on a form, inline
+  editor or field (it counts while on screen and changed since first
+  touched), `data-dirty` while a page holds changes it has not sent, or
+  `CookUnsaved.watch(fn)`. A page that moves on by itself after saving uses
+  `CookUnsaved.leave(url)` / `CookUnsaved.reload()` instead of `location`
+- Every handler that changes something takes `Extension<Viewer>` and, once
+  the change succeeded, calls `server::activity::record` — one stdout line
+  saying who did what. Quote request text with `activity::quoted` /
+  `activity::file` so it cannot forge a line.
+- Error text sent to a client goes through `handlers::common::json_error` or
+  `ui::error_page`, which pass it to `server::private_paths::hide`: paths come
+  out relative to the recipe directory, or as `…/file` for a config folder.
+  Never put `e.to_string()` in a response body by hand, and never put the
+  recipe directory's absolute path in a page or API answer.
+- Files from the recipe directory are served narrowly: `/api/static` gives
+  only pictures and never a name starting with `.` (`server/static_files.rs`),
+  and the recipe endpoints take only `.cook` / `.menu` paths
+  (`handlers::common::is_recipe_request`). Serve new files through these
+  rather than a fresh `ServeDir`.
 
 ### Recipe Processing Pipeline
 1. Recipe discovery via `cooklang-find` (handles paths and search)
@@ -174,6 +235,24 @@ Configuration search order:
 - Supports YAML frontmatter or `>>` metadata (deprecated)
 - Output formats: human, json, yaml, markdown, cooklang
 
+### Parser and Config File Limits
+- Every parser is built with `Extensions::empty()` (`crates/core/src/parser.rs`,
+  `crates/format/src/lib.rs`): no `@&` references, no range values (`2-3`
+  stays text), no Unicode fractions. Don't turn extensions on in CookCLI; they
+  need a spec change first (#219, #502).
+- `--` and `[-` open a comment anywhere on a line, `>` notes included, and `\`
+  escapes one character. The editor's highlighting
+  (`static/js/src/cooklang-mode.js`) has to follow the same rules.
+- cooklang's `scale_to_target` rounds a servings target to a whole number, so
+  the shopping list scales servings references itself (`scale_to_servings` in
+  `crates/core/src/shopping_list/mod.rs`).
+- Recipe reference paths keep their leading `./` (`/recipe/./Shared/X`): strip
+  `./` and the extension before comparing two of them.
+- `aisle.conf` only has `//` comments; `#` or `--` lines become ingredients,
+  which `cookcli_core::aisle::comment_lookalikes` warns about. `pantry.conf` is
+  TOML, edited with `toml_edit` in `cookcli-core` so comments survive; the
+  server writes it through core too.
+
 ## Frontend Architecture
 
 ### Template System
@@ -181,46 +260,131 @@ The web UI uses server-side rendering with Askama templates:
 - Templates located in `templates/` directory
 - Base template (`base.html`) provides common layout
 - Page-specific templates extend the base template
-- Template data structures defined in `src/server/templates.rs`
+- Template data structures defined in `src/web/templates.rs`
+- Templates are compiled into the binary: a template change needs a rebuild
+  and a server restart
+- In page scripts, DOM `replaceChildren` / `append` write `false` and
+  `undefined` as text, so never pass them `cond && node`; filter first, like
+  `el()` / `fill()` in `templates/aisles.html`
 
 ### Styling
 - Tailwind CSS for utility-first styling
-- Custom components defined in `static/css/input.css`
+- Custom components defined in `static/css/components.css`
 - Compiled CSS output in `static/css/output.css`
-- Configuration in `tailwind.config.js`
+- Tailwind is configured in `static/css/input.css` (`@source`, `@custom-variant`, `@theme`); components live in `static/css/components.css`
+
+### Translations
+- UI strings are Fluent messages in `locales/<lang>/*.ftl` (`aisles`, `common`,
+  `pantry`, `preferences`, `recipes`, `shopping`), one folder per locale: de-DE,
+  el-GR, en-US, es-ES, eu-ES, fr-FR, it-IT, ja-JP, nl-NL, sv-SE
+- A literal `{` in a message is written `{"{"}`
+- Templates call `tr.t("key")`, `tr.tn("key", count)` (plurals) and
+  `tr.tf("key", factor)`, defined on `Tr` in `src/web/templates.rs`; askama passes
+  fields by reference, so helpers take `&usize` / `&f64`
+- Add every new message to **every** locale. `tests/locales_test.rs` fails when
+  a locale lacks an en-US message id, or defines one twice — Fluent rejects a
+  locale with a duplicate id, and every page in that language panics. Two
+  branches adding the same key both pass on their own, so check again after a
+  merge or rebase
 
 ### Key Templates
 - `base.html` - Common layout with navigation and search
 - `recipes.html` - Recipe listing with directory navigation
 - `recipe.html` - Individual recipe display with scaling
+- `menu.html` - Menu and meal plan display
+- `edit.html` / `new.html` - Recipe and menu editor, new file form
 - `shopping_list.html` - Shopping list management
+- `pantry.html` / `aisles.html` - Pantry and aisle management
 - `preferences.html` - User preferences and settings
 
 ### Frontend Features
 - **Recipe Browsing**: Directory-based navigation with breadcrumbs
 - **Recipe Display**: Ingredients, steps, metadata with colorful badges
-- **Shopping List**: Persistent storage in `/tmp/shopping_list.txt`
+- **Shopping List**: Persistent storage in `.shopping-list` / `.shopping-checked` in the recipe directory
 - **Recipe Scaling**: Dynamic scaling with URL parameters
 - **Search**: Real-time recipe search with dropdown results
 - **Responsive Design**: Mobile-friendly layout with Tailwind
 
 ### CSS Component Classes
-Custom Tailwind components for consistent styling:
-- `.recipe-card` - Recipe cards with gradient top border
-- `.ingredient-badge` - Orange gradient badges for ingredients
-- `.cookware-badge` - Green gradient badges for cookware
-- `.timer-badge` - Red gradient badges for timers
-- `.metadata-pill` - Clean outline badges for metadata
-- `.nav-pill` - Navigation items with hover effects
-- `.step-number` - Circular step numbers with gradient
+Component classes live in `static/css/components.css` and resolve every colour through the tokens in `static/css/input.css`:
+- `.card` / `.card-head` - Bordered surface with hairline and 6px radius
+- `.btn`, `.btn-primary`, `.btn-danger`, `.btn-sm` - 40px controls (32px compact); one accent-filled primary per view
+- `.icon-btn` - 36px icon-only control
+- `.nav-card`, `.nav-pill`, `.menu-item` - Navigation card, pills, and small-screen menu rows
+- `.recipe-card`, `.recipe-card-icon`, `.recipe-card-title` - Index cards with a flat icon disc
+- `.ingredient-badge`, `.cookware-badge`, `.timer-badge` - Inline recipe entities (tint, dotted underline, chip)
+- `.metadata-pill`, `.tag` - Neutral bordered pills
+- `.step-box`, `.step-number`, `.step-body`, `.step-refs` - Boxed recipe steps
+- `.ingredient-row`, `.row`, `.row-value`, `.row-note` - List rows
+- `.pantry-row`, `.pantry-editor`, `.pantry-expiry`, `.pantry-actions`, `.item-status-dot` - Pantry item rows, their edit panel, expiry tags and stock state
+- `.stepper`, `.select`, `.search-input` - Form controls
+- `.editor-toolbar`, `.editor-toolbar-group`, `.editor-toolbar-glyph` - Cooklang insert toolbar above the editor (`static/js/src/toolbar.js`)
 
 ## Testing Approach
 
-Currently no automated tests (as noted in CONTRIBUTING.md). Manual testing approach:
+Automated tests live in two places:
+- Rust integration tests in `tests/*.rs` (`cargo test`), with `insta` snapshots
+  in `tests/snapshots/`
+- Playwright end-to-end specs in `tests/e2e/` (`npm test`; see UI Testing below)
+
+Things to know when running them:
+- When a change alters output other pages share (URLs, templates, badges), run
+  the whole Playwright project, not only the specs you touched — other specs
+  assert on that output too.
+- The pantry e2e specs add and edit items in `./seed`, which can leave
+  `seed/config/pantry.conf` modified; check `git status` after a run.
+- Two `cookcli-core` pantry tests check file permissions and cannot pass when
+  cargo runs as root (e.g. in a root container). Their failure message says so;
+  it is not a regression.
+- `cargo test` stops at the first failing test binary; add `--no-fail-fast`
+  to see them all.
+- Build the expected value of a path in a test with the platform separator
+  (`Path::join`, or `.replace('/', std::path::MAIN_SEPARATOR_STR)` as in
+  `tests/doctor_characterization_test.rs`). CookCLI prints native paths, so a
+  literal `"config/pantry.conf"` fails only on the Windows CI job. URLs and API
+  paths the code normalizes to `/` are the exception.
+- `docs/api.md` is generated from the API docs: regenerate it with
+  `UPDATE_API_DOCS=1 cargo test --test api_docs_md_test`.
+- The Docker image builds with `--no-default-features --features server,lsp`
+  (no `sync`). Anything the server needs must not sit under
+  `#[cfg(feature = "sync")]`; check with that build when touching `AppState`.
+- Two checkouts must not share a `CARGO_TARGET_DIR`: the artifacts have the
+  same names, so one checkout's build replaces the `cook` the other's tests run.
+- Playwright is fully parallel locally but uses one worker on CI. The
+  shopping-list and pantry specs share files in `./seed`, so retry a local
+  failure there with `--workers=1` before blaming the change, and restore
+  `seed/config/aisle.conf` as well as `pantry.conf` afterwards.
+- A spec that fakes ticks through the `POST /api/shopping_list` answer must
+  also stub `GET /api/shopping_list/checked`: the page's event stream
+  refetches the ticks when it opens.
+- The Docker image's `docker-entrypoint.sh` refuses a `/recipes` it cannot
+  write; mount a writable copy to try it.
+
+For manual testing:
 1. Use `cook seed` to create test recipes
 2. Test each command with various options
 3. Validate output formats
 4. Check error handling with invalid inputs
+
+### Isolating spawned processes from the real config
+
+Any test that spawns `cook` — and **every** test that spawns `cook server` —
+must route its `Command` through `common::with_isolated_config`
+(`tests/common/mod.rs`), which sets `COOK_CONFIG_DIR` to a directory inside the
+test's `TempDir`.
+
+This is not about tidiness. `cook server` loads `session.json` on boot and, if
+it finds one, starts syncing the directory it was given against the global
+`sync.db` — the database tracking the developer's own recipe folder. Without
+isolation, `cargo test` on a machine where someone has run `cook login` can
+upload fixture recipes to their real cook.md account, or index a temp directory
+into that database and propagate the deletions.
+
+Setting `HOME` / `XDG_CONFIG_HOME` is **not** sufficient: `directories`
+resolves the Windows config directory through the Known Folder API and ignores
+both. `COOK_CONFIG_DIR` is the only lever that works everywhere.
+`tests/config_dir_env_test.rs` is the regression guard; the Playwright
+`webServer` sets the same variable in `playwright.config.ts`.
 
 ## Release Process
 
@@ -229,6 +393,21 @@ Uses semantic commit messages for automated releases:
 - `fix:` - Bug fixes  
 - `docs:` - Documentation changes
 - `chore:` - Maintenance tasks
+
+Packaging scripts live in `packaging/`: `debian/` (.deb), `fedora/` (.rpm) and
+`source-tarball.sh`, which builds the source tarball with the compiled front-end
+assets (shared by the release workflow and the RPM build).
+
+Release workflow (`.github/workflows/release.yaml`) traps:
+- The Linux glibc binary is built in PyPA's `manylinux_2_28` image
+  (`Cross.toml`), and a release step fails when the binary needs a glibc above
+  `FLOOR=2.28`. Building it natively on `ubuntu-latest` would raise that floor
+  to the runner's glibc (#420). Bump the image's dated tag, never `latest`.
+- The `Swatinem/rust-cache` key includes `matrix.target`: a shared key once
+  fed build scripts linked against a newer glibc to older cross images (#656).
+- When Dependabot cannot fix an advisory because the fixed version raises
+  other crates' minimums, `cargo update -p <crate> --precise <version>` can
+  (#640).
 
 ## Before Creating a PR
 
@@ -254,22 +433,24 @@ Output formatting is centralized in `src/util/` modules. Each format has its own
 
 ### Working with Templates
 1. Create new template in `templates/` directory
-2. Define data structure in `src/server/templates.rs`
+2. Define data structure in `src/web/templates.rs`
 3. Implement handler in `src/server/ui.rs`
 4. Add route in the UI router
 
 ### Modifying Styles
-1. Edit component classes in `static/css/input.css`
+1. Edit component classes in `static/css/components.css`
 2. Run `make css` or `npm run build-css` to compile
 3. For development, use `npm run watch-css` for auto-rebuild
-4. Custom colors and utilities can be added to `tailwind.config.js`
+4. Custom colors and utilities can be added to `static/css/input.css` (`@theme`) and component classes to `static/css/components.css`
 
 ### Frontend Development Workflow
 1. Install dependencies: `npm install`
 2. Start CSS watch: `npm run watch-css`
 3. Run server: `cargo run -- server ./seed`
 4. Make changes to templates or styles
-5. Refresh browser to see changes (templates are recompiled on each request in dev mode)
+5. Rebuild and restart the server for template changes (Askama compiles them
+   in); CSS and JS changes only need a browser refresh in a debug build, once
+   `watch-css` / `watch-js` has rebuilt them
 
 ### Debugging Recipe Parsing
 Use `RUST_LOG=trace` to see detailed parsing information including:
@@ -453,11 +634,18 @@ Key settings:
 
 ### CI/CD Integration
 
-GitHub Actions workflow (`ui-tests.yml`):
-- Runs on push/PR to main branch
-- Matrix testing across OS and browsers
-- Artifact upload for test results
-- Parallel job execution
+The `UI Tests` job of `.github/workflows/test.yml`:
+- Runs on push/PR to main branch, alongside the Rust test jobs
+- Chromium only, against the pre-built debug binary
+- Uploads the Playwright report, plus videos when a test fails
+
+Changes under `.github/` are checked by `workflow-lint.yml` (actionlint and
+zizmor). To run the same checks locally:
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
+docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/zizmorcore/zizmor:1.30.1 --min-severity=low .github/workflows
+```
 
 ## Writing New Tests
 

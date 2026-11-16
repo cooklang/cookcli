@@ -355,3 +355,74 @@ test.describe('Cooking Mode', () => {
     await expect(page.locator('.cooking-card.current')).toHaveClass(/cooking-card-section/);
   });
 });
+
+// #548: the step picture's path is built from folder and file names, which a
+// shared or synced collection lets someone else choose. Cooking mode used to
+// write it into `src="…"` with an escaper that kept `"`, so a folder named
+// `x" onerror="…" y="` ran script on the server's origin.
+test.describe('Cooking Mode step pictures', () => {
+  const RECIPE = '/recipe/Breakfast/Easy Pancakes.cook';
+
+  test('uses the encoded picture URL the page shows', async ({ page }) => {
+    await page.goto(RECIPE);
+    await page.locator('#start-cooking-btn').click();
+
+    await expect(page.locator('#cooking-overlay img.cooking-step-image')).toHaveAttribute(
+      'src',
+      '/api/static/Breakfast/Easy%20Pancakes.3.jpg',
+    );
+  });
+
+  test('a quote in the picture path stays inside the src attribute', async ({ page }) => {
+    // Served as the recipe's step picture by rewriting the page's cooking
+    // mode data, so no folder with a `"` in its name is needed — Windows
+    // cannot create one.
+    const hostile = '/api/static/x" onerror="window.__cookingModeXss = true" y="/Pancakes.3.jpg';
+
+    await page.route(
+      (url) => decodeURIComponent(url.pathname) === RECIPE,
+      async (route) => {
+        const response = await route.fetch();
+        const html = (await response.text()).replace(
+          /(<script id="cooking-mode-data" type="application\/json">)([\s\S]*?)(<\/script>)/,
+          (_match, open: string, json: string, close: string) => {
+            const data = JSON.parse(json);
+            for (const section of data.sections) {
+              for (const step of section.steps) {
+                if (step.image) step.image = hostile;
+              }
+            }
+            return open + JSON.stringify(data) + close;
+          },
+        );
+        await route.fulfill({ response, body: html });
+      },
+    );
+
+    await page.goto(RECIPE);
+    await page.locator('#start-cooking-btn').click();
+    await expect(page.locator('#cooking-overlay')).toBeVisible();
+
+    const pictures = page.locator('#cooking-overlay img.cooking-step-image');
+    await expect(pictures).toHaveCount(1);
+    await expect(pictures).toHaveAttribute('src', hostile);
+    expect(
+      await pictures.evaluate((img) => img.getAttributeNames().sort()),
+    ).toEqual(['alt', 'class', 'src']);
+
+    // Let the (missing) picture fail to load, which is when an injected
+    // `onerror` would have run.
+    await pictures.evaluate(
+      (img) =>
+        new Promise<void>((resolve) => {
+          const image = img as HTMLImageElement;
+          if (image.complete) return resolve();
+          image.addEventListener('error', () => resolve(), { once: true });
+          image.addEventListener('load', () => resolve(), { once: true });
+        }),
+    );
+    expect(
+      await page.evaluate(() => (window as unknown as { __cookingModeXss?: boolean }).__cookingModeXss),
+    ).toBeUndefined();
+  });
+});

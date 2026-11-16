@@ -44,10 +44,10 @@
 
     function captureStepHTML() {
         const stepElements = [];
-        const sectionEls = document.querySelectorAll('.md\\:col-span-2 ol');
+        const sectionEls = document.querySelectorAll('ol.step-list');
         sectionEls.forEach(function(ol) {
             ol.querySelectorAll(':scope > li').forEach(function(li) {
-                const textDiv = li.querySelector('.leading-8');
+                const textDiv = li.querySelector('.step-body');
                 if (textDiv) {
                     stepElements.push(textDiv.innerHTML);
                 }
@@ -100,10 +100,15 @@
 
     // ─── Rendering ────────────────────────────────────────────────
 
+    // Safe in text and in quoted attribute values alike. The previous version
+    // went through `textContent` -> `innerHTML`, which only encodes `&`, `<`
+    // and `>`: a `"` in a value placed inside an attribute ended it (#548).
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
     function escapeHTML(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return String(str).replace(/[&<>"']/g, function(ch) {
+            return HTML_ESCAPES[ch];
+        });
     }
 
     function renderCard(card) {
@@ -117,8 +122,9 @@
                 const items = card.ingredients.map(function(ing) {
                     const qty = [ing.quantity, ing.unit].filter(Boolean).join(' ');
                     const note = ing.note ? '<span class="cooking-mise-note">(' + escapeHTML(ing.note) + ')</span>' : '';
+                    const optional = ing.optional ? ' <span class="cooking-mise-note">' + escapeHTML(state.optionalLabel) + '</span>' : '';
                     return '<div class="cooking-mise-item">' +
-                        '<span class="cooking-mise-name">' + escapeHTML(ing.name) + ' ' + note + '</span>' +
+                        '<span class="cooking-mise-name">' + escapeHTML(ing.name) + ' ' + note + optional + '</span>' +
                         (qty ? '<span class="cooking-mise-qty">' + escapeHTML(qty) + '</span>' : '') +
                         '</div>';
                 }).join('');
@@ -133,9 +139,6 @@
         }
         else if (card.type === 'step') {
             div.classList.add('cooking-card-step');
-            const imageHTML = card.image
-                ? '<img class="cooking-step-image" src="' + escapeHTML(card.image) + '" alt="Step ' + card.number + '" />'
-                : '';
             let ingredientsHTML = '';
             if (card.ingredients.length > 0) {
                 ingredientsHTML = '<div class="cooking-step-ingredients">' +
@@ -146,9 +149,18 @@
                     }).join('') + '</div>';
             }
             div.innerHTML =
-                imageHTML +
                 '<div class="cooking-step-text"><span class="cooking-step-number">' + card.number + '</span>' + card.html + '</div>' +
                 ingredientsHTML;
+            if (card.image) {
+                // Built as an element, not markup: the path comes from folder
+                // and file names, and an attribute set this way is only ever
+                // a value (#548).
+                const img = document.createElement('img');
+                img.className = 'cooking-step-image';
+                img.setAttribute('src', card.image);
+                img.setAttribute('alt', 'Step ' + card.number);
+                div.insertBefore(img, div.firstChild);
+            }
         }
         else if (card.type === 'done') {
             div.classList.add('cooking-card-done');
@@ -197,6 +209,11 @@
             sectionsNav.appendChild(pill);
         });
 
+        // Populated by static/js/timers.js while any timer is active for this recipe.
+        const timerStrip = document.createElement('div');
+        timerStrip.id = 'cooking-timer-strip';
+        timerStrip.className = 'hidden items-center gap-1 flex-shrink-0 overflow-x-auto max-w-[35vw]';
+
         const closeBtn = document.createElement('button');
         closeBtn.className = 'cooking-close-btn';
         closeBtn.setAttribute('aria-label', 'Close cooking mode');
@@ -207,6 +224,7 @@
         if (data.sections.length > 1 || (data.sections[0] && data.sections[0].name)) {
             header.appendChild(sectionsNav);
         }
+        header.appendChild(timerStrip);
         header.appendChild(closeBtn);
 
         // Carousel
@@ -530,6 +548,7 @@
         state.triggerElement = document.activeElement;
 
         const stepHTMLs = captureStepHTML();
+        state.optionalLabel = data.optionalLabel || '(optional)';
         state.cards = buildCards(data, stepHTMLs);
         if (state.cards.length === 0) return;
 
@@ -540,6 +559,10 @@
         document.body.style.overflow = 'hidden';
 
         updateCards();
+
+        // Let static/js/timers.js know it can refresh #cooking-timer-strip and
+        // any timer badges in the freshly-built cards.
+        document.dispatchEvent(new CustomEvent('cookingmode:opened'));
 
         // Add event listeners
         const carousel = document.getElementById('cooking-carousel');

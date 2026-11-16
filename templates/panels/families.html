@@ -1,0 +1,16 @@
+{#- One panel per metadata family, each drawn by its own template. Needs
+    `metadata` and `tr` in scope. -#}
+{% if !metadata.panels.is_empty() %}
+<div class="flex flex-col gap-2 max-w-full">
+    {% for family_panel in metadata.panels %}
+    {% match family_panel %}
+    {% when FamilyPanel::Nutrition with (panel) %}
+    {% include "panels/nutrition.html" %}
+    {% when FamilyPanel::File with (panel) %}
+    {% include "panels/file.html" %}
+    {% when FamilyPanel::Generic with (panel) %}
+    {% include "panels/generic.html" %}
+    {% endmatch %}
+    {% endfor %}
+</div>
+{% endif %}

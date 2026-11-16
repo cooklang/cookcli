@@ -1,0 +1,77 @@
+# Build RPMs on demand (and for packaging-related PRs), so the Fedora
+# packaging can be exercised without cutting a release. The release workflow
+# runs the same script for every GitHub release and attaches the RPMs there.
+name: RPM
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packaging/**
+      - .github/workflows/rpm.yaml
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 5
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rpm:
+    name: Build RPM (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    # Deliberately the moving tag: this job exists to catch the current Fedora
+    # breaking the spec, which a pinned digest would hide.
+    container: fedora:latest # zizmor: ignore[unpinned-images]
+    steps:
+      # actions/checkout needs git, so the tools come first. Rust comes from
+      # the distribution rather than rustup: that is the toolchain the spec's
+      # BuildRequires asks for, and rpmbuild checks those against installed
+      # packages, so a rustup toolchain leaves the build root "missing" both.
+      - name: Setup | Install tools
+        run: dnf install -y rpm-build gcc git tar xz curl npm rust cargo
+
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The container runs as root while the checkout is owned by the runner
+      # user, which git rejects as "dubious ownership" — and `git archive`
+      # below would fail. actions/checkout only marks the directory safe in a
+      # temporary global config that is gone by the time later steps run.
+      - name: Setup | Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Without an argument build-rpm.sh makes its own source tarball with
+      # packaging/source-tarball.sh — the script behind the release asset —
+      # so only the web assets are needed from npm, not Node.js in the build.
+      - name: Build | RPM
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build-css
+          npm run build-js
+          ./packaging/fedora/build-rpm.sh
+
+      - name: Upload | RPMs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cook-rpm-${{ matrix.arch }}
+          if-no-files-found: error
+          path: dist/rpm/*.rpm

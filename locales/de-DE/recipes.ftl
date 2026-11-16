@@ -13,12 +13,21 @@ recipe-ingredients = Zutaten
 recipe-steps = Anleitung
 recipe-notes = Notizen
 recipe-cookware = Kochgeschirr
+recipe-optional = (optional)
 recipe-timers = Timer
 recipe-tags = Schlagwörter
 recipe-add-to-shopping = Zur Einkaufsliste hinzufügen
 recipe-add-all-to-shopping = Alles zur Einkaufsliste hinzufügen
 recipe-scale-label = Skalierung
 recipe-servings-label = Portionen
+recipe-written-for =
+    { $count ->
+        [one] Geschrieben für { $count } Portion
+       *[other] Geschrieben für { $count } Portionen
+    }
+recipe-written-for-hint = Die Mengen sind aus dem Originalrezept umgerechnet. Garzeiten, Formgrößen und Würze müssen eventuell angepasst werden. Auswählen, um zu den ursprünglichen Portionen zurückzukehren.
+recipe-scaled-from-original = ×{ $factor } des Originalrezepts
+recipe-scaled-from-original-hint = Die Mengen sind aus dem Originalrezept umgerechnet. Garzeiten, Formgrößen und Würze müssen eventuell angepasst werden. Auswählen, um zum Originalrezept zurückzukehren.
 recipe-print = Rezept drucken
 recipe-added = Hinzugefügt!
 recipe-main-section = Hauptteil
@@ -40,19 +49,64 @@ meta-created-by = Erstellt von
 meta-created-at = Erstellt am
 meta-modified-by = Geändert von
 meta-modified-at = Geändert am
+meta-file-title = Datei
+meta-translated-from = Übersetzt aus
 
 # Nutrition (benutzerdefinierte `nutrition:`-Metadaten)
 nutrition-per-serving = pro Portion
 nutrition-proteins = Eiweiß
 nutrition-lipids = Fett
 nutrition-saturated-fat = gesättigte Fettsäuren
+nutrition-unsaturated-fat = ungesättigte Fettsäuren
+nutrition-monounsaturated-fat = einfach ungesättigte Fettsäuren
+nutrition-polyunsaturated-fat = mehrfach ungesättigte Fettsäuren
+nutrition-trans-fat = Transfettsäuren
+nutrition-starch = Stärke
 nutrition-carbohydrates = Kohlenhydrate
 nutrition-sugars = Zucker
 nutrition-fibers = Ballaststoffe
 nutrition-salt = Salz
+nutrition-title = Nährwerte
+nutrition-per-100g = pro 100 g
+nutrition-whole-recipe = ganzes Rezept
+nutrition-energy = Energie
+nutrition-of-which = davon
+nutrition-for = für
+nutrition-full-table = Volle Tabelle
+nutrition-legend = Gesundheitsbewertung pro 100 g:
+nutrition-rating-good = gut
+nutrition-rating-medium = mittel
+nutrition-rating-bad = schlecht
+nutrition-legend-good = gut für die Gesundheit
+nutrition-legend-medium = mittel
+nutrition-legend-bad = nicht gut für die Gesundheit
+nutrition-legend-unrated = kein Schwellenwert
 
 # Recipe Types
 recipe-type-menu = Menü
+recipe-type-plan = Essensplan
+plan-outside = Außerhalb dieses Plans
+plan-nothing-planned = Nichts geplant
+plan-add-to = Zu { $meal }, { $day } hinzufügen
+plan-line-actions = Ändern
+plan-move-to = Verschieben nach…
+plan-copy-to = Kopieren nach…
+plan-remove = Entfernen
+plan-move-title = Auf einen anderen Tag verschieben
+plan-copy-title = Auf einen anderen Tag kopieren
+plan-move = Verschieben
+plan-copy = Kopieren
+plan-target-day = Tag
+plan-target-meal = Mahlzeit
+plan-changed = Der Plan wurde seit dem Laden der Seite geändert. Laden Sie neu, um ihn zu sehen, und versuchen Sie es erneut.
+plan-save-failed = Der Plan konnte nicht gespeichert werden.
+plan-saved = Plan gespeichert
+plan-reload = Neu laden
+plan-pick-label = Tage für die Einkaufsliste
+plan-pick-all = Alle
+plan-pick-week = Nächste 7 Tage
+plan-pick-none = Keine
+plan-add-days = Tage zur Einkaufsliste hinzufügen
 
 # Today's Menu Banner
 todays-menu-title = Heutiges Menü
@@ -65,3 +119,4 @@ sort-name = Name
 sort-modified = Geändert
 sort-created = Erstellt
 sort-direction-toggle = Sortierrichtung umkehren
+random-recipe = Zufälliges Rezept

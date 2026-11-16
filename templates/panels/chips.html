@@ -1,0 +1,23 @@
+{#- A family as a framed line of chips, its title sitting on the frame. Needs
+    `panel` (a MetaListFamily). A chip never grows wider than the screen: its
+    text is cut with an ellipsis and the full text is in the title. -#}
+<fieldset class="panel-frame">
+    <legend>{{ panel.label }}{% match panel.note %}{% when Some with (note) %} &middot; {{ note }}{% when None %}{% endmatch %}</legend>
+    <div class="flex flex-wrap gap-2">
+        {% for item in panel.items %}
+        <span class="inline-flex min-w-0 max-w-full items-center gap-1 bg-sunk border border-line rounded-md px-2 py-1 text-muted">
+            {% match item.icon %}
+            {% when Some with (icon) %}
+            <span class="w-3.5 h-3.5 shrink-0 text-accent [&>svg]:w-full [&>svg]:h-full">{{ icon|safe }}</span>
+            {% when None %}
+            {% endmatch %}
+            {% match item.url %}
+            {% when Some with (url) %}
+            <a href="{{ url }}" class="min-w-0 truncate text-info underline" target="_blank" rel="noopener noreferrer" title="{{ url }}">{{ item.text }}</a>
+            {% when None %}
+            <span class="min-w-0 truncate" title="{{ item.text }}">{{ item.text }}</span>
+            {% endmatch %}
+        </span>
+        {% endfor %}
+    </div>
+</fieldset>

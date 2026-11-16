@@ -98,6 +98,45 @@ fn build_lang_arg_changes_ui_locale() {
 }
 
 #[test]
+fn build_lang_arg_sets_html_lang_attribute() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--lang",
+            "fr-FR",
+        ])
+        .assert()
+        .success();
+
+    // The resolved build language must be reflected on <html lang>, not left
+    // hardcoded to en. Screen readers and search engines rely on it.
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        index.contains(r#"<html lang="fr-FR""#),
+        "index should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+    assert!(
+        !index.contains(r#"<html lang="en""#),
+        "index must not keep the hardcoded lang=\"en\""
+    );
+
+    let recipe = std::fs::read_to_string(out.join("recipe/Risotto.html")).unwrap();
+    assert!(
+        recipe.contains(r#"<html lang="fr-FR""#),
+        "recipe page should carry lang=\"fr-FR\" on <html> under --lang fr-FR"
+    );
+}
+
+#[test]
 fn build_lang_arg_rejects_unsupported() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
@@ -324,11 +363,26 @@ fn build_writes_search_index() {
         .assert()
         .success();
 
-    let idx = out.join("static/search-index.json");
-    assert!(idx.is_file(), "search-index.json should exist");
+    let idx = out.join("static/search-index.js");
+    assert!(idx.is_file(), "search-index.js should exist");
 
-    let json: serde_json::Value =
-        serde_json::from_reader(std::fs::File::open(&idx).unwrap()).unwrap();
+    let source = std::fs::read_to_string(&idx).unwrap();
+    assert!(
+        source.starts_with("window.__SEARCH_INDEX__"),
+        "index should assign window.__SEARCH_INDEX__, got: {:.40}",
+        source
+    );
+    let (_, payload) = source
+        .split_once('=')
+        .expect("index should be an assignment");
+    let payload = payload.trim().trim_end_matches(';');
+
+    assert!(
+        !out.join("static/search-index.json").exists(),
+        "search-index.json should no longer be emitted"
+    );
+
+    let json: serde_json::Value = serde_json::from_str(payload).unwrap();
     let arr = json.as_array().expect("index is array");
     assert!(!arr.is_empty(), "index should not be empty for seed");
 
@@ -347,6 +401,36 @@ fn build_writes_search_index() {
         risotto.get("title").and_then(|t| t.as_str()),
         Some("Classic Risotto alla Milanese"),
         "title should be the metadata title; path should be the file stem"
+    );
+}
+
+#[test]
+fn search_js_loads_index_as_script() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let js = std::fs::read_to_string(out.join("static/js/search.js")).unwrap();
+
+    assert!(
+        js.contains("search-index.js"),
+        "search.js should load the index as a script (a fetch breaks file://)"
+    );
+    assert!(
+        js.contains("__SEARCH_INDEX__"),
+        "search.js should read the index from the global the script assigns"
     );
 }
 
@@ -455,6 +539,40 @@ fn build_writes_menu_pages_without_dotmenu_suffix() {
     );
 }
 
+/// On the server, a menu links each recipe at the menu's factor
+/// (`?scale=5`). A static page cannot scale from a query string, so the
+/// export keeps plain `.html` links and only shows the factor.
+#[test]
+fn static_menu_links_carry_no_scale() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // `@./Breakfast/Easy Pancakes{10%servings}` of a 2-serving recipe.
+    let menu = std::fs::read_to_string(out.join("menu/2 Day Plan.html")).unwrap();
+    assert!(menu.contains("(×5)"), "the factor is still shown");
+    assert!(
+        menu.contains("/recipe/Breakfast/Easy Pancakes.html\""),
+        "the link is the plain static page"
+    );
+    assert!(
+        !menu.contains("?scale="),
+        "no query string in a static export"
+    );
+}
+
 #[test]
 fn static_output_omits_dynamic_ui() {
     let tmp = TempDir::new().unwrap();
@@ -489,6 +607,11 @@ fn static_output_omits_dynamic_ui() {
     assert!(
         !index.contains("href=\"./preferences\""),
         "preferences nav link still present in static index"
+    );
+    // The random pick is a server redirect, which a static site cannot do.
+    assert!(
+        !index.contains("id=\"random-recipe\""),
+        "random recipe button still present in static index"
     );
 
     // The dynamic server search fetch should be gone; the static search.js
@@ -555,20 +678,7 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
     // Use a non-hidden subdir; the image walker skips dotted directories,
     // and `TempDir::new()` creates `.tmpXXXX`.
     let source = tmp.path().join("recipes");
-    std::fs::create_dir_all(&source).unwrap();
-
-    // Copy the seed into a writable scratch dir so we can build into it.
-    let seed = seed_dir();
-    for entry in walkdir::WalkDir::new(&seed) {
-        let entry = entry.unwrap();
-        let rel = entry.path().strip_prefix(&seed).unwrap();
-        let dst = source.join(rel);
-        if entry.file_type().is_dir() {
-            std::fs::create_dir_all(&dst).unwrap();
-        } else {
-            std::fs::copy(entry.path(), &dst).unwrap();
-        }
-    }
+    copy_seed_to(&source);
 
     let out = source.join("_site");
     for _ in 0..3 {
@@ -595,6 +705,59 @@ fn build_twice_with_output_inside_source_does_not_recurse() {
 }
 
 #[test]
+fn build_twice_does_not_list_output_dir() {
+    // Regression for #632: the previous run copies the .cook sources into
+    // `_site/recipe/`, so the listing pages used to show `_site` as a recipe
+    // folder, linking to a directory page that was never written.
+    let tmp = TempDir::new().unwrap();
+    let source = tmp.path().join("recipes");
+    copy_seed_to(&source);
+
+    let out = source.join("_site");
+    for _ in 0..2 {
+        Command::cargo_bin("cook")
+            .unwrap()
+            .args([
+                "build",
+                "web",
+                out.to_str().unwrap(),
+                "--base-path",
+                source.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+    }
+
+    let mut pages = vec![out.join("index.html")];
+    for entry in std::fs::read_dir(out.join("directory")).unwrap() {
+        pages.push(entry.unwrap().path());
+    }
+    assert!(pages.len() > 1, "seed should produce directory pages");
+    for page in pages {
+        let html = std::fs::read_to_string(&page).unwrap();
+        assert!(
+            !html.contains("_site"),
+            "{page:?} should not mention the output directory"
+        );
+    }
+}
+
+/// Copy the seed into a writable scratch dir so a test can build into it.
+fn copy_seed_to(dest: &std::path::Path) {
+    let seed = seed_dir();
+    for entry in walkdir::WalkDir::new(&seed) {
+        let entry = entry.unwrap();
+        let rel = entry.path().strip_prefix(&seed).unwrap();
+        let dst = dest.join(rel);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&dst).unwrap();
+        } else {
+            std::fs::copy(entry.path(), &dst).unwrap();
+        }
+    }
+}
+
+#[test]
 fn build_compress_writes_gzip_variants() {
     let tmp = TempDir::new().unwrap();
     let out = tmp.path().join("_site");
@@ -618,7 +781,7 @@ fn build_compress_writes_gzip_variants() {
     for file in [
         "index.html",
         "static/css/output.css",
-        "static/search-index.json",
+        "static/search-index.js",
     ] {
         let gz_path = out.join(format!("{file}.gz"));
         assert!(gz_path.is_file(), "{file}.gz should exist");
@@ -713,4 +876,237 @@ fn build_compress_twice_does_not_gzip_gzip() {
         double_gz.is_empty(),
         "no double-compressed files: {double_gz:?}"
     );
+}
+
+#[test]
+fn build_writes_feeds_when_feed_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--feed=https://recipes.example.com",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("atom.xml, rss.xml and feed.json"));
+
+    let atom = std::fs::read_to_string(out.join("atom.xml")).unwrap();
+    assert!(atom.contains(r#"<feed xmlns="http://www.w3.org/2005/Atom""#));
+    assert!(
+        atom.contains("https://recipes.example.com/recipe/Breakfast/Easy%20Pancakes.html"),
+        "atom feed should link recipe pages with absolute URLs"
+    );
+
+    let rss = std::fs::read_to_string(out.join("rss.xml")).unwrap();
+    assert!(rss.contains(r#"<rss version="2.0""#));
+    assert_eq!(
+        atom.matches("<entry>").count(),
+        rss.matches("<item>").count(),
+        "both feeds should list the same recipes"
+    );
+    assert!(rss.matches("<item>").count() > 1);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("feed.json")).unwrap()).unwrap();
+    assert_eq!(json["version"], "https://jsonfeed.org/version/1.1");
+    assert_eq!(json["feed_url"], "https://recipes.example.com/feed.json");
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(
+        items.len(),
+        rss.matches("<item>").count(),
+        "the JSON feed should list the same recipes"
+    );
+    assert!(items
+        .iter()
+        .any(|i| i["url"] == "https://recipes.example.com/recipe/Breakfast/Easy%20Pancakes.html"));
+
+    // Every page advertises the feeds, relative to its own depth.
+    for (page, prefix) in [
+        ("index.html", "."),
+        ("directory/Breakfast.html", ".."),
+        ("recipe/Breakfast/Easy Pancakes.html", "../.."),
+        ("menu/Weekly Plan.html", ".."),
+    ] {
+        let html = std::fs::read_to_string(out.join(page)).unwrap();
+        for (kind, file) in [
+            ("atom+xml", "atom.xml"),
+            ("rss+xml", "rss.xml"),
+            ("feed+json", "feed.json"),
+        ] {
+            // The title follows the build language, so leave it out.
+            let (head, tail) = (
+                format!(r#"<link rel="alternate" type="application/{kind}" "#),
+                format!(r#"href="{prefix}/{file}">"#),
+            );
+            assert!(
+                html.lines()
+                    .any(|l| l.contains(&head) && l.trim_end().ends_with(&tail)),
+                "{page} should link {prefix}/{file}"
+            );
+        }
+    }
+}
+
+#[test]
+fn build_omits_feeds_when_feed_not_set() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    assert!(!out.join("atom.xml").exists());
+    assert!(!out.join("rss.xml").exists());
+    assert!(!out.join("feed.json").exists());
+
+    // No page advertises feeds that were not written.
+    for page in ["index.html", "recipe/Breakfast/Easy Pancakes.html"] {
+        let html = std::fs::read_to_string(out.join(page)).unwrap();
+        assert!(
+            !html.contains(r#"rel="alternate""#),
+            "{page} should not link feeds"
+        );
+    }
+}
+
+#[test]
+fn build_feed_rejects_relative_url() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--feed=/recipes/",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--feed"));
+}
+
+#[test]
+fn build_feed_without_value_reuses_sitemap_url() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    // `--feed` right before the positional output dir: with require_equals,
+    // the directory must not be taken as the feed URL.
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--sitemap",
+            "https://recipes.example.com/sub",
+            "--feed",
+            out.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    assert!(out.join("sitemap.xml").exists());
+    let atom = std::fs::read_to_string(out.join("atom.xml")).unwrap();
+    assert!(
+        atom.contains("https://recipes.example.com/sub/recipe/Breakfast/Easy%20Pancakes.html"),
+        "feed should use the --sitemap URL"
+    );
+    assert!(out.join("rss.xml").exists());
+}
+
+#[test]
+fn build_feed_without_value_requires_sitemap() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--feed",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--feed needs the site's URL"));
+    assert!(!out.join("atom.xml").exists());
+}
+
+#[test]
+fn build_explicit_feed_url_overrides_sitemap() {
+    let tmp = TempDir::new().unwrap();
+    let out = tmp.path().join("_site");
+    let seed = seed_dir();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            out.to_str().unwrap(),
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--sitemap",
+            "https://sitemap.example.com",
+            "--feed=https://feed.example.com",
+        ])
+        .assert()
+        .success();
+
+    let rss = std::fs::read_to_string(out.join("rss.xml")).unwrap();
+    assert!(rss.contains("<link>https://feed.example.com/</link>"));
+    assert!(!rss.contains("sitemap.example.com"));
+}
+
+#[test]
+fn build_rejects_url_as_output_dir() {
+    // `--feed URL` with a space leaves the URL as the positional output dir.
+    let seed = seed_dir();
+    Command::cargo_bin("cook")
+        .unwrap()
+        .args([
+            "build",
+            "web",
+            "--base-path",
+            seed.to_str().unwrap(),
+            "--sitemap",
+            "https://recipes.example.com",
+            "--feed",
+            "https://recipes.example.com",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--feed=https://recipes.example.com",
+        ));
 }

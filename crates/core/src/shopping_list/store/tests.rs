@@ -19,7 +19,10 @@ fn entry(path: &str, scale: f64) -> StoredEntry {
         path: path.to_string(),
         scale,
         included_references: None,
+        included_reference_names: None,
+        included_reference_scales: None,
         recipes: None,
+        optional_ingredients: Vec::new(),
     }
 }
 
@@ -122,6 +125,87 @@ fn included_references_are_stored_as_children_and_read_back() {
     );
 }
 
+fn selection(name: &str, quantity: Option<&str>) -> OptionalSelection {
+    OptionalSelection {
+        name: name.to_string(),
+        quantity: quantity.map(str::to_string),
+    }
+}
+
+/// Chosen optional ingredients are `? name{quantity}` selection lines under
+/// the recipe, written before its references, and read back as they were.
+#[test]
+fn optional_ingredients_are_stored_as_selection_lines_and_read_back() {
+    let dir = temp();
+    let store = store(&dir);
+    let chosen = vec![
+        selection("chilli flakes", Some("2%pinch")),
+        selection("chives", None),
+    ];
+    store
+        .add(StoredEntry {
+            included_references: Some(vec!["Components/Salsa".to_string()]),
+            optional_ingredients: chosen.clone(),
+            ..entry("Breakfast/Eggs on toast.cook", 2.0)
+        })
+        .unwrap();
+
+    assert_eq!(
+        list_file(&dir),
+        "./Breakfast/Eggs on toast.cook{2}\n  ? chilli flakes{2%pinch}\n  ? chives\n  ./Components/Salsa\n"
+    );
+
+    let items = store.load().expect("loads");
+    assert_eq!(items[0].optional_ingredients, chosen);
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Components/Salsa".to_string()][..]),
+        "a selection line is not a reference"
+    );
+}
+
+/// A list written by another app may accept an optional recipe with a
+/// `? ./path` line. This store does not write those, and must not mistake one
+/// for a reference to include.
+#[test]
+fn an_optional_recipe_selection_is_not_an_included_reference() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "./Steak.cook\n  ? ./sauces/chimichurri{2}\n  ./Sides/Rice\n",
+    );
+
+    let items = store(&dir).load().expect("loads");
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Sides/Rice".to_string()][..])
+    );
+    assert!(items[0].optional_ingredients.is_empty());
+}
+
+#[test]
+fn a_menu_recipe_keeps_its_optional_ingredients() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_menu(
+            "Plans/Week 1.menu".to_string(),
+            1.0,
+            vec![StoredEntry {
+                optional_ingredients: vec![selection("parmesan", Some("50%g"))],
+                ..entry("Risotto.cook", 1.0)
+            }],
+        )
+        .unwrap();
+
+    let items = store.load().expect("loads");
+    let recipes = items[0].recipes.as_ref().expect("a menu carries recipes");
+    assert_eq!(
+        recipes[0].optional_ingredients,
+        vec![selection("parmesan", Some("50%g"))]
+    );
+}
+
 #[test]
 fn a_menu_reads_back_with_its_recipes_nested() {
     let dir = temp();
@@ -195,6 +279,74 @@ fn removing_something_that_is_not_there_changes_nothing() {
     assert_eq!(paths, ["Soup.cook"]);
 }
 
+/// The same recipe twice, the first with its stock and the second without —
+/// what a page that adds a recipe, unticks a sub-recipe and adds it again
+/// stores.
+fn soup_twice(store: &ShoppingListStore) {
+    store
+        .add(StoredEntry {
+            included_references: Some(vec!["./Stock.cook".into()]),
+            ..entry("Soup.cook", 1.0)
+        })
+        .unwrap();
+    store
+        .add(StoredEntry {
+            included_references: Some(vec![]),
+            ..entry("Soup.cook", 2.0)
+        })
+        .unwrap();
+}
+
+#[test]
+fn remove_at_takes_that_entry_and_not_the_first_with_its_path() {
+    let dir = temp();
+    let store = store(&dir);
+    soup_twice(&store);
+
+    assert!(store.remove_at(1, "Soup.cook").expect("removes"));
+
+    let items = store.load().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].scale, 1.0, "the first entry stays");
+    assert_eq!(
+        items[0].included_references.as_deref(),
+        Some(&["Stock.cook".to_string()][..]),
+        "with its sub-recipe"
+    );
+}
+
+#[test]
+fn remove_at_changes_nothing_when_the_entry_is_not_there_any_more() {
+    let dir = temp();
+    let store = store(&dir);
+    soup_twice(&store);
+    store.add(entry("Cake.cook", 1.0)).unwrap();
+    let before = list_file(&dir);
+
+    // Another path at that position: the list changed under the caller.
+    assert!(!store.remove_at(2, "Soup.cook").unwrap());
+    // Past the end.
+    assert!(!store.remove_at(3, "Soup.cook").unwrap());
+
+    assert_eq!(list_file(&dir), before);
+}
+
+#[test]
+fn remove_at_counts_the_entries_load_lists() {
+    let dir = temp();
+    let store = store(&dir);
+    // A free-hand ingredient, written by one of the apps, comes first in the
+    // file but is not one of the entries `load` returns.
+    write(
+        &base(&dir).join(".shopping-list"),
+        "salt\n./Soup.cook\n./Cake.cook\n",
+    );
+
+    assert!(store.remove_at(1, "Cake.cook").expect("removes"));
+
+    assert_eq!(list_file(&dir), "salt\n./Soup.cook\n");
+}
+
 #[test]
 fn clear_empties_the_list_and_the_checked_log() {
     let dir = temp();
@@ -206,9 +358,10 @@ fn clear_empties_the_list_and_the_checked_log() {
 
     assert!(store.load().unwrap().is_empty());
     assert!(store.checked_set().unwrap().is_empty());
-    assert!(
-        !base(&dir).join(".shopping-checked").exists(),
-        "the checked log is removed, not emptied"
+    assert_eq!(
+        std::fs::read_to_string(base(&dir).join(".shopping-checked").as_std_path()).unwrap(),
+        "",
+        "the checked log is emptied, not removed, so it keeps its owner"
     );
 }
 
@@ -463,4 +616,111 @@ fn a_rewrite_never_shortens_the_file_in_place() {
     }
     #[cfg(not(unix))]
     let _ = (before, after);
+}
+
+// -- Free-hand items -------------------------------------------------------
+
+fn free_hand(name: &str, quantity: Option<&str>) -> FreeHandItem {
+    FreeHandItem {
+        name: name.to_string(),
+        quantity: quantity.map(String::from),
+    }
+}
+
+#[test]
+fn add_all_appends_recipes_then_free_hand_items_in_one_write() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add(entry("Soup.cook", 1.0)).unwrap();
+
+    store
+        .add_all(
+            vec![entry("Risotto.cook", 2.0), entry("Salad.cook", 1.0)],
+            vec![
+                free_hand("almonds", Some("100%g")),
+                free_hand("paper towels", None),
+            ],
+        )
+        .expect("adds");
+
+    assert_eq!(
+        list_file(&dir),
+        "./Soup.cook\n./Risotto.cook{2}\n./Salad.cook\nalmonds{100%g}\npaper towels\n"
+    );
+    let paths: Vec<String> = store.load().unwrap().into_iter().map(|e| e.path).collect();
+    assert_eq!(paths, ["Soup.cook", "Risotto.cook", "Salad.cook"]);
+    assert_eq!(
+        store.load_free_hand().unwrap(),
+        [
+            free_hand("almonds", Some("100%g")),
+            free_hand("paper towels", None)
+        ]
+    );
+}
+
+#[test]
+fn free_hand_lines_written_by_another_app_are_read() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "salt\n./Pancakes{2}\n  flour{500%g}\nmilk{1%l}\n",
+    );
+    let store = store(&dir);
+
+    // Only the top level: `flour` belongs to the pancakes.
+    assert_eq!(
+        store.load_free_hand().unwrap(),
+        [free_hand("salt", None), free_hand("milk", Some("1%l"))]
+    );
+    assert_eq!(store.load().unwrap().len(), 1);
+}
+
+#[test]
+fn remove_free_hand_takes_the_first_item_with_that_name_and_amount() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_all(
+            vec![entry("Soup.cook", 1.0)],
+            vec![
+                free_hand("coffee", Some("1%cup")),
+                free_hand("coffee", Some("2%cup")),
+                free_hand("coffee", Some("1%cup")),
+            ],
+        )
+        .unwrap();
+
+    store
+        .remove_free_hand(&free_hand("coffee", Some("1%cup")))
+        .expect("removes");
+    store
+        .remove_free_hand(&free_hand("coffee", None))
+        .expect("nothing to remove is fine");
+
+    assert_eq!(
+        list_file(&dir),
+        "./Soup.cook\ncoffee{2%cup}\ncoffee{1%cup}\n"
+    );
+}
+
+#[test]
+fn removing_a_recipe_leaves_free_hand_items_alone() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_all(
+            vec![entry("Soup.cook", 1.0)],
+            vec![free_hand("Soup.cook", None)],
+        )
+        .unwrap();
+
+    store.remove("Soup.cook").unwrap();
+
+    assert_eq!(list_file(&dir), "Soup.cook\n");
+}
+
+#[test]
+fn a_free_hand_item_spec_is_an_ingredient_without_its_at() {
+    assert_eq!(free_hand("almonds", Some("50%g")).spec(), "almonds{50%g}");
+    assert_eq!(free_hand("paper towels", None).spec(), "paper towels{}");
 }

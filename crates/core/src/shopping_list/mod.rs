@@ -43,20 +43,25 @@
 //! `.shopping-checked` files that remember which recipes someone put on their
 //! list and what they have already ticked off while shopping.
 
+mod days;
 mod store;
 
-pub use store::{recipe_display_name, ShoppingListStore, StoredEntry};
+pub use days::{section_date, DayRange};
+pub use store::{
+    recipe_display_name, FreeHandItem, OptionalSelection, ShoppingListStore, StoredEntry,
+};
 
 use crate::{
     find,
     format::{quantity::ordered_components, shopping_list::quantity_fmt},
     parser::{parse_recipe_at, parse_unscaled, PARSER},
-    ConfigSource, Context, CoreError, Diagnostic, Outcome, RecipeSource,
+    ConfigSource, Context, CoreError, Diagnostic, DiagnosticKind, Outcome, RecipeSource,
+    UnscalableCause,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::{
-    aisle::AisleConf, ingredient_list::IngredientList, pantry::PantryConf,
-    quantity::GroupedQuantity, quantity::Value, Recipe,
+    aisle::AisleConf, convert::Converter, ingredient_list::IngredientList, metadata::StdKey,
+    pantry::PantryConf, quantity::GroupedQuantity, quantity::Value, Recipe,
 };
 use cooklang_find::RecipeEntry;
 use serde::{Deserialize, Serialize};
@@ -93,17 +98,39 @@ pub struct ScaledRecipe {
     /// Scaling factor applied to the recipe's quantities. Pass `1.0` to leave
     /// them alone.
     pub scale: f64,
+    /// Only the days of a menu to shop for: its sections dated (a
+    /// `YYYY-MM-DD` in the name, see [`section_date`]) within the range, and
+    /// what they reference. `None`
+    /// takes the whole recipe. A recipe with no dated section has no days to
+    /// choose from and is taken whole either way.
+    pub days: Option<DayRange>,
 }
 
 impl ScaledRecipe {
     /// A recipe at its authored scale.
     pub fn new(source: RecipeSource) -> Self {
-        Self { source, scale: 1.0 }
+        Self {
+            source,
+            scale: 1.0,
+            days: None,
+        }
     }
 
     /// A recipe scaled by `scale`.
     pub fn scaled(source: RecipeSource, scale: f64) -> Self {
-        Self { source, scale }
+        Self {
+            source,
+            scale,
+            days: None,
+        }
+    }
+
+    /// The same recipe narrowed to the sections dated within `days`.
+    pub fn on_days(self, days: DayRange) -> Self {
+        Self {
+            days: Some(days),
+            ..self
+        }
     }
 }
 
@@ -128,6 +155,13 @@ pub struct GenerateRequest {
     /// aisle category, and is subtracted from by the pantry — exactly as that
     /// ingredient would be.
     pub extra_items: Vec<String>,
+    /// Put the recipes' optional ingredients (`@?chives`) on the list too,
+    /// marked as optional.
+    ///
+    /// Off by default: a recipe contributes only what it needs, so an optional
+    /// garnish is bought only when someone asks for it. An optional recipe
+    /// reference (`@?./sauce{}`) is left out with everything it would add.
+    pub include_optional: bool,
 }
 
 /// How [`extract_ingredients`] should treat recipe references.
@@ -139,9 +173,35 @@ pub struct ExtractOptions<'a> {
     /// Which references to follow, by their display path (`sauces/tomato`).
     /// `None` follows all of them. Ignored when `ignore_references` is set.
     ///
-    /// A leading `./` is ignored on both sides of the comparison, so a path
-    /// stored without one still matches a reference written with one.
+    /// Both sides of the comparison are put through
+    /// [`find::resolve_reference`] first, so a reference written `@./sauce{}`
+    /// is named by `./sauce` and by `sauce` alike, and one written
+    /// `@../shared/sauce{}` by the `shared/sauce` it resolves to.
     pub included_references: Option<&'a [String]>,
+    /// Collect optional ingredients into [`ShoppingIngredients::optional`]
+    /// instead of leaving them out. See [`GenerateRequest::include_optional`].
+    pub include_optional: bool,
+    /// Resolve recipes only inside `base_path`: a name or a reference that
+    /// lands outside once links are followed answers as not found. For lists
+    /// built on someone else's behalf — the server sets it; the CLI reads
+    /// under the user's own permissions and leaves it off (#698).
+    pub confined: bool,
+}
+
+/// What [`extract_ingredients`] accumulates into: the ingredients the recipes
+/// need, and apart from them the optional ones.
+///
+/// Optional amounts are never merged into required ones, so the required
+/// total is what the recipes cannot do without, and the same ingredient can
+/// appear in both lists — 100 g of parmesan in the sauce, and 50 g more on
+/// top if you like.
+#[derive(Debug, Default)]
+pub struct ShoppingIngredients {
+    /// Ingredients the recipes need.
+    pub required: IngredientList,
+    /// Optional ingredients, and everything an optional recipe reference adds.
+    /// Stays empty unless [`ExtractOptions::include_optional`] is set.
+    pub optional: IngredientList,
 }
 
 /// One ingredient on a shopping list.
@@ -164,6 +224,20 @@ pub struct ListItem {
     /// [`ordered_components`](crate::format::quantity::ordered_components)
     /// describes.
     pub quantities: Vec<String>,
+    /// The recipes can do without it: an optional ingredient, or one an
+    /// optional recipe reference adds. The same name can appear twice, once
+    /// required and once optional, because the two amounts are kept apart.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
+}
+
+/// One ingredient on the list with `cooklang`'s own quantity model, for the
+/// formatters. See [`AggregatedList::raw_items`].
+#[derive(Debug, Clone)]
+pub(crate) struct RawItem {
+    pub(crate) name: String,
+    pub(crate) quantity: GroupedQuantity,
+    pub(crate) optional: bool,
 }
 
 /// A group of ingredients sharing an aisle category.
@@ -204,10 +278,10 @@ pub struct AggregatedList {
     /// structured values; consumers outside this crate get the rendered
     /// strings above.
     #[serde(skip)]
-    pub(crate) raw_items: Vec<(String, GroupedQuantity)>,
+    pub(crate) raw_items: Vec<RawItem>,
     /// The same as [`categories`](Self::categories), likewise unrendered.
     #[serde(skip)]
-    pub(crate) raw_categories: Vec<(String, Vec<(String, GroupedQuantity)>)>,
+    pub(crate) raw_categories: Vec<(String, Vec<RawItem>)>,
 }
 
 impl AggregatedList {
@@ -216,23 +290,48 @@ impl AggregatedList {
         self.items.is_empty()
     }
 
-    /// Build both views from an aggregated `cooklang` list.
+    /// Build both views from the aggregated required and optional lists.
     ///
     /// The uncategorised pairs are taken first because
     /// [`IngredientList::categorize`] consumes the list and reorders what it
-    /// keeps, so the insertion order cannot be recovered afterwards.
-    fn build(list: IngredientList, aisle: &AisleConf) -> Self {
-        let raw_items: Vec<(String, GroupedQuantity)> = list
-            .iter()
-            .map(|(name, quantity)| (name.clone(), quantity.clone()))
-            .collect();
+    /// keeps, so the insertion order cannot be recovered afterwards. Optional
+    /// items follow the required ones, both uncategorised and within each
+    /// category.
+    fn build(required: IngredientList, optional: IngredientList, aisle: &AisleConf) -> Self {
+        let raw = |list: &IngredientList, optional: bool| {
+            list.iter()
+                .map(|(name, quantity)| RawItem {
+                    name: name.clone(),
+                    quantity: quantity.clone(),
+                    optional,
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut raw_items = raw(&required, false);
+        raw_items.extend(raw(&optional, true));
         let items = raw_items.iter().map(ListItem::render).collect();
 
-        let raw_categories: Vec<(String, Vec<(String, GroupedQuantity)>)> = list
-            .categorize(aisle)
-            .into_iter()
-            .map(|(category, items)| (category, items.into_iter().collect()))
-            .collect();
+        // Categories keep the aisle configuration's order, with "other" last,
+        // whichever of the two lists a category first turns up in.
+        let rank = |category: &str| {
+            aisle
+                .categories
+                .iter()
+                .position(|c| c.name == category)
+                .unwrap_or(usize::MAX)
+        };
+        let mut raw_categories: Vec<(String, Vec<RawItem>)> = Vec::new();
+        for (list, optional) in [(required, false), (optional, true)] {
+            for (category, items) in list.categorize(aisle) {
+                let items = raw(&items, optional);
+                match raw_categories.iter_mut().find(|(c, _)| *c == category) {
+                    Some((_, existing)) => existing.extend(items),
+                    None => raw_categories.push((category, items)),
+                }
+            }
+        }
+        raw_categories.sort_by_key(|(category, _)| rank(category));
+
         let categories = raw_categories
             .iter()
             .map(|(name, items)| ListCategory {
@@ -250,22 +349,44 @@ impl AggregatedList {
     }
 }
 
+/// Fold case variants of an ingredient's name into a single entry.
+///
+/// [`IngredientList`] keys on the name as spelled, so `sugar` and `Sugar`
+/// travel the pipeline as two items — yet the pantry lookup, the server's
+/// checked set and the aisle all match case-insensitively, which subtracted
+/// stock from, and ticked, *each* variant separately (#694). The first
+/// spelling seen keeps the name; the quantities are summed by
+/// [`IngredientList::add_ingredient`], converting units as usual.
+pub fn merge_case_variants(list: IngredientList) -> IngredientList {
+    let mut spellings: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut merged = IngredientList::new();
+    for (name, quantity) in list.iter() {
+        let name = spellings
+            .entry(name.to_lowercase())
+            .or_insert_with(|| name.clone());
+        merged.add_ingredient(name.clone(), quantity, PARSER.converter());
+    }
+    merged
+}
+
 impl ListItem {
-    fn render((name, quantity): &(String, GroupedQuantity)) -> Self {
+    fn render(item: &RawItem) -> Self {
         Self {
-            name: name.clone(),
-            quantities: ordered_components(quantity)
+            name: item.name.clone(),
+            quantities: ordered_components(&item.quantity)
                 .into_iter()
                 .map(quantity_fmt)
                 .collect(),
+            optional: item.optional,
         }
     }
 }
 
 /// Build a shopping list from several recipes.
 ///
-/// Ingredients with the same name are merged, converting units where they
-/// convert; the aisle configuration from [`Context::aisle`] folds synonyms onto
+/// Ingredients with the same name are merged — letter case ignored, the
+/// first spelling kept — converting units where they convert; the aisle
+/// configuration from [`Context::aisle`] folds synonyms onto
 /// one spelling and supplies the categories; the pantry configuration from
 /// [`Context::pantry`] is subtracted from what is left. Pass
 /// [`ConfigSource::None`] for either to skip that step — that is how CookCLI's
@@ -284,9 +405,9 @@ impl ListItem {
 /// - [`CoreError::RecipeNotFound`] if a recipe, or a recipe it references,
 ///   does not exist.
 /// - [`CoreError::Parse`] if any recipe reached has parse errors.
-/// - [`CoreError::Reference`] if a recipe reference cannot be scaled.
 ///
-/// A recipe that reaches itself is *not* an error. See
+/// A recipe that reaches itself is *not* an error, and neither is a reference
+/// that cannot be scaled to the amount it asks for: both are warnings. See
 /// [`extract_ingredients`].
 pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<AggregatedList>, CoreError> {
     let mut diagnostics = Vec::new();
@@ -302,9 +423,11 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
     let options = ExtractOptions {
         ignore_references: req.ignore_references,
         included_references: None,
+        include_optional: req.include_optional,
+        confined: false,
     };
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     for recipe in &req.recipes {
         diagnostics.extend(extract_ingredients(ctx, recipe, &options, &mut list)?);
     }
@@ -315,20 +438,78 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
     // `use_common_names`, categorisation and the pantry all treat them the
     // same, which is what lets an extra "milk" merge with a recipe's.
     for spec in &req.extra_items {
-        let outcome = parse_extra_item(spec)?;
-        diagnostics.extend(outcome.diagnostics);
-        list.add_recipe(&outcome.value, PARSER.converter(), false);
+        diagnostics.extend(add_extra_item(spec, &mut list.required)?);
     }
 
-    let mut list = list.use_common_names(&aisle, PARSER.converter());
+    // Case variants merge before anything else reads the list, so `sugar`
+    // and `Sugar` buy, categorise and deplete the pantry as one ingredient
+    // under the first spelling (#694).
+    let mut required =
+        merge_case_variants(list.required).use_common_names(&aisle, PARSER.converter());
+    let mut optional =
+        merge_case_variants(list.optional).use_common_names(&aisle, PARSER.converter());
     if let Some(pantry) = &pantry {
-        list = list.subtract_pantry(pantry, PARSER.converter());
+        optional = subtract_pantry_from_optional(optional, &required, pantry);
+        required = required.subtract_pantry(pantry, PARSER.converter());
     }
 
     Ok(Outcome::with_diagnostics(
-        AggregatedList::build(list, &aisle),
+        AggregatedList::build(required, optional, &aisle),
         diagnostics,
     ))
+}
+
+/// Subtract the pantry from the optional list, except for ingredients the
+/// required list also has.
+///
+/// Pantry stock counts against the required amount first, and
+/// [`IngredientList::subtract_pantry`] does not say what is left over. Taking
+/// the same stock off the optional amount as well would count it twice, so an
+/// ingredient needed both ways keeps its whole optional amount: at worst the
+/// shopper is offered a little more garnish than they need.
+pub fn subtract_pantry_from_optional(
+    optional: IngredientList,
+    required: &IngredientList,
+    pantry: &PantryConf,
+) -> IngredientList {
+    let required_names: std::collections::HashSet<String> = required
+        .iter()
+        .map(|(name, _)| name.to_lowercase())
+        .collect();
+    let converter = PARSER.converter();
+
+    let mut only_optional = IngredientList::new();
+    for (name, quantity) in optional.iter() {
+        if !required_names.contains(&name.to_lowercase()) {
+            only_optional.add_ingredient(name.clone(), quantity, converter);
+        }
+    }
+    let remaining: std::collections::HashMap<String, GroupedQuantity> = only_optional
+        .subtract_pantry(pantry, converter)
+        .iter()
+        .map(|(name, quantity)| (name.clone(), quantity.clone()))
+        .collect();
+
+    let mut result = IngredientList::new();
+    for (name, quantity) in optional.iter() {
+        if required_names.contains(&name.to_lowercase()) {
+            result.add_ingredient(name.clone(), quantity, converter);
+        } else if let Some(left) = remaining.get(name) {
+            result.add_ingredient(name.clone(), left, converter);
+        }
+    }
+    result
+}
+
+/// Add one extra item — a Cooklang ingredient without its `@`, as in
+/// [`GenerateRequest::extra_items`] — to `list`, merging it with any
+/// ingredient of the same name already there.
+///
+/// Errors as [`CoreError::Parse`] when the entry is not a valid ingredient.
+pub fn add_extra_item(spec: &str, list: &mut IngredientList) -> Result<Vec<Diagnostic>, CoreError> {
+    let outcome = parse_extra_item(spec)?;
+    list.add_recipe(&outcome.value, PARSER.converter(), false);
+    Ok(outcome.diagnostics)
 }
 
 /// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient
@@ -452,9 +633,23 @@ fn at_source(diagnostic: Diagnostic, source: &ConfigSource) -> Diagnostic {
 /// ingredients. A quantity on the reference (`@./sauce{500%ml}`) scales the
 /// referenced recipe to that target rather than multiplying it.
 ///
-/// Expansion is iterative and stops three files deep: the named recipe, the
-/// recipes it references, and the recipes *those* reference — whose own
-/// references are not followed.
+/// Expansion is recursive: every reference is followed, and so is every
+/// reference inside what it leads to, however deep the chain runs. It used to
+/// stop three files in, and anything below that fell off the list with no
+/// warning (<https://github.com/cooklang/cookcli/issues/509>). Two things bound
+/// the descent: the cycle check below, and a hard depth limit for a chain long
+/// enough to exhaust the stack without ever repeating itself — a hundred
+/// levels, which no collection written by hand comes near.
+///
+/// A reference with no quantity of its own inherits the factor the recipe that
+/// named it was scaled by, so scaling a menu scales everything under it. One
+/// with a quantity names an absolute target instead, and the factor *that*
+/// reaches is what carries on down from there.
+///
+/// A target the referenced recipe cannot be scaled to — a weight when it has
+/// no `yield`, servings when it declares none — puts the reference itself on
+/// the list, as `--ignore-references` would, with a warning saying what to
+/// change. Nothing below it is expanded.
 ///
 /// **Every reference is resolved from disk**, under [`Context::base_path`],
 /// including the references of a [`RecipeSource::Content`] recipe. Only the
@@ -491,27 +686,77 @@ pub fn extract_ingredients(
     ctx: &Context,
     recipe: &ScaledRecipe,
     options: &ExtractOptions<'_>,
-    list: &mut IngredientList,
+    list: &mut ShoppingIngredients,
 ) -> Result<Vec<Diagnostic>, CoreError> {
     let base_path = ctx.base_path();
     let converter = PARSER.converter();
 
-    let (parsed, mut diagnostics) = parse_source(base_path, &recipe.source, recipe.scale)?;
-    let ref_indices = list.add_recipe(&parsed, converter, options.ignore_references);
+    let (parsed, mut diagnostics) =
+        parse_source(base_path, &recipe.source, recipe.scale, options.confined)?;
+
+    let starting_entry = match &recipe.source {
+        RecipeSource::Path(path) => {
+            if options.confined {
+                find::get_recipe_inside(base_path, path.as_str()).ok()
+            } else {
+                find::get_recipe(base_path, path.as_str()).ok()
+            }
+        }
+        // An unsaved buffer is no file, so nothing can reference it.
+        RecipeSource::Content { .. } => None,
+    };
+
+    let kept = recipe
+        .days
+        .as_ref()
+        .map(|days| (days, days::kept_ingredients(&parsed, days)));
+    let ref_indices = add_ingredients(
+        list,
+        &parsed,
+        converter,
+        options.ignore_references,
+        options.include_optional,
+        false,
+        match &kept {
+            Some((_, days::Kept::Ingredients(kept))) => Some(kept),
+            _ => None,
+        },
+    );
+    if let Some((range, kept)) = &kept {
+        let is_menu = starting_entry.as_ref().is_some_and(RecipeEntry::is_menu);
+        let warning = match kept {
+            // A recipe has no days, and nobody expects it to: only a menu
+            // that turns out to have none is worth a word.
+            days::Kept::Undated if is_menu => Some(
+                "No section of this menu is dated (YYYY-MM-DD in its name), so it has no days to \
+                 choose from: all of it is on the list"
+                    .to_string(),
+            ),
+            days::Kept::Ingredients(kept) if kept.is_empty() => Some(format!(
+                "None of this menu's days is in the range asked for ({range}), so nothing \
+                 from it is on the list"
+            )),
+            _ => None,
+        };
+        if let Some(message) = warning {
+            let mut warning = Diagnostic::warning(message);
+            if let Some(path) = starting_entry.as_ref().and_then(|entry| entry.path()) {
+                warning = warning.at_file(path.clone());
+            }
+            diagnostics.push(warning);
+        }
+    }
 
     // The chain of recipes currently being expanded, innermost last, by
     // resolved file path. A reference resolving to something already on it
     // would lead back up its own chain, so it is refused rather than followed.
     // See "Cycles" above for why this is the ancestor chain and not every
     // recipe seen.
-    let starting_path = match &recipe.source {
-        RecipeSource::Path(path) => find::get_recipe(base_path, path.as_str())
-            .ok()
-            .and_then(|entry| entry.path().cloned()),
-        // An unsaved buffer is no file, so nothing can reference it.
-        RecipeSource::Content { .. } => None,
-    };
-    let ancestors: Vec<Utf8PathBuf> = starting_path.into_iter().collect();
+    let ancestors: Vec<Utf8PathBuf> = starting_entry
+        .as_ref()
+        .and_then(|entry| entry.path().cloned())
+        .into_iter()
+        .collect();
 
     tracing::debug!(
         "ignore_references = {}, ref_indices.len() = {}",
@@ -520,8 +765,290 @@ pub fn extract_ingredients(
     );
 
     if !options.ignore_references {
-        for ref_index in ref_indices {
-            let ingredient = &parsed.ingredients[ref_index];
+        Expansion {
+            base_path,
+            converter,
+            list,
+            diagnostics: &mut diagnostics,
+            include_optional: options.include_optional,
+            confined: options.confined,
+        }
+        .expand(
+            &parsed,
+            &ref_indices,
+            recipe.scale,
+            options.included_references,
+            &ancestors,
+        )?;
+    }
+
+    Ok(diagnostics)
+}
+
+/// The selection lines for the optional ingredients of `recipe` named in
+/// `names`, with the amounts to buy at the recipe's scale.
+///
+/// This is what a shopping list records when someone accepts optional
+/// ingredients while adding a recipe: each named ingredient's optional
+/// occurrences are added up, scaled, and written as the final amount, so a
+/// reader never has to look the recipe up again. Amounts that do not add up
+/// into one quantity (`1 pinch` and `5 g`) become one selection each.
+///
+/// Names are compared case-insensitively with surrounding whitespace trimmed,
+/// against the ingredient's display name. A name that is not an optional
+/// ingredient of the recipe is ignored, and so are optional recipe
+/// references, which a selection line of this kind cannot hold.
+///
+/// # Errors
+///
+/// As [`extract_ingredients`] for reading and parsing the recipe.
+pub fn optional_selections(
+    ctx: &Context,
+    recipe: &ScaledRecipe,
+    names: &[String],
+    confined: bool,
+) -> Result<Outcome<Vec<OptionalSelection>>, CoreError> {
+    let converter = PARSER.converter();
+    let wanted: Vec<String> = names.iter().map(|n| n.trim().to_lowercase()).collect();
+    let (parsed, diagnostics) =
+        parse_source(ctx.base_path(), &recipe.source, recipe.scale, confined)?;
+
+    let mut accepted = IngredientList::new();
+    for entry in parsed.group_ingredients(converter) {
+        let ingredient = entry.ingredient;
+        let name = ingredient.display_name();
+        if ingredient.modifiers().is_optional()
+            && ingredient.reference.is_none()
+            && ingredient.modifiers().should_be_listed()
+            && wanted.contains(&name.trim().to_lowercase())
+        {
+            accepted.add_ingredient(name.into_owned(), &entry.quantity, converter);
+        }
+    }
+
+    let mut selections = Vec::new();
+    for (name, quantity) in accepted.iter() {
+        let components = ordered_components(quantity);
+        if components.is_empty() {
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: None,
+            });
+        }
+        for component in components {
+            let quantity = match component.unit() {
+                Some(unit) => format!("{}%{unit}", component.value()),
+                None => component.value().to_string(),
+            };
+            selections.push(OptionalSelection {
+                name: name.clone(),
+                quantity: Some(quantity),
+            });
+        }
+    }
+    Ok(Outcome::with_diagnostics(selections, diagnostics))
+}
+
+/// Add stored selection lines to the optional ingredients of `list`.
+///
+/// Each amount is used as written — it is already the amount to buy — and
+/// several lines for one name add up. A quantity that does not parse is
+/// reported and the ingredient is added without one, so the shopper still
+/// sees it.
+pub fn add_optional_selections(
+    list: &mut ShoppingIngredients,
+    selections: &[OptionalSelection],
+) -> Vec<Diagnostic> {
+    let converter = PARSER.converter();
+    let mut diagnostics = Vec::new();
+    for selection in selections {
+        let quantity = match &selection.quantity {
+            None => GroupedQuantity::default(),
+            Some(quantity) => {
+                let line = format!("@x{{{quantity}}}");
+                match parse_unscaled(&line, &selection.name, None) {
+                    Ok(outcome) => outcome
+                        .value
+                        .group_ingredients(converter)
+                        .into_iter()
+                        .next()
+                        .map(|entry| entry.quantity)
+                        .unwrap_or_default(),
+                    Err(_) => {
+                        diagnostics.push(Diagnostic::warning(format!(
+                            "Optional ingredient '{}' has an amount that is not a Cooklang \
+                             quantity: '{quantity}'. It is listed without one",
+                            selection.name
+                        )));
+                        GroupedQuantity::default()
+                    }
+                }
+            }
+        };
+        list.optional
+            .add_ingredient(selection.name.clone(), &quantity, converter);
+    }
+    diagnostics
+}
+
+/// A recipe reference [`add_ingredients`] left to follow: its index in
+/// [`Recipe::ingredients`], and whether what it adds is optional.
+type PendingReference = (usize, bool);
+
+/// Add `recipe`'s own ingredients to `list`, and return the recipe references
+/// it holds for the caller to expand.
+///
+/// The counterpart of [`IngredientList::add_recipe`] that keeps optional
+/// ingredients apart. An optional ingredient is left out unless
+/// `include_optional` is set, and then goes to [`ShoppingIngredients::optional`];
+/// so does every ingredient when `all_optional` says the whole recipe was
+/// reached through an optional reference. An optional reference that is left
+/// out is not returned either, so nothing below it is expanded.
+///
+/// `list_references` puts the references on the list as items named after the
+/// recipe, for `--ignore-references`.
+///
+/// `kept`, when given, narrows the recipe to the ingredients some days of a
+/// menu use (see [`ScaledRecipe::days`]): the rest is neither listed nor
+/// returned, and a group adds only what its kept members amount to.
+fn add_ingredients(
+    list: &mut ShoppingIngredients,
+    recipe: &Recipe,
+    converter: &Converter,
+    list_references: bool,
+    include_optional: bool,
+    all_optional: bool,
+    kept: Option<&std::collections::HashSet<usize>>,
+) -> Vec<PendingReference> {
+    let mut references = Vec::new();
+    for entry in recipe.group_ingredients(converter) {
+        let (index, ingredient) = (entry.index, entry.ingredient);
+        let quantity = match kept {
+            None => entry.quantity,
+            Some(kept) => match days::kept_quantity(recipe, entry, kept, converter) {
+                Some(quantity) => quantity,
+                None => continue,
+            },
+        };
+        let optional = all_optional || ingredient.modifiers().is_optional();
+        if optional && !include_optional {
+            continue;
+        }
+
+        if ingredient.reference.is_some() {
+            references.push((index, optional));
+            if !list_references {
+                continue;
+            }
+        }
+
+        if !ingredient.modifiers().should_be_listed() {
+            continue;
+        }
+
+        let target = if optional {
+            &mut list.optional
+        } else {
+            &mut list.required
+        };
+        target.add_ingredient(ingredient.display_name().into_owned(), &quantity, converter);
+    }
+    references
+}
+
+/// How deep a chain of recipe references is followed before the expansion gives
+/// up and says so.
+///
+/// The ancestor chain refuses a reference that leads back on itself, so the
+/// recursion is already bounded — but it is bounded at one level per recipe in
+/// the collection, and expanding a few thousand of them as native recursion
+/// overflows the stack and aborts the process. This is the second bound, and
+/// the one that keeps a pathological collection a diagnostic rather than a
+/// crash.
+///
+/// A menu of dinners of sauces of preparations is four. A hundred is not a
+/// number of levels anyone reaches by writing recipes, and it leaves an order
+/// of magnitude of headroom below where an unoptimised build runs out of stack.
+const MAX_REFERENCE_DEPTH: usize = 100;
+
+/// What stays the same for the whole of one expansion — where to look recipes
+/// up, and what to accumulate into — so the recursion carries only what
+/// actually changes as it goes down.
+struct Expansion<'a> {
+    base_path: &'a Utf8Path,
+    converter: &'a Converter,
+    list: &'a mut ShoppingIngredients,
+    diagnostics: &'a mut Vec<Diagnostic>,
+    /// See [`ExtractOptions::include_optional`].
+    include_optional: bool,
+    /// See [`ExtractOptions::confined`].
+    confined: bool,
+}
+
+impl Expansion<'_> {
+    /// [`find::get_recipe`], or [`find::get_recipe_inside`] when the list is
+    /// confined to the recipe directory.
+    fn get_recipe(&self, name: &str) -> Result<RecipeEntry, CoreError> {
+        if self.confined {
+            find::get_recipe_inside(self.base_path, name)
+        } else {
+            find::get_recipe(self.base_path, name)
+        }
+    }
+}
+
+impl Expansion<'_> {
+    /// The directory holding the recipe currently being expanded, relative to
+    /// the recipe directory — what a `..` in one of its references steps up
+    /// from.
+    ///
+    /// Empty for a recipe sitting at the recipe directory itself. Empty too
+    /// when there is no such file to speak of — an unsaved buffer passed as
+    /// [`RecipeSource::Content`] — or when its path does not sit under
+    /// `base_path` after all, which leaves a `..` nothing to spend and so
+    /// refuses it rather than guessing where it meant to land.
+    fn reference_dir(&self, ancestors: &[Utf8PathBuf]) -> Utf8PathBuf {
+        ancestors
+            .last()
+            .and_then(|path| path.strip_prefix(self.base_path).ok())
+            .and_then(|relative| relative.parent())
+            .map(Utf8Path::to_owned)
+            .unwrap_or_default()
+    }
+
+    /// Expand the recipes `recipe` references into `list`, and the recipes *those*
+    /// reference, all the way down.
+    ///
+    /// `ref_indices` is what [`add_ingredients`] returned for `recipe`: its own
+    /// ingredients are already on the list, and the references it skipped are
+    /// what is left to follow, each with whether what it adds is optional.
+    ///
+    /// `scale` is the factor `recipe` was scaled by. A reference that carries no
+    /// quantity of its own inherits it, so scaling a menu scales every recipe
+    /// underneath it.
+    ///
+    /// `included` selects which references to follow, and applies to **this level
+    /// only** — the web UI's checkboxes name the references of the recipe a shopper
+    /// is looking at, and nothing deeper is theirs to name. The recursion passes
+    /// `None`.
+    ///
+    /// `ancestors` is the chain of recipes currently being expanded, innermost
+    /// last; see "Cycles" on [`extract_ingredients`] for why it is the chain rather
+    /// than everything seen. It is the first of the two things that bound this
+    /// recursion: a reference leading back into its own chain is refused, so a
+    /// finite collection of recipes is a finite descent however the references
+    /// are wired. Its length is also the depth, which is how
+    /// [`MAX_REFERENCE_DEPTH`] — the second — is checked.
+    fn expand(
+        &mut self,
+        recipe: &Recipe,
+        ref_indices: &[PendingReference],
+        scale: f64,
+        included: Option<&[String]>,
+        ancestors: &[Utf8PathBuf],
+    ) -> Result<(), CoreError> {
+        for &(ref_index, optional) in ref_indices {
+            let ingredient = &recipe.ingredients[ref_index];
             let Some(reference) = ingredient.reference.as_ref() else {
                 continue;
             };
@@ -533,17 +1060,35 @@ pub fn extract_ingredients(
                 format!("{}/{}", reference.components.join("/"), reference.name)
             };
 
-            // If the caller specified which references to include, skip others.
-            // Normalize by stripping "./" prefix so paths stored without one
-            // still match display paths, which may carry one.
-            if let Some(included) = options.included_references {
-                fn strip_dot_slash(s: &str) -> &str {
-                    s.strip_prefix("./").unwrap_or(s)
+            // Where the reference points, as a path relative to the recipe
+            // directory. `..` is resolved against the directory of the recipe
+            // writing it, and a reference that climbs out of the collection —
+            // or names a drive on Windows — resolves to nothing. See
+            // [`find::resolve_reference`].
+            let from = self.reference_dir(ancestors);
+            let Some(ref_path) = find::resolve_reference(&from, &ref_display_path) else {
+                let mut outside = Diagnostic::warning(format!(
+                    "Skipped recipe reference '{ref_display_path}': it points outside the \
+                     recipe directory, so it is not a recipe in this collection. Anything \
+                     it would have added is not on the list"
+                ));
+                if let Some(path) = ancestors.last() {
+                    outside = outside.at_file(path.clone());
                 }
-                if !included
-                    .iter()
-                    .any(|r| strip_dot_slash(r) == strip_dot_slash(&ref_display_path))
-                {
+                self.diagnostics.push(outside);
+                continue;
+            };
+            let ref_path = ref_path.to_string();
+
+            // If the caller specified which references to include, skip others.
+            // Both sides are resolved first, so a stored `./sauce`, a stored
+            // `sauce` and a reference written `@./sauce{}` are one thing —
+            // which is what the old `./`-stripping did, and it goes on holding
+            // for the `../sauces/tomato` a stored path now spells resolved.
+            if let Some(included) = included {
+                if !included.iter().any(|r| {
+                    find::resolve_reference(&from, r).is_some_and(|p| p.as_str() == ref_path)
+                }) {
                     tracing::debug!(
                         "Skipping reference '{}' — not in included_references",
                         ref_display_path
@@ -552,39 +1097,74 @@ pub fn extract_ingredients(
                 }
             }
 
-            let ref_path = reference.path(find::REFERENCE_SEPARATOR);
-            let ref_entry = find::get_recipe(base_path, &ref_path)?;
-
-            if let Some(cycle) = cycle_warning(&ancestors, &ref_entry, &ref_path) {
-                diagnostics.push(cycle);
+            // `ancestors` holds one recipe per level, so its length is how deep
+            // this reference sits. Stop well above anything a real collection
+            // reaches but well below where the recursion runs out of stack —
+            // see `MAX_REFERENCE_DEPTH`.
+            if ancestors.len() >= MAX_REFERENCE_DEPTH {
+                let mut stopped = Diagnostic::warning(format!(
+                    "Stopped at recipe reference '{ref_path}': references are nested more \
+                     than {MAX_REFERENCE_DEPTH} deep here. Anything below it is not on the \
+                     list"
+                ));
+                // Attributed to the recipe holding the reference, so a caller
+                // can group or open it rather than reading the file name back
+                // out of the message. Not the same choice `cycle_warning`
+                // makes — that one names the recipe being referenced, which in
+                // a cycle is the interesting end of it. Here the reference is
+                // one of many that stop at the same place, and what a reader
+                // wants is where the list stopped.
+                //
+                // `ancestors` cannot be empty here — it is long enough to have
+                // hit the limit — but an unattributed warning is a better
+                // answer to being wrong about that than a panic.
+                if let Some(path) = ancestors.last() {
+                    stopped = stopped.at_file(path.clone());
+                }
+                self.diagnostics.push(stopped);
                 continue;
             }
+
+            let ref_entry = self.get_recipe(&ref_path)?;
+
+            if let Some(cycle) = cycle_warning(ancestors, &ref_entry, &ref_path) {
+                self.diagnostics.push(cycle);
+                continue;
+            }
+            // The recipe writing this reference, before the chain grows past it.
+            let holder = ancestors.last().cloned();
             // Expanding this one, so it is an ancestor of anything inside it.
-            let mut ancestors = ancestors.clone();
+            let mut ancestors = ancestors.to_vec();
             ancestors.extend(ref_entry.path().cloned());
 
             // Parse and scale the recipe based on the quantity specification.
-            let ref_recipe = match ingredient.quantity.as_ref() {
+            let (ref_recipe, ref_scale) = match ingredient.quantity.as_ref() {
                 Some(quantity) => {
-                    let target_value =
-                        match quantity.value() {
-                            Value::Number(num) => num.to_string().parse::<f64>().map_err(|_| {
-                                CoreError::Reference {
-                                    name: ref_path.clone(),
-                                    message: format!("invalid numeric value: {num}"),
-                                }
-                            })?,
-                            other => {
-                                return Err(CoreError::Reference {
-                                    name: ref_path.clone(),
-                                    message: format!("quantity is not a number: {other}"),
-                                });
-                            }
-                        };
+                    let target_value = match quantity.value() {
+                        Value::Number(num) => num.to_string().parse::<f64>().ok(),
+                        _ => None,
+                    };
+                    let Some(target_value) = target_value else {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: \
+                                 the amount is not a number"
+                            ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: UnscalableCause::NotANumber,
+                            },
+                        );
+                        continue;
+                    };
 
                     let (mut ref_recipe, ref_diagnostics) =
                         parse_entry(&ref_entry, &ref_path, None)?;
-                    diagnostics.extend(ref_diagnostics);
+                    self.diagnostics.extend(ref_diagnostics);
 
                     tracing::debug!(
                         "Scaling recipe '{}' to target {} {}",
@@ -592,106 +1172,309 @@ pub fn extract_ingredients(
                         target_value,
                         quantity.unit().unwrap_or("(no unit)")
                     );
-                    ref_recipe
-                        .scale_to_target(target_value, quantity.unit(), converter)
-                        .map_err(|e| CoreError::Reference {
-                            name: ref_path.clone(),
-                            message: format!(
-                                "cannot scale to {} {}: {e}",
-                                target_value,
-                                quantity.unit().unwrap_or("(no unit)")
+                    // Read before scaling: the servings and yield this is worked
+                    // out from are what scaling rewrites.
+                    let reached = target_factor(&ref_recipe, target_value, quantity.unit());
+                    // `scale_to_target` divides by the same base and does not
+                    // check it either: `servings: 0` or `yield: -500%g` is a
+                    // `None` here, then an `Ok` scaled by infinity or flipped
+                    // into negative amounts there (#699). Refuse it before
+                    // that, as unscalable.
+                    if let Some(base) = non_positive_base(&ref_recipe, quantity.unit()) {
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: \
+                                 it declares `{base}`, so there is nothing to scale from"
                             ),
-                        })?;
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: UnscalableCause::NonPositiveBase { declared: base },
+                            },
+                        );
+                        continue;
+                    }
+                    let scaled = match (is_servings(quantity.unit()), reached) {
+                        // `scale_to_target` would round the servings to a
+                        // whole number first (cooklang-rs#133): 2.5 servings
+                        // would come out as 3.
+                        (true, Some(factor)) => {
+                            scale_to_servings(
+                                &mut ref_recipe,
+                                target_value,
+                                factor,
+                                self.converter,
+                            );
+                            Ok(())
+                        }
+                        _ => ref_recipe.scale_to_target(
+                            target_value,
+                            quantity.unit(),
+                            self.converter,
+                        ),
+                    };
+                    if let Err(e) = scaled {
+                        let unit = quantity.unit().unwrap_or_default();
+                        self.list_unexpanded(
+                            ingredient,
+                            optional,
+                            holder.as_ref(),
+                            format!(
+                                "Could not scale recipe reference '{ref_path}' to {quantity}: {}",
+                                scale_failure(&e, unit)
+                            ),
+                            DiagnosticKind::UnscalableReference {
+                                reference: ref_path.clone(),
+                                amount: quantity.to_string(),
+                                cause: unscalable_cause(&e, unit),
+                            },
+                        );
+                        continue;
+                    }
 
-                    // No further scaling: the target already accounts for it.
-                    ref_recipe
+                    // The target is absolute, so the caller's factor does not
+                    // multiply into it — but the factor it *reached* carries on
+                    // down to whatever this recipe references in turn.
+                    (ref_recipe, reached.unwrap_or(1.0))
                 }
                 None => {
                     // No quantity specified, so the caller's scaling applies.
                     let (ref_recipe, ref_diagnostics) =
-                        parse_entry(&ref_entry, &ref_path, Some(recipe.scale))?;
-                    diagnostics.extend(ref_diagnostics);
-                    ref_recipe
+                        parse_entry(&ref_entry, &ref_path, Some(scale))?;
+                    self.diagnostics.extend(ref_diagnostics);
+                    (ref_recipe, scale)
                 }
             };
 
-            // References inside the referenced recipe, one level further down.
-            let nested_refs: Vec<usize> = ref_recipe
-                .ingredients
-                .iter()
-                .enumerate()
-                .filter(|(_, ingredient)| ingredient.reference.is_some())
-                .map(|(index, _)| index)
-                .collect();
-
-            tracing::debug!("Found {} nested references to process", nested_refs.len());
-            for nested_index in nested_refs {
-                let nested_ingredient = &ref_recipe.ingredients[nested_index];
-                tracing::debug!("Processing nested ingredient: {:?}", nested_ingredient.name);
-                let Some(nested_ref) = &nested_ingredient.reference else {
-                    continue;
-                };
-
-                // Same shape as the outer `ref_path` above. `path` supplies
-                // the leading `.` itself, so prepending another — as this used
-                // to — spelled the lookup `././sub/sauce`, which resolved but
-                // named itself that way in any error about it.
-                let nested_path = if nested_ref.components.is_empty() {
-                    nested_ref.name.clone()
-                } else {
-                    nested_ref.path(find::REFERENCE_SEPARATOR)
-                };
-
-                let nested_entry = find::get_recipe(base_path, &nested_path)?;
-
-                if let Some(cycle) = cycle_warning(&ancestors, &nested_entry, &nested_path) {
-                    diagnostics.push(cycle);
-                    continue;
-                }
-
-                let (mut nested_recipe, nested_diagnostics) =
-                    parse_entry(&nested_entry, &nested_path, None)?;
-                diagnostics.extend(nested_diagnostics);
-
-                // Scaling a nested reference depends on the unit it names.
-                match &nested_ingredient.quantity {
-                    Some(quantity) if quantity.unit() == Some("servings") => {
-                        // The quantity is the number of servings wanted.
-                        if let Value::Number(target_servings) = quantity.value() {
-                            let target = target_servings.to_string().parse().unwrap_or(1.0);
-                            tracing::debug!("Scaling nested recipe to {} servings", target);
-                            nested_recipe
-                                .scale_to_target(target, Some("servings"), converter)
-                                .map_err(|e| CoreError::Reference {
-                                    name: nested_path.clone(),
-                                    message: format!("cannot scale to {target} servings: {e}"),
-                                })?;
-                            // References are expanded above, so exclude them here.
-                            list.add_recipe(&nested_recipe, converter, false);
-                        }
-                    }
-                    Some(quantity) => {
-                        // Any other unit is treated as a plain scaling factor,
-                        // covering cases like "2 cups" of something.
-                        if let Value::Number(num) = quantity.value() {
-                            let scaling = num.to_string().parse().unwrap_or(1.0);
-                            nested_recipe.scale(scaling, converter);
-                            list.add_recipe(&nested_recipe, converter, false);
-                        }
-                    }
-                    None => {
-                        list.add_recipe(&nested_recipe, converter, false);
-                    }
-                }
-            }
-
-            // The referenced recipe's own ingredients go in last, after its
-            // nested references, so they are not counted twice.
-            list.add_recipe(&ref_recipe, converter, false);
+            // The referenced recipe's own ingredients, and then the recipes it
+            // references in turn — `add_ingredients` hands back the ones it
+            // skipped, which is exactly what is left to follow. Everything an
+            // optional reference adds is optional too.
+            let nested = add_ingredients(
+                self.list,
+                &ref_recipe,
+                self.converter,
+                false,
+                self.include_optional,
+                optional,
+                None,
+            );
+            tracing::debug!("Found {} nested references to process", nested.len());
+            self.expand(&ref_recipe, &nested, ref_scale, None, &ancestors)?;
         }
+
+        Ok(())
     }
 
-    Ok(diagnostics)
+    /// Put a reference that cannot be scaled on the list as it is written —
+    /// `Pâtes fraîches: 300 g`, the item `--ignore-references` would make of it
+    /// — and say why its recipe's ingredients are not there instead.
+    ///
+    /// The spec calls such a reference an error, and it is one: but of the
+    /// reference, not of the list. Failing the whole list over it dropped every
+    /// other recipe on it (<https://github.com/cooklang/cookcli/issues/682>).
+    /// Listing it, rather than skipping it like a cycle, keeps it in front of
+    /// whoever reads only the list — the web list does not show warnings — and
+    /// what it names is still something to buy or make.
+    ///
+    /// Nothing below the reference is expanded, so the factor
+    /// [`target_factor`] could not work out never reaches anything.
+    ///
+    /// The warning is attributed to `holder`, the recipe that wrote the
+    /// reference, as the depth warning is: whichever side gets fixed, that is
+    /// where the reference and its amount are.
+    fn list_unexpanded(
+        &mut self,
+        ingredient: &cooklang::Ingredient,
+        optional: bool,
+        holder: Option<&Utf8PathBuf>,
+        message: String,
+        kind: DiagnosticKind,
+    ) {
+        if ingredient.modifiers().should_be_listed() {
+            let mut quantity = GroupedQuantity::empty();
+            if let Some(q) = &ingredient.quantity {
+                quantity.add(q, self.converter);
+            }
+            let target = if optional {
+                &mut self.list.optional
+            } else {
+                &mut self.list.required
+            };
+            target.add_ingredient(
+                ingredient.display_name().into_owned(),
+                &quantity,
+                self.converter,
+            );
+        }
+
+        let mut warning = Diagnostic::warning(format!(
+            "{message}. It is on the list as written, not as the recipe's ingredients"
+        ))
+        .with_kind(kind);
+        if let Some(path) = holder {
+            warning = warning.at_file(path.clone());
+        }
+        self.diagnostics.push(warning);
+    }
+}
+
+/// Why `cooklang` refused a scaling target, said as what to change.
+///
+/// `cooklang` reads `yield` only as `number%unit` with no space, and matches
+/// its unit to the reference's exactly, so a recipe can look like it declares
+/// one and still not. The message says what form it takes rather than leaving
+/// the reader with "missing or invalid".
+fn scale_failure(error: &cooklang::scale::ScaleError, unit: &str) -> String {
+    use cooklang::scale::ScaleError;
+    match error {
+        ScaleError::InvalidServings => {
+            "it has no whole number of servings, such as `servings: 4`".to_string()
+        }
+        ScaleError::InvalidYield => format!(
+            "it has no yield to scale from. Add how much it makes, written number%unit, \
+             such as `yield: 500%{unit}`"
+        ),
+        ScaleError::UnitMismatch { got, .. } => {
+            format!("its yield is in {got}, so ask for it in {got}")
+        }
+    }
+}
+
+/// The base a `unit` target scales the recipe from, when the recipe declares
+/// it and it is not a positive number: `servings: 0` for a servings target,
+/// `yield: 0%unit`, a negative one, or a non-finite spelling Rust's float
+/// parse accepts (`nan`, `inf`) for a target in `unit`. A yield in another
+/// unit is a unit mismatch, not a base problem. Returned as its written
+/// spelling, `servings: 0` / `yield: -500%g`, for the warning.
+///
+/// `scale_to_target` divides by it and answers `Ok` having scaled by
+/// infinity or flipped every amount negative, so the caller lists the
+/// reference unexpanded instead.
+fn non_positive_base(recipe: &Recipe, unit: Option<&str>) -> Option<String> {
+    match unit {
+        Some(unit) if is_servings(Some(unit)) => recipe
+            .metadata
+            .servings()
+            .and_then(|servings| servings.as_number())
+            .filter(|servings| *servings == 0)
+            .map(|servings| format!("servings: {servings}")),
+        Some(unit) => recipe
+            .metadata
+            .get("yield")
+            .and_then(|yield_| yield_.as_str())
+            .and_then(|yield_| yield_.split_once('%'))
+            .filter(|(value, yield_unit)| {
+                *yield_unit == unit
+                    && value
+                        .parse::<f64>()
+                        .is_ok_and(|value| !(value.is_finite() && value > 0.0))
+            })
+            .map(|(value, yield_unit)| format!("yield: {value}%{yield_unit}")),
+        None => None,
+    }
+}
+
+/// [`scale_failure`] as data, for a caller wording the warning itself.
+fn unscalable_cause(error: &cooklang::scale::ScaleError, unit: &str) -> UnscalableCause {
+    use cooklang::scale::ScaleError;
+    match error {
+        ScaleError::InvalidServings => UnscalableCause::NoServings,
+        ScaleError::InvalidYield => UnscalableCause::NoYield {
+            unit: unit.to_string(),
+        },
+        ScaleError::UnitMismatch { got, .. } => {
+            UnscalableCause::YieldInOtherUnit { unit: got.clone() }
+        }
+    }
+}
+
+/// Whether a reference's unit asks for a number of servings, spelled the way
+/// [`Recipe::scale_to_target`] recognises it.
+fn is_servings(unit: Option<&str>) -> bool {
+    matches!(unit, Some("servings") | Some("serving"))
+}
+
+/// Scales `recipe` by `factor` to `target` servings, as
+/// [`Recipe::scale_to_servings`] does but without first rounding `target` to
+/// whole servings, which `cooklang` holds as a `u32` (cooklang-rs#133).
+///
+/// `factor` is [`target_factor`]'s, so the recipe's own servings are known and
+/// not zero. The servings metadata is rewritten to `target`, as
+/// `scale_to_servings` rewrites it, keeping a string a string.
+fn scale_to_servings(recipe: &mut Recipe, target: f64, factor: f64, converter: &Converter) {
+    recipe.scale(factor, converter);
+    if let Some(servings) = recipe.metadata.get_mut(StdKey::Servings) {
+        *servings = match servings {
+            serde_yaml::Value::String(_) => serde_yaml::Value::String(target.to_string()),
+            _ if target.fract() == 0.0 && target >= 0.0 => {
+                serde_yaml::Value::Number((target as u64).into())
+            }
+            _ => serde_yaml::Value::Number(target.into()),
+        };
+    }
+}
+
+/// The factor a reference's target scales its recipe by, so that references
+/// *inside* the scaled recipe that carry no quantity of their own can inherit
+/// it.
+///
+/// For a servings target, [`scale_to_servings`] applies this factor. For the
+/// others [`Recipe::scale_to_target`] applies it without reporting it, so this
+/// derives it the same way. Either way it must run first, while the recipe
+/// still holds the servings and yield that scaling rewrites.
+///
+/// `None` when the recipe cannot answer: servings that are not a whole number
+/// — `cooklang` holds them as a `u32`, so `1.5` is as unreadable to it as none
+/// at all — no yield, or a yield measured in another unit. `scale_to_target`
+/// refuses each of those, and the caller then lists the reference as written
+/// and expands nothing below it, so nothing here has to, and the caller's
+/// `unwrap_or(1.0)` is unreachable.
+///
+/// With one exception, which is why that fallback is a `1` and not an
+/// `expect`: a **non-positive** base, `servings: 0` or `yield: -500%g`.
+/// `cooklang` divides by it and scales the recipe by infinity — an `Ok`,
+/// not a refusal — so the caller refuses such recipes itself through
+/// [`non_positive_base`], and this `None` only reaches the
+/// nested-reference factor, where `1` leaves what the recipe references
+/// alone.
+///
+/// Unit names are matched exactly, including case, because that is how
+/// `cooklang` matches them — mirroring it is the whole point, and matching
+/// more loosely here would answer where `scale_to_target` refuses, which is
+/// the one way the fallback could be reached in earnest. The menu feature's
+/// `reference_scale_factor`, over in the `cookcli` crate's
+/// `util::menu_scale`, does the same conversion case-insensitively and falls
+/// back to the raw target rather than to one. The two cannot share an
+/// implementation while they disagree about that: this one is a shadow of
+/// `cooklang`'s arithmetic and has to match it exactly, and that one is a
+/// policy about what a menu author probably meant.
+fn target_factor(recipe: &Recipe, target: f64, unit: Option<&str>) -> Option<f64> {
+    let base = match unit {
+        // No unit at all is already a factor rather than an amount.
+        None => return Some(target),
+        // The target as asked, half servings included: the factor applied
+        // and the factor passed down are both this one.
+        Some("servings") | Some("serving") => {
+            return match f64::from(recipe.metadata.servings()?.as_number()?) {
+                base if base <= 0.0 => None,
+                base => Some(target / base),
+            }
+        }
+        Some(unit) => {
+            // The one yield spelling `scale_to_yield` accepts: `1000%g`.
+            let (value, yield_unit) = recipe.metadata.get("yield")?.as_str()?.split_once('%')?;
+            if yield_unit != unit {
+                return None;
+            }
+            value.parse::<f64>().ok()?
+        }
+    };
+
+    (base.is_finite() && base > 0.0).then(|| target / base)
 }
 
 /// The warning to raise if expanding `entry` would lead back up its own chain,
@@ -745,10 +1528,15 @@ fn parse_source(
     base_path: &Utf8Path,
     source: &RecipeSource,
     scale: f64,
+    confined: bool,
 ) -> Result<(Recipe, Vec<Diagnostic>), CoreError> {
     match source {
         RecipeSource::Path(path) => {
-            let entry = find::get_recipe(base_path, path.as_str())?;
+            let entry = if confined {
+                find::get_recipe_inside(base_path, path.as_str())?
+            } else {
+                find::get_recipe(base_path, path.as_str())?
+            };
             parse_entry(&entry, path.as_str(), Some(scale))
         }
         RecipeSource::Content { text, name } => {

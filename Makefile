@@ -40,9 +40,13 @@ clean:
 docker-build:
 	docker build -t $(IMAGE_NAME) .
 
+# Thin-LTO build for trying a change locally; not for publishing.
+docker-build-dev:
+	docker build --build-arg CARGO_PROFILE=docker-dev -t cookcli:dev .
+
 docker-push:
 	docker push $(IMAGE_NAME)
 
 docker: docker-build docker-push
 
-.PHONY: all build release dev_server test clean css js assets dev_assets docker-build docker-push docker
+.PHONY: all build release dev_server test clean css js assets dev_assets docker-build docker-build-dev docker-push docker

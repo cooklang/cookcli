@@ -1,15 +1,28 @@
-use crate::{server::AppState, util::PARSER};
+use crate::server::activity;
+use crate::web::viewer::Viewer;
+use crate::{
+    server::{
+        handlers::{
+            common::{
+                check_path, is_recipe_request, json_error, normalize_tags, not_found, recipe_file,
+                RecipeFile,
+            },
+            recipe_rename::RECIPE_FILES,
+        },
+        AppState,
+    },
+    util::{inside_collection, PARSER},
+};
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{Extension, Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
     Json,
 };
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::{Utf8Path, Utf8PathBuf};
 use cooklang_find;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 
 #[derive(Deserialize)]
 pub struct RecipeQuery {
@@ -21,39 +34,72 @@ pub struct SearchQuery {
     q: String,
 }
 
-fn json_error(msg: impl std::fmt::Display) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "error": msg.to_string() }))
-}
-
-fn check_path(p: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
-    let path = Utf8Path::new(p);
-    if !path
-        .components()
-        .all(|c| matches!(c, Utf8Component::Normal(_)))
-    {
-        tracing::error!("Invalid path: {p}");
-        return Err((
-            StatusCode::BAD_REQUEST,
-            json_error(format!("Invalid path: {p}")),
-        ));
-    }
-    Ok(())
-}
-
 pub async fn all_recipes(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let recipes = cooklang_find::build_tree(&state.base_path).map_err(|e| {
+    let mut tree = cooklang_find::build_tree(&state.base_path).map_err(|e| {
         tracing::error!("Failed to build recipe tree: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    // The glob walk follows linked folders; a listing must not publish the
+    // names of files outside the collection (#698).
+    crate::web::builders::prune_outside(&mut tree, &state.base_path);
 
-    let recipes = serde_json::to_value(recipes).map_err(|e| {
+    let mut recipes = serde_json::to_value(tree).map_err(|e| {
         tracing::error!("Failed to serialize recipes: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?;
+    normalize_tree_tags(&mut recipes);
+    relative_tree_paths(&mut recipes, &state.base_path);
 
     Ok(Json(recipes))
+}
+
+/// Rewrites each node's `path`, and its recipe's `source.path`, relative to
+/// the recipe directory; the root's becomes `""`.
+///
+/// `cooklang_find` hands them over absolute. This answer goes to anyone who
+/// may read, signed in or not, and where the collection sits on the server,
+/// under which account, is none of their business; a client only needs the
+/// path within the collection.
+fn relative_tree_paths(node: &mut serde_json::Value, base: &Utf8Path) {
+    for pointer in ["/path", "/recipe/source/path"] {
+        if let Some(path) = node.pointer_mut(pointer) {
+            if let Some(text) = path.as_str() {
+                *path = relative_path(text, base).into();
+            }
+        }
+    }
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_object_mut()) {
+        for child in children.values_mut() {
+            relative_tree_paths(child, base);
+        }
+    }
+}
+
+/// `path` relative to `base`, with `/` between components on every platform.
+/// A path outside `base`, which `cooklang_find` does not produce, comes back
+/// as its file name alone rather than as where it is.
+fn relative_path(path: &str, base: &Utf8Path) -> String {
+    let path = Utf8Path::new(path);
+    match path.strip_prefix(base) {
+        Ok(inside) => inside.as_str().replace('\\', "/"),
+        Err(_) => path.file_name().unwrap_or_default().to_string(),
+    }
+}
+
+/// Normalises `tags` on every recipe node of a serialised recipe tree.
+///
+/// Directory nodes carry a null `recipe` and only recurse.
+fn normalize_tree_tags(node: &mut serde_json::Value) {
+    if let Some(metadata) = node.pointer_mut("/recipe/metadata") {
+        normalize_tags(metadata);
+    }
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_object_mut()) {
+        for child in children.values_mut() {
+            normalize_tree_tags(child);
+        }
+    }
 }
 
 pub async fn recipe(
@@ -62,6 +108,13 @@ pub async fn recipe(
     Query(query): Query<RecipeQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     check_path(&path)?;
+    if !is_recipe_request(&path) {
+        tracing::error!("Recipe not found: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe not found: {path}")),
+        ));
+    }
 
     let entry = cooklang_find::get_recipe(vec![&state.base_path], &Utf8PathBuf::from(&path))
         .map_err(|e| {
@@ -72,37 +125,27 @@ pub async fn recipe(
             )
         })?;
 
+    // `get_recipe` follows links, so `Link/Secret.cook` through a
+    // `Link -> /outside` symlink is a hit (#698). It answers exactly as a
+    // missing recipe does: a different refusal would reveal there is a file
+    // at the link's far end.
+    if entry
+        .path()
+        .is_some_and(|file| !inside_collection(&state.base_path, file))
+    {
+        tracing::error!("{path:?} resolves outside the recipe directory");
+        return Err(not_found("Recipe", &path));
+    }
+
     let recipe =
         crate::util::parse_recipe_from_entry(&entry, query.scale.unwrap_or(1.0)).map_err(|e| {
             tracing::error!("Failed to parse recipe: {e}");
             (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
         })?;
 
-    // Get the image path if available
+    // The same URL the recipe page shows: percent-encoded, under the prefix.
     let image_path = entry.title_image().clone().and_then(|img_path| {
-        // If it's a URL, use it directly
-        if img_path.starts_with("http://") || img_path.starts_with("https://") {
-            Some(img_path)
-        } else {
-            // For file paths, make them relative and accessible via /api/static
-            let img_path = camino::Utf8Path::new(&img_path);
-
-            // Try to strip the base_path prefix to get a relative path
-            if let Ok(relative) = img_path.strip_prefix(&state.base_path) {
-                Some(format!("/api/static/{relative}"))
-            } else {
-                // If the path doesn't start with base_path, it might already be relative
-                // or it might be an absolute path to a file within base_path
-                if !img_path.is_absolute() {
-                    Some(format!("/api/static/{img_path}"))
-                } else {
-                    // Last resort: try to get just the filename
-                    img_path
-                        .file_name()
-                        .map(|name| format!("/api/static/{name}"))
-                }
-            }
-        }
+        crate::web::builders::get_image_path(&state.base_path, &state.url_prefix, img_path)
     });
 
     #[derive(Serialize)]
@@ -131,12 +174,15 @@ pub async fn recipe(
         grouped_ingredients,
     };
 
-    let value = serde_json::json!({
+    let mut value = serde_json::json!({
         "recipe": api_recipe,
         "image": image_path,
         "scale": query.scale.unwrap_or(1.0),
         // TODO: add more metadata if needed
     });
+    if let Some(metadata) = value.pointer_mut("/recipe/metadata/map") {
+        normalize_tags(metadata);
+    }
 
     Ok(Json(value))
 }
@@ -145,22 +191,13 @@ pub async fn recipe_raw(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+    // The lexical check keeps its own refusal; after it, one answer for
+    // "not there" and "not inside": a different one would say which it was
+    // (#698).
     check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Try .cook extension first, then .menu
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
+    let file_path = match recipe_file(&state.base_path, &path) {
+        Ok(RecipeFile::Existing(file_path)) => file_path,
+        _ => {
             tracing::error!("Recipe file not found: {path}");
             return Err((
                 StatusCode::NOT_FOUND,
@@ -181,75 +218,63 @@ pub async fn recipe_raw(
 pub async fn recipe_save(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    headers: HeaderMap,
     body: String,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Determine actual file path (with extension)
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
-            // Default to .cook for new files
-            Utf8PathBuf::from(format!("{}.cook", recipe_path))
-        }
+    let _writing = RECIPE_FILES.lock().await;
+    let (file_path, created) = match recipe_file(&state.base_path, &path)? {
+        RecipeFile::Existing(file_path) => (file_path, false),
+        RecipeFile::Missing(file_path) => (file_path, true),
     };
 
-    // Atomic write: write to temp file, then rename
-    let temp_path = file_path.with_extension("tmp");
+    // `If-Match: *` saves only over a file that is there. The editor sends
+    // it: a file it opened that is gone was renamed or deleted meanwhile, in
+    // another tab or on another device, and writing it would bring the old
+    // name back beside the new one. Checked under the lock rename and delete
+    // take. No entity tags are issued, so no other `If-Match` can match.
+    if let Some(condition) = headers.get(header::IF_MATCH) {
+        if condition.as_bytes().trim_ascii() != b"*" {
+            return Err((
+                StatusCode::PRECONDITION_FAILED,
+                json_error("Only `If-Match: *` is supported"),
+            ));
+        }
+        if created {
+            return Err((
+                StatusCode::PRECONDITION_FAILED,
+                json_error(format!(
+                    "{path} is no longer there: it was renamed or deleted. \
+                     Your changes are still in the editor."
+                )),
+            ));
+        }
+    }
 
-    let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
-        tracing::error!("Failed to create temp file {}: {}", temp_path, e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!(
-                "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
-            )),
-        )
-    })?;
-
-    temp_file.write_all(body.as_bytes()).await.map_err(|e| {
-        tracing::error!("Failed to write to temp file {}: {}", temp_path, e);
-        // Fire-and-forget cleanup - spawn so we don't block the error path
-        let temp_path_clone = temp_path.clone();
-        tokio::spawn(async move {
-            let _ = tokio::fs::remove_file(&temp_path_clone).await;
-        });
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json_error(format!("Failed to write recipe: {e}")),
-        )
-    })?;
-
-    // Replace the original file with the temp file. `rename_replace_async`
-    // uses an atomic rename on capable platforms but copies + removes on
-    // Android, where the aarch64 `rename()` libc wrapper hits the
-    // seccomp-blocked `renameat2` syscall (SIGSYS / "Bad system call").
-    // See https://github.com/cooklang/cookcli/issues/349.
-    crate::server::fs_atomic::rename_replace_async(temp_path.clone(), file_path.clone())
+    // Written beside the recipe and renamed over it, so a reader never sees
+    // half a file — or through it, when a rename would change its owner
+    // (#814). Either way `write_replace` avoids the `rename()` that Android's
+    // seccomp filter kills the process for (#349).
+    crate::server::fs_atomic::write_replace_async(file_path.clone(), body.into_bytes())
         .await
         .map_err(|e| {
-            tracing::error!("Failed to rename temp file to {}: {}", file_path, e);
-            let temp_path_clone = temp_path.clone();
-            tokio::spawn(async move {
-                let _ = tokio::fs::remove_file(&temp_path_clone).await;
-            });
+            tracing::error!("Failed to save {}: {}", file_path, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                json_error(format!("Failed to save recipe: {e}")),
+                json_error(format!(
+                    "Failed to save recipe: {e}. Check that the recipes folder has write permissions."
+                )),
             )
         })?;
 
-    tracing::info!("Saved recipe: {}", file_path);
+    activity::record(
+        &viewer,
+        format_args!(
+            "{} {}",
+            if created { "created" } else { "updated" },
+            activity::file(&state.base_path, &file_path)
+        ),
+    );
 
     Ok(Json(serde_json::json!({
         "status": "success",
@@ -275,7 +300,7 @@ pub async fn search(
     // with `cook search`. Calling the library here left the web UI on the old
     // union-over-terms behaviour after the CLI moved to AND (#425), which is
     // the kind of split the two would never have been noticed to have.
-    let hits = cookcli_core::search::search(
+    let mut hits = cookcli_core::search::search(
         &cookcli_core::Context::new(state.base_path.clone()),
         cookcli_core::search::SearchRequest {
             query: query.q.clone(),
@@ -287,6 +312,9 @@ pub async fn search(
         (StatusCode::INTERNAL_SERVER_ERROR, json_error(&e))
     })?
     .into_value();
+
+    // The search walk follows linked folders too (#698).
+    hits.retain(|hit| inside_collection(&state.base_path, &hit.path));
 
     let results = hits
         .into_iter()
@@ -304,29 +332,15 @@ pub async fn search(
 pub async fn recipe_delete(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    check_path(&path)?;
-
-    let recipe_path = state.base_path.join(&path);
-
-    // Determine actual file path (with extension)
-    let file_path = if recipe_path.exists() {
-        recipe_path
-    } else {
-        let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));
-        let menu_path = Utf8PathBuf::from(format!("{}.menu", recipe_path));
-
-        if cook_path.exists() {
-            cook_path
-        } else if menu_path.exists() {
-            menu_path
-        } else {
-            tracing::error!("Recipe file not found for deletion: {path}");
-            return Err((
-                StatusCode::NOT_FOUND,
-                json_error(format!("Recipe file not found: {path}")),
-            ));
-        }
+    let _writing = RECIPE_FILES.lock().await;
+    let RecipeFile::Existing(file_path) = recipe_file(&state.base_path, &path)? else {
+        tracing::error!("Recipe file not found for deletion: {path}");
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error(format!("Recipe file not found: {path}")),
+        ));
     };
 
     // Delete the file
@@ -338,10 +352,74 @@ pub async fn recipe_delete(
         )
     })?;
 
-    tracing::info!("Deleted recipe: {}", file_path);
+    activity::record(
+        &viewer,
+        format_args!("deleted {}", activity::file(&state.base_path, &file_path)),
+    );
 
     Ok(Json(serde_json::json!({
         "status": "success",
         "path": path
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn tree_paths_become_relative_to_the_collection() {
+        let base = Utf8Path::new("/srv/cook/recipes");
+        let mut tree = json!({
+            "name": "recipes",
+            "path": "/srv/cook/recipes",
+            "recipe": null,
+            "children": {
+                "Breakfast": {
+                    "name": "Breakfast",
+                    "path": "/srv/cook/recipes/Breakfast",
+                    "recipe": null,
+                    "children": {
+                        "Pancakes": {
+                            "name": "Pancakes",
+                            "path": "/srv/cook/recipes/Breakfast/Pancakes.cook",
+                            "recipe": {
+                                "metadata": {},
+                                "source": {
+                                    "path": "/srv/cook/recipes/Breakfast/Pancakes.cook",
+                                    "source_type": "Path"
+                                }
+                            },
+                            "children": {}
+                        }
+                    }
+                }
+            }
+        });
+
+        relative_tree_paths(&mut tree, base);
+
+        assert_eq!(tree["path"], "");
+        let breakfast = &tree["children"]["Breakfast"];
+        assert_eq!(breakfast["path"], "Breakfast");
+        let pancakes = &breakfast["children"]["Pancakes"];
+        assert_eq!(pancakes["path"], "Breakfast/Pancakes.cook");
+        assert_eq!(
+            pancakes["recipe"]["source"]["path"],
+            "Breakfast/Pancakes.cook"
+        );
+        assert_eq!(pancakes["recipe"]["source"]["source_type"], "Path");
+        assert!(!tree.to_string().contains("/srv/cook"), "{tree}");
+    }
+
+    #[test]
+    fn a_path_outside_the_collection_keeps_only_its_name() {
+        let base = Utf8Path::new("/srv/cook/recipes");
+        assert_eq!(relative_path("/home/someone/Soup.cook", base), "Soup.cook");
+        assert_eq!(
+            relative_path("/srv/cook/recipes-old/Soup.cook", base),
+            "Soup.cook"
+        );
+    }
 }

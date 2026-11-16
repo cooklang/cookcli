@@ -28,7 +28,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod menu_scale;
+pub mod menu;
+pub mod recipe_info;
 
 // The formatters and the parser now live in `cookcli-core`. Re-exported here
 // so the rest of the CLI keeps reaching them as `crate::util::format::..` and
@@ -46,8 +47,16 @@ use tracing::warn;
 
 /// Parse a Recipe from a RecipeEntry with the given scaling factor
 pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Result<Arc<Recipe>> {
+    let mut recipe = parse_unscaled_recipe_from_entry(entry)?;
+    recipe.scale(scaling_factor, PARSER.converter());
+    Ok(Arc::new(recipe))
+}
+
+/// Parse a Recipe from a RecipeEntry without scaling it, for callers that
+/// work out the factor from the recipe itself (its `servings`) first.
+pub fn parse_unscaled_recipe_from_entry(entry: &RecipeEntry) -> Result<Recipe> {
     let content = entry.content().context("Failed to read recipe content")?;
-    let parsed = PARSER.parse(&content);
+    let (content, parsed) = cookcli_core::parser::parse_file(&content);
 
     // Log any warnings
     if parsed.report().has_warnings() {
@@ -67,7 +76,7 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
         let mut error_output = Vec::new();
         parsed
             .report()
-            .write(&recipe_path, &content, false, &mut error_output)
+            .write(&recipe_path, content, false, &mut error_output)
             .ok();
         let error_details = String::from_utf8_lossy(&error_output);
         return Err(anyhow::anyhow!(
@@ -77,28 +86,31 @@ pub fn parse_recipe_from_entry(entry: &RecipeEntry, scaling_factor: f64) -> Resu
         ));
     }
 
-    let (mut recipe, _warnings) = parsed.into_result().expect("already checked for errors");
-
-    // Scale the recipe
-    recipe.scale(scaling_factor, PARSER.converter());
-    Ok(Arc::new(recipe))
+    let (recipe, _warnings) = parsed.into_result().expect("already checked for errors");
+    Ok(recipe)
 }
 
 pub fn write_to_output<F>(output: Option<&Utf8Path>, f: F) -> Result<()>
 where
     F: FnOnce(&mut dyn std::io::Write) -> Result<()>,
 {
-    let mut stream: Box<dyn std::io::Write> = if let Some(path) = output {
-        let file = std::fs::File::create(path).context("Failed to create output file")?;
-        let stream = anstream::StripStream::new(file);
-        Box::new(stream)
-    } else {
-        Box::new(anstream::stdout().lock())
-    };
-    f(stream.as_mut())?;
-    // Explicitly flush the stream to ensure all output is written
     use std::io::Write;
-    stream.flush()?;
+    if let Some(path) = output {
+        // Render fully before touching the file: a formatter that fails
+        // halfway (e.g. an unwritable cooklang quantity, #722) must not
+        // leave a truncated file behind.
+        let mut buf = Vec::new();
+        {
+            let mut stream = anstream::StripStream::new(&mut buf);
+            f(&mut stream)?;
+            stream.flush()?;
+        }
+        std::fs::write(path, &buf).context("Failed to write output file")?;
+    } else {
+        let mut stream = anstream::stdout().lock();
+        f(&mut stream)?;
+        stream.flush()?;
+    }
     Ok(())
 }
 
@@ -193,16 +205,53 @@ pub fn resolve_to_absolute_path(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> 
     };
 
     // Normalize the path by resolving all components
-    std::fs::canonicalize(&absolute)
-        .map_err(|e| {
-            tracing::error!("Failed to canonicalize path: {:?}", e);
-            anyhow::anyhow!("Failed to canonicalize path")
-        })?
-        .try_into()
-        .map_err(|e| {
-            tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
-            anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
-        })
+    let canonical = std::fs::canonicalize(&absolute)
+        .with_context(|| format!("Base path not found: {absolute}"))?;
+
+    // On Windows that is a `\\?\` path, and `glob`, which every
+    // `cooklang_find` walk uses, finds nothing under one other than
+    // `\\?\C:\…`: a collection on a mapped network drive or share
+    // (`\\?\UNC\…`) listed and searched as empty (#783). Drop the prefix
+    // where Windows allows it, and keep the path as given where it cannot
+    // be spelled without one (`\\?\Volume{…}\…`).
+    let resolved = dunce::simplified(&canonical);
+    let resolved = if has_verbatim_prefix(resolved) {
+        std::path::absolute(&absolute)?
+    } else {
+        resolved.to_path_buf()
+    };
+    resolved.try_into().map_err(|e| {
+        tracing::error!("Failed to convert canonicalized path to UTF-8: {:?}", e);
+        anyhow::anyhow!("Failed to convert canonicalized path to UTF-8")
+    })
+}
+
+/// Whether `path` starts with a `\\?\` prefix other than `\\?\C:\`.
+fn has_verbatim_prefix(path: &std::path::Path) -> bool {
+    use std::path::{Component, Prefix};
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => {
+            prefix.kind().is_verbatim() && !matches!(prefix.kind(), Prefix::VerbatimDisk(_))
+        }
+        _ => false,
+    }
+}
+
+/// Whether a request-supplied path, joined to a directory, stays inside it.
+///
+/// Re-exported from `cookcli-core`, which is where the single definition lives
+/// now that `find::resolve_reference` has to apply the same rule to a recipe
+/// reference before looking it up.
+pub use cookcli_core::find::is_safe_relative_path;
+
+/// Percent-encode each `/`-separated path segment, preserving the separators,
+/// so a recipe path can go into a URL or a `Location` header as it is.
+pub fn encode_url_path(relpath: &str) -> String {
+    relpath
+        .split('/')
+        .map(|seg| urlencoding::encode(seg).into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// Resolve a recipe name or path to a file, in CLI wording.
@@ -213,9 +262,53 @@ pub fn get_recipe(base_path: &Utf8Path, name: &str) -> Result<RecipeEntry> {
     cookcli_core::find::get_recipe(base_path, name).map_err(cli_error)
 }
 
+/// `path` canonicalized, or, when it does not exist yet, its nearest existing
+/// ancestor canonicalized with the rest appended.
+pub fn canonical_or_nearest(path: &Utf8Path) -> Utf8PathBuf {
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(canonical) = current.canonicalize_utf8() {
+            return missing
+                .iter()
+                .rev()
+                .fold(canonical, |acc: Utf8PathBuf, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name);
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Whether `path` stays inside `base` once links are followed. `path` need
+/// not exist: its nearest existing ancestor is canonicalized and the rest
+/// appended, so `Link/New.cook` through a `Link -> /outside` symlink counts
+/// as outside, as does a `Linked.cook -> /outside` file.
+///
+/// `is_safe_relative_path` is lexical, so a request for `Link/Secret.cook`
+/// passes it; without this the raw, save and delete endpoints, the editor and
+/// the picture and `/api/static` routes then reached the file the link
+/// pointed to (#698). A link that stays in the directory still resolves.
+pub fn inside_collection(base: &Utf8Path, path: &Utf8Path) -> bool {
+    let base = canonical_or_nearest(base);
+    canonical_or_nearest(path).starts_with(&base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn encodes_spaces_per_segment_preserving_slashes() {
+        assert_eq!(
+            encode_url_path("recipe/Root Vegetables/Mash Up.html"),
+            "recipe/Root%20Vegetables/Mash%20Up.html"
+        );
+    }
 
     /// Core hands over a lowercase line; this is the only thing the terminal
     /// needs done to it, and it must not corrupt a message that opens with a
@@ -267,5 +360,53 @@ mod tests {
             split_recipe_name_and_scaling_factor("recipe.cook:abc"),
             None
         );
+    }
+
+    /// A collection with a recipe one folder down, as in #783.
+    #[cfg(windows)]
+    fn collection() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("French")).unwrap();
+        std::fs::write(dir.path().join("French").join("Crepes.cook"), "@eggs{2}\n").unwrap();
+        dir
+    }
+
+    #[cfg(windows)]
+    fn lists_crepes(base: &Utf8Path) -> bool {
+        let tree = cooklang_find::build_tree(base).unwrap();
+        tree.children
+            .get("French")
+            .is_some_and(|folder| folder.children.contains_key("Crepes"))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolved_base_path_has_no_verbatim_prefix() {
+        let dir = collection();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        let resolved = resolve_to_absolute_path(base).unwrap();
+        assert!(!resolved.as_str().starts_with(r"\\?\"), "{resolved}");
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
+    }
+
+    /// A mapped network drive or share canonicalizes to `\\?\UNC\…`, under
+    /// which `glob` (and so every `cooklang_find` walk) finds nothing: the
+    /// home page and search came up empty while a recipe's URL still opened
+    /// it (#783). The admin share reaches a local folder the same way.
+    #[cfg(windows)]
+    #[test]
+    fn lists_recipes_in_a_collection_on_a_network_share() {
+        let dir = collection();
+        let local = dir.path().to_str().unwrap();
+        let Some((drive, rest)) = local.split_once(":\\") else {
+            panic!("temp dir {local} has no drive letter");
+        };
+        let share = format!(r"\\localhost\{drive}$\{rest}");
+        if !std::path::Path::new(&share).is_dir() {
+            eprintln!("skipped: the admin share {share} is not reachable");
+            return;
+        }
+        let resolved = resolve_to_absolute_path(Utf8Path::new(&share)).unwrap();
+        assert!(lists_crepes(&resolved), "nothing listed under {resolved}");
     }
 }

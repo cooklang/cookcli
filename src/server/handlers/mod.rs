@@ -1,6 +1,10 @@
-mod common;
+pub mod aisles;
+pub(super) mod common;
 pub mod menus;
 pub mod pantry;
+pub mod plans;
+pub mod recipe_image;
+pub mod recipe_rename;
 pub mod recipes;
 pub mod shopping_list;
 pub mod shopping_list_events;
@@ -8,16 +12,23 @@ pub mod stats;
 #[cfg(feature = "sync")]
 pub mod sync;
 
+pub use aisles::{
+    change_aisles, create_aisles, get_aisles, get_raw_aisles, get_uncategorized, put_raw_aisles,
+};
 pub use menus::{get_menu, list_menus};
 pub use pantry::{
-    add_item as add_pantry_item, get_depleted, get_expiring, get_pantry,
-    remove_item as remove_pantry_item, update_item as update_pantry_item,
+    add_item as add_pantry_item, get_depleted, get_expiring, get_pantry, get_raw_pantry,
+    put_raw_pantry, remove_item as remove_pantry_item, rename_section as rename_pantry_section,
+    update_item as update_pantry_item,
 };
+pub use plans::plan_edit;
+pub use recipe_image::{recipe_image_delete, recipe_image_get, recipe_image_put};
+pub use recipe_rename::recipe_rename;
 pub use recipes::{all_recipes, recipe, recipe_delete, recipe_raw, recipe_save, reload, search};
 pub use shopping_list::{
     add_menu_to_shopping_list, add_to_shopping_list, check_shopping_item, clear_shopping_list,
-    compact_checked, get_checked_items, get_shopping_list_items, remove_from_shopping_list,
-    shopping_list, uncheck_shopping_item,
+    compact_checked, get_checked_items, get_extra_items, get_shopping_list_items,
+    remove_extra_item, remove_from_shopping_list, shopping_list, uncheck_shopping_item,
 };
 pub use shopping_list_events::shopping_list_events;
 pub use stats::stats;

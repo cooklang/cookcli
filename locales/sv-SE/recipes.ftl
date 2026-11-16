@@ -13,12 +13,21 @@ recipe-ingredients = Ingredienser
 recipe-steps = Instruktioner
 recipe-notes = Anteckningar
 recipe-cookware = Köksredskap
+recipe-optional = (valfritt)
 recipe-timers = Timers
 recipe-tags = Taggar
 recipe-add-to-shopping = Lägg till handlingslistan
 recipe-add-all-to-shopping = Lägg allt till handlingslistan
 recipe-scale-label = Skala
 recipe-servings-label = portioner
+recipe-written-for =
+    { $count ->
+        [one] Skrivet för { $count } portion
+       *[other] Skrivet för { $count } portioner
+    }
+recipe-written-for-hint = Mängderna är omräknade från originalreceptet. Tillagningstider, formstorlekar och kryddning kan behöva justeras. Välj för att gå tillbaka till de ursprungliga portionerna.
+recipe-scaled-from-original = ×{ $factor } av originalreceptet
+recipe-scaled-from-original-hint = Mängderna är omräknade från originalreceptet. Tillagningstider, formstorlekar och kryddning kan behöva justeras. Välj för att gå tillbaka till originalreceptet.
 recipe-print = Skruv ut recept
 recipe-added = Tillagd!
 recipe-main-section = Huvud
@@ -40,19 +49,64 @@ meta-created-by = Skapad av
 meta-created-at = Skapad
 meta-modified-by = Ändrad av
 meta-modified-at = Ändrad
+meta-file-title = Fil
+meta-translated-from = Översatt från
 
 # Nutrition (anpassad `nutrition:`-metadata)
 nutrition-per-serving = per portion
 nutrition-proteins = protein
 nutrition-lipids = fett
 nutrition-saturated-fat = mättat fett
+nutrition-unsaturated-fat = omättat fett
+nutrition-monounsaturated-fat = enkelomättat fett
+nutrition-polyunsaturated-fat = fleromättat fett
+nutrition-trans-fat = transfett
+nutrition-starch = stärkelse
 nutrition-carbohydrates = kolhydrater
 nutrition-sugars = socker
 nutrition-fibers = fibrer
 nutrition-salt = salt
+nutrition-title = Näringsvärde
+nutrition-per-100g = per 100 g
+nutrition-whole-recipe = hela receptet
+nutrition-energy = energi
+nutrition-of-which = varav
+nutrition-for = för
+nutrition-full-table = Hela tabellen
+nutrition-legend = Hälsobedömning per 100 g:
+nutrition-rating-good = bra
+nutrition-rating-medium = medel
+nutrition-rating-bad = dåligt
+nutrition-legend-good = bra för hälsan
+nutrition-legend-medium = medel
+nutrition-legend-bad = inte bra för hälsan
+nutrition-legend-unrated = ingen gräns
 
 # Recipe Types
 recipe-type-menu = Meny
+recipe-type-plan = Måltidsplan
+plan-outside = Utanför den här planen
+plan-nothing-planned = Inget planerat
+plan-add-to = Lägg till i { $meal }, { $day }
+plan-line-actions = Ändra
+plan-move-to = Flytta till…
+plan-copy-to = Kopiera till…
+plan-remove = Ta bort
+plan-move-title = Flytta till en annan dag
+plan-copy-title = Kopiera till en annan dag
+plan-move = Flytta
+plan-copy = Kopiera
+plan-target-day = Dag
+plan-target-meal = Måltid
+plan-changed = Planen har ändrats sedan sidan laddades. Ladda om för att se den och försök igen.
+plan-save-failed = Det gick inte att spara planen.
+plan-saved = Planen sparad
+plan-reload = Ladda om
+plan-pick-label = Dagar till inköpslistan
+plan-pick-all = Alla
+plan-pick-week = Nästa 7 dagar
+plan-pick-none = Inga
+plan-add-days = Lägg till dagarna i inköpslistan
 
 # Today's Menu Banner
 todays-menu-title = Dagens meny
@@ -65,3 +119,4 @@ sort-name = Namn
 sort-modified = Ändrad
 sort-created = Skapad
 sort-direction-toggle = Byt sorteringsriktning
+random-recipe = Slumpmässigt recept

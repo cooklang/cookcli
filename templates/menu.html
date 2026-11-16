@@ -1,19 +1,85 @@
 {% extends "base.html" %}
 
+{# One item of a menu line: a linked recipe, an ingredient, or text. `short`
+   names a recipe without its folders, for the planner's narrow day cards. #}
+{% macro menu_item(item, short) %}
+{% match item %}
+{% when crate::web::templates::MenuSectionItem::Text with (text) %}
+    <span class="text-text">{{ text }}</span>
+{% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale, servings, menu } %}
+    <span class="inline-flex items-center gap-1">
+        <a href="{{ prefix }}/{{ crate::web::templates::reference_path(name, menu.clone(), static_mode.clone()) }}{% if !static_mode %}{% if let Some(n) = servings %}?servings={{ n|scale_factor }}{% else if let Some(s) = scale %}?scale={{ s|scale_factor }}{% endif %}{% endif %}"
+           class="text-info font-medium hover:underline"{% if short %} title="{{ crate::web::templates::reference_label(name) }}"{% endif %}>
+            {% if short %}{{ name.rsplit("/").next().unwrap_or(name.as_str()).trim_end_matches(".menu") }}{% else %}{{ crate::web::templates::reference_label(name) }}{% endif %}
+        </a>
+        {% if menu.clone() %}<span class="tag">{{ tr.t("recipe-type-menu") }}</span>{% endif %}
+        {% match scale %}
+        {% when Some with (s) %}
+            <span class="text-sm text-faint">(×{{ s|scale_factor }})</span>
+        {% when None %}
+        {% endmatch %}
+    </span>
+{% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
+    <span class="inline-flex items-center gap-1">
+        <span class="ingredient-badge">
+            {{ name }}
+            {% match quantity %}
+            {% when Some with (q) %}
+                <span>{{ q }}</span>
+            {% when None %}
+            {% endmatch %}
+            {% match unit %}
+            {% when Some with (u) %}
+                <span class="font-normal text-muted">{{ u }}</span>
+            {% when None %}
+            {% endmatch %}
+        </span>
+    </span>
+{% endmatch %}
+{% endmacro %}
+
+{# A section of the menu as a card: its name, then its lines, a line that is
+   only `Name:` being a meal heading. #}
+{% macro section_card(section) %}
+<div class="menu-section card overflow-hidden">
+    {% match section.name %}
+    {% when Some with (section_name) %}
+    <div class="menu-section-header bg-sunk border-b border-line px-6 py-3">
+        <h2 class="text-title font-semibold text-text">{{ section_name }}</h2>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
+    <div class="menu-section-body p-6 space-y-2">
+        {% for line in section.lines %}
+        {% match crate::web::templates::meal_header(line) %}
+        {% when Some with (header) %}
+        <!-- Meal type header -->
+        <h3 class="text-title font-semibold text-text mt-2 mb-1">{{ header }}</h3>
+        {% when None %}
+        <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
+            {% for item in line %}{% call menu_item(item, false) %}{% endfor %}
+        </div>
+        {% endmatch %}
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
 {% block title %}{{ name }} - Cook{% endblock %}
 
 {% block content %}
 <div id="menu-content">
     <nav class="mb-4 print:hidden">
-        <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
-                <span class="mx-2 text-gray-400">/</span>
+                <span class="mx-2 text-faint">/</span>
                 {% if loop.last %}
-                    <span class="text-gray-900">{{ crumb }}</span>
+                    <span class="text-text">{{ crumb }}</span>
                 {% else %}
-                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-gray-900">{{ crumb }}</a>
+                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-text">{{ crumb }}</a>
                 {% endif %}
             </li>
             {% endfor %}
@@ -25,7 +91,7 @@
         {% match image_path %}
         {% when Some with (img) %}
         <div class="mb-4 max-w-4xl mx-auto print:hidden">
-            <div class="rounded-xl overflow-hidden shadow-lg bg-gray-50">
+            <div class="overflow-hidden card bg-sunk">
                 <img src="{{ img }}" alt="{{ name }}" class="w-full h-auto max-h-[500px] object-contain mx-auto">
             </div>
         </div>
@@ -35,38 +101,59 @@
         <!-- Title bar with scale and shopping list button -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 print:mb-1">
             <div class="flex items-center gap-3">
-                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent print:text-2xl">{{ name }}</h1>
-                <span class="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-full text-sm font-semibold print:hidden">{{ tr.t("recipe-type-menu") }}</span>
+                <h1 class="text-display font-bold text-text print:text-2xl">{{ name }}</h1>
+                <span class="tag print:hidden">{% if plan.is_some() %}{{ tr.t("recipe-type-plan") }}{% else %}{{ tr.t("recipe-type-menu") }}{% endif %}</span>
             </div>
             {% if !static_mode %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 <div class="flex items-center">
-                    <label for="scale" class="text-sm font-medium text-gray-700 mr-2">{{ tr.t("recipe-scale-label") }}:</label>
-                    <input type="number"
-                           id="scale"
-                           value="{{ scale }}"
-                           min="0.5"
-                           max="200"
-                           step="0.5"
-                           class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
-                           onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                    {% match servings %}
+                    {% when Some with (servings) %}
+                    {# The menu declares servings: count servings, as the recipe
+                       page does. #}
+                    <label for="servings" class="text-sm font-medium text-muted mr-2">{{ tr.t("label-servings") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-servings") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="servings"
+                               value="{{ servings.chosen }}"
+                               min="{% if servings.chosen < 0.5 %}{{ servings.chosen }}{% else %}0.5{% endif %}"
+                               step="any"
+                               data-base-servings="{{ servings.base }}"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-servings") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% when None %}
+                    <label for="scale" class="text-sm font-medium text-muted mr-2">{{ tr.t("recipe-scale-label") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-scale") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="scale"
+                               value="{{ scale }}"
+                               min="0.5"
+                               max="200"
+                               step="0.5"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-scale") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% endmatch %}
                 </div>
-                <a href="{{ prefix }}/edit/{{ recipe_path }}"
-                   class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
-                   title="{{ tr.t("action-edit") }}">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {% if viewer.can_edit_recipes() %}
+                <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
-                    <span class="hidden lg:inline">{{ tr.t("action-edit") }}</span>
+                    <span>{{ tr.t("action-edit") }}</span>
                 </a>
-                <button onclick="addToShoppingList(event, {{ recipe_path|json }})"
-                        class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
-                        title="{{ tr.t("recipe-add-all-to-shopping") }}">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {% endif %}
+                {% if viewer.can_edit_lists() %}
+                <button onclick="addToShoppingList(event, {{ recipe_path|json }})" class="btn btn-primary" title="{{ tr.t("recipe-add-all-to-shopping") }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
-                    <span class="hidden lg:inline">{{ tr.t("recipe-add-all-to-shopping") }}</span>
+                    <span>{{ tr.t("recipe-add-all-to-shopping") }}</span>
                 </button>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -79,8 +166,8 @@
             <!-- Description if present -->
             {% match metadata.description %}
             {% when Some with (description) %}
-            <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-200">
-                <p class="text-gray-700 italic">{{ description }}</p>
+            <div class="recipe-note">
+                <p class="m-0">{{ description }}</p>
             </div>
             {% when None %}
             {% endmatch %}
@@ -92,6 +179,25 @@
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} {{ tr.t("recipe-servings-label") }}</span>
                 {% when None %}
                 {% endmatch %}
+                {#- Scaled away from the servings it was written for: say so, since
+                    times, pan sizes and seasoning do not always follow the
+                    quantities. Links back to the original servings. #}
+                {% if let Some(servings) = servings %}
+                {% match servings.original_servings() %}
+                {% when Some with (count) %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-servings"
+                   title="{{ tr.t("recipe-written-for-hint") }}">📖 {{ tr.tn("recipe-written-for", count) }}</a>
+                {% when None %}
+                {% endmatch %}
+                {% endif %}
+                {#- Scaled by the multiplier (no servings to count): the same
+                    reminder, as a factor of the original. #}
+                {% if servings.is_none() && scale != 1.0 %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+                {% endif %}
 
                 {% match metadata.time %}
                 {% when Some with (time) %}
@@ -107,165 +213,218 @@
 
                 {% match metadata.source %}
                 {% when Some with (source) %}
+                {% if source|is_web_url %}
+                <span class="metadata-pill metadata-source">📖 <a href="{{ source.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-source">📖 {{ source }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 {% match metadata.source_url %}
                 {% when Some with (source_url) %}
-                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url }}" class="text-blue-600 hover:text-blue-800 hover:underline">{{ source_url|hostname }}</a></span>
+                {% if source_url|is_web_url %}
+                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source_url.trim()|hostname }}</a></span>
+                {% else %}
+                <span class="metadata-pill metadata-source-url">🔗 {{ source_url }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
+                {% if value|is_web_url %}
+                <span class="metadata-pill metadata-custom">{{ key }}: <a href="{{ value.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ value.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
+                {% endif %}
                 {% endfor %}
             </div>
 
-            <!-- Custom metadata families (e.g. nutrition): one line per family -->
-            {% if !metadata.custom_lists.is_empty() %}
-            <div class="space-y-1.5">
-                {% for family in metadata.custom_lists %}
-                <div class="flex items-start gap-2 text-sm">
-                    <div class="min-w-[80px] pt-1">
-                        <span class="block uppercase tracking-wide text-xs text-gray-500">{{ family.label }}</span>
-                        {% match family.note %}
-                        {% when Some with (note) %}
-                        <span class="block text-[9px] leading-tight text-gray-400 italic">{{ note }}</span>
-                        {% when None %}
-                        {% endmatch %}
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        {% for item in family.items %}
-                        <span class="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-gray-700">
-                            {% match item.icon %}
-                            {% when Some with (icon) %}
-                            <span class="w-3.5 h-3.5 text-orange-500 [&>svg]:w-full [&>svg]:h-full">{{ icon|safe }}</span>
-                            {% when None %}
-                            {% endmatch %}
-                            {{ item.text }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
+            <!-- Metadata families (nutrition, file, ...): one panel each -->
+            {% include "panels/families.html" %}
 
             {% when None %}
+            {% if scale != 1.0 %}
+            <div id="metadata-container" class="flex flex-wrap gap-3">
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+            </div>
+            {% endif %}
             {% endmatch %}
         </div>
     </div>
 
+    {% match plan %}
+    {% when Some with (plan) %}
+    <!-- Meal plan: one card a day, in calendar rows from md up -->
+    <div id="plan">
+        {% if !static_mode && viewer.can_edit_lists() %}
+        <!-- Some days to the shopping list: tick the days, then add them. -->
+        <div id="plan-pick" class="flex flex-wrap items-center gap-2 mb-4 print:hidden" role="group" aria-label="{{ tr.t("plan-pick-label") }}">
+            <span class="text-sm font-medium text-muted">{{ tr.t("plan-pick-label") }}:</span>
+            <button type="button" class="btn btn-sm" data-plan-pick="all">{{ tr.t("plan-pick-all") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="week">{{ tr.t("plan-pick-week") }}</button>
+            <button type="button" class="btn btn-sm" data-plan-pick="none">{{ tr.t("plan-pick-none") }}</button>
+            <button type="button" id="plan-add-days" class="btn btn-sm" disabled onclick="addDaysToShoppingList(event)">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span>{{ tr.t("plan-add-days") }}</span>
+                <span id="plan-pick-count" class="tag">0</span>
+            </button>
+        </div>
+        {% endif %}
+        <div class="hidden md:grid grid-cols-7 gap-2 mb-2" aria-hidden="true">
+            {% for weekday in plan.weekdays %}
+            <div class="px-3 text-sm font-medium text-muted">{{ weekday }}</div>
+            {% endfor %}
+        </div>
+        <ol class="grid grid-cols-1 md:grid-cols-7 gap-2">
+            {% for week in plan.weeks %}
+            {% for cell in week %}
+            {% match cell %}
+            {% when Some with (day) %}
+            <li class="plan-day card p-3" data-date="{{ day.date }}">
+                <h2 class="text-sm font-semibold text-text">{% if !static_mode && viewer.can_edit_lists() %}<label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" class="plan-day-pick w-4 h-4 accent-[var(--accent)] print:hidden" value="{{ day.date }}"><time datetime="{{ day.date }}">{{ day.label }}</time></label>{% else %}<time datetime="{{ day.date }}">{{ day.label }}</time>{% endif %}</h2>
+                {% for meal in day.meals %}
+                {% let meal_index = loop.index0 %}
+                <div class="plan-meal mt-2"{% if let Some(meal_name) = meal.name %} data-meal="{{ meal_name }}"{% endif %}>
+                    <div class="flex items-center justify-between gap-1">
+                    {% if let Some(meal_name) = meal.name %}
+                    <h3 class="text-xs font-medium text-muted">{{ meal_name }}{% if let Some(time) = meal.time %} · {{ time }}{% endif %}</h3>
+                    {% if plan.edit.is_some() %}
+                    <button type="button" class="plan-add print:hidden" data-plan-add
+                            aria-label="{{ tr.tp("plan-add-to", "meal day").replace("{meal}", meal_name).replace("{day}", day.label.as_str()) }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M12 5v14M5 12h14"></path></svg>
+                    </button>
+                    {% endif %}
+                    {% endif %}
+                    </div>
+                    {% if meal.lines.is_empty() %}
+                    <p class="text-sm text-faint"><span aria-hidden="true">—</span><span class="sr-only">{{ tr.t("plan-nothing-planned") }}</span></p>
+                    {% else %}
+                    {% for line in meal.lines %}
+                    {% match plan.line_text(day.date.as_str(), meal.name.as_deref(), loop.index0) %}
+                    {% when Some with (text) %}
+                    <div class="plan-line text-sm flex items-start gap-1" data-index="{{ loop.index0 }}" data-text="{{ text }}" draggable="true">
+                        <div id="plan-line-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}" class="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-1">
+                            {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
+                        </div>
+                        <button type="button" class="plan-line-button print:hidden" id="plan-line-button-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}"
+                                aria-haspopup="menu" aria-expanded="false" aria-controls="plan-line-menu"
+                                aria-labelledby="plan-line-button-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }} plan-line-{{ day.date }}-{{ meal_index }}-{{ loop.index0 }}">
+                            <span class="sr-only">{{ tr.t("plan-line-actions") }}</span>
+                            <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.75"></circle><circle cx="12" cy="12" r="1.75"></circle><circle cx="19" cy="12" r="1.75"></circle></svg>
+                        </button>
+                    </div>
+                    {% when None %}
+                    <div class="text-sm flex flex-wrap items-baseline gap-x-1">
+                        {% for item in line %}{% call menu_item(item, true) %}{% endfor %}
+                    </div>
+                    {% endmatch %}
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </li>
+            {% when None %}
+            <li class="hidden md:block" aria-hidden="true"></li>
+            {% endmatch %}
+            {% endfor %}
+            {% endfor %}
+        </ol>
+
+        {% if !plan.outside.is_empty() %}
+        <h2 class="text-title font-semibold text-text mt-8 mb-4">{{ tr.t("plan-outside") }}</h2>
+        <div class="space-y-6">
+            {% for section in plan.outside %}{% call section_card(section) %}{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if let Some(edit) = plan.edit %}
+    <!-- Changing the plan from the calendar: static/js/src/planner.js -->
+    {% include "recipe_picker.html" %}
+    <div id="plan-line-menu" class="plan-popup" role="menu" hidden>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="move">{{ tr.t("plan-move-to") }}</button>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="copy">{{ tr.t("plan-copy-to") }}</button>
+        <button type="button" role="menuitem" tabindex="-1" data-plan-action="remove">{{ tr.t("plan-remove") }}</button>
+    </div>
+    <div id="plan-target" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <form class="card shadow-[var(--shadow-overlay)] p-6 w-full max-w-sm mx-4" role="dialog" aria-modal="true" aria-labelledby="plan-target-heading">
+            <h2 id="plan-target-heading" class="text-title font-bold text-text mb-4"
+                data-move="{{ tr.t("plan-move-title") }}" data-copy="{{ tr.t("plan-copy-title") }}"></h2>
+            <label for="plan-target-day" class="block text-sm font-medium text-muted mb-1">{{ tr.t("plan-target-day") }}</label>
+            <select id="plan-target-day" class="select w-full mb-4">
+                {% for week in plan.weeks %}{% for cell in week %}{% if let Some(day) = cell %}
+                <option value="{{ day.date }}">{{ day.label }}</option>
+                {% endif %}{% endfor %}{% endfor %}
+            </select>
+            <label for="plan-target-meal" class="block text-sm font-medium text-muted mb-1">{{ tr.t("plan-target-meal") }}</label>
+            <select id="plan-target-meal" class="select w-full">
+                {% for meal in edit.meals %}
+                <option value="{{ meal }}">{{ meal }}</option>
+                {% endfor %}
+            </select>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" class="btn" data-plan-cancel>{{ tr.t("action-cancel") }}</button>
+                <button type="submit" class="btn btn-primary" data-move="{{ tr.t("plan-move") }}" data-copy="{{ tr.t("plan-copy") }}"></button>
+            </div>
+        </form>
+    </div>
+    <div id="plan-error" class="fixed bottom-4 inset-x-4 md:inset-x-auto md:right-4 md:max-w-md card p-4 border-l-[3px] border-l-danger bg-danger-soft z-50 flex items-center gap-3" hidden>
+        <p class="flex-1 text-text" role="alert"></p>
+        <button type="button" class="btn btn-sm" data-plan-reload>{{ tr.t("plan-reload") }}</button>
+    </div>
+    <p id="plan-status" class="sr-only" role="status"></p>
+    <script type="module">
+    const { initPlanner } = await import({{ prefix|json|safe }} + '/static/js/src/planner.js');
+    initPlanner(document.getElementById('plan'), {
+        prefix: {{ prefix|json|safe }},
+        path: {{ edit.path|json|safe }},
+        version: {{ edit.version|json|safe }},
+        servings: {{ edit.servings|json|safe }},
+        strings: {
+            changed: {{ tr.t("plan-changed")|json|safe }},
+            failed: {{ tr.t("plan-save-failed")|json|safe }},
+            saved: {{ tr.t("plan-saved")|json|safe }},
+        },
+    });
+    </script>
+    {% endif %}
+    <script>
+    // Marks today and dims the days gone by. Done here rather than on the
+    // server so a static site, or a server in another time zone, still
+    // agrees with the reader's calendar.
+    (function () {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        let todayCell = null;
+        document.querySelectorAll('#plan .plan-day[data-date]').forEach(cell => {
+            if (cell.dataset.date === today) {
+                cell.classList.add('plan-day-today');
+                cell.setAttribute('aria-current', 'date');
+                todayCell = cell;
+            } else if (cell.dataset.date < today) {
+                cell.classList.add('plan-day-past');
+            }
+        });
+        // One column on small screens: start at today rather than at day 1.
+        if (todayCell && todayCell.previousElementSibling &&
+                window.matchMedia('(max-width: 767px)').matches) {
+            todayCell.scrollIntoView({ block: 'start' });
+        }
+    })();
+    </script>
+    {% when None %}
     <!-- Menu sections -->
     <div class="space-y-6">
-            {% for section in sections %}
-            <div class="menu-section bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden">
-                {% match section.name %}
-                {% when Some with (name) %}
-                <div class="menu-section-header bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3">
-                    <h2 class="text-xl font-semibold">{{ name }}</h2>
-                </div>
-                {% when None %}
-                {% endmatch %}
-
-                <div class="menu-section-body p-6 space-y-2">
-                    {% for line in section.lines %}
-                    {% if line.len() == 1 %}
-                        {% match line[0] %}
-                        {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                            {% if text.trim().ends_with(":") %}
-                            <!-- Meal type header -->
-                            <h3 class="text-lg font-semibold text-gray-800 mt-2 mb-1">{{ text }}</h3>
-                            {% else %}
-                            <!-- Regular text line -->
-                            <div class="pl-6">
-                                <span class="text-gray-700">{{ text }}</span>
-                            </div>
-                            {% endif %}
-                        {% when _ %}
-                            <!-- Single non-text item -->
-                            <div class="pl-6 flex items-baseline gap-x-2">
-                                {% match line[0] %}
-                                {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% endif %}"
-                                           class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
-                                            {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                        </a>
-                                        {% match scale %}
-                                        {% when Some with (s) %}
-                                            <span class="text-sm text-gray-500">(×{{ s }})</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                    <span class="inline-flex items-center gap-1">
-                                        <span class="ingredient-badge">
-                                            {{ name }}
-                                            {% match quantity %}
-                                            {% when Some with (q) %}
-                                                <span class="font-semibold">{{ q }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                            {% match unit %}
-                                            {% when Some with (u) %}
-                                                <span class="text-orange-700">{{ u }}</span>
-                                            {% when None %}
-                                            {% endmatch %}
-                                        </span>
-                                    </span>
-                                {% when _ %}
-                                {% endmatch %}
-                            </div>
-                        {% endmatch %}
-                    {% else %}
-                    <!-- Multi-item line (meal item with ingredients) -->
-                    <div class="pl-6 flex flex-wrap items-baseline gap-x-2">
-                        {% for item in line %}
-                            {% match item %}
-                            {% when crate::web::templates::MenuSectionItem::Text with (text) %}
-                                <span class="text-gray-700">{{ text }}</span>
-
-                            {% when crate::web::templates::MenuSectionItem::RecipeReference with { name, scale } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <a href="{{ prefix }}/recipe/{{ name.strip_prefix("./").unwrap_or(name) }}{% if static_mode %}.html{% endif %}"
-                                       class="text-purple-600 hover:text-purple-800 font-medium hover:underline">
-                                        {{ name.strip_prefix("./").unwrap_or(name).replace("/", " › ") }}
-                                    </a>
-                                    {% match scale %}
-                                    {% when Some with (s) %}
-                                        <span class="text-sm text-gray-500">(×{{ s }})</span>
-                                    {% when None %}
-                                    {% endmatch %}
-                                </span>
-
-                            {% when crate::web::templates::MenuSectionItem::Ingredient with { name, quantity, unit } %}
-                                <span class="inline-flex items-center gap-1">
-                                    <span class="ingredient-badge">
-                                        {{ name }}
-                                        {% match quantity %}
-                                        {% when Some with (q) %}
-                                            <span class="font-semibold">{{ q }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                        {% match unit %}
-                                        {% when Some with (u) %}
-                                            <span class="text-orange-700">{{ u }}</span>
-                                        {% when None %}
-                                        {% endmatch %}
-                                    </span>
-                                </span>
-                            {% endmatch %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
+            {% for section in sections %}{% call section_card(section) %}{% endfor %}
     </div>
+    {% endmatch %}
 </div>
 
 {% if !static_mode %}
@@ -283,13 +442,120 @@ function escHtml(s) {
         .replace(/'/g, '&#39;');
 }
 
+// |json puts the path in a JS string literal with <, >, & escaped as
+// \uXXXX, so it survives the <script> context.
+const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+// A menu that declares servings has a servings stepper and `?servings=`
+// URLs; any other has the multiplier and `?scale=`. The stepper input's id
+// is the query parameter's name.
+{% match servings %}
+{% when Some with (servings) %}
+const SCALE_PARAM = 'servings';
+const DEFAULT_SCALE = {{ servings.chosen }};
+{% when None %}
+const SCALE_PARAM = 'scale';
+const DEFAULT_SCALE = {{ scale }};
+{% endmatch %}
+
+function goToScale(value) {
+    const input = document.getElementById(SCALE_PARAM);
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) {
+        // Cleared or non-numeric: put the current value back, do not navigate.
+        input.value = DEFAULT_SCALE;
+        return;
+    }
+    const min = parseFloat(input.min) || 0.5;
+    // The servings stepper has no max.
+    const max = input.max === '' ? Infinity : parseFloat(input.max);
+    const clamped = Math.min(max, Math.max(min, n));
+    window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
+}
+
+// The factor the list wants: the servings stepper holds servings.
+function chosenScale() {
+    const scaleInput = document.getElementById(SCALE_PARAM);
+    let scale = scaleInput ? parseFloat(scaleInput.value) : 1;
+    if (scaleInput && scaleInput.dataset.baseServings) {
+        scale /= parseFloat(scaleInput.dataset.baseServings);
+    }
+    return scale;
+}
+
+// Day pickers of a meal plan: which days go to the shopping list.
+function pickedDays() {
+    return [...document.querySelectorAll('#plan .plan-day-pick:checked')].map(box => box.value);
+}
+
+function updatePickedDays() {
+    const days = pickedDays();
+    const count = document.getElementById('plan-pick-count');
+    const add = document.getElementById('plan-add-days');
+    if (!count || !add) return;
+    count.textContent = days.length;
+    add.disabled = days.length === 0;
+    add.classList.toggle('btn-primary', days.length > 0);
+}
+
+document.querySelectorAll('[data-plan-pick]').forEach(button => {
+    button.addEventListener('click', () => {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const today = iso(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 6);
+        const last = iso(end);
+        document.querySelectorAll('#plan .plan-day-pick').forEach(box => {
+            switch (button.dataset.planPick) {
+                case 'all': box.checked = true; break;
+                case 'none': box.checked = false; break;
+                // The next seven days, today included.
+                case 'week': box.checked = box.value >= today && box.value <= last; break;
+            }
+        });
+        updatePickedDays();
+    });
+});
+document.addEventListener('change', event => {
+    if (event.target.closest('.plan-day-pick')) updatePickedDays();
+});
+
+async function addDaysToShoppingList(event) {
+    const button = event.currentTarget;
+    const label = button.querySelector('span');
+    const original = label.textContent;
+    const dates = pickedDays();
+    if (dates.length === 0) return;
+    let message;
+    let ok = false;
+    try {
+        const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: {{ recipe_path|json|safe }}, scale: chosenScale(), dates })
+        });
+        ok = response.ok;
+        message = ok ? {{ tr.t("recipe-added")|json|safe }} : {{ tr.t("shopping-failed-to-add")|json|safe }};
+    } catch (error) {
+        console.error('Error:', error);
+        message = {{ tr.t("shopping-error")|json|safe }};
+    }
+    label.textContent = message;
+    button.classList.add(ok ? 'text-ok' : 'text-danger');
+    setTimeout(() => {
+        label.textContent = original;
+        button.classList.remove('text-ok', 'text-danger');
+    }, 2000);
+}
+
 async function addToShoppingList(event, recipePath) {
     event.preventDefault();
     const button = event.currentTarget;
     const originalText = button.innerHTML;
 
     try {
-        const scale = document.getElementById('scale')?.value || 1;
+        const scale = chosenScale();
         const response = await fetch('{{ prefix }}/api/shopping_list/add_menu', {
             method: 'POST',
             headers: {
@@ -297,31 +563,29 @@ async function addToShoppingList(event, recipePath) {
             },
             body: JSON.stringify({
                 path: recipePath,
-                scale: parseFloat(scale)
+                scale: scale
             })
         });
 
         if (response.ok) {
-            button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ' + escHtml({{ tr.t("recipe-added")|json|safe }});
-            button.classList.add('bg-green-500', 'hover:bg-green-600');
-            button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+            button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ' + escHtml({{ tr.t("recipe-added")|json|safe }});
+            button.classList.add('bg-ok-soft', 'text-ok', 'border-ok');
 
             setTimeout(() => {
                 button.innerHTML = originalText;
-                button.classList.remove('bg-green-500', 'hover:bg-green-600');
-                button.classList.add('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+                button.classList.remove('bg-ok-soft', 'text-ok', 'border-ok');
             }, 2000);
         } else {
             throw new Error({{ tr.t("shopping-failed-to-add")|json|safe }});
         }
     } catch (error) {
         console.error('Error:', error);
-        button.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> ' + escHtml({{ tr.t("shopping-error")|json|safe }});
-        button.classList.add('bg-red-500', 'hover:bg-red-600');
+        button.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> ' + escHtml({{ tr.t("shopping-error")|json|safe }});
+        button.classList.add('bg-danger-soft', 'text-danger', 'border-danger');
 
         setTimeout(() => {
             button.innerHTML = originalText;
-            button.classList.remove('bg-red-500', 'hover:bg-red-600');
+            button.classList.remove('bg-danger-soft', 'text-danger', 'border-danger');
         }, 2000);
     }
 }

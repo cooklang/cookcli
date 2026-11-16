@@ -9,6 +9,9 @@
 
 #![cfg(feature = "server")]
 
+#[path = "common/mod.rs"]
+mod common;
+
 use serde_json::Value;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
@@ -91,11 +94,12 @@ async fn try_start_server() -> Option<ServerGuard> {
     write_fixture(&dir);
 
     let port = free_port();
-    let child = Command::new(assert_cmd::cargo::cargo_bin("cook"))
-        .arg("server")
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin("cook"));
+    cmd.arg("server")
         .arg(dir.path())
         .arg("--port")
-        .arg(port.to_string())
+        .arg(port.to_string());
+    let child = common::with_isolated_config(&mut cmd, dir.path())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -300,9 +304,13 @@ async fn add_menu_and_the_menu_api_report_identical_factors() {
 async fn html_menu_page_agrees_with_the_menu_api() {
     let server = start_server().await;
 
-    // Every reference link, paired with the badge following it (if any).
+    // Every reference link with its `?scale=` or `?servings=` (if any), paired
+    // with the badge following it (if any). The badge's classes are
+    // deliberately not pinned — this test is about the factors, and
+    // hard-coding the styling made a purely visual change to menu.html fail
+    // here.
     let re = regex::Regex::new(
-        r#"/recipe/(?:[^"?]*?)"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span class="text-sm text-gray-500">\(×([0-9.]+)\)</span>)?"#,
+        r#"/recipe/([^"?]*?)(?:\?(scale|servings)=([0-9.]+))?"[^>]*>\s*[^<]+?\s*</a>\s*(?:<span[^>]*>\(×([0-9.]+)\)</span>)?"#,
     )
     .unwrap();
 
@@ -319,12 +327,36 @@ async fn html_menu_page_agrees_with_the_menu_api() {
             .await
             .expect("menu page body");
 
-        let rendered: Vec<f64> = re
+        let factor = |m: Option<regex::Match>| m.map_or(1.0, |m| m.as_str().parse().unwrap());
+        let (linked, rendered): (Vec<f64>, Vec<f64>) = re
             .captures_iter(&html)
-            .map(|c| c.get(1).map_or(1.0, |m| m.as_str().parse().unwrap()))
-            .collect();
+            // A scaled menu also links to itself, unscaled, from its
+            // "x2 of the original" badge; that is not a reference.
+            .filter(|c| &c[1] != "Plan.menu")
+            .map(|c| {
+                let recipe = &c[1];
+                let value = factor(c.get(3));
+                // A recipe that declares servings is linked by its servings,
+                // any other by its factor.
+                let linked = match c.get(2).map(|m| m.as_str()) {
+                    Some("servings") => {
+                        assert_eq!(recipe, "Servings Recipe", "only it declares servings");
+                        value / 2.0
+                    }
+                    Some(_) => {
+                        assert_ne!(recipe, "Servings Recipe", "linked by its servings");
+                        value
+                    }
+                    None => 1.0,
+                };
+                (linked, factor(c.get(4)))
+            })
+            .unzip();
 
         assert_eq!(rendered, expected, "HTML menu page at scale {scale}");
+        // Each link opens the recipe at the factor its badge shows, and a x1
+        // reference links without a query string.
+        assert_eq!(linked, rendered, "recipe links at scale {scale}");
         assert_eq!(
             rendered,
             reference_scales(&server, &format!("?scale={scale}")).await,

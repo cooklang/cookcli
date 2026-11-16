@@ -2,29 +2,34 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Drafts are skipped below, so marking one ready is what first reviews it.
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Only the latest push to a pull request is worth a review; a newer one
+# cancels the review still running for the previous push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-    
+    # A draft is still being worked on, and every push to it would post a
+    # fresh review comment. Review once it is marked ready instead.
+    #
+    # release-please opens its release PR as github-actions[bot], which the
+    # action refuses (see allowed_bots below), so the check failed on every
+    # release. The PR is a version bump and a generated changelog, and the
+    # changes it lists were each reviewed in their own PR: skip it rather than
+    # allow the bot.
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.login != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read
       issues: read
       id-token: write
-    
+
     steps:
       # Dependabot-triggered runs read from the Dependabot secret store, not the
       # Actions one, so CLAUDE_CODE_OAUTH_TOKEN is empty there and the action
@@ -48,33 +53,24 @@ jobs:
 
       - name: Checkout repository
         if: steps.creds.outputs.available == 'true'
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 1
 
       - name: Run Claude Code Review
         id: claude-review
         if: steps.creds.outputs.available == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Dependency bumps are exactly the PRs worth a second pair of eyes, but the
           # action refuses bot actors by default. Named explicitly rather than "*" so
           # a future App installed on this public repo cannot drive the review prompt.
           allowed_bots: "dependabot[bot]"
-          prompt: |
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
-            
-            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
-
-            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
-          
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
-
+          # or https://code.claude.com/docs/en/cli-reference for available options

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ConfigSource, Severity};
+use crate::{ConfigSource, DiagnosticKind, Severity, UnscalableCause};
 use camino::Utf8Path;
 
 const AISLE: &str = "\
@@ -42,6 +42,7 @@ fn request(names: &[&str]) -> GenerateRequest {
         recipes: names.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
         extra_items: Vec::new(),
+        include_optional: false,
     }
 }
 
@@ -153,6 +154,7 @@ fn the_request_scale_is_applied_per_recipe() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -181,6 +183,42 @@ fn ingredients_are_categorised_by_the_aisle_configuration() {
     assert_eq!(names, vec!["produce", "dairy", "other"]);
     assert_eq!(list.categories[0].items[0].name, "tomatoes");
     assert_eq!(list.categories[2].items[0].name, "sand");
+}
+
+/// Names that differ only by case are one ingredient: their amounts merge
+/// under the first spelling seen, in both the flat and categorised views.
+/// Upstream's categoriser used to keep only the last variant.
+/// <https://github.com/cooklang/cookcli/issues/694>
+#[test]
+fn ingredients_differing_only_by_case_are_merged() {
+    let dir = dir_with(&[("a.cook", "Add @sugar{1%cup} and @Sugar{2%cup}.\n")]);
+
+    let list = generate(&ctx(&dir), request(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "sugar"), Some(vec!["3 cup".to_string()]));
+    assert_eq!(quantities(&list, "Sugar"), None);
+
+    let names: Vec<&str> = list.items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, vec!["sugar"]);
+}
+
+/// The pantry matches case-insensitively, so two variants would each be
+/// charged the same stock: `sugar 100 g` + `Sugar 200 g` with `100 g` in the
+/// pantry used to show 100 g left to buy instead of 200 g (#694).
+#[test]
+fn merged_case_variants_subtract_the_pantry_once() {
+    let dir = dir_with(&[("a.cook", "Add @sugar{100%g} and @Sugar{200%g}.\n")]);
+    let ctx = ctx(&dir).with_pantry(ConfigSource::Inline(
+        "[cupboard]\nsugar = \"100%g\"\n".to_string(),
+    ));
+
+    let list = generate(&ctx, request(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "sugar"), Some(vec!["200 g".to_string()]));
 }
 
 /// Without an aisle configuration everything lands in `other`, and the caller
@@ -380,6 +418,618 @@ fn references_are_expanded_into_their_ingredients() {
     );
 }
 
+/// `./` means the recipe directory, whatever depth the recipe writing it sits
+/// at. The shipped seed depends on this: `Breakfast/Mexican Style Burrito.cook`
+/// writes `@./Shared/Red Beans` and means the one at the root.
+#[test]
+fn a_reference_that_does_not_step_up_is_read_from_the_recipe_directory() {
+    let dir = dir_with(&[
+        (
+            "Breakfast/Burrito.cook",
+            "Fill with @./Shared/Beans{}.
+",
+        ),
+        (
+            "Shared/Beans.cook",
+            "Soak @beans{200%g}.
+",
+        ),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["Breakfast/Burrito.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()]),
+        "{:?}",
+        outcome.value.items
+    );
+}
+
+/// A `..` steps up from the directory of the recipe writing it, so a reference
+/// that lands back inside the recipe directory is followed like any other.
+///
+/// It was not: every reference was resolved from the recipe directory itself,
+/// so `../Shared/Vinaigrette` was looked for *beside* that directory — outside
+/// the collection, where on Windows a `\\host\share` spelling of it would have
+/// handed the host the user's NTLM hash to go and look.
+#[test]
+fn a_reference_that_steps_up_is_resolved_from_the_recipe_writing_it() {
+    let dir = dir_with(&[
+        (
+            "Salads/Caprese.cook",
+            "Dress with @../Shared/Vinaigrette{}.
+",
+        ),
+        (
+            "Shared/Vinaigrette.cook",
+            "Whisk @oil{3%tbsp}.
+",
+        ),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["Salads/Caprese.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "oil"),
+        Some(vec!["3 tbsp".to_string()]),
+        "{:?}",
+        outcome.value.items
+    );
+}
+
+/// A reference that climbs past the recipe directory names nothing in the
+/// collection. It is skipped with a warning rather than followed, and the rest
+/// of the recipe still makes a list — the same shape as a reference that
+/// points at a file which is not there.
+#[test]
+fn a_reference_climbing_out_of_the_recipe_directory_is_skipped_and_reported() {
+    let dir = dir_with(&[(
+        "menu.cook",
+        "Serve @../Secret{} with @rice{100%g}.
+",
+    )]);
+    // The file it would reach, one level up from the recipe directory.
+    std::fs::write(
+        dir.path().parent().unwrap().join("Secret.cook"),
+        "Add @leaked-marker{1}.
+",
+    )
+    .ok();
+
+    let outcome = generate(&ctx(&dir), request(&["menu.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "leaked-marker"),
+        None,
+        "a reference outside the recipe directory must not be followed: {:?}",
+        outcome.value.items
+    );
+    assert_eq!(
+        quantities(&outcome.value, "rice"),
+        Some(vec!["100 g".to_string()]),
+        "the rest of the recipe still makes a list: {:?}",
+        outcome.value.items
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| { d.severity == Severity::Warning && d.message.contains("points outside") }),
+        "the skip must be reported: {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// `included_references` names the references of one recipe, and is matched
+/// against them resolved rather than as spelled. A caller that stored the
+/// resolved path of a `../` reference still selects it — which is what the
+/// web UI stores now — and one that stored the authored spelling, with or
+/// without the `./`, goes on selecting it too.
+#[test]
+fn included_references_are_matched_resolved_however_they_were_spelled() {
+    let files = &[
+        (
+            "Salads/Caprese.cook",
+            "Dress with @../Shared/Vinaigrette{} and @./Shared/Pesto{}.
+",
+        ),
+        (
+            "Shared/Vinaigrette.cook",
+            "Whisk @oil{3%tbsp}.
+",
+        ),
+        (
+            "Shared/Pesto.cook",
+            "Blend @basil{50%g}.
+",
+        ),
+    ];
+
+    for spelling in ["Shared/Vinaigrette", "../Shared/Vinaigrette"] {
+        let dir = dir_with(files);
+        let mut list = ShoppingIngredients::default();
+        extract_ingredients(
+            &ctx(&dir),
+            &at_path("Salads/Caprese.cook"),
+            &ExtractOptions {
+                ignore_references: false,
+                included_references: Some(&[spelling.to_string()]),
+                include_optional: false,
+                confined: false,
+            },
+            &mut list,
+        )
+        .unwrap_or_else(|e| panic!("{spelling}: {e}"));
+
+        let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
+        assert!(
+            names.iter().any(|n| n.as_str() == "oil"),
+            "{spelling} must select the reference it names: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n.as_str() == "basil"),
+            "{spelling} must not select the one it does not: {names:?}"
+        );
+    }
+}
+
+/// Expansion follows a chain of references all the way down. It used to stop
+/// three files in — the named recipe, what it references, and what *those*
+/// reference — and anything deeper fell off the list with no warning and a
+/// clean exit (<https://github.com/cooklang/cookcli/issues/509>).
+///
+/// `paprika`, four files down, is the one that was missing.
+#[test]
+fn references_are_expanded_however_deep_the_chain_runs() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./d{} and add @cumin{1%tsp}.\n"),
+        ("d.cook", "Add @paprika{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("generates");
+
+    for name in ["salt", "pepper", "cumin", "paprika"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once somewhere down the chain: {:?}",
+            outcome.value.items
+        );
+    }
+}
+
+/// The scale asked for on the command line reaches the bottom of the chain,
+/// not just the first recipe under it. A reference carrying no quantity of its
+/// own is "some of this recipe", so doubling the menu doubles it too.
+#[test]
+fn the_request_scale_reaches_every_recipe_down_the_chain() {
+    let dir = dir_with(&[
+        ("menu.cook", "Serve @./dinner{}.\n"),
+        ("dinner.cook", "Prepare @./sauce{} with @rice{100%g}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Path("menu.cook".into()),
+                2.0,
+            )],
+            ignore_references: false,
+            extra_items: Vec::new(),
+            include_optional: false,
+        },
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "rice"), Some(vec!["200 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["8".to_string()]),
+        "the recipe two levels down is scaled like the one above it"
+    );
+}
+
+/// A reference that names a target does not take the caller's factor — but the
+/// factor it *reaches* carries on down to what it references in turn.
+#[test]
+fn a_scaled_reference_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6 servings of a recipe that makes 2 is three times as much of everything.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["300 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12".to_string()]),
+        "the sauce the dinner calls for is needed three times over too"
+    );
+}
+
+/// The other half of `target_factor`: a target measured against the recipe's
+/// `yield` rather than its servings, which is its own arithmetic.
+#[test]
+fn a_yield_target_passes_the_factor_it_reached_further_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1000%g\n---\n\nSimmer @tomatoes{4} with @./stock{}.\n",
+        ),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // Half of what the sauce yields is half of everything it asks for.
+    assert_eq!(quantities(&list, "tomatoes"), Some(vec!["2".to_string()]));
+    assert_eq!(
+        quantities(&list, "bones"),
+        Some(vec!["100 g".to_string()]),
+        "the stock the sauce calls for is halved too"
+    );
+}
+
+/// `cooklang`'s `scale_to_yield` compares the yield's unit to the target's as
+/// plain strings — the converter it is handed only refits quantities once the
+/// factor is known, and never reconciles `kg` with `g`. So a target in another
+/// unit is refused rather than converted, and the reference is listed as
+/// written.
+///
+/// Pinned because `target_factor` compares the two the same way, and a
+/// `cooklang` that started converting would make it quietly answer `None` — and
+/// a `None` is a factor of 1 for everything below the reference. This test
+/// fails first if that ever changes.
+#[test]
+fn a_yield_target_in_another_unit_is_listed_as_written() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        (
+            "sauce.cook",
+            "---\nyield: 1%kg\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("its yield is in kg"),
+        "{warning:?}"
+    );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 g".to_string(),
+            cause: UnscalableCause::YieldInOtherUnit {
+                unit: "kg".to_string()
+            },
+        })
+    );
+}
+
+/// A servings target is scaled as asked, not rounded to whole servings the way
+/// `cooklang`'s `scale_to_target` would (#680, cooklang-rs#133), and the factor
+/// passed down is the same one. On whole targets that would hold whatever
+/// either did, so this asks for 6.4 servings: the sauce below the reference
+/// comes out at 3.2 times its amounts.
+#[test]
+fn a_fractional_servings_target_scales_exactly_all_the_way_down() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6.4%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 2\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+
+    // 6.4 servings is 3.2 times what the dinner makes.
+    assert_eq!(quantities(&list, "rice"), Some(vec!["320 g".to_string()]));
+    assert_eq!(
+        quantities(&list, "tomatoes"),
+        Some(vec!["12.8".to_string()]),
+        "the factor passed down is the one applied"
+    );
+}
+
+/// The case in #680: a menu planning 2.5 servings of a recipe for one.
+#[test]
+fn half_servings_in_a_menu_are_not_rounded_up() {
+    let dir = dir_with(&[
+        (
+            "week.menu",
+            "== Monday ==\n\nDinner: \\\n- @./stew{2.5%servings}\n",
+        ),
+        (
+            "stew.cook",
+            "---\nservings: 1\n---\n\nSimmer @beans{100%g}.\n",
+        ),
+    ]);
+
+    let list = generate(&ctx(&dir), request(&["week.menu"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(quantities(&list, "beans"), Some(vec!["250 g".to_string()]));
+}
+
+/// The third case where `target_factor` declines: a recipe whose servings are
+/// not a whole number. `cooklang` exposes servings as a `u32`, so `1.5` reaches
+/// `as_number()` as `None` exactly as a missing value would.
+///
+/// Worth its own test rather than folding into the one below, because the
+/// recipe *has* servings metadata here — the question is whether `cooklang`
+/// refuses a base it cannot represent as firmly as it refuses one that is not
+/// there. If it ever started coping, the sauce under this reference would be
+/// counted at a factor of one without a word said.
+#[test]
+fn a_servings_target_against_a_fractional_base_is_listed_as_written() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./dinner{6%servings}.\n"),
+        (
+            "dinner.cook",
+            "---\nservings: 1.5\n---\n\nPrepare @./sauce{} with @rice{100%g}.\n",
+        ),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "dinner"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "rice"), None);
+    assert_eq!(
+        quantities(&outcome.value, "tomatoes"),
+        None,
+        "nothing below the reference is expanded, at a factor of one or any other"
+    );
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("whole number of servings"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NoServings,
+                ..
+            })
+        ),
+        "{warning:?}"
+    );
+}
+
+/// The other way `target_factor` can decline to answer: a servings target
+/// against a recipe that declares no servings. `an_unscalable_reference_is_listed_as_written`
+/// pins the yield half of this; this is the servings half.
+///
+/// The reference carries a sub-recipe below it deliberately. If `cooklang`
+/// ever stopped refusing this, expansion would carry on with the
+/// `unwrap_or(1.0)` fallback and the stock would be counted at the sauce's
+/// authored amounts whatever was asked for — silently. Stopping at the
+/// reference is what keeps that fallback unreachable, so that is what is
+/// pinned.
+#[test]
+fn a_servings_target_on_a_recipe_without_servings_is_listed_as_written() {
+    let dir = dir_with(&[
+        // No `servings` metadata, so scaling to a servings target cannot work.
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{200%g}.\n"),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    assert_eq!(quantities(&outcome.value, "bones"), None);
+    unexpanded_warning(&outcome.diagnostics);
+}
+
+/// `servings: 0` is a whole number of servings, so `scale_to_target` does
+/// not refuse it — it divides by zero, scales by infinity and answers `Ok`.
+/// The reference is refused before that, as unscalable (#699).
+#[test]
+fn a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nservings: 0\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{6%servings}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["6 servings".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "tomatoes"),
+        None,
+        "the recipe below the reference is not expanded, least of all by inf"
+    );
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "servings: 0"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// The yield half of [`a_zero_servings_recipe_is_unscalable_not_scaled_by_infinity`]:
+/// `yield: 0%g` divides by zero the same way.
+#[test]
+fn a_zero_yield_recipe_is_unscalable_not_scaled_by_infinity() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: 0%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NonPositiveBase { declared },
+                ..
+            }) if declared == "yield: 0%g"
+        ),
+        "{warning:?}"
+    );
+}
+
+/// `nan` and `inf` are not numbers a yield can mean, but Rust's float parse
+/// accepts them, so `yield: nan%g` passed the positive check and listed
+/// `tomatoes NaN` — or `0`, dividing by `inf` — without a warning.
+#[test]
+fn a_non_finite_yield_is_unscalable_too() {
+    for declared in ["nan", "inf"] {
+        let dir = dir_with(&[
+            (
+                "sauce.cook",
+                &format!("---\nyield: {declared}%g\n---\n\nSimmer @tomatoes{{4}}.\n"),
+            ),
+            ("main.cook", "Prepare @./sauce{500%g}.\n"),
+        ]);
+
+        let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+        assert_eq!(quantities(&outcome.value, "tomatoes"), None, "{declared}");
+        let warning = unexpanded_warning(&outcome.diagnostics);
+        assert!(
+            matches!(
+                &warning.kind,
+                Some(DiagnosticKind::UnscalableReference {
+                    cause: UnscalableCause::NonPositiveBase { declared: d },
+                    ..
+                }) if d == &format!("yield: {declared}%g")
+            ),
+            "{declared}: {warning:?}"
+        );
+    }
+}
+
+/// A negative base flips the sign too: `yield: -500%g` asked for `500%g`
+/// divided to `-4` and listed `tomatoes -4` without a warning before
+/// (#699). It is refused the same way.
+#[test]
+fn a_negative_yield_recipe_is_unscalable_not_sign_flipped() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: -500%g\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{500%g}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(
+        warning.message.contains("yield: -500%g"),
+        "the warning names the declared base: {warning:?}"
+    );
+    assert!(
+        warning.message.contains("nothing to scale from"),
+        "{warning:?}"
+    );
+}
+
+/// The recursion is bounded by the ancestor chain, not by a depth limit, so a
+/// cycle that only closes further down is still caught — and still counted
+/// once rather than looping.
+#[test]
+fn a_cycle_that_closes_three_recipes_down_is_still_refused() {
+    let dir = dir_with(&[
+        ("a.cook", "Make @./b{} and add @salt{1%tsp}.\n"),
+        ("b.cook", "Make @./c{} and add @pepper{1%tsp}.\n"),
+        ("c.cook", "Make @./a{} and add @cumin{1%tsp}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["a.cook"])).expect("a cycle must not fail");
+
+    for name in ["salt", "pepper", "cumin"] {
+        assert_eq!(
+            quantities(&outcome.value, name),
+            Some(vec!["1 tsp".to_string()]),
+            "{name} is declared once: {:?}",
+            outcome.value.items
+        );
+    }
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("circular")),
+        "expected a cycle warning: {:?}",
+        outcome.diagnostics
+    );
+}
+
 /// Records today's surprising behaviour: suppressing expansion does not drop
 /// the reference, it leaves it on the list as a quantity-less item.
 #[test]
@@ -392,6 +1042,7 @@ fn ignore_references_leaves_the_reference_as_a_bare_item() {
             recipes: vec![at_path("main.cook")],
             ignore_references: true,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -557,6 +1208,70 @@ fn a_recipe_referenced_by_two_others_is_counted_for_both() {
     );
 }
 
+/// The ancestor chain bounds the recursion, but it bounds it at "every recipe
+/// in the collection" — one file per level. Expanding that as native recursion
+/// overflowed the stack and aborted at around two thousand levels, which
+/// `cook server` and `cook sync` can both be pointed at.
+///
+/// So there is a depth limit as well, far above anything a real collection
+/// reaches. It says so rather than truncating quietly.
+#[test]
+fn a_chain_deeper_than_any_real_collection_stops_and_says_so() {
+    let depth = 150;
+    let files: Vec<(String, String)> = (0..depth)
+        .map(|i| {
+            let next = if i + 1 < depth {
+                format!("Make @./r{}{{}} and ", i + 1)
+            } else {
+                String::new()
+            };
+            (
+                format!("r{i}.cook"),
+                format!("{next}add @ing{i}{{1%tsp}}.\n"),
+            )
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(name, text)| (name.as_str(), text.as_str()))
+        .collect();
+    let dir = dir_with(&borrowed);
+
+    let outcome = generate(&ctx(&dir), request(&["r0.cook"])).expect("a deep chain must not fail");
+
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning && d.message.contains("deep")),
+        "the shopper has to be told the list stops short: {:?}",
+        outcome.diagnostics
+    );
+    assert!(
+        quantities(&outcome.value, "ing0").is_some(),
+        "everything above the limit is still on the list"
+    );
+    assert!(
+        quantities(&outcome.value, &format!("ing{}", depth - 1)).is_none(),
+        "and everything below it is not"
+    );
+
+    let stopped = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("deep"))
+        .expect("checked above");
+    assert!(
+        stopped
+            .location
+            .as_ref()
+            .and_then(|l| l.file.as_deref())
+            .is_some(),
+        "like the cycle warning, it names the recipe it concerns so a UI does \
+         not have to read the file name back out of the message: {stopped:?}"
+    );
+}
+
 /// `included_references` is what the web server uses to let a shopper drop one
 /// sub-recipe from a menu without dropping the rest.
 #[test]
@@ -567,7 +1282,7 @@ fn included_references_selects_which_references_to_follow() {
         ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
     ]);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     let included = ["sauce".to_string()];
     extract_ingredients(
         &ctx(&dir),
@@ -575,16 +1290,72 @@ fn included_references_selects_which_references_to_follow() {
         &ExtractOptions {
             ignore_references: false,
             included_references: Some(&included),
+            include_optional: false,
+            confined: false,
         },
         &mut list,
     )
     .expect("extracts");
 
-    let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+    let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
     assert!(names.contains(&&"tomatoes".to_string()), "{names:?}");
     assert!(
         !names.contains(&&"bones".to_string()),
         "an excluded reference must not be expanded: {names:?}"
+    );
+}
+
+/// `included_references` names the references of the recipe a shopper is
+/// looking at, so it filters that level and nothing below it. A sub-recipe
+/// reached *through* an included reference is followed whether or not it was
+/// named — the shopper never saw it to tick it.
+///
+/// `stock` is the one that matters: excluded where `main` names it directly,
+/// still counted where the sauce calls for it. One kilo, not two and not none.
+#[test]
+fn included_references_filter_the_top_level_only() {
+    let dir = dir_with(&[
+        ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4} with @./stock{}.\n"),
+        ("stock.cook", "Simmer @bones{1%kg}.\n"),
+    ]);
+
+    let mut list = ShoppingIngredients::default();
+    let included = ["sauce".to_string()];
+    extract_ingredients(
+        &ctx(&dir),
+        &at_path("main.cook"),
+        &ExtractOptions {
+            ignore_references: false,
+            included_references: Some(&included),
+            include_optional: false,
+            confined: false,
+        },
+        &mut list,
+    )
+    .expect("extracts");
+
+    let items: Vec<(&String, String)> = list
+        .required
+        .iter()
+        .map(|(name, q)| {
+            (
+                name,
+                q.iter().map(quantity_fmt).collect::<Vec<_>>().join(", "),
+            )
+        })
+        .collect();
+    assert!(
+        items.iter().any(|(name, _)| *name == "tomatoes"),
+        "{items:?}"
+    );
+    assert_eq!(
+        items
+            .iter()
+            .find(|(name, _)| *name == "bones")
+            .map(|(_, q)| q.as_str()),
+        Some("1 kg"),
+        "the stock the sauce calls for is counted, the one main names is not: {items:?}"
     );
 }
 
@@ -597,7 +1368,7 @@ fn no_included_references_follows_all_of_them() {
         ("main.cook", "Prepare @./sauce{} and @./stock{}.\n"),
     ]);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     extract_ingredients(
         &ctx(&dir),
         &at_path("main.cook"),
@@ -606,7 +1377,7 @@ fn no_included_references_follows_all_of_them() {
     )
     .expect("extracts");
 
-    let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
+    let names: Vec<&String> = list.required.iter().map(|(name, _)| name).collect();
     assert!(names.contains(&&"tomatoes".to_string()), "{names:?}");
     assert!(names.contains(&&"bones".to_string()), "{names:?}");
 }
@@ -621,13 +1392,14 @@ fn extract_ingredients_accumulates_across_calls() {
     ]);
     let ctx = ctx(&dir);
 
-    let mut list = IngredientList::new();
+    let mut list = ShoppingIngredients::default();
     for name in ["a.cook", "b.cook"] {
         extract_ingredients(&ctx, &at_path(name), &ExtractOptions::default(), &mut list)
             .expect("extracts");
     }
 
     let items: Vec<(&String, String)> = list
+        .required
         .iter()
         .map(|(name, q)| {
             (
@@ -638,6 +1410,295 @@ fn extract_ingredients_accumulates_across_calls() {
         .collect();
     assert_eq!(items.len(), 1, "{items:?}");
     assert_eq!(items[0].1, "5");
+}
+
+// ---------------------------------------------------------------------------
+// Optional ingredients
+// ---------------------------------------------------------------------------
+
+const EGGS_ON_TOAST: &str = "\
+Fry @eggs{2} in @butter{10%g}.
+
+Serve on @toast{2%slices}, garnished with @?chives and @?chilli flakes{1%pinch}.
+";
+
+fn with_optional(names: &[&str]) -> GenerateRequest {
+    GenerateRequest {
+        include_optional: true,
+        ..request(names)
+    }
+}
+
+/// `(name, optional)` for every item on the uncategorised view, in order.
+fn names_and_flags(list: &AggregatedList) -> Vec<(&str, bool)> {
+    list.items
+        .iter()
+        .map(|i| (i.name.as_str(), i.optional))
+        .collect()
+}
+
+/// A recipe contributes only what it needs unless optional ingredients are
+/// asked for.
+#[test]
+fn optional_ingredients_are_left_out_by_default() {
+    let dir = dir_with(&[("eggs.cook", EGGS_ON_TOAST)]);
+
+    let list = generate(&ctx(&dir), request(&["eggs.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        names_and_flags(&list),
+        vec![("eggs", false), ("butter", false), ("toast", false)]
+    );
+}
+
+/// Asked for, they follow the required ingredients, marked optional.
+#[test]
+fn included_optional_ingredients_are_marked() {
+    let dir = dir_with(&[("eggs.cook", EGGS_ON_TOAST)]);
+
+    let list = generate(&ctx(&dir), with_optional(&["eggs.cook"]))
+        .expect("generates")
+        .value;
+
+    assert_eq!(
+        names_and_flags(&list),
+        vec![
+            ("eggs", false),
+            ("butter", false),
+            ("toast", false),
+            ("chives", true),
+            ("chilli flakes", true),
+        ]
+    );
+    assert_eq!(
+        quantities(&list, "chilli flakes"),
+        Some(vec!["1 pinch".to_string()])
+    );
+}
+
+/// Required and optional amounts of one ingredient are two items, across
+/// recipes too, so the required total stays what the recipes cannot do
+/// without.
+#[test]
+fn optional_amounts_are_not_merged_into_required_ones() {
+    let dir = dir_with(&[
+        (
+            "risotto.cook",
+            "Stir @parmesan{100%g} in.\n\nTop with @?parmesan{50%g}.\n",
+        ),
+        ("salad.cook", "Shave @parmesan{20%g} over.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), with_optional(&["risotto.cook", "salad.cook"]))
+        .expect("generates")
+        .value;
+
+    let parmesan: Vec<(bool, Vec<String>)> = list
+        .items
+        .iter()
+        .filter(|i| i.name == "parmesan")
+        .map(|i| (i.optional, i.quantities.clone()))
+        .collect();
+    assert_eq!(
+        parmesan,
+        vec![
+            (false, vec!["120 g".to_string()]),
+            (true, vec!["50 g".to_string()]),
+        ]
+    );
+}
+
+/// An optional recipe reference is left out with everything it would add,
+/// and included it makes all of that optional.
+#[test]
+fn an_optional_reference_makes_everything_it_adds_optional() {
+    let dir = dir_with(&[
+        (
+            "steak.cook",
+            "Grill @steak{1}. Serve with @?./sauces/chimichurri{}.\n",
+        ),
+        (
+            "sauces/chimichurri.cook",
+            "Blend @parsley{20%g} with @oil{50%ml}.\n",
+        ),
+    ]);
+
+    let without = generate(&ctx(&dir), request(&["steak.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&without), vec![("steak", false)]);
+
+    let with = generate(&ctx(&dir), with_optional(&["steak.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(
+        names_and_flags(&with),
+        vec![("steak", false), ("parsley", true), ("oil", true)]
+    );
+}
+
+/// Optional items sit in their aisle category after the required ones, and a
+/// category only optional items land in still keeps the configuration's
+/// order.
+#[test]
+fn optional_items_are_categorised_after_required_ones() {
+    let dir = dir_with(&[("a.cook", "Add @?lettuce, @milk{1%l} and @?milk{100%ml}.\n")]);
+    let ctx = ctx(&dir).with_aisle(ConfigSource::Inline(AISLE.to_string()));
+
+    let list = generate(&ctx, with_optional(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    let categories: Vec<(&str, Vec<(&str, bool)>)> = list
+        .categories
+        .iter()
+        .map(|c| {
+            (
+                c.name.as_str(),
+                c.items
+                    .iter()
+                    .map(|i| (i.name.as_str(), i.optional))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        categories,
+        vec![
+            ("produce", vec![("lettuce", true)]),
+            ("dairy", vec![("milk", false), ("milk", true)]),
+        ]
+    );
+}
+
+/// Pantry stock counts against the required amount. An optional ingredient
+/// nothing requires is subtracted from as usual; one also required keeps its
+/// whole optional amount rather than being subtracted from twice.
+#[test]
+fn the_pantry_is_not_subtracted_twice() {
+    let dir = dir_with(&[(
+        "a.cook",
+        "Add @parmesan{100%g}, @?parmesan{50%g} and @?chives{10%g}.\n",
+    )]);
+    let ctx = ctx(&dir).with_pantry(ConfigSource::Inline(
+        "[fridge]\nparmesan = \"120%g\"\nchives = \"4%g\"\n".to_string(),
+    ));
+
+    let list = generate(&ctx, with_optional(&["a.cook"]))
+        .expect("generates")
+        .value;
+
+    let items: Vec<(&str, bool, Vec<String>)> = list
+        .items
+        .iter()
+        .map(|i| (i.name.as_str(), i.optional, i.quantities.clone()))
+        .collect();
+    assert_eq!(
+        items,
+        vec![
+            ("parmesan", true, vec!["50 g".to_string()]),
+            ("chives", true, vec!["6 g".to_string()]),
+        ]
+    );
+}
+
+/// The amounts a selection line records are the recipe's optional amounts at
+/// the recipe's scale, added up per ingredient, and split where they do not
+/// add up.
+#[test]
+fn optional_selections_are_scaled_and_summed() {
+    let dir = dir_with(&[(
+        "risotto.cook",
+        "Stir @parmesan{100%g} in.\n\n\
+         Top with @?parmesan{50%g}, then @?parmesan{20%g}.\n\n\
+         Add @?chilli{1%pinch} and @?chilli{2%g}, and @?basil.\n",
+    )]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &ScaledRecipe::scaled(RecipeSource::Path("risotto.cook".into()), 2.0),
+        &[
+            " Parmesan".to_string(),
+            "chilli".to_string(),
+            "basil".to_string(),
+        ],
+        false,
+    )
+    .expect("reads the recipe")
+    .value;
+
+    let got: Vec<(&str, Option<&str>)> = selections
+        .iter()
+        .map(|s| (s.name.as_str(), s.quantity.as_deref()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan", Some("140%g")),
+            ("chilli", Some("4%g")),
+            ("chilli", Some("2%pinch")),
+            ("basil", None),
+        ]
+    );
+}
+
+/// Only optional ingredients can be selected, and only by a name the recipe
+/// has.
+#[test]
+fn optional_selections_ignore_required_and_unknown_names() {
+    let dir = dir_with(&[("a.cook", "Add @salt{1%tsp} and @?chives.\n")]);
+
+    let selections = optional_selections(
+        &ctx(&dir),
+        &at_path("a.cook"),
+        &["salt".to_string(), "nutmeg".to_string()],
+        false,
+    )
+    .expect("reads the recipe")
+    .value;
+
+    assert!(selections.is_empty(), "{selections:?}");
+}
+
+/// Stored selections join the optional list as written, not scaled again,
+/// and several lines for one name add up.
+#[test]
+fn stored_selections_are_added_as_optional_amounts() {
+    let mut list = ShoppingIngredients::default();
+    let diagnostics = add_optional_selections(
+        &mut list,
+        &[
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("50%g".to_string()),
+            },
+            OptionalSelection {
+                name: "parmesan".to_string(),
+                quantity: Some("20%g".to_string()),
+            },
+            OptionalSelection {
+                name: "chives".to_string(),
+                quantity: None,
+            },
+        ],
+    );
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(list.required.is_empty());
+    let got: Vec<(String, String)> = list
+        .optional
+        .iter()
+        .map(|(name, q)| (name.clone(), q.to_string()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("parmesan".to_string(), "70 g".to_string()),
+            ("chives".to_string(), String::new()),
+        ]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -700,23 +1761,198 @@ fn a_recipe_that_does_not_parse_is_a_parse_error_naming_its_file() {
     }
 }
 
-/// A reference the referenced recipe cannot satisfy is its own error, so a
-/// caller can tell it apart from the recipe being missing or broken.
+/// The one warning a reference that could not be scaled raises, checked for
+/// what every such warning must say: that it is a warning, and which recipe
+/// wrote the reference.
+fn unexpanded_warning(diagnostics: &[Diagnostic]) -> &Diagnostic {
+    let found: Vec<&Diagnostic> = diagnostics
+        .iter()
+        .filter(|d| d.message.contains("Could not scale recipe reference"))
+        .collect();
+    assert_eq!(found.len(), 1, "{diagnostics:?}");
+    let warning = found[0];
+    assert_eq!(warning.severity, Severity::Warning, "{warning:?}");
+    assert!(
+        warning.message.contains("on the list as written"),
+        "{warning:?}"
+    );
+    assert!(
+        file_name(warning).is_some(),
+        "the warning names the recipe holding the reference: {warning:?}"
+    );
+    warning
+}
+
+/// The file a diagnostic is attributed to, by name.
+fn file_name(diagnostic: &Diagnostic) -> Option<&str> {
+    diagnostic
+        .location
+        .as_ref()
+        .and_then(|l| l.file.as_deref())
+        .and_then(Utf8Path::file_name)
+}
+
+/// A reference its recipe cannot be scaled for is wrong, but only the
+/// reference is: everything else still makes the list, and the reference is on
+/// it as written (<https://github.com/cooklang/cookcli/issues/682>). It used to
+/// fail the whole list.
 #[test]
-fn an_unscalable_reference_is_a_reference_error() {
+fn an_unscalable_reference_is_listed_as_written() {
     let dir = dir_with(&[
         // No `yield` metadata, so scaling to a yield target cannot work.
         ("sauce.cook", "Simmer @tomatoes{4}.\n"),
-        ("main.cook", "Prepare @./sauce{500%ml}.\n"),
+        (
+            "main.cook",
+            "Prepare @./sauce{500%ml} with @pasta{200%g}.\n",
+        ),
+        ("salad.cook", "Toss @lettuce{1}.\n"),
     ]);
 
-    match generate(&ctx(&dir), request(&["main.cook"])) {
-        Err(CoreError::Reference { name, message }) => {
-            assert!(name.contains("sauce"), "{name}");
-            assert!(message.contains("500"), "{message}");
-        }
-        other => panic!("expected CoreError::Reference, got {other:?}"),
-    }
+    let outcome = generate(&ctx(&dir), request(&["main.cook", "salad.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 ml".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    assert_eq!(
+        quantities(&outcome.value, "pasta"),
+        Some(vec!["200 g".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "lettuce"),
+        Some(vec!["1".to_string()])
+    );
+
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert_eq!(file_name(warning), Some("main.cook"));
+    assert!(warning.message.contains("'sauce'"), "{warning:?}");
+    assert!(
+        warning.message.contains("`yield: 500%ml`"),
+        "the warning says what to write, in the unit asked for: {warning:?}"
+    );
+    assert_eq!(
+        warning.kind,
+        Some(DiagnosticKind::UnscalableReference {
+            reference: "sauce".to_string(),
+            amount: "500 ml".to_string(),
+            cause: UnscalableCause::NoYield {
+                unit: "ml".to_string()
+            },
+        }),
+        "the parts a caller words the warning from, in another language say"
+    );
+}
+
+/// What is listed is the amount the reference asks for once the recipe holding
+/// it was scaled — the 300 g a carbonara for two asks of its fresh pasta, not
+/// the 600 g it is written with.
+#[test]
+fn an_unscalable_reference_is_listed_at_its_holders_scale() {
+    let dir = dir_with(&[
+        (
+            "pasta.cook",
+            "---\nservings: 4\n---\n\nKnead @flour{400%g}.\n",
+        ),
+        ("carbonara.cook", "Boil @./pasta{600%g}.\n"),
+    ]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            recipes: vec![ScaledRecipe::scaled(
+                RecipeSource::Path("carbonara.cook".into()),
+                0.5,
+            )],
+            ..request(&[])
+        },
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "pasta"),
+        Some(vec!["300 g".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "flour"), None);
+    unexpanded_warning(&outcome.diagnostics);
+}
+
+/// A reference deeper down is attributed to the recipe that wrote it, not to
+/// the one the list was asked for.
+#[test]
+fn an_unscalable_reference_deeper_down_names_the_recipe_holding_it() {
+    let dir = dir_with(&[
+        ("menu.cook", "Make @./dinner{} and buy @bread{1}.\n"),
+        ("dinner.cook", "Prepare @./sauce{500%ml}.\n"),
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["menu.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "bread"),
+        Some(vec!["1".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["500 ml".to_string()])
+    );
+    assert_eq!(
+        file_name(unexpanded_warning(&outcome.diagnostics)),
+        Some("dinner.cook")
+    );
+}
+
+/// An amount that is not a number cannot be a target at all. Listed as
+/// written too, rather than failing the list.
+#[test]
+fn a_reference_whose_amount_is_not_a_number_is_listed_as_written() {
+    let dir = dir_with(&[
+        (
+            "sauce.cook",
+            "---\nyield: 500%ml\n---\n\nSimmer @tomatoes{4}.\n",
+        ),
+        ("main.cook", "Prepare @./sauce{a splash}.\n"),
+    ]);
+
+    let outcome = generate(&ctx(&dir), request(&["main.cook"])).expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "sauce"),
+        Some(vec!["a splash".to_string()])
+    );
+    assert_eq!(quantities(&outcome.value, "tomatoes"), None);
+    let warning = unexpanded_warning(&outcome.diagnostics);
+    assert!(warning.message.contains("not a number"), "{warning:?}");
+    assert!(
+        matches!(
+            &warning.kind,
+            Some(DiagnosticKind::UnscalableReference {
+                cause: UnscalableCause::NotANumber,
+                ..
+            })
+        ),
+        "{warning:?}"
+    );
+}
+
+/// An optional reference stays optional when it is listed as written.
+#[test]
+fn an_unscalable_optional_reference_is_listed_as_optional() {
+    let dir = dir_with(&[
+        ("sauce.cook", "Simmer @tomatoes{4}.\n"),
+        ("main.cook", "Serve with @?./sauce{500%ml}.\n"),
+    ]);
+
+    let list = generate(&ctx(&dir), with_optional(&["main.cook"]))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&list), vec![("sauce", true)]);
+
+    let list = generate(&ctx(&dir), request(&["main.cook"]))
+        .expect("generates")
+        .value;
+    assert!(list.items.is_empty(), "{:?}", list.items);
 }
 
 // ---------------------------------------------------------------------------
@@ -790,6 +2026,7 @@ fn in_memory_recipe_text_reaches_the_list() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -820,6 +2057,7 @@ fn two_in_memory_recipes_aggregate_into_one_list() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -852,6 +2090,7 @@ fn a_buffer_and_a_file_aggregate_together() {
             ],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -877,6 +2116,7 @@ fn an_in_memory_recipe_expands_references_from_disk() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -907,6 +2147,7 @@ fn a_reference_from_a_buffer_to_an_unsaved_recipe_is_not_found() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     ) {
         Err(CoreError::RecipeNotFound { name }) => assert!(name.contains("sauce"), "{name}"),
@@ -930,6 +2171,7 @@ fn in_memory_text_is_used_and_the_name_is_never_looked_up() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -960,6 +2202,7 @@ fn the_request_scale_applies_to_an_in_memory_recipe() {
             )],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("generates")
@@ -985,6 +2228,7 @@ fn a_broken_buffer_is_a_parse_error_naming_the_supplied_name() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     ) {
         Err(CoreError::Parse {
@@ -1021,6 +2265,7 @@ fn a_warning_from_a_buffer_carries_no_file() {
             })],
             ignore_references: false,
             extra_items: Vec::new(),
+            include_optional: false,
         },
     )
     .expect("parses despite warning");
@@ -1045,6 +2290,7 @@ fn request_with_extras(recipes: &[&str], extras: &[&str]) -> GenerateRequest {
         recipes: recipes.iter().map(|n| at_path(n)).collect(),
         ignore_references: false,
         extra_items: extras.iter().map(|s| s.to_string()).collect(),
+        include_optional: false,
     }
 }
 
@@ -1205,4 +2451,293 @@ fn an_empty_extra_item_is_an_error() {
         CoreError::Parse { name, .. } => assert_eq!(name, "   "),
         other => panic!("expected CoreError::Parse, got {other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Some days of a menu
+// ---------------------------------------------------------------------------
+
+/// Two dated days, the same recipe on both and a free-hand ingredient each,
+/// then an undated section.
+const WEEK: &str = "\
+== Monday (2026-10-05) ==
+
+Dinner: \\
+- @./stew{} \\
+- @almonds{50%g}
+
+== Tuesday (2026-10-06) ==
+
+Dinner: \\
+- @./stew{} \\
+- @almonds{30%g} \\
+- @bread{1}
+
+== Leftovers ==
+
+- @cheese{100%g}
+";
+
+const STEW: &str = "Simmer @beans{200%g} with @onion{1}.\n";
+
+fn day(text: &str) -> chrono::NaiveDate {
+    chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+}
+
+fn on_days(name: &str, from: Option<&str>, to: Option<&str>) -> ScaledRecipe {
+    at_path(name).on_days(DayRange {
+        from: from.map(day),
+        to: to.map(day),
+    })
+}
+
+fn request_for(recipes: Vec<ScaledRecipe>) -> GenerateRequest {
+    GenerateRequest {
+        recipes,
+        ignore_references: false,
+        extra_items: Vec::new(),
+        include_optional: false,
+    }
+}
+
+#[test]
+fn a_section_is_dated_by_the_first_date_in_its_name() {
+    let date = |name| section_date(name).map(|(date, _)| date);
+    assert_eq!(date("Wednesday (2026-10-07)"), Some(day("2026-10-07")));
+    assert_eq!(date("2026-10-07 Dinner"), Some(day("2026-10-07")));
+    assert_eq!(
+        date("Day 1 (2026-03-04) (2026-03-05)"),
+        Some(day("2026-03-04"))
+    );
+    assert_eq!(date("Lunch (12:30) (2026-03-04)"), Some(day("2026-03-04")));
+    assert_eq!(date("Jour (é) (2026-03-04)"), Some(day("2026-03-04")));
+    assert_eq!(
+        section_date("2026-10-07 Dinner"),
+        Some((day("2026-10-07"), " Dinner"))
+    );
+    for name in [
+        "Day 1",
+        "Day (2026-02-30)",
+        "12026-10-07",
+        "2026-10-071",
+        "Week 2026-10",
+    ] {
+        assert_eq!(date(name), None, "{name}");
+    }
+}
+
+#[test]
+fn only_the_chosen_days_of_a_menu_go_on_the_list() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![on_days(
+            "week.menu",
+            Some("2026-10-06"),
+            Some("2026-10-06"),
+        )]),
+    )
+    .expect("generates")
+    .value;
+
+    // Tuesday alone: one stew, its own almonds and bread, nothing undated.
+    assert_eq!(quantities(&list, "beans"), Some(vec!["200 g".to_string()]));
+    assert_eq!(quantities(&list, "almonds"), Some(vec!["30 g".to_string()]));
+    assert_eq!(quantities(&list, "bread"), Some(vec!["1".to_string()]));
+    assert_eq!(quantities(&list, "cheese"), None);
+}
+
+/// A plan's days may also be headed by their date, the meal named after it,
+/// as the planner reads them.
+#[test]
+fn a_day_may_be_headed_by_its_date() {
+    const PLAN: &str = "\
+= 2026-10-05 Dinner
+
+- @./stew{}
+
+= 2026-10-06 Dinner
+
+- @bread{1}
+";
+    let dir = dir_with(&[("plan.menu", PLAN), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("plan.menu", Some("2026-10-06"), None)]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "bread"), Some(vec!["1".to_string()]));
+    assert_eq!(quantities(&list, "beans"), None);
+}
+
+/// Narrowing to some days still leaves optional ingredients out unless they
+/// are asked for, and then marks them as optional.
+#[test]
+fn the_chosen_days_keep_optional_ingredients_apart() {
+    const PLAN: &str = "\
+== Monday (2026-10-05) ==
+
+- @?chives{5%g}
+
+== Tuesday (2026-10-06) ==
+
+- @bread{1} \\
+- @?chives{10%g}
+";
+    let dir = dir_with(&[("plan.menu", PLAN)]);
+    let tuesday = || vec![on_days("plan.menu", Some("2026-10-06"), None)];
+
+    let without = generate(&ctx(&dir), request_for(tuesday()))
+        .expect("generates")
+        .value;
+    assert_eq!(names_and_flags(&without), vec![("bread", false)]);
+
+    let with = generate(
+        &ctx(&dir),
+        GenerateRequest {
+            include_optional: true,
+            ..request_for(tuesday())
+        },
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        names_and_flags(&with),
+        vec![("bread", false), ("chives", true)]
+    );
+    assert_eq!(quantities(&with, "chives"), Some(vec!["10 g".to_string()]));
+}
+
+#[test]
+fn either_end_of_the_range_may_be_open() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let up_to_monday = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", None, Some("2026-10-05"))]),
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        quantities(&up_to_monday, "almonds"),
+        Some(vec!["50 g".to_string()])
+    );
+    assert_eq!(quantities(&up_to_monday, "bread"), None);
+
+    let from_monday = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", Some("2026-10-05"), None)]),
+    )
+    .expect("generates")
+    .value;
+    assert_eq!(
+        quantities(&from_monday, "beans"),
+        Some(vec!["400 g".to_string()])
+    );
+    assert_eq!(
+        quantities(&from_monday, "almonds"),
+        Some(vec!["80 g".to_string()])
+    );
+    // Undated sections are not a day, so a range leaves them out.
+    assert_eq!(quantities(&from_monday, "cheese"), None);
+}
+
+#[test]
+fn the_chosen_days_scale_with_the_menu() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_for(vec![ScaledRecipe::scaled(
+            RecipeSource::Path("week.menu".into()),
+            2.0,
+        )
+        .on_days(DayRange {
+            from: Some(day("2026-10-06")),
+            to: None,
+        })]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(quantities(&list, "beans"), Some(vec!["400 g".to_string()]));
+    assert_eq!(quantities(&list, "almonds"), Some(vec!["60 g".to_string()]));
+}
+
+#[test]
+fn a_recipe_without_days_is_taken_whole_and_quietly() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("stew.cook", Some("2026-10-06"), None)]),
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()])
+    );
+    assert!(
+        !outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("menu")),
+        "{:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
+fn a_menu_without_dated_sections_is_taken_whole_with_a_warning() {
+    let dir = dir_with(&[
+        ("plain.menu", "== Day 1 ==\n\n- @./stew{} \\\n- @bread{2}\n"),
+        ("stew.cook", STEW),
+    ]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("plain.menu", Some("2026-10-06"), None)]),
+    )
+    .expect("generates");
+
+    assert_eq!(
+        quantities(&outcome.value, "bread"),
+        Some(vec!["2".to_string()])
+    );
+    assert_eq!(
+        quantities(&outcome.value, "beans"),
+        Some(vec!["200 g".to_string()])
+    );
+    let warning = outcome
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("No section of this menu is dated"))
+        .unwrap_or_else(|| panic!("expected a warning, got {:?}", outcome.diagnostics));
+    assert_eq!(warning.severity, Severity::Warning);
+}
+
+#[test]
+fn a_menu_with_no_day_in_range_adds_nothing_and_says_so() {
+    let dir = dir_with(&[("week.menu", WEEK), ("stew.cook", STEW)]);
+
+    let outcome = generate(
+        &ctx(&dir),
+        request_for(vec![on_days("week.menu", Some("2027-01-01"), None)]),
+    )
+    .expect("generates");
+
+    assert!(outcome.value.is_empty(), "{:?}", outcome.value.items);
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("(from 2027-01-01)")),
+        "{:?}",
+        outcome.diagnostics
+    );
 }

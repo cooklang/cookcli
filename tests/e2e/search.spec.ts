@@ -65,4 +65,75 @@ test.describe('Search Functionality', () => {
       await searchInput.clear();
     }
   });
+
+  test('should render inline result names as text, not markup', async ({ page }) => {
+    // Fabricate a result whose name is markup; a raw innerHTML interpolation
+    // would run the onerror handler and set the marker.
+    await page.route('**/api/search?*', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ path: 'x', name: '<img src=x onerror=window.__pwned=1>' }]),
+      })
+    );
+
+    const searchInput = page.getByPlaceholder('Search recipes...');
+    await searchInput.fill('pizza');
+
+    const result = page.locator('#search-results a.search-result');
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText('<img');
+    await expect(result.locator('img')).toHaveCount(0);
+
+    const pwned = await page.evaluate(() => (window as any).__pwned);
+    expect(pwned).toBeUndefined();
+  });
+
+  test('Enter opens every result as cards, pictures included (#828)', async ({ page }) => {
+    const searchInput = page.getByPlaceholder('Search recipes...');
+    await searchInput.fill('pancakes');
+    await expect(page.locator('#search-results a.search-result').first()).toBeVisible();
+    await searchInput.press('Enter');
+
+    await expect(page).toHaveURL(/\/search\?q=pancakes$/);
+    await expect(page.locator('h1')).toHaveText('Search results');
+    await expect(searchInput).toHaveValue('pancakes');
+
+    const cards = page.locator('#search-page-results .recipe-card');
+    await expect(cards.first()).toBeVisible();
+    const card = cards.filter({ hasText: 'Easy Pancakes' });
+    await expect(card.locator('img')).toHaveAttribute('src', /\/api\/static\/Breakfast\/Easy%20Pancakes\.jpg$/);
+    await expect(page.locator('#search-summary')).toContainText(`${await cards.count()} recipe`);
+
+    await card.click();
+    await expect(page).toHaveURL(/\/recipe\/Breakfast\/Easy%20Pancakes\.cook$/);
+  });
+
+  test('the dropdown links to the results page', async ({ page }) => {
+    await page.getByPlaceholder('Search recipes...').fill('pancakes');
+    const seeAll = page.locator('#search-results a.search-see-all');
+    await expect(seeAll).toHaveText('See all results');
+    await seeAll.click();
+    await expect(page).toHaveURL(/\/search\?q=pancakes$/);
+    await expect(page.locator('#search-page-results .recipe-card').first()).toBeVisible();
+  });
+
+  test('Enter on a highlighted result still opens that recipe', async ({ page }) => {
+    const searchInput = page.getByPlaceholder('Search recipes...');
+    await searchInput.fill('pancakes');
+    const first = page.locator('#search-results a.search-result').first();
+    await expect(first).toBeVisible();
+    const href = await first.getAttribute('href');
+
+    await searchInput.press('ArrowDown');
+    await expect(first).toHaveClass(/search-selected/);
+    await searchInput.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`${href!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '%20')}$`));
+  });
+
+  test('a query with no hits says so on the page', async ({ page }) => {
+    await page.goto('/search?q=zzzznothing');
+    await expect(page.locator('#search-page-results .recipe-card')).toHaveCount(0);
+    await expect(page.locator('#search-page-results')).toContainText('No recipes found');
+  });
 });

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use unic_langid::LanguageIdentifier;
 
 use crate::web::language::FeatureFlags;
+use crate::web::viewer::Viewer;
 
 /// Helper struct for translations in templates
 #[derive(Clone, Debug, Serialize)]
@@ -24,11 +25,54 @@ impl Tr {
     /// Translate a pluralized message. Passes `$count` as a number so Fluent
     /// plural selectors (`[one]` / `[other]`, etc.) resolve correctly.
     pub fn tn(&self, key: &str, count: &usize) -> String {
-        let args = std::collections::HashMap::from([("count", fluent::FluentValue::from(count))]);
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("count"),
+            fluent::FluentValue::from(count),
+        )]);
         crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
     }
 
-    #[cfg(feature = "server")]
+    /// Translate a message that shows a scale factor, passed as `$factor` in
+    /// the short form the menu badges use: `1.5`, `0.333`.
+    pub fn tf(&self, key: &str, factor: &f64) -> String {
+        let factor = filters::scale_factor(factor).unwrap_or_else(|_| factor.to_string());
+        let args = std::collections::HashMap::from([(
+            std::borrow::Cow::Borrowed("factor"),
+            fluent::FluentValue::from(factor),
+        )]);
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
+    /// Translate a message for a page script to finish: each variable named
+    /// in `names` (space-separated) comes out as `{name}`, for the script to
+    /// replace with a value it only learns later.
+    pub fn tp(&self, key: &str, names: &str) -> String {
+        let args = names
+            .split_whitespace()
+            .map(|name| {
+                (
+                    std::borrow::Cow::Owned(name.to_string()),
+                    fluent::FluentValue::from(format!("{{{name}}}")),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
+    /// Translate a message whose variables are all text, named in `args`.
+    pub fn ta(&self, key: &str, args: &[(&str, &str)]) -> String {
+        let args = args
+            .iter()
+            .map(|(name, value)| {
+                (
+                    std::borrow::Cow::Owned(name.to_string()),
+                    fluent::FluentValue::from(value.to_string()),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        crate::web::i18n::LOCALES.lookup_with_args(&self.lang, key, &args)
+    }
+
     pub fn lang_string(&self) -> String {
         self.lang.to_string()
     }
@@ -44,6 +88,98 @@ mod tr_tests {
         let tr = Tr::new(langid!("en-US"));
         assert_eq!(tr.tn("recipes-count", &1), "1 recipe");
         assert_eq!(tr.tn("recipes-count", &3), "3 recipes");
+    }
+
+    #[test]
+    fn placeholders_are_left_for_the_script() {
+        let tr = Tr::new(langid!("fr-FR"));
+        assert_eq!(
+            tr.tp("picture-target-step", "step text"),
+            "Étape {step} : {text}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod scale_factor_tests {
+    use super::filters::scale_factor;
+
+    #[test]
+    fn drops_trailing_zeros() {
+        assert_eq!(scale_factor(&2.0).unwrap(), "2");
+        assert_eq!(scale_factor(&0.5).unwrap(), "0.5");
+        assert_eq!(scale_factor(&1.25).unwrap(), "1.25");
+    }
+
+    #[test]
+    fn rounds_to_three_places() {
+        assert_eq!(scale_factor(&(1.0 / 3.0)).unwrap(), "0.333");
+        assert_eq!(scale_factor(&(2.0 / 3.0)).unwrap(), "0.667");
+        assert_eq!(scale_factor(&(5.0 / 3.0)).unwrap(), "1.667");
+        // Rounding up to a whole number leaves no decimal point behind.
+        assert_eq!(scale_factor(&4.9999999).unwrap(), "5");
+    }
+}
+
+#[cfg(test)]
+mod is_web_url_tests {
+    use super::filters::is_web_url;
+
+    #[test]
+    fn accepts_http_and_https() {
+        assert!(is_web_url("https://example.com/recipe").unwrap());
+        assert!(is_web_url("http://example.com").unwrap());
+        assert!(is_web_url(" https://example.com ").unwrap());
+    }
+
+    #[test]
+    fn rejects_other_schemes_and_plain_text() {
+        assert!(!is_web_url("javascript:alert(1)").unwrap());
+        assert!(!is_web_url("mailto:me@example.com").unwrap());
+        assert!(!is_web_url("Grandma's cookbook").unwrap());
+        assert!(!is_web_url("example.com").unwrap());
+        assert!(!is_web_url("see https://example.com").unwrap());
+    }
+}
+
+#[cfg(test)]
+mod reference_link_tests {
+    use super::{reference_label, reference_path};
+
+    #[test]
+    fn a_recipe_links_to_its_page() {
+        assert_eq!(
+            reference_path("./Salads/Caprese", false, false),
+            "recipe/Salads/Caprese"
+        );
+        assert_eq!(
+            reference_path("./Salads/Caprese", false, true),
+            "recipe/Salads/Caprese.html"
+        );
+    }
+
+    #[test]
+    fn a_menu_links_to_the_menu_however_it_was_written() {
+        for name in ["./Brunches/Sunday.menu", "./Brunches/Sunday"] {
+            assert_eq!(
+                reference_path(name, true, false),
+                "recipe/Brunches/Sunday.menu"
+            );
+            // `cook build web` writes menus under `menu/`, not `recipe/`.
+            assert_eq!(
+                reference_path(name, true, true),
+                "menu/Brunches/Sunday.html"
+            );
+        }
+    }
+
+    #[test]
+    fn labels_drop_the_dot_slash_and_the_extension() {
+        assert_eq!(
+            reference_label("./Brunches/Sunday.menu"),
+            "Brunches › Sunday"
+        );
+        assert_eq!(reference_label("./Risotto"), "Risotto");
     }
 }
 
@@ -94,6 +230,30 @@ mod filters {
             .unwrap_or_else(|| url.to_string()))
     }
 
+    /// True when a metadata value is an absolute http(s) URL, so templates
+    /// can render it as a link. Other schemes (`javascript:`, `data:`, …)
+    /// stay plain text.
+    pub fn is_web_url(value: &str) -> Result<bool> {
+        let value = value.trim();
+        if value.contains(char::is_whitespace) {
+            return Ok(false);
+        }
+        Ok(Url::parse(value)
+            .map(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some())
+            .unwrap_or(false))
+    }
+
+    /// A scale factor as short decimal text, for a menu's badges and recipe
+    /// links alike: rounded to 3 places, without trailing zeros. `1/3` reads
+    /// `0.333`, `2.0` reads `2`.
+    pub fn scale_factor(value: &f64) -> Result<String> {
+        let text = format!("{value:.3}");
+        if !text.contains('.') {
+            return Ok(text);
+        }
+        Ok(text.trim_end_matches('0').trim_end_matches('.').to_string())
+    }
+
     /// Render Markdown-style `inline code` spans as `<code>` elements.
     ///
     /// The API docs describe payload keys and content types in prose, and
@@ -136,6 +296,8 @@ pub struct ErrorTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 pub struct TodaysMenu {
@@ -153,11 +315,53 @@ pub struct RecipesTemplate {
     pub items: Vec<RecipeItem>,
     pub todays_menu: Option<TodaysMenu>,
     pub new_recipe_url: String,
+    pub new_menu_url: String,
+    pub new_plan_url: String,
+    /// `/random` link for the current folder; `None` hides the button.
+    pub random_recipe_url: Option<String>,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+/// The `/search` page: every hit of the search box's query, best first, as
+/// the recipe index's cards.
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "search.html")]
+pub struct SearchTemplate {
+    pub active: String,
+    pub query: String,
+    pub count: usize,
+    pub items: Vec<RecipeItem>,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+/// The servings stepper of a recipe that declares a number of servings.
+pub struct ServingsScale {
+    /// The recipe's own `servings`.
+    pub base: u32,
+    /// The servings the page is scaled to.
+    pub chosen: f64,
+}
+
+impl ServingsScale {
+    /// The servings the recipe was written for, when the page is scaled away
+    /// from them: times, pan sizes and seasoning do not always scale with the
+    /// quantities, so the page says what the author wrote it for.
+    pub fn original_servings(&self) -> Option<usize> {
+        (self.chosen != f64::from(self.base)).then_some(self.base as usize)
+    }
 }
 
 #[derive(Template)]
@@ -167,7 +371,11 @@ pub struct RecipeTemplate {
     pub recipe: RecipeData,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the quantities were scaled by.
     pub scale: f64,
+    /// Set when the recipe declares servings: the stepper then counts
+    /// servings instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub tags: Vec<String>,
     pub ingredients: Vec<IngredientData>,
     pub cookware: Vec<CookwareData>,
@@ -178,6 +386,8 @@ pub struct RecipeTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 impl RecipeTemplate {
@@ -197,6 +407,7 @@ impl RecipeTemplate {
                             "quantity": ing.quantity,
                             "unit": ing.unit,
                             "note": ing.note,
+                            "optional": ing.optional,
                         })
                     })
                     .collect();
@@ -245,6 +456,7 @@ impl RecipeTemplate {
             "scale": self.scale,
             "image": self.image_path,
             "sections": sections,
+            "optionalLabel": self.tr.t("recipe-optional"),
         });
 
         // Escape </script> sequences to prevent premature script tag closing
@@ -370,8 +582,15 @@ fn step_text(step: &StepData) -> String {
         match item {
             StepItem::Text(t) => out.push_str(t),
             StepItem::Ingredient { name, .. } => out.push_str(name),
-            StepItem::Cookware(c) => out.push_str(c),
-            StepItem::Timer(t) => out.push_str(t),
+            StepItem::Cookware { name, note } => {
+                out.push_str(name);
+                if let Some(n) = note {
+                    out.push_str(" (");
+                    out.push_str(n);
+                    out.push(')');
+                }
+            }
+            StepItem::Timer { display, .. } => out.push_str(display),
             StepItem::Quantity(q) => out.push_str(q),
             StepItem::LineBreak => out.push(' '),
         }
@@ -471,15 +690,24 @@ pub struct MenuTemplate {
     pub name: String,
     pub recipe_path: String,
     pub breadcrumbs: Vec<String>,
+    /// The factor the menu was scaled by.
     pub scale: f64,
+    /// Set when the menu declares servings: the stepper then counts servings
+    /// instead of showing `scale`.
+    pub servings: Option<ServingsScale>,
     pub metadata: Option<RecipeMetadata>,
     pub sections: Vec<MenuSection>,
+    /// Set when the menu is a meal plan: the page shows `sections` as a
+    /// calendar instead of one card each.
+    pub plan: Option<crate::web::plan::PlanView>,
     pub image_path: Option<String>,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -492,6 +720,8 @@ pub struct ShoppingListTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -512,6 +742,25 @@ pub struct PreferencesTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "aisles.html")]
+pub struct AislesTemplate {
+    pub active: String,
+    /// What `GET /api/aisles` returns; the page draws itself from it and
+    /// from each change's answer.
+    pub aisles: serde_json::Value,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -521,11 +770,18 @@ pub struct PantryTemplate {
     pub active: String,
     pub configured: bool,
     pub sections: Vec<PantrySection>,
+    /// How many items each filter above the list would show.
+    pub counts: PantryCounts,
+    /// Why the pantry file could not be read, when it could not; the page
+    /// shows it rather than an empty pantry someone might start filling.
+    pub load_error: Option<String>,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -534,14 +790,44 @@ pub struct PantryTemplate {
 pub struct EditTemplate {
     pub active: String,
     pub recipe_name: String,
+    /// A `.menu` file: the toolbar gets the Day, Meal and Add recipe helpers.
+    pub is_menu: bool,
     pub recipe_path: String,
     pub content: String,
-    pub base_path: String,
+    /// Largest title picture upload the server takes, checked in the browser
+    /// before sending so a too-big file fails at once rather than after it.
+    pub max_image_bytes: usize,
+    /// Longest edge the server stores a title picture at; the browser scales
+    /// a photo down to it before sending.
+    pub max_image_edge: u32,
     pub tr: Tr,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+/// The frame fields of the new-plan form, as the form shows them.
+#[cfg(feature = "server")]
+pub struct NewPlanForm {
+    /// `YYYY-MM-DD`.
+    pub start: String,
+    pub days: String,
+    pub min_days: u32,
+    pub max_days: u32,
+    pub servings: String,
+    pub meals: Vec<NewPlanMeal>,
+}
+
+#[cfg(feature = "server")]
+pub struct NewPlanMeal {
+    /// The form field, e.g. `breakfast`.
+    pub field: &'static str,
+    /// The meal's name in the page language, as the plan will write it.
+    pub label: String,
+    pub checked: bool,
 }
 
 #[cfg(feature = "server")]
@@ -552,10 +838,35 @@ pub struct NewTemplate {
     pub tr: Tr,
     pub error: Option<String>,
     pub filename: Option<String>,
+    /// The form creates a `.menu` file rather than a `.cook` recipe.
+    pub is_menu: bool,
+    /// The `.menu` is a meal plan: the form asks for its frame too.
+    pub is_plan: bool,
+    pub plan: NewPlanForm,
     pub prefix: String,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
+}
+
+#[cfg(feature = "server")]
+#[derive(Template)]
+#[template(path = "login.html")]
+pub struct LoginTemplate {
+    pub active: String,
+    /// Where to go after signing in, relative to the URL prefix.
+    pub next: String,
+    /// Echoed back after a failed attempt so it need not be retyped.
+    pub username: String,
+    pub failed: bool,
+    pub tr: Tr,
+    pub prefix: String,
+    pub static_mode: bool,
+    pub repo_url: Option<String>,
+    pub features: FeatureFlags,
+    pub viewer: Viewer,
 }
 
 #[cfg(feature = "server")]
@@ -573,6 +884,27 @@ pub struct PantryItem {
     pub bought: Option<String>,
     pub expire: Option<String>,
     pub low: Option<String>,
+    /// `quantity` as the page shows it, `250 g` for `250%g`; empty without one.
+    pub quantity_text: String,
+    /// `low` shown the same way.
+    pub low_text: String,
+    /// `"out"`, `"low"` or `"ok"`, judged as `cook pantry depleted` judges it.
+    pub stock: &'static str,
+    /// `"expired"`, `"today"`, `"soon"` (within the week `cook pantry
+    /// expiring` looks ahead), `"later"`, or `""` with no readable date.
+    pub expiry: &'static str,
+    /// Days until it expires, or since it did; 0 without a date.
+    pub expiry_days: usize,
+}
+
+/// The number of items behind each filter on the pantry page.
+#[cfg(feature = "server")]
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PantryCounts {
+    pub all: usize,
+    pub low: usize,
+    pub out: usize,
+    pub expiring: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -592,6 +924,9 @@ pub struct RecipeItem {
     /// Calorie entry from a `nutrition:` metadata list (e.g. `"258 kcal"`),
     /// shown as a compact badge next to the tags.
     pub nutrition_kcal: Option<String>,
+    /// The donut and macros of a recipe that gives all three, shown instead
+    /// of the kcal badge.
+    pub nutrition_ring: Option<ListNutrition>,
     pub image_path: Option<String>,
     pub is_menu: bool,
     pub modified_at: Option<u64>,
@@ -619,9 +954,132 @@ pub struct RecipeMetadata {
     pub source: Option<String>,
     pub source_url: Option<String>,
     pub custom: Vec<(String, String)>,
-    /// Non-standard metadata keys whose value is a YAML list (e.g. `nutrition:`),
-    /// one entry per family, rendered as one line each below the tags.
-    pub custom_lists: Vec<MetaListFamily>,
+    /// One panel per non-standard metadata family (`nutrition:`, `file:`, ...),
+    /// each built by that family's renderer and drawn by its own template
+    /// under `templates/panels/`.
+    pub panels: Vec<FamilyPanel>,
+}
+
+/// The panel of one metadata family. Each variant is drawn by its own
+/// template (`templates/panels/<variant>.html`); `panels/families.html`
+/// picks the template.
+#[derive(Debug, Clone, Serialize)]
+pub enum FamilyPanel {
+    /// `nutrition:` as a mapping of numbers: a table of values.
+    /// Boxed: the table is far larger than the other variants.
+    Nutrition(Box<NutritionPanel>),
+    /// `file:` / `meta:`: dated and attributed entries with icons.
+    File(MetaListFamily),
+    /// Any other list or mapping: one line of chips.
+    Generic(MetaListFamily),
+}
+
+/// The nutrition panel of a recipe page, with every label already translated:
+/// a donut and the macros and a few small cards for the servings chosen, and
+/// the full table behind a button.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionPanel {
+    pub title: String,
+    pub per_serving_label: String,
+    pub per_100g_label: String,
+    pub whole_recipe_label: String,
+    /// "of which", in front of the label of a sub-nutrient row.
+    pub of_which: String,
+    /// "for", as in "for 4 servings".
+    pub for_label: String,
+    /// The label of the button that opens the full table.
+    pub full_table_label: String,
+    /// The servings the amounts are for.
+    pub servings: String,
+    /// Whether the recipe gave a `weight:`, which the per-100 g column needs.
+    pub has_100g: bool,
+    /// True when the recipe has no whole number of servings: everything is
+    /// per serving, with no per-100 g and no whole-recipe column.
+    pub per_serving_only: bool,
+    /// The energy for the servings chosen, in kcal.
+    pub kcal_total: Option<String>,
+    /// The energy of one serving, in kcal.
+    pub kcal_per_serving: Option<String>,
+    /// The donut, when carbohydrates, fat and proteins are all given.
+    pub ring: Option<Vec<RingArc>>,
+    /// Fat, carbohydrates and proteins for the servings chosen.
+    pub macros: Vec<MacroLine>,
+    /// Saturated fat, sugars, fibre and salt as small cards.
+    pub cards: Vec<NutrientCard>,
+    /// "Health rating, per 100 g:", in front of the legend.
+    pub legend_label: String,
+    /// What each colour of the cards means; empty without a `weight:`, when
+    /// every card is neutral.
+    pub legend: Vec<LegendItem>,
+    /// Every nutrient, for the full table.
+    pub rows: Vec<NutritionRow>,
+}
+
+/// One arc of the donut. `kind` is `carb`, `fat` or `prot`, and picks the
+/// colour in `components.css`; the dash values are on a circle of
+/// circumference 100.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RingArc {
+    pub kind: String,
+    pub dasharray: String,
+    pub dashoffset: String,
+}
+
+/// One macro beside the donut: its amount and its share of the energy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacroLine {
+    pub kind: String,
+    pub label: String,
+    pub amount: String,
+    pub pct: Option<u32>,
+}
+
+/// A small card for one nutrient, coloured by `level` (`low`, `mid`, `high`,
+/// `good` or `neutral`); `word` says the level in words.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutrientCard {
+    pub icon: Option<String>,
+    pub label: String,
+    pub value: String,
+    pub level: String,
+    pub word: Option<String>,
+    /// Which macro it belongs to (`fat`, `carb`, `prot`), `other` for none, so
+    /// a click on a slice of the donut can highlight it.
+    pub group: String,
+}
+
+/// One colour of the cards and its meaning, translated.
+#[derive(Debug, Clone, Serialize)]
+pub struct LegendItem {
+    /// The colour: `low` (green), `mid` (amber), `high` (red) or `neutral` (blue).
+    pub level: String,
+    pub word: String,
+}
+
+/// What a recipe card shows of the nutrition: the donut and the macros, per
+/// serving.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListNutrition {
+    pub kcal: String,
+    pub arcs: Vec<RingArc>,
+    pub macros: Vec<MacroLine>,
+    /// "per serving", translated.
+    pub per_serving: String,
+}
+
+/// One nutrient of a [`NutritionPanel`], values already formatted with unit.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionRow {
+    pub icon: Option<String>,
+    pub label: String,
+    /// A nutrient that is "of which" another (saturated fat, sugars).
+    pub sub: bool,
+    /// `fat`, `carb` or `prot` for a macro and its sub-nutrients, `all` for
+    /// the energy, `other` for the rest.
+    pub group: String,
+    pub per_serving: String,
+    pub per_100g: Option<String>,
+    pub total: String,
 }
 
 /// One family line of list-valued custom metadata (e.g. `nutrition`).
@@ -637,6 +1095,9 @@ pub struct MetaListFamily {
 /// One entry within a [`MetaListFamily`] (e.g. `"258 kcal"`).
 #[derive(Debug, Clone, Serialize)]
 pub struct MetaListItem {
+    /// The address, when the value is a web link: `text` then shows only its
+    /// host, so a long URL cannot push the page wider than the screen.
+    pub url: Option<String>,
     /// Inline SVG markup (Tabler Icons, MIT), or `None` for a plain bullet.
     pub icon: Option<String>,
     pub text: String,
@@ -650,15 +1111,30 @@ pub struct IngredientData {
     /// Preparation note from Cooklang shorthand notation (e.g., "@tomatoes{2}(diced)" -> "diced")
     pub note: Option<String>,
     pub reference_path: Option<String>,
+    /// What the link to `reference_path` adds so the recipe opens at the size
+    /// this one asks for — see [`reference_query`]. Empty otherwise.
+    pub reference_query: String,
+    /// Marked optional in the recipe (`@?chives`). Required and optional
+    /// amounts of one ingredient are listed as two entries.
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CookwareData {
     pub name: String,
+    /// Preparation or descriptive note from Cooklang shorthand notation,
+    /// e.g. `#pot{}(big)` -> "big".
+    pub note: Option<String>,
+    /// Marked optional in the recipe (`#?splatter guard{}`).
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RecipeSection {
+    /// One-based position among the parsed recipe's sections, counting the
+    /// empty ones this page leaves out: the `S` of a `Recipe.S.N.jpg` step
+    /// picture.
+    pub number: usize,
     pub name: Option<String>,
     pub items: Vec<RecipeSectionItem>,
     pub step_offset: usize,
@@ -697,11 +1173,27 @@ pub enum StepItem {
     Ingredient {
         name: String,
         reference_path: Option<String>,
+        /// As on [`IngredientData::reference_query`].
+        reference_query: String,
     },
-    Cookware(String),
-    Timer(String),
+    Cookware {
+        name: String,
+        note: Option<String>,
+    },
+    Timer {
+        display: String,
+        seconds: Option<i64>,
+    },
     Quantity(String),
     LineBreak,
+}
+
+/// The text of a menu line that is only a meal heading (`Breakfast:`).
+pub fn meal_header(line: &[MenuSectionItem]) -> Option<&str> {
+    match line {
+        [MenuSectionItem::Text(text)] if text.trim().ends_with(':') => Some(text),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -710,12 +1202,58 @@ pub struct MenuSection {
     pub lines: Vec<Vec<MenuSectionItem>>,
 }
 
+/// Where a menu's reference to `name` leads, below the site prefix: the
+/// recipe's page, or for a `menu` the other menu's page — `menu/<path>.html`
+/// on a static site, and `recipe/<path>.menu` on the server, whose extension
+/// keeps a recipe of the same name from answering instead.
+pub fn reference_path(name: &str, menu: bool, static_mode: bool) -> String {
+    let path = name.strip_prefix("./").unwrap_or(name);
+    match (menu, static_mode) {
+        (true, true) => format!("menu/{}.html", path.trim_end_matches(".menu")),
+        (true, false) => format!("recipe/{}.menu", path.trim_end_matches(".menu")),
+        (false, true) => format!("recipe/{path}.html"),
+        (false, false) => format!("recipe/{path}"),
+    }
+}
+
+/// The query that opens a referenced recipe `factor` times its own size, as
+/// a menu's links do: by servings when it declares a whole number of them,
+/// since its page counts servings, otherwise by the multiplier. Empty at ×1,
+/// or when the factor is unknown.
+pub fn reference_query(factor: Option<f64>, servings: Option<u32>) -> String {
+    let Some(factor) = factor.filter(|f| f.is_finite() && *f > 0.0) else {
+        return String::new();
+    };
+    // Compared as written, so that a factor a hair off 1 links plainly too.
+    let text = |value: f64| filters::scale_factor(&value).unwrap_or_default();
+    if text(factor) == "1" {
+        return String::new();
+    }
+    match servings.filter(|&n| n > 0) {
+        Some(n) => format!("?servings={}", text(f64::from(n) * factor)),
+        None => format!("?scale={}", text(factor)),
+    }
+}
+
+/// A menu's reference as the page names it: `Brunches › Sunday`, without the
+/// `./` or a `.menu` it was written with.
+pub fn reference_label(name: &str) -> String {
+    let path = name.strip_prefix("./").unwrap_or(name);
+    path.trim_end_matches(".menu").replace('/', " › ")
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub enum MenuSectionItem {
     Text(String),
     RecipeReference {
         name: String,
         scale: Option<f64>,
+        /// `scale` as servings of the referenced recipe, when it declares
+        /// them: its link then carries `?servings=` instead of `?scale=`.
+        servings: Option<f64>,
+        /// The reference is to another menu (`@./Brunches/Sunday.menu{}`):
+        /// it links to that menu's page and is labelled as a menu.
+        menu: bool,
     },
     Ingredient {
         name: String,
@@ -746,7 +1284,7 @@ pub struct ParamDoc {
 #[cfg(feature = "server")]
 pub struct EndpointDoc {
     pub method: String,
-    /// Path in axum route syntax, e.g. "/api/pantry/:section/:name".
+    /// Path in axum route syntax, e.g. "/api/pantry/{section}/{name}".
     pub path: String,
     pub summary: String,
     /// Longer prose. Empty string means "no extra detail".
@@ -766,11 +1304,11 @@ impl EndpointDoc {
     /// template so the template needs no conditional chain per endpoint.
     pub fn method_classes(&self) -> &'static str {
         match self.method.as_str() {
-            "GET" => "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-            "POST" => "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-            "PUT" => "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-            "DELETE" => "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-            _ => "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+            "GET" => "bg-sunk text-text",
+            "POST" => "bg-ok-soft text-ok",
+            "PUT" => "bg-accent-soft text-accent-text",
+            "DELETE" => "bg-danger-soft text-danger",
+            _ => "bg-sunk text-muted",
         }
     }
 }
@@ -825,4 +1363,64 @@ pub struct ApiDocsTemplate {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    /// Who the page is for; decides whether editing controls are shown.
+    pub viewer: Viewer,
 }
+
+/// Askama's axum integration lived in the `askama_axum` crate, which was
+/// deprecated and never updated for axum 0.8. It provided a blanket
+/// `IntoResponse` for every `Template`; a blanket impl is not available to us
+/// (both traits are foreign), so each response template opts in explicitly.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for $t {
+            fn into_response(self) -> axum::response::Response {
+                match askama::Template::render(&self) {
+                    Ok(body) => axum::response::Html(body).into_response(),
+                    Err(err) => {
+                        tracing::error!("failed to render template: {err}");
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            "Template rendering failed",
+                        )
+                            .into_response()
+                    }
+                }
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response!(
+    ErrorTemplate,
+    RecipesTemplate,
+    SearchTemplate,
+    RecipeTemplate,
+    MenuTemplate,
+    ShoppingListTemplate,
+    PreferencesTemplate,
+    PantryTemplate,
+    AislesTemplate,
+    EditTemplate,
+    NewTemplate,
+    ApiDocsTemplate,
+    LoginTemplate,
+);
+
+/// The two large templates are handed around boxed, and `Box<T>` is not
+/// itself a `Template`.
+#[cfg(feature = "server")]
+macro_rules! impl_into_response_boxed {
+    ($($t:ty),+ $(,)?) => {
+        $(impl axum::response::IntoResponse for Box<$t> {
+            fn into_response(self) -> axum::response::Response {
+                (*self).into_response()
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "server")]
+impl_into_response_boxed!(RecipeTemplate, MenuTemplate);

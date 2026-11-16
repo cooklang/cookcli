@@ -7,9 +7,9 @@ Start the server with [`cook server`](server.md); every endpoint below is served
 ## Before you start
 
 - **Base URL:** `http://localhost:9080/api`
-- **Authentication:** None. Anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network.
-- **CORS:** All origins are allowed, for the methods GET, POST, PUT and DELETE.
-- **Request size limit:** 1 MB.
+- **Authentication:** Off unless the server has a users file (`cook server user add <name>`). Without one, anyone who can reach the server can read and modify your recipes — think twice before using `--host` on an untrusted network. With one, reads stay open, and every request that changes something needs the session cookie that signing in sets: `curl -c jar -d username=<name> --data-urlencode password=<password> <server>/login`, then pass `-b jar` to later requests. `GET /api/ws/lsp` and `/api/sync/*` need it too.
+- **CORS:** Off unless the server was started with `--cors-origin`: no other origin can read its answers. `--cors-origin '*'` lets any origin `GET`; a cross-origin request that would modify recipes is still refused with `403` unless it comes from an origin named explicitly. Requests with no `Origin` header — `curl` and other non-browser clients — are unaffected. `content-type` is always an allowed request header. Every request, from a browser or not, has to be sent to `localhost`, an IP address, or the host of a `--cors-origin`; any other `Host` is refused with `403`.
+- **Request size limit:** 1 MB, except a title or step picture upload (`PUT /api/recipe_image/{*path}`), which takes up to 10 MB.
 - **Content type:** JSON in and out, except where noted — raw recipe text is `text/plain`.
 
 ## Errors
@@ -21,8 +21,13 @@ Every failure returns the same shape, with the status code carrying the meaning:
 ```
 
 - `400` — malformed input: an invalid path, a bad query parameter, or a recipe that failed to parse.
+- `401` — the server requires signing in to make changes, and the request carried no valid session cookie. The response carries `X-Cook-Refused: sign-in`, and its `error` is written in the language of the `lang` cookie or `Accept-Language`.
+- `403` — the signed-in user's role does not allow this request (`Your role does not allow this change`, marked `X-Cook-Refused: role` and translated like the `401`); signing in again as the same user will not help. Also: the request was sent to a host name other than `localhost` or an IP address, or a browser request tried to modify recipes from an origin the server does not trust (another site). Start the server with `--cors-origin <ORIGIN>` to allow that origin and its host.
 - `404` — the recipe, menu, or pantry section does not exist, or no pantry file is configured.
+- `413` — the request body is over the size limit, or a picture has more pixels than the server will decode.
+- `415` — a picture in a format the server cannot read. The body adds a `code`; see `PUT /api/recipe_image/{*path}`.
 - `500` — the server could not read or write a file.
+- `503` — every language server session is in use, or the bridge is switched off. Only `GET /api/ws/lsp` returns this; see `--max-lsp-sessions`.
 
 ## Contents
 
@@ -30,6 +35,7 @@ Every failure returns the same shape, with the status code carrying the meaning:
 - [Menus](#menus)
 - [Shopping List](#shopping-list)
 - [Pantry](#pantry)
+- [Aisles](#aisles)
 - [Search & Stats](#search--stats)
 - [Realtime](#realtime)
 - [Sync](#sync)
@@ -42,7 +48,7 @@ Browse, read, write and delete `.cook` files under the server's recipe directory
 
 List every recipe as a directory tree
 
-Returns the recipe tree rooted at the server's base path. Every node — root, directory, and file alike — carries the same four keys: `children`, `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null for a file; that is the discriminator, not the key's presence. Menus (`.menu`) appear in the same tree as recipes.
+Returns the recipe tree rooted at the server's base path. Every node — root, directory, and file alike — carries the same four keys: `children`, `name`, `path`, `recipe`. `recipe` is `null` for a directory and non-null for a file; that is the discriminator, not the key's presence. Every `path`, and a recipe's `source.path`, is relative to the recipe directory, the root's being `""`; it is what `GET /api/recipes/{*path}` takes. Where the directory is on the server is never sent. Menus (`.menu`) appear in the same tree as recipes. A recipe's `metadata` keeps the types its frontmatter used, except `tags`, which is always an array of strings: the comma-separated spelling `tags: breakfast, quick` is split into the same array the list spelling `tags: [breakfast, quick]` gives.
 
 Response:
 
@@ -54,36 +60,37 @@ Response:
         "Easy Pancakes": {
           "children": {},
           "name": "Easy Pancakes",
-          "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+          "path": "Breakfast/Easy Pancakes.cook",
           "recipe": {
             "metadata": {
               "author": "CookCLI Team",
               "servings": 2,
+              "tags": ["breakfast", "quick"],
               "description": "Simple crepes that are perfect for a lazy weekend breakfast."
             },
             "source": {
-              "path": "/absolute/path/to/seed/Breakfast/Easy Pancakes.cook",
+              "path": "Breakfast/Easy Pancakes.cook",
               "source_type": "Path"
             }
           }
         }
       },
       "name": "Breakfast",
-      "path": "/absolute/path/to/seed/Breakfast",
+      "path": "Breakfast",
       "recipe": null
     }
   },
   "name": "seed",
-  "path": "/absolute/path/to/seed",
+  "path": "",
   "recipe": null
 }
 ```
 
-### `GET /api/recipes/*path`
+### `GET /api/recipes/{*path}`
 
 Read one parsed recipe
 
-Parses the recipe and returns its ingredients, cookware, timers and steps. `grouped_ingredients` aggregates repeated ingredients and indexes back into `ingredients`. `inline_quantities` is also present alongside them at the top level of `recipe`. The `image` field is a URL under `/api/static/` when the recipe has a title image, otherwise null.
+Parses the recipe and returns its ingredients, cookware, timers and steps. `grouped_ingredients` aggregates repeated ingredients and indexes back into `ingredients`. `inline_quantities` is also present alongside them at the top level of `recipe`. The `image` field is a URL under `/api/static/` (after any `--url-prefix`, each path segment percent-encoded) when the recipe has a title image, otherwise null. Frontmatter lands under `metadata.map` with the types it was written in, except `tags`, which is always an array of strings — `tags: breakfast, quick` is split on commas into the same array as `tags: [breakfast, quick]`.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -94,13 +101,14 @@ Response:
 
 ```json
 {
-  "image": "/api/static/Breakfast/Easy Pancakes.jpg",
+  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
   "scale": 2.0,
   "recipe": {
     "metadata": {
       "map": {
         "author": "CookCLI Team",
         "servings": 4,
+        "tags": ["breakfast", "quick"],
         "description": "Simple crepes that are perfect for a lazy weekend breakfast."
       }
     },
@@ -160,11 +168,11 @@ Response:
 }
 ```
 
-### `GET /api/recipes/raw/*path`
+### `GET /api/recipes/raw/{*path}`
 
 Read the unparsed Cooklang source
 
-Returns the file's text verbatim with content type `text/plain`, including YAML frontmatter. The `.cook` and `.menu` extensions are optional in the path — the server tries the bare path first, then `.cook`, then `.menu`.
+Returns the file's text verbatim with content type `text/plain`, including YAML frontmatter. Only `.cook` and `.menu` files are served. The extension is optional in the path — without one the server tries `.cook`, then `.menu`. A path with a component starting with `.` is refused with a 400, and any other file answers 404.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -183,11 +191,11 @@ Crack the @eggs{3} into a blender, then add the @flour{125%g},
 @milk{250%ml} and @sea salt{pinch}, and blitz until smooth.
 ```
 
-### `PUT /api/recipes/*path`
+### `PUT /api/recipes/{*path}`
 
 Create or overwrite a recipe
 
-The request body is the raw Cooklang source as `text/plain` — not JSON. Writes are atomic (temp file plus rename). If the file does not exist yet, it is created with a `.cook` extension — but the response's `path` echoes the request path verbatim and does not report that resolved filename. The parent directory must already exist: writing into a directory that is not there returns a 500 whose message talks about permissions even when the real cause is the missing directory.
+The request body is the raw Cooklang source as `text/plain` — not JSON. Writes are atomic (temp file plus rename). Only `.cook` and `.menu` files are written, with the same resolution as the raw endpoint: a path naming any other file, such as `config/aisle.conf`, writes `config/aisle.conf.cook` and leaves that file alone. If the file does not exist yet, it is created with the extension the path gives, or `.cook` — but the response's `path` echoes the request path verbatim and does not report that resolved filename. The parent directory must already exist: writing into a directory that is not there returns a 500 whose message talks about permissions even when the real cause is the missing directory. Send `If-Match: *` to write only over a file that exists: a missing one is then refused with `412` instead of created. The editor does, so a recipe renamed or deleted in another tab is not written back under its old name. No entity tags are issued, so any other `If-Match` value is refused with `412` too.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -212,7 +220,7 @@ Response:
 }
 ```
 
-### `DELETE /api/recipes/*path`
+### `DELETE /api/recipes/{*path}`
 
 Delete a recipe file
 
@@ -220,7 +228,7 @@ Permanently removes the file from disk. There is no undo and no trash.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
-| `path` | path | `string` | yes | Recipe path relative to the recipe directory. The `.cook` extension is optional — the same bare → `.cook` → `.menu` resolution as the raw endpoint applies here too. |
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory. The extension is optional, and only a `.cook` or `.menu` file is ever removed — the same resolution as the raw endpoint applies here too. |
 
 Response:
 
@@ -231,11 +239,125 @@ Response:
 }
 ```
 
-### `GET /api/static/*path`
+### `POST /api/recipe_rename/{*path}`
+
+Rename a recipe or menu file
+
+Renames the file within its own folder; moving it to another folder is not possible. Its title and step pictures (`Recipe.jpg`, `Recipe.2.jpg`, `Recipe.1.2.jpg`) are renamed with it, except one another recipe or menu in the folder shows too. Every reference to it in the collection's `.cook` and `.menu` files (`@./Breakfast/Old Recipe{}`, `@../Old Recipe{}`) is rewritten to the new name — only the name, the rest of each file is kept byte for byte. A reference that cannot be rewritten exactly (an escape or a comment inside the name, another letter case, a file reached through a symbolic link, a file saved meanwhile) is left alone and listed in `references_skipped`, with its line when known; a file that could not be written is listed in `references_failed`, and the rename stands. The saved shopping list is not changed: `shopping_list_stale` says whether it still names the old path. Nothing is ever overwritten: `409` when a file already has the new name, when a picture would land on an existing file or on another recipe's picture name, or when renaming a recipe to the name of a menu beside it (references to the menu would reach the recipe). `400` for a name that is not a plain file name (a folder, a leading dot, characters Windows or a Cooklang reference cannot hold, a Windows device name), for a file or folder that is a symbolic link, and for the same name; `404` when the file does not exist.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe or menu path relative to the recipe directory; the extension is optional, resolved as for the raw endpoint. |
+| `name` | body | `string` | yes | The new name, without folder. The file's own extension may be typed and is dropped; a recipe cannot be renamed to `.menu` or the other way round. |
+
+Request body:
+
+```json
+{ "name": "New Recipe" }
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "path": "Breakfast/New Recipe.cook",
+  "references_updated": ["Plans/Week 1.menu"],
+  "references_skipped": [{ "file": "Lunch/Bowl.cook", "line": 4 }],
+  "references_failed": [],
+  "shopping_list_stale": false
+}
+```
+
+### `GET /api/recipe_image/{*path}`
+
+Read a recipe's title and step pictures
+
+Reports the picture the recipe page shows. `image` is a URL — under `/api/static/`, with the server's `--url-prefix`, or the value itself when the metadata names an `http(s)` address — and null when there is none. `source` says where it comes from: `metadata` when the recipe's `image` (or `images`, `picture`, `pictures`) metadata names it, which takes precedence over any file; `file` for a `Recipe.jpg`, `.jpeg`, `.png` or `.webp` beside the recipe; null for none. `sections` lists every section of the saved recipe that has steps — `section` is its position counting every section, `name` null for an unnamed one — with each step's number within the section, its text as plain words, and its picture's URL or null. The upload and removal endpoints answer with this same shape. With `step`, the answer is that step's `{ path, section, step, image, source }` instead, `source` being `file` or null; the upload and removal of a step picture answer with it too. A step's picture is `Recipe.S.N.ext` (section S, step N within it), else `Recipe.G.ext` with the step counted across every section — the order the recipe page looks in.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. |
+| `section` | query | `integer` | no | With `step`: the step's section, from 1, counting every section of the recipe. Defaults to 1. |
+| `step` | query | `integer` | no | A step's picture instead of the title picture: the step's number within its section, from 1. A step or section the saved recipe does not have, a value that is not a whole number from 1, or `section` without `step` returns `400`. |
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": "/api/static/Breakfast/Easy%20Pancakes.jpg",
+  "source": "file",
+  "sections": [
+    {
+      "section": 1,
+      "name": null,
+      "steps": [
+        { "step": 1, "text": "Whisk eggs, milk and flour.", "image": null },
+        { "step": 2, "text": "Cook in a pan for 1 minute.", "image": "/api/static/Breakfast/Easy%20Pancakes.1.2.jpg" }
+      ]
+    }
+  ]
+}
+```
+
+### `PUT /api/recipe_image/{*path}`
+
+Upload a recipe's title or step picture
+
+The request body is the picture's bytes — not a multipart form. JPEG, PNG and WebP are accepted, up to 10 MB; the format is read from the bytes, not the `Content-Type`. The picture is turned upright from its Exif orientation, scaled down to at most 2048 px on its longer edge, laid over white if it has transparency, and saved as JPEG at `Recipe.jpg` beside the recipe — or, with `step`, at `Recipe.S.N.jpg`. It is always re-encoded, never stored as sent, so the file holds no Exif (GPS position included) and nothing that rode along after the image. The web editor scales a photo down in the browser before sending it, which is why 10 MB is plenty; another client may send the original. For the title, any `Recipe.jpeg`, `.png` or `.webp` from before is removed; step pictures (`Recipe.1.jpg`) are not touched. A picture the metadata names still wins over the uploaded file — see `source` in the response. For a step, that step's other files in both conventions and every extension are removed (`Recipe.S.N.png`, `Recipe.G.jpg`, …); the title picture and other steps' pictures are not touched. A step picture belongs to a position, not to the step's text: adding or removing an earlier step moves it onto another step. Errors carry a `code` next to `error`: `415` with `heif` for a HEIC or AVIF photo, which the server cannot read (an iPhone's own browser converts them to JPEG when uploading), `415` with `unsupported` for any other format, `400` with `invalid` for a file that does not decode, and `413` with `too_large` for one with more pixels than the decoder takes on. A body over 10 MB is refused with a plain-text `413` once the server has read past the limit.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. The recipe must exist. |
+| `section` | query | `integer` | no | With `step`: the step's section, from 1, counting every section of the recipe. Defaults to 1. |
+| `step` | query | `integer` | no | A step's picture instead of the title picture: the step's number within its section, from 1. A step or section the saved recipe does not have, a value that is not a whole number from 1, or `section` without `step` returns `400`. |
+
+Request body:
+
+```text
+<the picture's bytes>
+```
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "section": 1,
+  "step": 2,
+  "image": "/api/static/Breakfast/Easy%20Pancakes.1.2.jpg",
+  "source": "file"
+}
+```
+
+### `DELETE /api/recipe_image/{*path}`
+
+Remove a recipe's title or step picture
+
+Deletes every `Recipe.jpg`, `.jpeg`, `.png` and `.webp` beside the recipe, for good — there is no undo and no trash. With `step`, deletes that step's `Recipe.S.N` and `Recipe.G` files in those extensions instead. Returns `404` when there was none. A picture named by the recipe's metadata is left alone; remove it by editing the recipe.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Recipe path relative to the recipe directory; the `.cook` extension is optional. |
+| `section` | query | `integer` | no | With `step`: the step's section, from 1, counting every section of the recipe. Defaults to 1. |
+| `step` | query | `integer` | no | A step's picture instead of the title picture: the step's number within its section, from 1. A step or section the saved recipe does not have, a value that is not a whole number from 1, or `section` without `step` returns `400`. |
+
+Response:
+
+```json
+{
+  "path": "Breakfast/Easy Pancakes.cook",
+  "image": null,
+  "source": null
+}
+```
+
+### `GET /api/static/{*path}`
 
 Fetch a recipe asset
 
-Serves files straight from the recipe directory — this is where recipe images live. The `image` field returned by `GET /api/recipes/*path` is already a URL into this route.
+Serves the recipes' pictures from the recipe directory. The `image` field returned by `GET /api/recipes/{*path}` is already a URL into this route. Only `jpg`, `jpeg`, `png`, `webp`, `gif` and `avif` files are served, and nothing in a folder or under a name starting with `.`; anything else is a `404`. Responses carry `Cache-Control: no-cache`, so a browser checks back each time — a cheap `304` through the `ETag` when nothing changed — and a picture replaced under the same name shows up at once.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -260,11 +382,11 @@ Response:
 ]
 ```
 
-### `GET /api/menus/*path`
+### `GET /api/menus/{*path}`
 
 Read one menu
 
-Sections correspond to days; a `date` is extracted when the section name contains one in parentheses, e.g. `Day 1 (2026-03-04)` — the seed menus don't use that convention, so `date` is null below. A meal's `time` is likewise extracted from its header, e.g. `Breakfast (08:30):` yields `"type": "Breakfast", "time": "08:30"`; none of the seed menus set a time either, hence null throughout. Meal items are tagged by `kind`: `recipe_reference` points at another file; `ingredient` is a loose item written directly in the menu. Plain connecting text in the menu (e.g. "with") is dropped — only structured references and ingredients are returned. Returns 400 if the path is not a menu file, 404 if it does not exist. The response below is trimmed to the first of this menu's two `sections`; the second follows the same shape. A `recipe_reference`'s `scale` is a ready-to-use multiplier for the referenced recipe, resolved from the menu's `{...}` notation per the Cooklang spec: a bare `{2}` is a raw multiplier, `{3%servings}` targets servings against the referenced recipe's own `servings` metadata, any other unit targets its `yield`, and `{}` means 1. The example below shows `5.0` because the menu asks for `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` query multiplies these, so `?scale=2` yields `10.0`. `POST /api/shopping_list/add_menu` resolves references identically, so the two endpoints always agree.
+Sections correspond to days; a `date` is extracted when the section name contains a `YYYY-MM-DD` date (the first one), e.g. `Day 1 (2026-03-04)` — the seed menus don't use that convention, so `date` is null below. A meal's `time` is likewise extracted from its header, e.g. `Breakfast (08:30):` yields `"type": "Breakfast", "time": "08:30"`; none of the seed menus set a time either, hence null throughout. Meal items are tagged by `kind`: `recipe_reference` points at another file; `ingredient` is a loose item written directly in the menu. Plain connecting text in the menu (e.g. "with") is dropped — only structured references and ingredients are returned. Returns 400 if the path is not a menu file, 404 if it does not exist. The response below is trimmed to the first of this menu's two `sections`; the second follows the same shape. A `recipe_reference`'s `scale` is a ready-to-use multiplier for the referenced recipe, resolved from the menu's `{...}` notation per the Cooklang spec: a bare `{2}` is a raw multiplier, `{3%servings}` targets servings against the referenced recipe's own `servings` metadata, any other unit targets its `yield`, and `{}` means 1. The example below shows `5.0` because the menu asks for `{10%servings}` and `Easy Pancakes` declares `servings: 2`. The `?scale` query multiplies these, so `?scale=2` yields `10.0`. `POST /api/shopping_list/add_menu` resolves references identically, so the two endpoints always agree. A reference to another menu, used as a meal of this one (`@./Brunches/Sunday.menu{}`), is a `recipe_reference` too, with `"menu": true` and a `path` ending in `.menu`; its `servings` target is read from that menu's own `servings`. `menu` is left out for recipes. `metadata` values are strings, except `tags`, which is always an array of strings whichever way the frontmatter spelled it.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -330,6 +452,45 @@ Response:
 }
 ```
 
+### `POST /api/plans/{*path}`
+
+Change a meal plan
+
+Makes one change to a meal plan — a `.menu` with sections on two days or more — as its calendar page does: `add` a recipe to the end of a day's meal, `remove` a line, or `move` / `copy` a line to another day's meal. Only the lines concerned change; the rest of the file keeps its bytes. A day is a section whose name holds its `YYYY-MM-DD` date, `== Wednesday (2026-10-07) ==` or `= 2026-10-07 Dinner`, and a meal starts at a line that is only `Name:`, or at the section's heading for the meal named after its date; a missing day or meal is created, days in date order, meals in the order the plan's days name them. A line is named by its day, meal and place among the meal's bullets (from 0), plus its text without the bullet, which must match the file. `version` is the SHA-256 of the file's text, in hex, as the plan's page carries it; a change to any other version, or to a line that is no longer there, is refused with 409 and the current `version`. `add` takes a recipe's path in the collection and writes `- @./Path{}`, or `- @./Path{2%servings}` with `servings`. Returns 400 for a menu dated on fewer than two days, a meal name that would not read back (`:`, brackets, …) or a recipe that does not exist, and 404 for a missing file. When sign-in is on, needs the `editor` role. The response carries the file's new `version`.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `path` | path | `string` | yes | Plan path relative to the recipe directory, e.g. `Plans/October.menu`. |
+| `op` | body | `string` | yes | `add`, `remove`, `move` or `copy`. |
+| `version` | body | `string` | yes | The version of the plan the change was made to. |
+| `date, meal` | body | `string` | yes | The day (`YYYY-MM-DD`) and meal: where `add` adds, or the line's for the others. |
+| `index, text` | body | `number, string` | no | `remove`, `move`, `copy`: the line's place in the meal and its text. |
+| `to` | body | `object` | no | `move`, `copy`: `{ "date", "meal" }` the line goes to. |
+| `recipe, servings` | body | `string, number` | no | `add`: the recipe's path, e.g. `Salads/Caprese.cook`, and optional servings. |
+
+Request body:
+
+```json
+{
+  "version": "8e507b3bf24da02c9f3fa5c788eab55839e4ea7d37a1683ee8505ef177bde090",
+  "op": "move",
+  "date": "2026-10-07",
+  "meal": "Dinner",
+  "index": 0,
+  "text": "@./Risotto{}",
+  "to": { "date": "2026-10-09", "meal": "Breakfast" }
+}
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "version": "8bb83c4f83bc739a1c5ea480a71c182e7a92c86b57e6478e58b4cea1aba562c7"
+}
+```
+
 ## Shopping List
 
 Two distinct things live here. `POST /api/shopping_list` is stateless: send recipes, get an aggregated ingredient list back. Everything else operates on the server's persistent list, stored as `.shopping-list` and `.shopping-checked` in the recipe directory. Most of the endpoints that mutate the stored list respond `200 OK` with an empty body — only `GET /api/shopping_list/items`, `GET /api/shopping_list/checked`, and the stateless `POST /api/shopping_list` return JSON. (A third GET lives under this path in the router, `/api/shopping_list/events`, but it's a Server-Sent Events stream, not JSON — see the Realtime section.)
@@ -338,20 +499,22 @@ Two distinct things live here. `POST /api/shopping_list` is stateless: send reci
 
 Aggregate ingredients across recipes
 
-Stateless — nothing is stored. Ingredients with the same name are combined and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request.
+Stateless — nothing is stored. Ingredients with the same name are combined, letter case ignored and the first spelling kept, and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` says why the list is not what its recipes say, one line each in the language of the request (`lang` cookie, then `Accept-Language`), starting with the path of the recipe concerned: for now, a sub-recipe reference that could not be scaled to the amount it asks for, which is then listed as written rather than as its ingredients. Parse warnings of the recipes are not included. Empty when there is nothing to say. A recipe's optional ingredients are left out unless they are listed in `optional_ingredients`; those come back with `optional: true`, as separate items from any required amount of the same ingredient. An element may also be a free-hand item, `{ "name": "almonds", "quantity": "50%g" }` as `GET /api/shopping_list/extra_items` returns it, merged with the recipes' required ingredients of the same name.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `recipe` | body | `string` | yes | Recipe path. The array may hold several. |
 | `scale` | body | `number` | no | Scaling factor for this recipe. Defaults to 1. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit to include all of them. |
+| `optional_ingredients` | body | `{ name: string, quantity?: string }[]` | no | Optional ingredients to include, each with the amount to buy in Cooklang quantity syntax (`2%pinch`). The amount is used as given, not scaled — this is what `GET /api/shopping_list/items` returns for the entry. |
 
 Request body:
 
 ```json
 [
   { "recipe": "Neapolitan Pizza", "scale": 2 },
-  { "recipe": "Salads/Caprese", "included_references": ["Shared/Vinaigrette"] }
+  { "recipe": "Salads/Caprese", "included_references": ["Shared/Vinaigrette"] },
+  { "name": "almonds", "quantity": "50%g" }
 ]
 ```
 
@@ -365,6 +528,7 @@ Response:
       "items": [
         {
           "name": "ripe tomatoes",
+          "optional": false,
           "quantities": [
             {
               "scalable": true,
@@ -380,6 +544,7 @@ Response:
       "items": [
         {
           "name": "fresh mozzarella",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -390,6 +555,7 @@ Response:
         },
         {
           "name": "mozzarella cheese",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -405,6 +571,7 @@ Response:
       "items": [
         {
           "name": "tipo zero flour",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -415,6 +582,7 @@ Response:
         },
         {
           "name": "fresh yeast",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -430,6 +598,7 @@ Response:
       "items": [
         {
           "name": "salt",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -448,6 +617,7 @@ Response:
         },
         {
           "name": "black pepper",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -463,6 +633,7 @@ Response:
       "items": [
         {
           "name": "Dijon mustard",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -476,6 +647,7 @@ Response:
         },
         {
           "name": "honey",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -489,6 +661,7 @@ Response:
         },
         {
           "name": "red wine vinegar",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -505,6 +678,7 @@ Response:
         { "name": "basil leaves", "quantities": [] },
         {
           "name": "San Marzano tomato sauce",
+          "optional": false,
           "quantities": [
             {
               "scalable": false,
@@ -518,7 +692,9 @@ Response:
     }
   ],
   "pantry_items": ["flour", "water", "salt", "tipo zero flour", "olive oil", "fresh basil", "black pepper"],
-  "checked": []
+  "pantry_error": null,
+  "checked": [],
+  "warnings": []
 }
 ```
 
@@ -526,7 +702,7 @@ Response:
 
 Read the stored recipe list
 
-Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given.
+Returns the recipes currently on the shopping list, not their ingredients. An entry with a `recipes` array is a menu added via `add_menu`; its nested entries carry their own resolved scale and `included_references`, independent of whatever the same recipe's standalone entry (if any) was given. `name` is the `title` the recipe or menu declares, or its file name when it declares none or cannot be read; `included_reference_names` names each of `included_references` the same way, in the same order, and `included_reference_scales` gives how many times its own size each is made — from the quantity the recipe asks for against the sub-recipe's servings or yield — or `null` where that cannot be worked out. `optional_ingredients` lists the optional ingredients chosen for an entry, with the amounts to buy, and is left out when there are none.
 
 Response:
 
@@ -536,7 +712,10 @@ Response:
     "path": "Salads/Caprese.cook",
     "name": "Caprese",
     "scale": 2.0,
-    "included_references": []
+    "included_references": [],
+    "included_reference_names": [],
+    "included_reference_scales": [],
+    "optional_ingredients": [{ "name": "basil", "quantity": "10%g" }]
   },
   {
     "path": "2 Day Plan.menu",
@@ -547,22 +726,42 @@ Response:
         "path": "Breakfast/Easy Pancakes",
         "name": "Easy Pancakes",
         "scale": 5.0,
-        "included_references": []
+        "included_references": [],
+        "included_reference_names": [],
+        "included_reference_scales": []
       },
-      { "path": "lamb-chops", "name": "lamb-chops", "scale": 1.0, "included_references": [] },
+      {
+        "path": "lamb-chops",
+        "name": "Sicilian-style Scottadito Lamb Chops",
+        "scale": 1.0,
+        "included_references": [],
+        "included_reference_names": [],
+        "included_reference_scales": []
+      },
       {
         "path": "Neapolitan Pizza",
         "name": "Neapolitan Pizza",
         "scale": 1.0,
-        "included_references": ["Shared/Pizza Dough"]
+        "included_references": ["Shared/Pizza Dough"],
+        "included_reference_names": ["Pizza Dough"],
+        "included_reference_scales": [1.0]
       },
       {
         "path": "Salads/Caprese",
         "name": "Caprese",
         "scale": 1.0,
-        "included_references": ["Shared/Vinaigrette"]
+        "included_references": ["Shared/Vinaigrette"],
+        "included_reference_names": ["Vinaigrette"],
+        "included_reference_scales": [1.0]
       },
-      { "path": "Risotto", "name": "Risotto", "scale": 1.0, "included_references": [] }
+      {
+        "path": "Risotto",
+        "name": "Classic Risotto alla Milanese",
+        "scale": 1.0,
+        "included_references": [],
+        "included_reference_names": [],
+        "included_reference_scales": []
+      }
     ]
   }
 ]
@@ -579,6 +778,7 @@ Responds `200 OK` with an empty body. The display name is derived from the path 
 | `path` | body | `string` | yes | Recipe path relative to the recipe directory. |
 | `scale` | body | `number` | yes | Scaling factor to store with the entry. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit and no sub-recipes are expanded — unlike the stateless `POST /api/shopping_list`, where omitting this field means "expand all", omitting it here is not preserved through storage and reads back as an explicit empty array. Pass the reference paths explicitly if you want them expanded. |
+| `optional_ingredients` | body | `string[]` | no | Names of the recipe's optional ingredients to buy too. Their amounts are worked out from the recipe at `scale` and stored as `? name{quantity}` lines under the entry; `GET /api/shopping_list/items` returns them as `optional_ingredients`. Omit to buy none of them. |
 
 Request body:
 
@@ -594,43 +794,78 @@ Request body:
 
 Add every recipe in a menu
 
-Stored as a single entry with the menu's recipes nested inside; each nested recipe's own sub-recipe references are resolved automatically (there is no `included_references` field to set here). Each nested recipe's scale is resolved from the menu reference: a bare `{2}` is a raw multiplier, `{3%servings}` targets 3 servings against the recipe's own `servings` metadata, and any other unit targets its `yield` metadata. Responds `200 OK` with an empty body; returns 404 if `path` does not exist, but does not check that it's actually a `.menu` file — pointing this at a plain recipe is accepted and stores it as if it were `POST /api/shopping_list/add` with that recipe's own references as `included_references`, which can leave the list in a state that later makes `compact` fail.
+Stored as a single entry with the menu's recipes nested inside; each nested recipe's own sub-recipe references are resolved automatically (there is no `included_references` field to set here). Each nested recipe's scale is resolved from the menu reference: a bare `{2}` is a raw multiplier, `{3%servings}` targets 3 servings against the recipe's own `servings` metadata, and any other unit targets its `yield` metadata. A menu the menu references (`@./Brunches/Sunday.menu{}`) is nested like a recipe, its own references as its `included_references`, so the shopping list counts its free-hand ingredients and recipes; a reference leading back to a menu already being expanded is skipped there. Responds `200 OK` with an empty body; returns 404 if `path` does not exist, but does not check that it's actually a `.menu` file — pointing this at a plain recipe is accepted and stores it as if it were `POST /api/shopping_list/add` with that recipe's own references as `included_references`, which can leave the list in a state that later makes `compact` fail. With `dates`, only the sections dated one of them (`== Monday (2026-10-05) ==`) count, and nothing is stored as a menu: their recipes become plain recipe entries, as if each had been added with `POST /api/shopping_list/add`, and their free-hand ingredients (`@almonds{50%g}`) become free-hand items, merged by name and scaled by `scale` (see `GET /api/shopping_list/extra_items`). A date not in the menu adds nothing; `400` if `dates` is empty, longer than 400, or holds something that is not a `YYYY-MM-DD` date.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `path` | body | `string` | yes | Menu path relative to the recipe directory. |
 | `scale` | body | `number` | yes | Scaling factor applied to the whole menu. |
+| `dates` | body | `string[]` | no | Only the days with these dates (`YYYY-MM-DD`). Omit for the whole menu. |
 
 Request body:
 
 ```json
 {
-  "path": "2 Day Plan.menu",
-  "scale": 1.0
+  "path": "Plans/October.menu",
+  "scale": 1.0,
+  "dates": ["2026-10-05", "2026-10-06"]
 }
+```
+
+### `GET /api/shopping_list/extra_items`
+
+Read the stored free-hand items
+
+The items on the list that no recipe put there: the free-hand lines of `.shopping-list`, such as the ingredients written straight into a menu whose days were added with `dates`, or items another Cooklang app added by hand. `quantity` is written as the file stores it (`50%g`, `2`), and absent for an item with no amount.
+
+Response:
+
+```json
+[
+  { "name": "almonds", "quantity": "100%g" },
+  { "name": "paper towels" }
+]
+```
+
+### `POST /api/shopping_list/remove_extra_item`
+
+Remove one free-hand item from the stored list
+
+Removes the first free-hand item with this name and quantity, and compacts the checked log as `remove` does. Responds `200 OK` with an empty body, whether or not there was such an item.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `name` | body | `string` | yes | The item's name. |
+| `quantity` | body | `string` | no | Its quantity exactly as `extra_items` returned it; omit for none. |
+
+Request body:
+
+```json
+{ "name": "almonds", "quantity": "100%g" }
 ```
 
 ### `POST /api/shopping_list/remove`
 
 Remove one recipe from the stored list
 
-Also compacts the checked log, dropping checks for ingredients no longer referenced by any remaining recipe — best-effort; a compaction failure does not fail the remove itself. Responds `200 OK` with an empty body.
+Also compacts the checked log, dropping checks for ingredients no longer referenced by any remaining recipe — best-effort; a compaction failure does not fail the remove itself. Responds `200 OK` with an empty body, or `409 Conflict` when the entry at `index` is no longer `path` — the list changed since it was read, and nothing was removed.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `path` | body | `string` | yes | Recipe path exactly as stored. |
+| `index` | body | `integer` | no | Position of the entry in `GET /api/shopping_list/items`, counting from 0. The same recipe can be on the list more than once; without `index` the first entry with `path` is removed. |
 
 Request body:
 
 ```json
-{ "path": "Salads/Caprese.cook" }
+{ "path": "Salads/Caprese.cook", "index": 1 }
 ```
 
 ### `POST /api/shopping_list/clear`
 
 Empty the stored list
 
-Removes every recipe and all checked state. Responds `200 OK` with an empty body.
+Removes every recipe, every free-hand item and all checked state. Responds `200 OK` with an empty body.
 
 ### `POST /api/shopping_list/check`
 
@@ -684,7 +919,7 @@ Re-aggregates the current list and removes checks for ingredients that are no lo
 
 ## Pantry
 
-Reads and writes `pantry.conf`, a TOML file of what you already have at home. Quantities are typically `VALUE%UNIT`, e.g. `250%g`, but the field is just a string — `unlim` and plain counts like `12` appear untouched in the seed data. Every endpoint here returns 404 when no pantry file is configured.
+Reads and writes `pantry.conf`, a TOML file of what you already have at home. Quantities are typically `VALUE%UNIT`, e.g. `250%g`; `unlim` and plain counts like `12` appear in the seed data, and writes refuse a value nothing could parse back. Every endpoint here returns 404 when no pantry file is configured. Changes edit only the entry concerned, so comments, blank lines and formatting elsewhere in the file are kept; they need the `shopper` role when sign-in is on.
 
 ### `GET /api/pantry`
 
@@ -718,13 +953,13 @@ Response:
 
 Add an item
 
-Creates the section if it does not exist. The response claims success and reports a distinct item was appended even when the section already has an item of that name — but every write round-trips through a TOML serializer that keys each section's items by name, so a second item sharing a name with an existing one in the same section silently replaces it on disk rather than coexisting. Verified: adding `dup` twice with different quantities to a fresh section leaves exactly one `dup` item, with the second call's quantity.
+Creates the section if it does not exist. Spaces around each field are dropped. `400` when the section or name is blank, when the section already has an item of that name (use `PUT` to change it), or when the pantry file cannot be read as a pantry — it is never replaced by a new one.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
-| `section` | body | `string` | yes | Section to add the item to. |
-| `name` | body | `string` | yes | Item name. |
-| `quantity` | body | `string` | no | Amount as `VALUE%UNIT`, or any other string such as `unlim`. |
+| `section` | body | `string` | yes | Section to add the item to. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character: it becomes a segment of the `/api/pantry/{section}/{name}` URL. |
+| `name` | body | `string` | yes | Item name. `400` when it is `.` or `..`, or contains a control character. |
+| `quantity` | body | `string` | no | Amount as `VALUE%UNIT` (e.g. `250%g`), a plain count like `12`, or `unlim`/`unlimited`. `400` for a value the pantry cannot read back. |
 | `bought` | body | `string` | no | Purchase date. Accepts `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`, `MM/DD/YYYY`, `YYYY.MM.DD` or `DD-MM-YYYY`. |
 | `expire` | body | `string` | no | Expiry date, same accepted formats as `bought`. |
 | `low` | body | `string` | no | Threshold below which the item counts as running low. Compared against `quantity` only when both share the same unit; see `GET /api/pantry/depleted`. |
@@ -749,20 +984,20 @@ Response:
 }
 ```
 
-### `PUT /api/pantry/:section/:name`
+### `PUT /api/pantry/{section}/{name}`
 
 Update an item
 
-Only the fields present in the body are changed; omitted fields keep their current values. Returns 404 if the section does not exist. A name that matches nothing inside a valid section does not 404 — that case still rewrites the file (a no-op) and responds `200` with a success message naming the item that was never found. If more than one item in the section shares the target name, only the first one is updated.
+Only the fields present in the body are changed; omitted fields keep their current values, and a body with none of them writes nothing. `404` if the section or the item does not exist. `400` for a `quantity`, `low`, `bought` or `expire` value the pantry cannot read back — the same forms as `POST /api/pantry/add` accepts.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
 | `section` | path | `string` | yes | Section containing the item. |
 | `name` | path | `string` | yes | Item name. |
-| `quantity` | body | `string` | no | New amount. |
-| `bought` | body | `string` | no | New purchase date. |
-| `expire` | body | `string` | no | New expiry date. |
-| `low` | body | `string` | no | New low threshold. |
+| `quantity` | body | `string` | no | New amount, the same forms as `POST /api/pantry/add`. |
+| `bought` | body | `string` | no | New purchase date, the same formats as `POST /api/pantry/add`. |
+| `expire` | body | `string` | no | New expiry date, the same formats as `POST /api/pantry/add`. |
+| `low` | body | `string` | no | New low threshold — a readable amount, never `unlim`. |
 
 Request body:
 
@@ -779,11 +1014,11 @@ Response:
 }
 ```
 
-### `DELETE /api/pantry/:section/:name`
+### `DELETE /api/pantry/{section}/{name}`
 
 Remove an item
 
-The section is deleted too if it becomes empty. Returns 404 if the section does not exist, but — like `PUT` — responds `200` with a success message even when no item in the section actually has that name; nothing is removed and the file is rewritten unchanged.
+The section is deleted too if it becomes empty. `404` if the section or the item does not exist.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -796,6 +1031,74 @@ Response:
 {
   "success": true,
   "message": "Removed butter from fridge"
+}
+```
+
+### `POST /api/pantry/rename`
+
+Rename a section
+
+The section keeps its place in the file, its items and the comments around it. Changing only the case of its own name is allowed. `400` when the new name is blank, is the current one, is already used by another section or by an item above the first section header (ignoring case), or when either name is `general`; `404` if the section does not exist.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `section` | body | `string` | yes | The section to rename. |
+| `new_name` | body | `string` | yes | Its new name. `400` when it is `.` or `..`, or contains a slash, a backslash, `#`, `?` or a control character, as for a new section. |
+
+Request body:
+
+```json
+{ "section": "fridge", "new_name": "Fridge" }
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Renamed fridge to Fridge"
+}
+```
+
+### `GET /api/pantry/raw`
+
+Read the pantry file as text
+
+The file exactly as written, with its `revision`. The `content` below is cut short.
+
+Response:
+
+```json
+{
+  "content": "water = \"unlim\"\n\n[fridge]\nmilk = \"2%l\"\n",
+  "revision": "5f0c2b7d9a41e863"
+}
+```
+
+### `PUT /api/pantry/raw`
+
+Replace the pantry file
+
+Writes `content` as the whole file once it reads as a pantry, and answers as `GET /api/pantry/raw` does. Otherwise `400` quoting the parser, with the line, and the file is left alone. Send the `revision` the text was edited from and the change is refused with `409` and the current `revision` if the file has changed since; leave it out to replace the file regardless.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `content` | body | `string` | yes | The new file. |
+| `revision` | body | `string` | no | The `revision` the text was edited from. |
+
+Request body:
+
+```json
+{
+  "content": "[fridge]\nmilk = \"1%l\"\nmilk = \"2%l\"\n"
+}
+```
+
+Response:
+
+```json
+{
+  "error": "Not a valid pantry: Error parsing input: TOML parse error: TOML parse error at line 3, column 1 | 3 | milk = \"2%l\" | ^ duplicate key `milk` in table `fridge`"
 }
 ```
 
@@ -836,6 +1139,161 @@ Response:
 ]
 ```
 
+## Aisles
+
+Reads and changes `aisle.conf`, which groups the shopping list by store aisle: an `[aisle]` line, then one ingredient per line with its other names after `|`. Changes edit only the lines concerned, so comments and blank lines elsewhere in the file are kept. Each response carries the file's `revision`; send it back with a change and the change is refused with `409` if the file has been changed since, along with the current `revision`. Leave it out to apply the change regardless. Changes need the `shopper` role when sign-in is on.
+
+### `GET /api/aisles`
+
+Read the aisles
+
+Aisles in file order, which is the order the shopping list uses. Each ingredient's first name is the one the shopping list shows; the others are merged into it. `warnings` lists the lines the parser skipped, such as a name listed twice. `comment_lines` lists the lines written like a `#` or `--` comment, with their `line` number and `text`: the file's comments start with `//`, so these are read as ingredients. `file` is where the aisle file is, relative to the recipe directory; for the global one, outside it, `file` is `null` and `shared` is `true`, since other recipe directories use it too. The full path is never sent. Without an aisle file, `configured` and `shared` are `false`, `file` and `revision` are `null` and `aisles` is empty. The response below is trimmed to two of the seed's eight aisles and a few ingredients each.
+
+Response:
+
+```json
+{
+  "configured": true,
+  "file": "config/aisle.conf",
+  "shared": false,
+  "revision": "edbf1fd2579f964e",
+  "aisles": [
+    {
+      "name": "fruit and veg",
+      "ingredients": [
+        { "names": ["apples"] },
+        { "names": ["avocado", "avocados"] }
+      ]
+    },
+    {
+      "name": "milk and dairy",
+      "ingredients": [
+        { "names": ["milk"] },
+        { "names": ["butter"] }
+      ]
+    }
+  ],
+  "warnings": [],
+  "comment_lines": []
+}
+```
+
+### `POST /api/aisles`
+
+Create an aisle file
+
+Creates an empty `config/aisle.conf` in the recipe directory and answers `201` with the same shape as `GET /api/aisles`. `409` if an aisle file already exists, wherever it was found (the answer does not say where).
+
+### `POST /api/aisles/changes`
+
+Change the aisles
+
+A change is named by `action`; the other fields depend on it. `add_aisle` (`name`, optional `position`, counted from 0; last when omitted), `rename_aisle` (`name`, `new_name`), `remove_aisle` (`name`; its ingredients go with it), `move_aisle` (`name`, `position`), `add_ingredient` (`aisle`, `names`), `update_ingredient` (`name`, `names`, optional `aisle` to move it), `remove_ingredient` (`name`), `add_names` (`name`, `names`: more names for that ingredient, ones it has skipped) and `merge_ingredients` (`names`, one per ingredient, and `main`: the one name the shopping list will show; the result keeps the place, aisle and comment of the ingredient `main` came from). An ingredient is found by any of its names, ignoring case. Send one change with its fields beside `revision`, or several as `changes`, a list: they are applied in order and written together, or not at all, and an error names the change that failed (`Change 4: …`). Answers with the aisles as `GET /api/aisles` does. `400` for a name the file cannot hold (empty, or containing `|` or `//`) or one already used — ingredient names ignoring case, as the shopping list matches them; `404` for an aisle or ingredient that does not exist, or when there is no aisle file; `409` for a stale `revision`.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `action` | body | `string` | yes | `add_aisle`, `rename_aisle`, `remove_aisle`, `move_aisle`, `add_ingredient`, `update_ingredient`, `remove_ingredient`, `add_names` or `merge_ingredients`. Not given when sending `changes`. |
+| `changes` | body | `object[]` | no | Several changes, each with its own `action`, made together. |
+| `revision` | body | `string` | no | The `revision` the change was made against. |
+| `name` | body | `string` | no | The aisle, or any one of the ingredient's names. |
+| `names` | body | `string[]` | no | An ingredient's names, the one to show first; for `merge_ingredients`, one name of each ingredient to group. |
+| `main` | body | `string` | no | For `merge_ingredients`: the name the grouped ingredient goes by. |
+| `aisle` | body | `string` | no | The aisle to put it in. |
+| `new_name` | body | `string` | no | For `rename_aisle`. |
+| `position` | body | `integer` | no | Where the aisle goes among the aisles, from 0. |
+
+Request body:
+
+```json
+{
+  "revision": "edbf1fd2579f964e",
+  "changes": [
+    { "action": "add_aisle", "name": "snacks" },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["almonds"] },
+    { "action": "add_names", "name": "butter", "names": ["Butter"] },
+    { "action": "add_ingredient", "aisle": "snacks", "names": ["Butter"] }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "error": "Change 4: \"Butter\" is already in the \"milk and dairy\" aisle"
+}
+```
+
+### `GET /api/aisles/raw`
+
+Read the aisle file as text
+
+The file exactly as written, with its `revision`. `404` when there is no aisle file. The `content` below is cut short.
+
+Response:
+
+```json
+{
+  "content": "[fruit and veg]\napples\nbananas\ngrapes\n",
+  "revision": "edbf1fd2579f964e"
+}
+```
+
+### `PUT /api/aisles/raw`
+
+Replace the aisle file
+
+Writes `content` as the whole file once the aisle parser accepts it, and answers as `GET /api/aisles` does. Otherwise `400` naming the line, and the file is left alone.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `content` | body | `string` | yes | The new file. |
+| `revision` | body | `string` | no | The `revision` the text was edited from. |
+
+Request body:
+
+```json
+{
+  "content": "[a]\nx\n[b]\nx\n"
+}
+```
+
+Response:
+
+```json
+{
+  "error": "Line 4: Duplicate ingredient: 'x'"
+}
+```
+
+### `GET /api/aisles/uncategorized`
+
+Ingredients without an aisle
+
+The ingredients the recipes and menus use that no aisle names — what `cook doctor aisle` reports — with the files using each. `link` is what follows `/recipe/` in that file's page address. Scans the whole collection, so it takes longer than the other reads. The response below is trimmed to two of the seed's eleven.
+
+Response:
+
+```json
+{
+  "total_recipes": 14,
+  "ingredients": [
+    {
+      "name": "San Marzano tomato sauce",
+      "recipes": [
+        { "path": "Neapolitan Pizza.cook", "link": "Neapolitan Pizza" }
+      ]
+    },
+    {
+      "name": "almonds",
+      "recipes": [
+        { "path": "Weekly Plan.menu", "link": "Weekly Plan.menu" }
+      ]
+    }
+  ]
+}
+```
+
 ## Search & Stats
 
 Collection-wide queries.
@@ -844,7 +1302,7 @@ Collection-wide queries.
 
 Full-text recipe search
 
-Matches against recipe names and content. Menus are searched alongside recipes. `q` is required: omitting it entirely returns a plain-text 400 from axum's query deserializer (`Failed to deserialize query string: missing field q`), not the page's usual JSON error envelope — the same shape as the `scale` parameter's failure mode on `GET /api/recipes/*path`. A present but empty `q=` is not rejected, though: it matches everything and returns the whole collection.
+Matches against recipe names and content. Menus are searched alongside recipes. `q` is required: omitting it entirely returns a plain-text 400 from axum's query deserializer (`Failed to deserialize query string: missing field q`), not the page's usual JSON error envelope — the same shape as the `scale` parameter's failure mode on `GET /api/recipes/{*path}`. A present but empty `q=` is not rejected, though: it matches everything and returns the whole collection.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -917,7 +1375,7 @@ Long-lived connections. Neither of these returns a normal JSON response.
 
 Server-sent events for shopping list changes
 
-Emits a `change` event whenever `.shopping-list` or `.shopping-checked` is modified on disk — including by another client or by the `cook` CLI. The event's `file` field is `"list"` or `"checked"`, naming which file changed (captured live below by editing the shopping list in a second shell while connected). It is not a snapshot of what changed, so the intended pattern is to re-fetch the list on each event rather than to apply a diff. A `ping` keep-alive comment is sent every 30 seconds. If the filesystem watcher failed to start, the stream still connects and returns 200 but never emits an event.
+Emits a `change` event whenever `.shopping-list` or `.shopping-checked` is written, created, replaced or removed on disk — by any client of this server (a client's own changes are announced back to it too), by CookCloud sync, or by hand. Reading the files, through this API or otherwise, never emits one. The event's `file` field is `"list"` or `"checked"`, naming which file changed (captured live below by editing the shopping list in a second shell while connected). It is not a snapshot of what changed, so the intended pattern is to re-fetch on each event rather than to apply a diff: after `"checked"` only the ticks changed, and `GET /api/shopping_list/checked` has them; after `"list"`, regenerate the list. A subscriber that falls too far behind to be told every change is sent a `"list"` event instead. A `ping` keep-alive comment is sent every 30 seconds. If the filesystem watcher failed to start, the stream still connects and returns 200 but never emits an event.
 
 Response:
 
@@ -933,11 +1391,11 @@ data: {"file":"checked"}
 
 Language server bridge (websocket)
 
-Upgrades to a websocket (verified: a plain WebSocket handshake against this path returns `101 Switching Protocols`) that bridges to a `cook lsp` subprocess, providing diagnostics and completions to the built-in editor. Messages are Language Server Protocol messages framed with `Content-Length` headers exactly as LSP over stdio would be — see the LSP specification for the format. Not a REST endpoint and not usable with a plain HTTP client.
+Upgrades to a websocket (verified: a plain WebSocket handshake against this path returns `101 Switching Protocols`) that bridges to a `cook lsp` subprocess, providing diagnostics and completions to the built-in editor. Each websocket text message is one bare JSON-RPC message; the bridge adds and strips the `Content-Length` framing LSP uses over stdio. The language server's workspace root is always the server's recipe directory: `initialize` has its `rootUri`, `rootPath` and `workspaceFolders` replaced, and `workspace/didChangeWorkspaceFolders` is dropped, as is any message that is not a single JSON object. Browsers apply no CORS to websockets, so a handshake is refused with `403` when its `Origin` is neither a `--cors-origin` nor the server's own page reached by IP address or `localhost`. Clients that send no `Origin` are unaffected, and `--no-csrf-check` turns the check off. Each open socket holds a subprocess, so no more than `--max-lsp-sessions` of them (8 by default) run at once; a handshake beyond that is refused with `503` and the usual JSON error body instead of being upgraded, and succeeds once an earlier socket closes. `--max-lsp-sessions 0` turns the endpoint off, which is worth doing when serving `--host` on a network you do not control. Not a REST endpoint and not usable with a plain HTTP client.
 
 ## Sync
 
-Sign in to CookCloud and sync recipes across devices. These four endpoints exist only when CookCLI is built with the `sync` feature, which is on by default — the badge on each entry marks that. Because the router is read as source text (`include_str!`), they are documented unconditionally rather than silently disappearing from this page in a build that lacks the feature. Authentication uses an OAuth device-code flow: start a login, show the user the code, then poll status until it completes.
+Sign in to Cook Cloud and sync recipes across devices (Cook Basic). These four endpoints exist only when CookCLI is built with the `sync` feature, which is on by default — the badge on each entry marks that. Because the router is read as source text (`include_str!`), they are documented unconditionally rather than silently disappearing from this page in a build that lacks the feature. Authentication uses an OAuth device-code flow: start a login, show the user the code, then poll status until it completes.
 
 ### `GET /api/sync/status`
 

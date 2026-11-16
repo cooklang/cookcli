@@ -42,14 +42,14 @@ pub enum CoreError {
         rendered: String,
     },
 
-    /// A scaling factor was not a finite number.
+    /// A scaling factor was not a finite, non-negative number.
     ///
-    /// Only NaN and infinity are rejected. Zero and negative factors are
-    /// accepted, because the CLI accepts them and this crate must not change
-    /// that behaviour. NaN is worth catching because a missing JavaScript
-    /// argument arrives as `undefined`, which becomes NaN across NAPI and
-    /// would otherwise silently produce NaN quantities.
-    #[error("scale factor must be finite, but was {scale}")]
+    /// NaN, infinity and negative factors are rejected; zero is accepted.
+    /// NaN is worth catching because a missing JavaScript argument arrives as
+    /// `undefined`, which becomes NaN across NAPI and would otherwise silently
+    /// produce NaN quantities. A negative factor yields amounts like `-400 g`
+    /// that no output format can write as scalable quantities (#722).
+    #[error("scale factor must be a finite non-negative number, but was {scale}")]
     InvalidScale {
         /// The rejected factor.
         scale: f64,
@@ -132,29 +132,13 @@ pub enum CoreError {
         rendered: String,
     },
 
-    // No variant for a circular recipe reference. Reference expansion is
-    // bounded rather than recursive, so a cycle neither loops nor fails — it
-    // silently double-counts the ingredients it revisits, which is
-    // <https://github.com/cooklang/cookcli/issues/424>. Whoever fixes that
-    // needs to reintroduce a variant here; it was removed rather than left
+    // No variant for a recipe reference that cannot be followed — a circular
+    // one, or one whose recipe cannot be scaled to the amount it asks for. Both
+    // are warnings on the shopping list, not failures of it (#424, #682).
+    // `Reference` and `CircularReference` were removed rather than left
     // unreachable, because a public variant nothing can return invites
     // consumers to write dead match arms and implies a guarantee this crate
     // does not make.
-    /// A recipe reference could not be expanded into its ingredients.
-    ///
-    /// The referenced recipe was found and parsed; what failed was working out
-    /// how much of it the referring recipe wants — an unusable quantity on the
-    /// reference, or a target the referenced recipe cannot be scaled to.
-    /// Absence and parse failures are [`CoreError::RecipeNotFound`] and
-    /// [`CoreError::Parse`] as usual.
-    #[error("cannot expand recipe reference '{name}': {message}")]
-    Reference {
-        /// The referenced recipe, as it is spelled in the referring recipe.
-        name: String,
-        /// What went wrong.
-        message: String,
-    },
-
     /// A directory could not be searched.
     ///
     /// Distinct from [`CoreError::Io`] because nothing was read: the search
@@ -228,7 +212,6 @@ mod tests {
             | CoreError::Config { .. }
             | CoreError::PantryEdit { .. }
             | CoreError::Render { .. }
-            | CoreError::Reference { .. }
             | CoreError::Search { .. }
             | CoreError::InvalidShoppingList { .. }
             | CoreError::Io { .. } => {}
@@ -263,10 +246,6 @@ mod tests {
             CoreError::Render {
                 message: "undefined variable".to_string(),
                 rendered: "line 1\nline 2\n".to_string(),
-            },
-            CoreError::Reference {
-                name: "./sauce".to_string(),
-                message: "unit mismatch (expected ml, got g)".to_string(),
             },
             CoreError::Search {
                 base_dir: Utf8PathBuf::from("/recipes/notes[2024]"),

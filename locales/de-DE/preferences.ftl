@@ -11,6 +11,7 @@ pref-aisle-path = Gang-Konfiguration
 pref-pantry-path = Vorratskammer-Konfiguration
 pref-base-path = Rezeptverzeichnis
 pref-not-configured = Nicht konfiguriert
+pref-global-config = Globale Konfiguration
 
 # Version
 pref-version = Version

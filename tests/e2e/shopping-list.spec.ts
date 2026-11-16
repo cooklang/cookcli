@@ -117,6 +117,24 @@ test.describe('Shopping List', () => {
     }
   });
 
+  test('should show the empty state after Clear All', async ({ page }) => {
+    // Add a known recipe so the list has something to clear
+    await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /Add to Shopping List/i }).click();
+    await page.waitForTimeout(500);
+
+    await helpers.goToShoppingList();
+    await expect(page.locator('#list-content li').first()).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: /Clear All/i }).click();
+
+    // The results container must stay visible so the "no items" message shows
+    const results = page.locator('#shopping-list-results');
+    await expect(results).toBeVisible();
+    await expect(results.getByText(/No items in shopping list/i)).toBeVisible({ timeout: 5_000 });
+  });
+
   test('should aggregate duplicate ingredients', async ({ page }) => {
     // Add same recipe multiple times or scale it - use known recipe
     await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
@@ -200,11 +218,11 @@ test.describe('Shopping List', () => {
     await helpers.navigateTo('/recipe/Breakfast/Easy Pancakes.cook');
     await page.waitForLoadState('networkidle');
 
-    // Check if scale input exists
-    const scaleInput = page.locator('#scale');
-    if (await scaleInput.count() > 0) {
-      // Scale recipe
-      await helpers.scaleRecipe(2);
+    // Easy Pancakes declares servings, so it has a servings stepper
+    const servingsInput = page.locator('#servings');
+    if (await servingsInput.count() > 0) {
+      // Double the recipe's 2 servings
+      await helpers.setServings(4);
 
       // Add to shopping list
       const addButton = page.getByRole('button', { name: /Add to Shopping List/i });

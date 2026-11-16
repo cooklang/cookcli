@@ -1,6 +1,6 @@
 //! Format a recipe as a standalone Typst document.
 
-use crate::{quantity::grouped_quantity_fmt, PaperSize};
+use crate::{number::format_quantity_with_unit, quantity::grouped_quantity_fmt, PaperSize};
 use cooklang::{
     convert::Converter,
     model::{Item, Section, Step},
@@ -114,7 +114,7 @@ fn write_title(w: &mut impl io::Write, name: &str, scale: f64) -> io::Result<()>
 }
 
 fn write_description(w: &mut impl io::Write, description: &str) -> io::Result<()> {
-    writeln!(w, "// DESCRIPTION: {}", description.replace('\n', " "))?;
+    comment(w, "DESCRIPTION", description)?;
     writeln!(w, r#"#quote[_"{}"_]"#, escape_typst(description))?;
     writeln!(w)?;
     Ok(())
@@ -122,10 +122,14 @@ fn write_description(w: &mut impl io::Write, description: &str) -> io::Result<()
 
 fn write_tags(w: &mut impl io::Write, tags: &[String]) -> io::Result<()> {
     if !tags.is_empty() {
-        writeln!(w, "// TAGS: {}", tags.join(", "))?;
+        comment(w, "TAGS", &tags.join(", "))?;
         write!(w, r"*Tags:* ")?;
         for (i, tag) in tags.iter().enumerate() {
-            write!(w, r"`{}`", escape_typst(tag))?;
+            // `#raw("…")`, not a `…` raw span: raw text has no escapes, so
+            // the markup map would render `gluten-free` as `gluten\-free`,
+            // and a backtick in a tag would end the span. A newline in one
+            // is flattened like any other metadata value (#704).
+            write!(w, r#"#raw("{}");"#, escape_typst_string(&single_line(tag)))?;
             if i < tags.len() - 1 {
                 write!(w, ", ")?;
             }
@@ -140,14 +144,16 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     let mut metadata_items = Vec::new();
 
     if let Some(servings) = recipe.metadata.servings() {
-        writeln!(w, "// SERVINGS: {servings}")?;
+        let servings = single_line(&servings.to_string());
+        comment(w, "SERVINGS", &servings)?;
         metadata_items.push(format!("Servings: {servings}"));
     }
 
     // Get prep time from metadata
     if let Some(prep_time_val) = recipe.metadata.get("prep time") {
         if let Some(prep_time_str) = prep_time_val.as_str() {
-            writeln!(w, "// PREP_TIME: {prep_time_str}")?;
+            let prep_time_str = single_line(prep_time_str);
+            comment(w, "PREP_TIME", &prep_time_str)?;
             metadata_items.push(format!("Prep time: {prep_time_str}"));
         }
     }
@@ -155,7 +161,8 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     // Get cook time from metadata
     if let Some(cook_time_val) = recipe.metadata.get("cook time") {
         if let Some(cook_time_str) = cook_time_val.as_str() {
-            writeln!(w, "// COOK_TIME: {cook_time_str}")?;
+            let cook_time_str = single_line(cook_time_str);
+            comment(w, "COOK_TIME", &cook_time_str)?;
             metadata_items.push(format!("Cook time: {cook_time_str}"));
         }
     }
@@ -163,16 +170,16 @@ fn write_metadata(w: &mut impl io::Write, recipe: &Recipe) -> io::Result<()> {
     // Add author if present
     if let Some(author) = recipe.metadata.author() {
         if let Some(author_name) = author.name() {
-            writeln!(w, "// AUTHOR: {author_name}")?;
+            comment(w, "AUTHOR", author_name)?;
         }
     }
 
     // Add source if present
     if let Some(source) = recipe.metadata.source() {
         if let Some(url) = source.url() {
-            writeln!(w, "// SOURCE: {url}")?;
+            comment(w, "SOURCE", url)?;
         } else if let Some(name) = source.name() {
-            writeln!(w, "// SOURCE: {name}")?;
+            comment(w, "SOURCE", name)?;
         }
     }
 
@@ -231,8 +238,8 @@ fn write_ingredients(
             let path = reference.components.join(sep);
             write!(
                 w,
-                r#"#ingredient("{}")"#,
-                escape_typst(&ingredient.display_name())
+                r#"#ingredient("{}");"#,
+                escape_typst_string(&ingredient.display_name())
             )?;
             write!(
                 w,
@@ -244,8 +251,8 @@ fn write_ingredients(
         } else {
             write!(
                 w,
-                r#"#ingredient("{}")"#,
-                escape_typst(&ingredient.display_name())
+                r#"#ingredient("{}");"#,
+                escape_typst_string(&ingredient.display_name())
             )?;
         }
 
@@ -290,7 +297,11 @@ fn write_cookware(
             )?;
         }
 
-        write!(w, r#"#cookware("{}")"#, escape_typst(cw.display_name()))?;
+        write!(
+            w,
+            r#"#cookware("{}");"#,
+            escape_typst_string(cw.display_name())
+        )?;
 
         if cw.modifiers().is_optional() {
             write!(w, r" _(optional)_")?;
@@ -364,11 +375,15 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
             }
             &Item::Ingredient { index } => {
                 let igr = &recipe.ingredients[index];
-                write!(w, r#"#ingredient("{}")"#, escape_typst(&igr.display_name()))?;
+                write!(
+                    w,
+                    r#"#ingredient("{}");"#,
+                    escape_typst_string(&igr.display_name())
+                )?;
             }
             &Item::Cookware { index } => {
                 let cw = &recipe.cookware[index];
-                write!(w, r#"#cookware("{}")"#, escape_typst(&cw.name))?;
+                write!(w, r#"#cookware("{}");"#, escape_typst_string(&cw.name))?;
             }
             &Item::Timer { index } => {
                 let t = &recipe.timers[index];
@@ -378,18 +393,18 @@ fn write_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Resul
                         name,
                         t.quantity
                             .as_ref()
-                            .map_or("".to_string(), |q| q.to_string())
+                            .map_or("".to_string(), format_quantity_with_unit)
                     )
                 } else {
                     t.quantity
                         .as_ref()
-                        .map_or("".to_string(), |q| q.to_string())
+                        .map_or("".to_string(), format_quantity_with_unit)
                 };
-                write!(w, r#"#timer("{}")"#, escape_typst(&timer_text))?;
+                write!(w, r#"#timer("{}");"#, escape_typst_string(&timer_text))?;
             }
             &Item::InlineQuantity { index } => {
                 let q = &recipe.inline_quantities[index];
-                write!(w, r"*{}*", escape_typst(&q.to_string()))?;
+                write!(w, r"*{}*", escape_typst(&format_quantity_with_unit(q)))?;
             }
         }
     }
@@ -421,7 +436,215 @@ fn escape_typst(text: &str) -> String {
             '+' => r"\+".to_string(),
             '/' => r"\/".to_string(),
             '*' => r"\*".to_string(),
+            // A `[` after a call is read as its content argument, and a
+            // `]` closes one early — `#quote[_"…"_]` included.
+            '[' => r"\[".to_string(),
+            ']' => r"\]".to_string(),
             _ => c.to_string(),
         })
         .collect()
+}
+
+/// Write `// KEY: value` with the value flattened to a single line.
+///
+/// Every comment that carries metadata text goes through here, so a
+/// newline in a value cannot slip a line past the `//` and be typeset as
+/// arbitrary Typst.
+fn comment(w: &mut impl io::Write, key: &str, value: &str) -> io::Result<()> {
+    writeln!(w, "// {key}: {}", single_line(value))
+}
+
+/// Flatten a metadata value to a single line.
+///
+/// Metadata comes from YAML frontmatter, where a block scalar carries
+/// newlines — and double-quoted YAML scalars can carry `\v`, `\f`, `\N`,
+/// `\L` and `\P` too. Typst's lexer ends a `//` comment on every one of
+/// them (any control character, plus U+2028 and U+2029), so all become a
+/// space here.
+fn single_line(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control() || c == '\u{2028}' || c == '\u{2029}' {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+/// Escape for a Typst *string literal* (`#name("...")`).
+///
+/// Strings are not markup: `\` and `"` are the only characters with an
+/// escape, so the markup map produced invalid input on two fronts — `\-`
+/// for a hyphen is not a valid string escape, and a bare `"` terminated
+/// the literal early enough to inject arbitrary Typst.
+fn escape_typst_string(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '\\' => r"\\".to_string(),
+            '"' => r#"\""#.to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::parse_recipe;
+    use cooklang::Converter;
+
+    fn rendered(frontmatter: &str) -> String {
+        let recipe = parse_recipe(frontmatter, "t", 1.0).unwrap().value;
+        let mut out = Vec::new();
+        print_typst(
+            &recipe,
+            "t",
+            1.0,
+            &Converter::default(),
+            &mut out,
+            PaperSize::A4,
+            2.5,
+        )
+        .unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn multiline_metadata_stays_in_the_comment() {
+        let out = rendered("---\nprep time: |\n  10\n  #emph[evil]\n---\n\nMix @flour{2%cups}.\n");
+        // Outside a `//` comment the payload may only appear escaped
+        // (`\#emph[evil]`); a bare `#emph[evil]` would run as markup.
+        for line in out.lines() {
+            assert!(
+                line.starts_with("//")
+                    || !line.replace(r"\#emph[evil]", "").contains("#emph[evil]"),
+                "escaped comment: {line}"
+            );
+        }
+    }
+
+    /// `Servings::Text` accepts any non-numeric string, so a block scalar
+    /// under `servings` reached `// SERVINGS:` raw before (#704).
+    #[test]
+    fn multiline_servings_stays_in_the_comment() {
+        let out =
+            rendered("---\nservings: |\n  4\n  #read(\"evil\")\n---\n\nMix @flour{2%cups}.\n");
+        for line in out.lines() {
+            assert!(
+                line.starts_with("//") || !line.replace(r"\#read(", "").contains("#read("),
+                "escaped comment: {line}"
+            );
+        }
+    }
+
+    /// Typst's lexer ends a `//` comment on more than `\r` and `\n`:
+    /// vertical tab, form feed, NEL, line separator and paragraph
+    /// separator all do. YAML double-quoted scalars carry them as
+    /// `\v \f \N \L \P` (#704).
+    #[test]
+    fn every_typst_line_terminator_stays_in_the_comment() {
+        for (escape, name) in [
+            ('\r', "CR"),
+            ('\u{b}', "VT"),
+            ('\u{c}', "FF"),
+            ('\u{85}', "NEL"),
+            ('\u{2028}', "LS"),
+            ('\u{2029}', "PS"),
+        ] {
+            let mut w = Vec::new();
+            comment(&mut w, "KEY", &format!("before{escape}#read(\"evil\")")).unwrap();
+            let line = String::from_utf8(w).unwrap();
+            assert_eq!(
+                line.trim_end_matches(['\r', '\n']),
+                "// KEY: before #read(\"evil\")",
+                "{name} must flatten"
+            );
+        }
+    }
+
+    /// The other metadata comments — author, source, tags — take the same
+    /// helper; one multiline source exercises all of them through the
+    /// document (#704).
+    #[test]
+    fn multiline_source_author_and_tags_stay_in_comments() {
+        let out = rendered(
+            "---\nsource: |\n  a\n  #read(\"s\")\nauthor: |\n  b\n  #read(\"a\")\ntags:\n  - \"c\\v#read(\\\"t\\\")\"\n---\n\nMix @flour{2%cups}.\n",
+        );
+        for line in out.lines() {
+            // `#read(` inside a `#raw("…")` string is text — its `"` is
+            // escaped — so only a bare `#read("` is a call.
+            assert!(
+                line.starts_with("//") || !line.replace(r#"\#read(""#, "").contains(r#"#read(""#),
+                "escaped comment: {line}"
+            );
+        }
+    }
+
+    /// `"` and `\` must not terminate a `#name("…")` string early — markup
+    /// escaping left `"` raw and wrote `\-` for a hyphen, which is not a
+    /// valid string escape (#703).
+    #[test]
+    fn string_escapes_stay_inside_the_literal() {
+        let out =
+            rendered("Season with @mom's \"special\" salt{1%tsp} and @all-purpose flour{2%cups}.");
+        assert!(
+            out.contains(r#"#ingredient("mom's \"special\" salt");"#),
+            "{out}"
+        );
+        // Hyphens are not markup inside a string: `all\-purpose` would be an
+        // invalid escape there.
+        assert!(
+            out.contains(r#"#ingredient("all-purpose flour");"#),
+            "{out}"
+        );
+    }
+
+    /// The same rule at the other string call sites: cookware and timer
+    /// names with a `"` or a `\` must not terminate `#cookware("…")` /
+    /// `#timer("…")` early.
+    #[test]
+    fn cookware_and_timer_strings_stay_escaped() {
+        let out = rendered("Use the #mom's \"big\" pan{} and wait ~rest\\\\ now{10%min}.");
+        assert!(out.contains(r#"#cookware("mom's \"big\" pan");"#), "{out}");
+        assert!(out.contains(r#"#timer("rest\\ now: 10 min");"#), "{out}");
+    }
+
+    /// `[` right after a call is its content argument to Typst, so a step
+    /// written `@salt{}[to taste]` did not compile; a `]` in a description
+    /// closed `#quote[_"…"_]` early. Both are escaped now.
+    #[test]
+    fn markup_brackets_are_escaped() {
+        let out = rendered("---\ndescription: \"a ] b\"\n---\n\nSalt @salt{}[to taste].");
+        assert!(out.contains(r"\[to taste\]"), "{out}");
+        assert!(out.contains(r"a \] b"), "{out}");
+    }
+
+    /// A call in markup keeps reading while `(`, `[` or `.ident` follows it:
+    /// `~{5%min}.at("zz", default: panic(read("f")))` evaluated the argument.
+    /// Every emitted call is terminated with `;`, which Typst consumes, so
+    /// what follows is text again (#703).
+    #[test]
+    fn calls_are_terminated_before_text() {
+        let out = rendered("Wait ~{5%min}.at(\"zz\") and @salt{1%g}(n)(x) then #pan{}.Then.\n");
+        assert!(out.contains(r#"#timer("5 min");.at("zz")"#), "{out}");
+        assert!(out.contains(r#"#ingredient("salt");(x)"#), "{out}");
+        assert!(out.contains(r#"#cookware("pan");.Then."#), "{out}");
+    }
+
+    /// Tags render through `#raw("…")`: raw text has no escapes, so markup
+    /// escaping printed `gluten\-free`, and a backtick ended the span.
+    #[test]
+    fn tags_render_as_raw_strings() {
+        let out = rendered("---\ntags:\n  - gluten-free\n  - \"it`s\"\n---\n\nMix @flour{2%cups}.");
+        assert!(out.contains(r#"#raw("gluten-free");"#), "{out}");
+        assert!(out.contains(r#"#raw("it`s");"#), "{out}");
+    }
+
+    #[test]
+    fn string_escape_covers_backslash_and_quote_only() {
+        assert_eq!(escape_typst_string("a\\b\"c"), r#"a\\b\"c"#);
+        assert_eq!(escape_typst("a[b]c"), r"a\[b\]c");
+    }
 }

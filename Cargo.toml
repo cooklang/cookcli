@@ -3,7 +3,7 @@ members = [".", "crates/core", "crates/format"]
 
 [package]
 name = "cookcli"
-version = "0.34.0"
+version = "0.41.1"
 edition = "2021"
 description = "A command-line interface for managing and working with Cooklang recipes"
 license = "MIT"
@@ -19,21 +19,29 @@ default = ["self-update", "sync", "server", "import", "lsp"]
 # `cook server` - the axum web UI. Pulls in the whole HTTP server stack.
 server = [
     "dep:axum",
-    "dep:askama_axum",
     "dep:tower",
     "dep:tower-http",
     "dep:notify",
     "dep:notify-debouncer-full",
     "dep:tokio-stream",
     "dep:futures-util",
+    "dep:fastrand",
     "dep:open",
+    "dep:image",
+    "dep:argon2",
+    "dep:hmac",
+    "dep:sha2",
+    "dep:console",
+    "dep:toml_edit",
+    "dep:same-file",
+    "dep:libc",
 ]
 # `cook import` - scrape a recipe from a website.
 import = ["dep:cooklang-import", "dep:reqwest"]
 # `cook lsp` - language server for editor integrations.
 lsp = ["dep:cooklang-language-server", "dep:tower-lsp"]
 
-self-update = ["dep:self_update", "dep:reqwest"]
+self-update = ["dep:self_update", "dep:reqwest", "dep:sha2", "dep:semver", "dep:self-replace", "dep:tempfile"]
 # The sync loop only runs inside the web server, so sync implies server.
 sync = [
     "server",
@@ -60,33 +68,46 @@ path = "src/main.rs"
 accept-language = "3"
 anstream = "1.0"
 anyhow = "1"
+# Password hashing for `cook server` sign-in (users.toml holds PHC strings).
+argon2 = { version = "0.5", features = ["std"], optional = true }
 askama = { version = "0.12", features = ["serde-json"] }
-askama_axum = { version = "0.4", optional = true }
-axum = { version = "0.7", features = ["ws"], optional = true }
+axum = { version = "0.8", features = ["ws"], optional = true }
 camino = { version = "1", features = ["serde1"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["unstable-locales"] }
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
+# No-echo password prompt for `cook server user add` / `hash-password`.
+console = { version = "0.16", default-features = false, features = ["std"], optional = true }
 base64 = { version = "0.23", optional = true }
 # bundled_units is deliberately NOT enabled: it carries the unit database, and with
 # it Converter::default() silently converts quantities to a "best" unit (e.g.
 # 5/8 cup -> 10 tbsp) and approximates fractions. Without it the converter is empty
 # and quantities stay as authored. If it ever comes back, some dep is leaking it
 # through feature unification (`cargo tree -e features -i cooklang`).
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
-cooklang-find = { version = "0.6.1", default-features = false }
-cooklang-import = { version = "0.9.14", optional = true }
-cooklang-sync-client = { version = "0.5.0", optional = true }
+cooklang = { version = "0.19.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+cooklang-find = { version = "0.12.0", default-features = false }
+cooklang-import = { version = "0.12.0", optional = true }
+cooklang-sync-client = { version = "0.6.0", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
-cooklang-language-server = { version = "0.2.4", optional = true }
-cooklang-reports = { version = "0.5.1" }
+cooklang-language-server = { version = "0.3.0", optional = true }
+cooklang-reports = { version = "0.7.0" }
 # `version` + `path`: local builds use the workspace copy, the published crate
 # resolves from crates.io.
-cookcli-core = { version = "0.34.0", path = "crates/core" }
+cookcli-core = { version = "0.41.1", path = "crates/core" }
 directories = "6"
+# Spells a canonical Windows path without `\\?\` where it can, for `glob` (#783).
+dunce = "1"
 flate2 = "1"
-fluent = "0.16"
+fluent = "0.17"
+fastrand = { version = "2", optional = true }
 futures-util = { version = "0.3", optional = true }
-fluent-templates = "0.10"
+fluent-templates = "0.15"
+# Title pictures uploaded through the web editor are decoded, resized and
+# re-encoded as JPEG. Only the codecs that path reads are enabled: the default
+# set adds a dozen formats, and `rayon`, for nothing the server uses.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
+# Signs `cook server` session cookies. 0.13 pairs with sha2 0.11 (digest 0.11).
+hmac = { version = "0.13", optional = true }
 mime_guess = "2.0"
 notify = { version = "8", optional = true }
 notify-debouncer-full = { version = "0.7", optional = true }
@@ -94,13 +115,27 @@ open = { version = "5.3", optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 rust-embed = "8"
+# Version ordering for `cook update` and `cook doctor`: string comparison
+# lies across a digit-width boundary ("0.38.9" > "0.38.10").
+semver = { version = "1", optional = true }
+# Tells a case-only rename (`pasta` to `Pasta`) on a case-insensitive file
+# system from a rename onto another file.
+same-file = { version = "1", optional = true }
 # "reqwest" selects the HTTP backend: since 0.44 it is a feature in its own right,
 # and "rustls" only configures TLS on an already-enabled backend ("reqwest?/rustls"),
 # so without it the crate compiles with no `http_client::get`.
-self_update = { version = "0.44", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "reqwest", "rustls"], optional = true }
+# 1.x puts the GitHub backend behind "github", and names the tar.gz support
+# "compression-tar-gz" (0.44's "compression-flate2"). 0.44 required zip ^6,
+# which every zip advisory up to 9.0.5 covers; 1.3 requires zip ^9.
+# "compression-zip-deflate": the Windows release zip deflates cook.exe (`7z a`).
+self_update = { version = "1.3", default-features = false, features = ["github", "archive-tar", "compression-tar-gz", "archive-zip", "compression-zip-deflate", "reqwest", "rustls", "progress-bar"], optional = true }
+# 0.44 re-exported these as `self_update::self_replace` and `self_update::TempDir`.
+self-replace = { version = "1", optional = true }
+tempfile = { version = "3", optional = true }
 serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
+sha2 = { version = "0.11", optional = true }
 sys-locale = "0.3"
 tabular = { version = "0.2", features = ["ansi-cell"] }
 tokio = { version = "1", features = ["full"] }
@@ -108,8 +143,10 @@ tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = { version = "0.7", optional = true }
 thiserror = { version = "2", optional = true }
 toml = "1.1.3"
+# Edits users.toml without losing the admin's comments.
+toml_edit = { version = "0.25", optional = true }
 tower = { version = "0.5", features = ["util"], optional = true }
-tower-http = { version = "0.7", features = ["fs", "trace", "cors", "normalize-path"], optional = true }
+tower-http = { version = "0.7", features = ["fs", "trace", "cors", "normalize-path", "set-header"], optional = true }
 tower-lsp = { version = "0.20", optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -120,6 +157,11 @@ walkdir = "2"
 uuid = { version = "1", features = ["v4"], optional = true }
 yansi = "1"
 
+# `statfs`, to tell a network share from a local disk before replacing a file
+# on it (`server::fs_atomic`, #814).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2", optional = true }
+
 [dev-dependencies]
 tempfile = "3"
 assert_cmd = "2"
@@ -129,10 +171,27 @@ walkdir = "2"
 insta = { version = "1", features = ["yaml", "json", "filters"] }
 strip-ansi-escapes = "0.2"
 tokio = { version = "1", features = ["full", "test-util"] }
+tokio-tungstenite = "0.30"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 regex = "1"
+
+# argon2 is unusably slow unoptimized (seconds per sign-in in a debug build,
+# and in every test that signs in), so optimize it even in dev builds.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
 
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
+
+# Faster builds of images meant for trying a change locally
+# (`make docker-build-dev`): thin LTO over parallel codegen units instead of
+# one fat LTO pass. Published images keep `release`.
+[profile.docker-dev]
+inherits = "release"
+lto = "thin"
+codegen-units = 16

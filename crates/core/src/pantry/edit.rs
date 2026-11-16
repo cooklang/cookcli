@@ -146,6 +146,44 @@ pub(super) fn item_exists(doc: &DocumentMut, section: &str, name: &str) -> bool 
     }
 }
 
+/// What kind of entry holds the root key `add` wants, when it is not a free
+/// item slot.
+///
+/// [`item_exists`] only sees items, but `general` names share the document
+/// root with sections and section names share it with top-level items, so a
+/// free *item* slot can still be a taken *name*: inserting `milk` into
+/// `general` writes over `[milk]`, and opening `[fridge]` writes over
+/// `fridge = "2%l"`. `remove` and `update` refuse the same collisions by not
+/// finding what they look for; `add` must refuse too rather than `insert`
+/// over it.
+pub(super) fn name_taken_differently(
+    doc: &DocumentMut,
+    section: &str,
+    name: &str,
+) -> Option<&'static str> {
+    if section == GENERAL {
+        return doc
+            .get(name)
+            .is_some_and(|item| item.is_table_like() || item.as_array_of_tables().is_some())
+            .then_some("a section");
+    }
+    match doc.get(section) {
+        // A section already holds the slot, and an array of names is turned
+        // into one by [`normalise_array_section`] rather than overwritten.
+        Some(item)
+            if item.is_table_like()
+                || item
+                    .as_array()
+                    .is_some_and(|a| a.iter().all(|v| v.as_str().is_some())) =>
+        {
+            None
+        }
+        Some(item) if item.as_array_of_tables().is_some() => Some("a section"),
+        Some(_) => Some("a top-level item"),
+        None => None,
+    }
+}
+
 /// The table holding `section`'s items, if it is there.
 fn section_entries<'a>(doc: &'a DocumentMut, section: &str) -> Option<&'a Table> {
     if section == GENERAL {
@@ -203,6 +241,46 @@ pub(super) fn remove(doc: &mut DocumentMut, section: &str, name: &str) {
     }
 }
 
+/// The root key other than `except` that `name` would collide with, compared
+/// ignoring case: a section, or an item above the first `[header]`.
+///
+/// Ignoring case because `Dairy` next to `dairy` reads as one section to anyone
+/// looking at the page, while the parser would keep them apart.
+pub(super) fn root_key_like(doc: &DocumentMut, name: &str, except: &str) -> Option<String> {
+    doc.as_table()
+        .iter()
+        .map(|(key, _)| key)
+        .find(|key| *key != except && key.to_lowercase() == name.to_lowercase())
+        .map(str::to_string)
+}
+
+/// Rename `section` to `new_name`, keeping where it is in the file.
+///
+/// The root is rebuilt in its own order with only that key changed, so a
+/// section written inline (`fridge = { … }`) keeps its place among the
+/// top-level entries; a `[header]` table carries its own position, and its
+/// decor — the comment above the header — moves with it. The caller has
+/// checked that `section` exists and that `new_name` is free.
+pub(super) fn rename_section(doc: &mut DocumentMut, section: &str, new_name: &str) {
+    let root = doc.as_table_mut();
+    let keys: Vec<String> = root.iter().map(|(key, _)| key.to_string()).collect();
+    let entries: Vec<(toml_edit::Key, Item)> = keys
+        .iter()
+        .filter_map(|key| root.remove_entry(key))
+        .collect();
+
+    for (key, item) in entries {
+        let key = if key.get() == section {
+            toml_edit::Key::new(new_name)
+                .with_leaf_decor(key.leaf_decor().clone())
+                .with_dotted_decor(key.dotted_decor().clone())
+        } else {
+            key
+        };
+        root.insert_formatted(&key, item);
+    }
+}
+
 /// Apply `attributes` to the item already at `section`/`name`.
 ///
 /// Only the attributes that are set are written. Everything else the entry
@@ -231,16 +309,23 @@ pub(super) fn apply(
         && attributes.bought.is_none()
         && attributes.expire.is_none()
         && attributes.low.is_none();
+    // The spacing and comment around the value — `milk = "1%l" # semi-skimmed`
+    // — belong to the line, not to the amount, so they stay.
+    let decor = existing.as_value().map(|value| value.decor().clone());
+
     if stays_short {
         if let Some(quantity) = &attributes.quantity {
             *existing = toml_edit::value(quantity.as_str());
         }
-        return Ok(());
+    } else {
+        let mut table = as_inline_table(existing, section, name)?;
+        attributes.write_into(&mut table);
+        *existing = toml_edit::value(table);
     }
 
-    let mut table = as_inline_table(existing, section, name)?;
-    attributes.write_into(&mut table);
-    *existing = toml_edit::value(table);
+    if let (Some(decor), Some(value)) = (decor, existing.as_value_mut()) {
+        *value.decor_mut() = decor;
+    }
     Ok(())
 }
 
@@ -332,8 +417,24 @@ impl Attributes {
             ("expire", &self.expire),
             ("low", &self.low),
         ] {
-            if let Some(value) = value {
+            let Some(value) = value else { continue };
+            if table.contains_key(key) {
                 table.insert(key, value.as_str().into());
+                continue;
+            }
+            // A key added after the last one takes over the space that
+            // closed the table, `{ quantity = "1%l" }` becoming
+            // `{ quantity = "1%l", expire = "…" }` and not `"1%l" , expire`.
+            let closing = table.iter_mut().last().and_then(|(_, last)| {
+                let suffix = last.decor().suffix()?.as_str()?.to_string();
+                suffix.trim().is_empty().then(|| {
+                    last.decor_mut().set_suffix("");
+                    suffix
+                })
+            });
+            table.insert(key, value.as_str().into());
+            if let (Some(closing), Some(added)) = (closing, table.get_mut(key)) {
+                added.decor_mut().set_suffix(closing);
             }
         }
     }
@@ -419,8 +520,51 @@ mod tests {
         assert!(out.contains("shelf = \"top\""), "{out}");
     }
 
+    /// An attribute added to an item written inline is spaced like the ones
+    /// already there, whichever way the file spaces them.
+    #[test]
+    fn an_added_attribute_is_spaced_like_its_neighbours() {
+        let expire = Attributes {
+            expire: Some("2026-11-02".to_string()),
+            ..Default::default()
+        };
+        let mut d = doc("[fridge]\nmilk = { quantity = \"2%l\" }\ncream = {quantity=\"1\"}\n");
+        apply(&mut d, "fridge", "milk", &expire).expect("applies");
+        apply(&mut d, "fridge", "cream", &expire).expect("applies");
+
+        let out = d.to_string();
+        assert!(
+            out.contains("milk = { quantity = \"2%l\", expire = \"2026-11-02\" }"),
+            "{out}"
+        );
+        assert!(
+            out.contains("cream = {quantity=\"1\", expire = \"2026-11-02\"}"),
+            "{out}"
+        );
+    }
+
     /// Changing only the quantity of a short-form item leaves it short form,
     /// rather than expanding it to `{ quantity = "..." }`.
+    #[test]
+    fn a_comment_after_an_item_survives_an_update() {
+        let mut d = doc("[fridge]\nmilk = \"1%l\" # semi-skimmed\neggs = \"6\"   # free range\n");
+        apply(&mut d, "fridge", "milk", &quantity("2%l")).unwrap();
+        apply(
+            &mut d,
+            "fridge",
+            "eggs",
+            &Attributes {
+                expire: Some("2027-01-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            d.to_string(),
+            "[fridge]\nmilk = \"2%l\" # semi-skimmed\neggs = { quantity = \"6\", expire = \"2027-01-01\" }   # free range\n"
+        );
+    }
+
     #[test]
     fn a_short_form_item_stays_short_when_only_the_quantity_changes() {
         let mut d = doc("[fridge]\nmilk = \"1%l\"\n");
@@ -519,5 +663,58 @@ mod tests {
         let mut d = doc("[fridge]\n");
         insert(&mut d, "fridge", "milk", &Attributes::default());
         assert!(d.to_string().contains("milk = \"\""), "{d}");
+    }
+
+    /// A rename touches the header and nothing else: the section stays where
+    /// it was, its comment stays above it, and its items keep their forms.
+    #[test]
+    fn a_renamed_section_keeps_its_place_comments_and_items() {
+        let mut d = doc("salt = \"1%kg\"\n\
+             \n\
+             # cold things\n\
+             [fridge]\n\
+             milk = \"1%l\" # semi-skimmed\n\
+             eggs = { quantity = \"6\", expire = \"2027-01-01\" }\n\
+             \n\
+             [freezer]\n\
+             peas = \"500%g\"\n");
+        rename_section(&mut d, "fridge", "Fridge door");
+
+        assert_eq!(
+            d.to_string(),
+            "salt = \"1%kg\"\n\
+             \n\
+             # cold things\n\
+             [\"Fridge door\"]\n\
+             milk = \"1%l\" # semi-skimmed\n\
+             eggs = { quantity = \"6\", expire = \"2027-01-01\" }\n\
+             \n\
+             [freezer]\n\
+             peas = \"500%g\"\n"
+        );
+    }
+
+    /// A section written inline among the top-level entries keeps its place
+    /// among them rather than moving to the end.
+    #[test]
+    fn an_inline_section_keeps_its_place_among_top_level_entries() {
+        let mut d = doc("fridge = { milk = \"1%l\" }\nshelf = { rice = \"1%kg\" }\n");
+        rename_section(&mut d, "fridge", "cold");
+        assert_eq!(
+            d.to_string(),
+            "cold = { milk = \"1%l\" }\nshelf = { rice = \"1%kg\" }\n"
+        );
+    }
+
+    #[test]
+    fn a_name_in_use_is_found_ignoring_case_but_not_the_section_itself() {
+        let d = doc("salt = \"1%kg\"\n[fridge]\nmilk = \"1%l\"\n[freezer]\npeas = \"1\"\n");
+        assert_eq!(
+            root_key_like(&d, "FREEZER", "fridge").as_deref(),
+            Some("freezer")
+        );
+        assert_eq!(root_key_like(&d, "Salt", "fridge").as_deref(), Some("salt"));
+        assert_eq!(root_key_like(&d, "Fridge", "fridge"), None);
+        assert_eq!(root_key_like(&d, "pantry", "fridge"), None);
     }
 }

@@ -39,6 +39,21 @@ updates:
           - minor
           - patch
 
+  # ---- Docker base images ----
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "0 9 1,15 * *"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      docker-base-images:
+        patterns:
+          - "*"
+
   # ---- GitHub Actions ----
   - package-ecosystem: github-actions
     directory: /

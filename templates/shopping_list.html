@@ -6,15 +6,15 @@
 <div class="flex flex-col lg:flex-row gap-6">
     <!-- Sidebar with selected recipes and pantry -->
     <div class="lg:w-2/5 xl:w-1/3">
-        <div class="bg-white rounded-2xl shadow-lg p-6 sticky top-6">
-            <h3 class="font-bold text-lg mb-3 text-orange-600">{{ tr.t("shopping-selected-recipes") }}</h3>
+        <div class="card p-6 sticky top-6">
+            <h2 class="font-bold text-title mb-3 text-accent-text">{{ tr.t("shopping-selected-recipes") }}</h2>
             <div id="selected-recipes" class="space-y-2 mb-6">
             </div>
 
             <!-- Pantry items section -->
             <div id="pantry-section" class="hidden">
-                <h3 class="font-bold text-lg mb-3 text-green-600">{{ tr.t("shopping-in-pantry") }}</h3>
-                <div id="pantry-items" class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200 max-h-64 overflow-y-auto">
+                <h2 class="font-bold text-title mb-3 text-text">{{ tr.t("shopping-in-pantry") }}</h2>
+                <div id="pantry-items" class="bg-sunk rounded-[var(--radius-control)] p-3 border border-line max-h-64 overflow-y-auto">
                 </div>
             </div>
         </div>
@@ -22,63 +22,85 @@
 
     <!-- Main content area with shopping list -->
     <div class="flex-1">
-        <div id="error-banner" class="hidden mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+        <div id="error-banner" class="hidden mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft">
             <div class="flex items-start gap-3">
-                <div class="shrink-0 text-red-500">
-                    <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="shrink-0 text-danger">
+                    <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                     </svg>
                 </div>
                 <div class="flex-1">
-                    <p id="error-message" class="text-red-700 text-sm font-mono whitespace-pre-wrap"></p>
+                    <p id="error-message" class="text-text text-sm font-mono whitespace-pre-wrap"></p>
                 </div>
-                <button onclick="hideError()" class="text-red-400 hover:text-red-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" onclick="hideError()" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
         </div>
+
+        <!-- A pantry file the list could not use, so nothing was taken off it.
+             Filled from the `pantry_error` of POST /api/shopping_list; the
+             pantry page shows the same error and has the file's Text tab. -->
+        <div id="pantry-unused" role="status" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
+            <p class="text-sm font-medium text-text mb-1">{{ tr.t("shopping-pantry-unused") }}</p>
+            <p id="pantry-unused-reason" class="text-sm text-muted font-mono whitespace-pre-wrap mb-2"></p>
+            <a href="{{ prefix }}/pantry" class="text-sm text-accent-text hover:underline">{{ tr.t("shopping-pantry-open") }}</a>
+        </div>
+
+        <!-- Why the list is not what its recipes say: a sub-recipe listed as
+             written because it could not be scaled. Filled from the
+             `warnings` of POST /api/shopping_list, already translated. -->
+        <div id="list-warnings" class="hidden mb-4 card p-4 border-l-[3px] border-l-info">
+            <p class="text-sm font-medium text-text mb-1">{{ tr.t("shopping-warnings") }}</p>
+            <ul id="list-warning-list" class="text-sm text-muted font-mono list-disc pl-5"></ul>
+        </div>
+
         <!-- Heading and list actions share a row; the heading lives here rather
              than in the JS-rendered list so the buttons stay put while the list
              below them re-renders. -->
         <div id="shopping-list-header" class="hidden flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 class="text-2xl font-bold text-orange-700">{{ tr.t("shopping-title") }}</h2>
+            <h1 class="text-display font-bold text-text">{{ tr.t("shopping-title") }}</h1>
             <div class="flex items-center gap-2">
                 <!-- Split button: the left half copies, the right half opens the
                      checkboxes that decide what the copied text contains. -->
                 <div id="copy-list-group" class="hidden relative">
                     <div class="flex">
-                        <button id="copy-list-button" onclick="copyList()" class="px-4 py-2 bg-orange-600 text-white rounded-l-lg hover:bg-orange-700 transition-all">
+                        <button id="copy-list-button" type="button" onclick="copyList()" class="btn btn-primary rounded-r-none">
                             {{ tr.t("shopping-copy") }}
                         </button>
                         <button id="copy-options-toggle" type="button" onclick="toggleCopyOptions()"
-                            aria-haspopup="true" aria-expanded="false" aria-controls="copy-options-menu"
-                            aria-label="{{ tr.t("shopping-copy-options") }}"
-                            class="px-3 py-2 bg-orange-600 text-white rounded-r-lg border-l border-orange-500 hover:bg-orange-700 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                aria-haspopup="true" aria-expanded="false" aria-controls="copy-options-menu"
+                                aria-label="{{ tr.t("shopping-copy-options") }}"
+                                class="btn btn-primary rounded-l-none -ml-px px-3 border-l-accent-ink/25">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
                     </div>
-                    <div id="copy-options-menu" class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1">
-                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                    <div id="copy-options-menu" class="hidden absolute right-0 mt-2 w-64 card shadow-[var(--shadow-overlay)] z-50 py-1">
+                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-text hover:bg-sunk cursor-pointer">
                             <input type="checkbox" id="copy-option-aisles" onchange="onCopyOptionChange()"
-                                class="w-4 h-4 text-orange-600 rounded-sm focus:ring-orange-500">
+                                   class="w-4 h-4 accent-[var(--accent)]">
                             <span>{{ tr.t("shopping-copy-include-aisles") }}</span>
                         </label>
-                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                        <label class="flex items-center gap-3 px-4 py-2.5 text-sm text-text hover:bg-sunk cursor-pointer">
                             <input type="checkbox" id="copy-option-amounts" onchange="onCopyOptionChange()"
-                                class="w-4 h-4 text-orange-600 rounded-sm focus:ring-orange-500">
+                                   class="w-4 h-4 accent-[var(--accent)]">
                             <span>{{ tr.t("shopping-copy-include-amounts") }}</span>
                         </label>
                     </div>
                 </div>
-                <button onclick="clearList()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
+                <a href="{{ prefix }}/aisles" class="btn">{{ tr.t("aisles-manage") }}</a>
+                {% if viewer.can_edit_lists() %}
+                <button type="button" onclick="clearList()" class="btn">
                     {{ tr.t("shopping-clear-all") }}
                 </button>
+                {% endif %}
             </div>
         </div>
+
         <div id="shopping-list-results">
             <div id="list-content"></div>
         </div>
@@ -87,6 +109,11 @@
 
 <script>
 let shoppingList = [];
+// Shown after optional ingredients.
+const OPTIONAL_LABEL = {{ tr.t("shopping-optional")|json|safe }};
+// Free-hand lines of the list, such as the ingredients written straight into
+// a menu whose days were added: `{name, quantity}`.
+let extraItems = [];
 
 // Last payload rendered by displayShoppingList(), kept so the copy button can
 // rebuild the list as plain text without re-fetching.
@@ -116,6 +143,16 @@ function encodeRecipePath(path) {
         .join('/');
 }
 
+// What a recipe link adds so the page opens at the size on the list: `?scale=`
+// with the factor written as the menu links write it (3 decimals at most), and
+// nothing at ×1 or when the size is unknown. A recipe with servings shows the
+// factor as servings.
+function scaleQuery(scale) {
+    const factor = Number(Number(scale).toFixed(3));
+    if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return '';
+    return '?scale=' + encodeURIComponent(String(factor));
+}
+
 function showError(message) {
     const banner = document.getElementById('error-banner');
     const msg = document.getElementById('error-message');
@@ -127,19 +164,152 @@ function hideError() {
     document.getElementById('error-banner').classList.add('hidden');
 }
 
-async function loadShoppingList() {
-    try {
-        const response = await fetch('{{ prefix }}/api/shopping_list/items');
-        shoppingList = await response.json();
-        renderSelectedRecipes();
+// Say why the pantry was not taken off the list, or hide the box when it was.
+function showPantryError(error) {
+    document.getElementById('pantry-unused').classList.toggle('hidden', !error);
+    document.getElementById('pantry-unused-reason').textContent = error || '';
+}
 
-        // Automatically generate the shopping list if there are items
-        if (shoppingList.length > 0) {
-            await generateList();
-        }
-    } catch (error) {
-        console.error('Failed to load shopping list:', error);
+// Show why the list is not what its recipes say, or nothing.
+function showWarnings(warnings) {
+    document.getElementById('list-warnings').classList.toggle('hidden', !warnings.length);
+    setHtml(
+        document.getElementById('list-warning-list'),
+        warnings.map(w => '<li>' + escHtml(w) + '</li>').join('')
+    );
+}
+
+// The last markup written into each container. Renders compare against it —
+// never against `innerHTML`, which the browser re-serialises — and leave the
+// DOM alone when nothing changed, so a refresh that brings back the same list
+// doesn't recreate the checkbox under the user's finger.
+const renderedHtml = new WeakMap();
+
+function setHtml(element, html) {
+    if (renderedHtml.get(element) === html) return;
+    element.innerHTML = html;
+    renderedHtml.set(element, html);
+}
+
+// Refreshes run one at a time. 'list' regenerates the whole list (whose
+// response carries the ticks as well); 'checked' only re-reads the ticks.
+// Asking for either while one runs queues a single follow-up, 'list' winning,
+// so a burst of requests costs at most one extra round.
+let pendingRefresh = null;
+let refreshing = null;
+
+function requestRefresh(kind) {
+    if (pendingRefresh !== 'list') {
+        pendingRefresh = kind;
     }
+    if (!refreshing) {
+        refreshing = runRefreshes();
+    }
+    return refreshing;
+}
+
+async function runRefreshes() {
+    // The `finally` belongs in here, not on the returned promise: one attached
+    // with `.finally()` runs a tick late, and a request arriving in that gap
+    // would queue behind a loop that has already stopped.
+    try {
+        while (pendingRefresh) {
+            const kind = pendingRefresh;
+            pendingRefresh = null;
+            try {
+                await (kind === 'list' ? refreshList() : refreshChecked());
+            } catch (error) {
+                console.error('Failed to refresh the shopping list:', error);
+            }
+        }
+    } finally {
+        refreshing = null;
+    }
+}
+
+// The `/items` response the list on the page was last generated from. A 'list'
+// refresh that reads the same items back — the echo of a change this page made
+// itself, or the refresh every event-stream connection starts with — only
+// re-reads the ticks instead of re-parsing every recipe.
+let generatedFrom = null;
+
+async function refreshList() {
+    const ticks = tickSnapshot();
+    const [response, extraResponse] = await Promise.all([
+        fetch('{{ prefix }}/api/shopping_list/items'),
+        fetch('{{ prefix }}/api/shopping_list/extra_items'),
+    ]);
+    if (!response.ok) {
+        throw new Error(`loading the shopping list answered ${response.status}`);
+    }
+    if (!extraResponse.ok) {
+        throw new Error(`loading the shopping list's extra items answered ${extraResponse.status}`);
+    }
+    const recipesText = await response.text();
+    const extraText = await extraResponse.text();
+    const items = recipesText + '\n' + extraText;
+    if (items === generatedFrom) {
+        return refreshChecked();
+    }
+
+    generatedFrom = null;
+    shoppingList = JSON.parse(recipesText);
+    extraItems = JSON.parse(extraText);
+    renderSelectedRecipes();
+
+    // Automatically generate the shopping list if there are items
+    if (listIsEmpty()) {
+        showPantryError(null);
+        showWarnings([]);
+    } else {
+        const data = await generateList();
+        if (!data) {
+            showPantryError(null);
+            showWarnings([]);
+            return;
+        }
+        showPantryError(data.pantry_error);
+        showWarnings(data.warnings || []);
+        displayShoppingList(data);
+        applyServerChecked(data.checked || [], ticks);
+    }
+    generatedFrom = items;
+}
+
+async function refreshChecked(ticks = tickSnapshot()) {
+    // With a tick in flight the answer couldn't be trusted (see
+    // applyServerChecked), and that tick's own announcement will ask again
+    // once it has landed.
+    if (ticks.busy) {
+        resyncLater();
+        return;
+    }
+    const response = await fetch('{{ prefix }}/api/shopping_list/checked');
+    if (!response.ok) {
+        throw new Error(`loading the ticked items answered ${response.status}`);
+    }
+    applyServerChecked(await response.json(), ticks);
+}
+
+function listIsEmpty() {
+    return shoppingList.length === 0 && extraItems.length === 0;
+}
+
+// The extra items as the sidebar lists them, each with its Remove button.
+function extraItemsHtml() {
+    if (extraItems.length === 0) return '';
+    const rows = extraItems.map(item => {
+        const amount = item.quantity ? ' ' + escHtml(String(item.quantity).replace('%', ' ')) : '';
+        const remove = window.__CAN_EDIT_LISTS__
+            ? `<button type="button" data-action="remove-extra" data-name="${escHtml(item.name)}" data-quantity="${escHtml(item.quantity == null ? '' : item.quantity)}" data-has-quantity="${item.quantity == null ? '' : '1'}" class="text-danger hover:underline font-medium text-sm">{{ tr.t("shopping-remove") }}</button>`
+            : '';
+        return `<li class="flex items-center justify-between gap-2 text-sm text-text"><span>${escHtml(item.name)}<span class="text-muted">${amount}</span></span>${remove}</li>`;
+    }).join('');
+    return `
+    <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
+        <div class="font-medium text-text mb-1">{{ tr.t("shopping-extra-items") }}</div>
+        <ul id="extra-items" class="space-y-1">${rows}</ul>
+    </div>`;
 }
 
 function renderSelectedRecipes() {
@@ -149,55 +319,56 @@ function renderSelectedRecipes() {
     // selection rather than the generated items: with recipes selected but
     // every ingredient in the pantry there is nothing to copy, yet Clear All
     // still has to be reachable.
-    setHeaderVisible(shoppingList.length > 0);
+    setHeaderVisible(!listIsEmpty());
 
-    if (shoppingList.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>';
-        document.getElementById('list-content').innerHTML = '<p class="text-gray-500">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
+    if (listIsEmpty()) {
+        setHtml(container, '<p class="text-faint text-sm">' + escHtml({{ tr.t("shopping-no-recipes")|json|safe }}) + '</p>');
+        setHtml(document.getElementById('list-content'), '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>');
+        document.getElementById('pantry-section').classList.add('hidden');
         lastListData = null;
         updateCopyButtonVisibility();
         return;
     }
 
-    container.innerHTML = shoppingList.map((item, index) => {
+    setHtml(container, shoppingList.map((item, index) => {
         // Plan/menu entry — show nested recipes
         if (item.recipes) {
             const recipesHtml = item.recipes.map(recipe => {
                 const refs = recipe.included_references || [];
+                const refNames = recipe.included_reference_names || [];
                 const refsHtml = refs.length > 0 ? `
-                    <ul class="mt-1 ml-8 pl-2 border-l border-indigo-200 space-y-0.5">
-                        ${refs.map(ref => {
-                            const refName = ref.split('/').pop();
-                            return `<li class="text-xs text-gray-400 flex items-center gap-1">
-                                <svg class="w-3 h-3 text-blue-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
+                        ${refs.map((ref, i) => {
+                            const refName = refNames[i] || ref.split('/').pop();
+                            const refScale = (recipe.included_reference_scales || [])[i];
+                            return `<li class="text-xs text-faint flex items-center gap-1">
+                                <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                 </svg>
-                                <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
+                                <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}${scaleQuery(refScale)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
                             </li>`;
                         }).join('')}
                     </ul>` : '';
-                return `<li class="text-sm text-gray-600 flex flex-col">
+                return `<li class="text-sm text-muted flex flex-col">
                     <div class="flex items-center gap-1">
-                        <svg class="w-3 h-3 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}" class="hover:text-orange-600 transition-colors">${escHtml(recipe.name)}</a>
-                        <span class="text-purple-400 text-xs">(×${escHtml(recipe.scale)})</span>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(recipe.path)}${scaleQuery(recipe.scale)}" class="hover:text-accent-text hover:underline">${escHtml(recipe.name)}</a>
+                        <span class="text-faint text-xs">(×${escHtml(recipe.scale)})</span>
                     </div>
                     ${refsHtml}
                 </li>`;
             }).join('');
 
             return `
-            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
+            <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
                 <div class="flex items-center justify-between">
                     <div>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
-                        <span class="text-indigo-600 ml-2 text-xs font-semibold uppercase">plan</span>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}${scaleQuery(item.scale)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                        <span class="text-accent-text ml-2 text-xs font-semibold uppercase">plan</span>
                     </div>
-                    <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
-                        {{ tr.t("shopping-remove") }}
-                    </button>
+                    ${removeButton(item.path, index)}
                 </div>
                 <ul class="mt-2 ml-4 space-y-1">${recipesHtml}</ul>
             </div>`;
@@ -205,33 +376,45 @@ function renderSelectedRecipes() {
 
         // Regular recipe entry
         const refs = item.included_references || [];
+        // The titles the server resolved, in the same order as `refs`.
+        const refNames = item.included_reference_names || [];
         const refsHtml = refs.length > 0 ? `
-            <ul class="mt-1 ml-8 pl-2 border-l border-purple-200 space-y-0.5">
-                ${refs.map(ref => {
-                    const refName = ref.split('/').pop();
-                    return `<li class="text-sm text-gray-500 flex items-center gap-1">
-                        <svg class="w-3 h-3 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <ul class="mt-1 ml-8 pl-2 border-l border-line space-y-0.5">
+                ${refs.map((ref, i) => {
+                    const refName = refNames[i] || ref.split('/').pop();
+                    const refScale = (item.included_reference_scales || [])[i];
+                    return `<li class="text-sm text-faint flex items-center gap-1">
+                        <svg class="w-3 h-3 text-faint shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
-                        <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}" class="hover:text-orange-600 transition-colors">${escHtml(refName)}</a>
+                        <a href="{{ prefix }}/recipe/${encodeRecipePath(ref)}${scaleQuery(refScale)}" class="hover:text-accent-text hover:underline">${escHtml(refName)}</a>
                     </li>`;
                 }).join('')}
             </ul>` : '';
 
         return `
-        <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
+        <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
             <div class="flex items-center justify-between">
                 <div>
-                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}" class="font-medium text-gray-800 hover:text-orange-600 underline decoration-gray-300 hover:decoration-orange-400 transition-colors">${escHtml(item.name)}</a>
-                    <span class="text-purple-600 ml-2 text-sm">(×${escHtml(item.scale)})</span>
+                    <a href="{{ prefix }}/recipe/${encodeRecipePath(item.path)}${scaleQuery(item.scale)}" class="font-medium text-text hover:text-accent-text underline decoration-[var(--text-faint)] hover:decoration-[var(--accent)]">${escHtml(item.name)}</a>
+                    <span class="text-muted ml-2 text-sm">(×${escHtml(item.scale)})</span>
                 </div>
-                <button type="button" data-action="remove-recipe" data-path="${escHtml(item.path)}" class="text-red-500 hover:text-red-700 font-medium text-sm">
-                    {{ tr.t("shopping-remove") }}
-                </button>
+                ${removeButton(item.path, index)}
             </div>
             ${refsHtml}
         </div>`;
-    }).join('');
+    }).join('') + extraItemsHtml());
+}
+
+// Guests may look at the list but not change it, so they get no Remove
+// buttons and the ticks are read-only. The server refuses them regardless.
+// The entry's position goes along with its path: the same recipe can be on the
+// list twice, and the path alone would take the first copy.
+function removeButton(path, index) {
+    if (!window.__CAN_EDIT_LISTS__) return '';
+    return `<button type="button" data-action="remove-recipe" data-path="${escHtml(path)}" data-index="${index}" class="text-danger hover:underline font-medium text-sm">
+        {{ tr.t("shopping-remove") }}
+    </button>`;
 }
 
 // Event delegation for dynamically-rendered remove buttons: avoids inline
@@ -240,8 +423,37 @@ function renderSelectedRecipes() {
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-action="remove-recipe"]');
     if (!btn) return;
-    removeRecipe(btn.dataset.path);
+    removeRecipe(btn.dataset.path, Number(btn.dataset.index));
 });
+
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action="remove-extra"]');
+    if (!btn) return;
+    removeExtraItem({
+        name: btn.dataset.name,
+        quantity: btn.dataset.hasQuantity ? btn.dataset.quantity : null,
+    });
+});
+
+async function removeExtraItem(item) {
+    try {
+        const response = await fetch('{{ prefix }}/api/shopping_list/remove_extra_item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item)
+        });
+        if (response.ok) {
+            hideError();
+            await requestRefresh('list');
+        } else {
+            const data = await response.json().catch(() => ({}));
+            showError(data.error || 'Failed to remove item');
+        }
+    } catch (error) {
+        console.error('Failed to remove item:', error);
+        showError('Failed to remove item');
+    }
+}
 
 // Same delegation trick for ingredient checkboxes — inline `onchange` with
 // unescaped ingredient names would execute script if a name contained a
@@ -249,24 +461,30 @@ document.addEventListener('click', (event) => {
 document.addEventListener('change', (event) => {
     const input = event.target.closest('[data-action="toggle-item"]');
     if (!input) return;
-    toggleItem(input.dataset.itemId, input.checked, input.dataset.ingredientName);
+    toggleItem(input);
 });
 
-async function removeRecipe(path) {
+async function removeRecipe(path, index) {
     try {
         const response = await fetch('{{ prefix }}/api/shopping_list/remove', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ path })
+            body: JSON.stringify({ path, index })
         });
 
         if (response.ok) {
             hideError();
-            await loadShoppingList();
+            await requestRefresh('list');
         } else {
             const data = await response.json().catch(() => ({}));
+            // 409: the list changed since it was drawn, so nothing was
+            // removed. Draw it again so the next click names the right entry —
+            // first, as regenerating the list hides the error.
+            if (response.status === 409) {
+                await requestRefresh('list');
+            }
             showError(data.error || 'Failed to remove recipe');
         }
     } catch (error) {
@@ -283,8 +501,7 @@ async function clearList() {
 
         if (response.ok) {
             hideError();
-            await loadShoppingList();
-            document.getElementById('shopping-list-results').classList.add('hidden');
+            await requestRefresh('list');
         } else {
             const data = await response.json().catch(() => ({}));
             showError(data.error || 'Failed to clear list');
@@ -295,12 +512,14 @@ async function clearList() {
     }
 }
 
+// Generate the list for the recipes in `shoppingList`. Returns the generated
+// list, or null once it has shown why there isn't one.
 async function generateList() {
     hideError();
 
-    if (shoppingList.length === 0) {
+    if (listIsEmpty()) {
         showError({{ tr.t("shopping-add-recipes-first")|json|safe }});
-        return;
+        return null;
     }
 
     try {
@@ -324,6 +543,9 @@ async function generateList() {
                         if (recipe.included_references) {
                             req.included_references = recipe.included_references;
                         }
+                        if (recipe.optional_ingredients) {
+                            req.optional_ingredients = recipe.optional_ingredients;
+                        }
                         return req;
                     });
                     return [menuFreehand, ...recipeRequests];
@@ -333,28 +555,34 @@ async function generateList() {
                 if (item.included_references) {
                     req.included_references = item.included_references;
                 }
+                // Chosen optional ingredients, with the amounts to buy.
+                if (item.optional_ingredients) {
+                    req.optional_ingredients = item.optional_ingredients;
+                }
                 return [req];
-            }))
+            }).concat(extraItems.map(item => ({ name: item.name, quantity: item.quantity })))
+            )
         });
 
         const data = await response.json();
         if (!response.ok) {
             showError(data.error || {{ tr.t("shopping-failed-to-generate")|json|safe }});
-            return;
+            return null;
         }
-        displayShoppingList(data);
+        return data;
     } catch (error) {
         console.error('Failed to generate shopping list:', error);
         showError({{ tr.t("shopping-failed-to-generate")|json|safe }});
+        return null;
     }
 }
 
 // Format a Cooklang Number tagged enum ({type: "regular"|"fraction", value: ...})
-function formatCooklangNumber(num) {
+function formatCooklangNumber(num, fractions = true) {
     if (!num || typeof num !== 'object') return '';
     switch (num.type) {
         case 'regular':
-            return formatNumber(num.value);
+            return formatNumber(num.value, fractions);
         case 'fraction': {
             const f = num.value;
             const whole = f.whole || 0;
@@ -375,14 +603,14 @@ function formatCooklangNumber(num) {
 }
 
 // Format a Cooklang Value tagged enum ({type: "number"|"range"|"text", value: ...})
-function formatCooklangValue(value) {
+function formatCooklangValue(value, fractions = true) {
     if (!value || typeof value !== 'object') return '';
     switch (value.type) {
         case 'number':
-            return formatCooklangNumber(value.value);
+            return formatCooklangNumber(value.value, fractions);
         case 'range': {
-            const start = formatCooklangNumber(value.value.start);
-            const end = formatCooklangNumber(value.value.end);
+            const start = formatCooklangNumber(value.value.start, fractions);
+            const end = formatCooklangNumber(value.value.end, fractions);
             return `${start} - ${end}`;
         }
         case 'text':
@@ -392,8 +620,10 @@ function formatCooklangValue(value) {
     }
 }
 
-// Format numbers with fractions
-function formatNumber(value) {
+// Format numbers with fractions: the rules of `format_number` and
+// `unit_uses_fractions` in crates/format/src/number.rs, which every other page
+// and output uses. Change both together.
+function formatNumber(value, fractions = true) {
     // Round to reasonable precision
     const rounded = Math.round(value * 1000000) / 1000000;
 
@@ -403,7 +633,7 @@ function formatNumber(value) {
     }
 
     // Try to convert to common fraction
-    const fraction = decimalToFraction(rounded);
+    const fraction = fractions ? decimalToFraction(rounded) : null;
     if (fraction) {
         return fraction;
     }
@@ -418,6 +648,28 @@ function formatNumber(value) {
     }
 
     return result;
+}
+
+// Metric, time and temperature units read in decimals: `100.625 g`, not
+// `100 5/8 g`. A bare `c` or `f` is not here: `c` is also a cup.
+const DECIMAL_UNITS = new Set([
+    'mg', 'milligram', 'milligrams', 'milligramme', 'milligrammes',
+    'g', 'gr', 'gram', 'grams', 'gramme', 'grammes',
+    'kg', 'kilo', 'kilos', 'kilogram', 'kilograms', 'kilogramme', 'kilogrammes',
+    'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres',
+    'cl', 'centiliter', 'centiliters', 'centilitre', 'centilitres',
+    'dl', 'deciliter', 'deciliters', 'decilitre', 'decilitres',
+    'l', 'liter', 'liters', 'litre', 'litres',
+    's', 'sec', 'secs', 'second', 'seconds',
+    'min', 'mins', 'minute', 'minutes',
+    'h', 'hr', 'hrs', 'hour', 'hours',
+    'day', 'days',
+    '°c', '°f', 'celsius', 'fahrenheit',
+]);
+
+function unitUsesFractions(unit) {
+    if (!unit) return true;
+    return !DECIMAL_UNITS.has(unit.trim().replace(/\.$/, '').toLowerCase());
 }
 
 function decimalToFraction(value) {
@@ -450,43 +702,131 @@ function decimalToFraction(value) {
     return null;
 }
 
+// The aisle names, for placing an ingredient from the "other" group. Fetched
+// the first time such a group shows up, for someone who may change the
+// aisles; `false` when there is no aisle file to add to.
+let aisleNames = null;
+let aisleNamesLoading = false;
+
+// Ends with "+ New aisle…", which asks for a name and creates the aisle along
+// with the ingredient.
+function assignAisleSelect(name) {
+    if (!window.__CAN_EDIT_LISTS__ || !aisleNames) return '';
+    return `<select class="select h-8 text-sm ml-2 max-w-[10rem]" data-action="assign-aisle"
+                data-ingredient-name="${escHtml(name)}"
+                aria-label="${escHtml({{ tr.t("aisles-assign")|json|safe }} + ': ' + name)}">
+            <option value="">${escHtml({{ tr.t("aisles-assign")|json|safe }})}</option>
+            ${aisleNames.map(aisle => `<option value="${escHtml(aisle)}">${escHtml(aisle)}</option>`).join('')}
+            <option value="" data-new-aisle>${escHtml({{ tr.t("aisles-new-aisle")|json|safe }})}</option>
+        </select>`;
+}
+
+async function loadAisleNames() {
+    if (aisleNames !== null || aisleNamesLoading) return;
+    aisleNamesLoading = true;
+    try {
+        const response = await fetch('{{ prefix }}/api/aisles');
+        if (!response.ok) return;
+        const data = await response.json();
+        aisleNames = data.configured ? data.aisles.map(aisle => aisle.name) : false;
+        if (lastListData) displayShoppingList(lastListData);
+    } catch (error) {
+        console.error('Failed to load the aisles:', error);
+    } finally {
+        aisleNamesLoading = false;
+    }
+}
+
+document.addEventListener('change', async (event) => {
+    const select = event.target.closest('[data-action="assign-aisle"]');
+    if (!select) return;
+    let aisle = select.value;
+    const changes = [];
+    if ('newAisle' in select.selectedOptions[0].dataset) {
+        aisle = (prompt({{ tr.t("aisles-new-aisle-prompt")|json|safe }}) || '').trim();
+        const same = (aisleNames || []).find(name => name.toLowerCase() === aisle.toLowerCase());
+        if (same) {
+            aisle = same;
+        } else if (aisle) {
+            changes.push({ action: 'add_aisle', name: aisle });
+        }
+    }
+    if (!aisle) {
+        select.value = '';
+        return;
+    }
+    changes.push({ action: 'add_ingredient', aisle, names: [select.dataset.ingredientName] });
+    select.disabled = true;
+    try {
+        const response = await fetch('{{ prefix }}/api/aisles/changes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(changes.length === 1 ? changes[0] : { changes }),
+        });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || {{ tr.t("aisles-failed")|json|safe }});
+        }
+        if (changes.length > 1) aisleNames.push(aisle);
+        // The list is the same; how it is grouped is not.
+        generatedFrom = null;
+        await requestRefresh('list');
+    } catch (error) {
+        showError(error.message);
+        select.disabled = false;
+        select.value = '';
+    }
+});
+
+// Render the generated list. The markup carries no ticks — those are applied
+// from `checkedItems` by applyCheckedStates() at the end — so a list whose
+// items haven't changed renders to the same markup and setHtml() leaves it in
+// place. One that does change (the aisle pickers arriving after the list, say)
+// gets fresh boxes, which have to be ticked again.
 function displayShoppingList(data) {
     const resultsDiv = document.getElementById('shopping-list-results');
     const contentDiv = document.getElementById('list-content');
     const pantrySection = document.getElementById('pantry-section');
     const pantryItems = document.getElementById('pantry-items');
 
-    // Populate checked set from server response
-    checkedItems = new Set((data.checked || []).map(n => n.toLowerCase()));
-
     lastListData = data;
-    updateCopyButtonVisibility();
+    // Live updates from another tab render here too, so make sure the
+    // container is showing whatever hid it earlier.
+    resultsDiv.classList.remove('hidden');
 
     let html = '';
 
     // Display items to buy (organized by aisle)
+    if (window.__CAN_EDIT_LISTS__ && !aisleNames
+        && (data.categories || []).some(category => category.category === 'other')) {
+        loadAisleNames();
+    }
     if (data.categories && data.categories.length > 0) {
-        html += data.categories.map(category => `
-            <div class="mb-6 bg-white rounded-lg p-4 shadow-xs">
-                <h3 class="font-semibold text-lg mb-3 text-orange-600">${escHtml(category.category)}</h3>
+        html += data.categories.map((category, categoryIndex) => `
+            <div class="aisle-section mb-6 card p-4">
+                <h2 class="aisle-name font-semibold text-title mb-3 text-accent-text">${escHtml(category.category)}</h2>
                 <ul class="space-y-2">
-                    ${category.items.map((item, idx) => {
-                        // Use ingredient name as the unique ID for localStorage
-                        const itemId = `item-${item.name.replace(/\s+/g, '-')}`;
+                    ${category.items.map((item, itemIndex) => {
+                        // Positional rather than derived from the name, which
+                        // could collide ("olive oil" and "olive-oil") and send
+                        // a click on one label to the other's checkbox.
+                        const itemId = `item-${categoryIndex}-${itemIndex}`;
                         return `
-                        <li class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded-sm transition-colors">
+                        <li class="flex items-center justify-between py-2 px-3 hover:bg-sunk rounded-[var(--radius-control)]">
                             <div class="flex items-center flex-1">
                                 <input type="checkbox"
-                                    id="${escHtml(itemId)}"
-                                    class="w-5 h-5 text-orange-600 rounded-sm focus:ring-orange-500 mr-3"
+                                    id="${itemId}"
+                                    class="list-checkbox accent-[var(--accent)] mr-3"
+                                    ${window.__CAN_EDIT_LISTS__ ? '' : 'disabled'}
                                     data-action="toggle-item"
-                                    data-item-id="${escHtml(itemId)}"
                                     data-ingredient-name="${escHtml(item.name)}">
-                                <label for="${escHtml(itemId)}" class="cursor-pointer flex-1">
+                                <label for="${itemId}" class="cursor-pointer flex-1">
                                     <span class="item-name">${escHtml(item.name)}</span>
+                                    ${item.optional ? `<span class="italic text-muted ml-1">${escHtml(OPTIONAL_LABEL)}</span>` : ''}
                                 </label>
+                                ${category.category === 'other' ? assignAisleSelect(item.name) : ''}
                             </div>
-                            <span class="text-gray-600 ml-4">
+                            <span class="text-muted ml-4">
                                 ${escHtml(formatQuantities(item.quantities))}
                             </span>
                         </li>
@@ -499,7 +839,7 @@ function displayShoppingList(data) {
     // Display pantry items in sidebar
     if (data.pantry_items && data.pantry_items.length > 0) {
         pantrySection.classList.remove('hidden');
-        pantryItems.innerHTML = `
+        setHtml(pantryItems, `
             <ul class="space-y-2 text-sm">
                 ${data.pantry_items.map((item, idx) => {
                     // Handle both string array and object array formats
@@ -508,29 +848,28 @@ function displayShoppingList(data) {
                     return `
                     <li class="flex items-center justify-between py-1">
                         <div class="flex items-center flex-1">
-                            <svg class="w-4 h-4 text-green-600 mr-2 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="w-4 h-4 text-ok mr-2 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                             </svg>
-                            <span class="text-green-800">${escHtml(itemName)}</span>
+                            <span class="text-text">${escHtml(itemName)}</span>
                         </div>
-                        <span class="text-green-700 text-xs ml-2">
+                        <span class="text-muted text-xs ml-2">
                             ${itemQuantities ? escHtml(formatQuantities(itemQuantities)) : ''}
                         </span>
                     </li>
                 `}).join('')}
             </ul>
-        `;
+        `);
     } else {
         pantrySection.classList.add('hidden');
     }
 
     if (html === '') {
-        contentDiv.innerHTML = '<p class="text-gray-500">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>';
+        setHtml(contentDiv, '<p class="text-faint">' + escHtml({{ tr.t("shopping-no-items")|json|safe }}) + '</p>');
     } else {
-        contentDiv.innerHTML = html;
-        // Load saved checked states
-        loadCheckedStates();
+        setHtml(contentDiv, html);
     }
+    applyCheckedStates();
 }
 
 // Helper function to format quantities
@@ -542,7 +881,7 @@ function formatQuantities(quantities) {
         let val = '';
 
         if (q.value) {
-            val = formatCooklangValue(q.value);
+            val = formatCooklangValue(q.value, unitUsesFractions(q.unit));
         }
 
         let unit = q.unit || '';
@@ -552,6 +891,19 @@ function formatQuantities(quantities) {
 
 // Store for checked items - using ingredient names (lowercased) as keys
 let checkedItems = new Set();
+
+// Ticks sent but not yet confirmed, and a count of every tick made on this
+// page. A read of the checked log that overlapped a tick may have been answered
+// before that tick was written, so its answer can't be trusted: see
+// applyServerChecked().
+let togglesInFlight = 0;
+let toggleEpoch = 0;
+// Ticks go to the server one at a time, in the order they were made. Two
+// requests in flight at once can land either way round, and a quick tick and
+// untick of the same item landing backwards would leave it ticked.
+let toggleChain = Promise.resolve();
+// Pending re-read of the ticks after one couldn't be used: see resyncLater().
+let resyncTimer = null;
 
 // What the copy button puts on the clipboard. Persisted so the choice survives
 // a reload — this is a per-device preference, not list state, so it stays in
@@ -623,7 +975,8 @@ function buildPlainTextList() {
             .filter(item => !checkedItems.has(String(item.name).toLowerCase()))
             .map(item => {
                 const quantities = copyOptions.amounts ? formatQuantities(item.quantities) : '';
-                return quantities ? `${item.name} ${quantities}` : item.name;
+                const name = item.optional ? `${item.name} ${OPTIONAL_LABEL}` : item.name;
+                return quantities ? `${name} ${quantities}` : name;
             });
         if (lines.length > 0) {
             blocks.push(copyOptions.aisles ? [category.category, ...lines].join('\n') : lines.join('\n'));
@@ -717,79 +1070,128 @@ function updateCopyButtonVisibility() {
     }
 }
 
-async function toggleItem(itemId, checked, ingredientName) {
-    const storageKey = ingredientName || itemId;
-    const endpoint = checked ? 'check' : 'uncheck';
-
-    try {
-        const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: storageKey })
-        });
-
-        if (!response.ok) {
-            console.error(`Failed to ${endpoint} item:`, await response.text());
-            return;
-        }
-    } catch (error) {
-        console.error(`Failed to ${endpoint} item:`, error);
-        return;
-    }
-
-    if (checked) {
-        checkedItems.add(storageKey.toLowerCase());
-    } else {
-        checkedItems.delete(storageKey.toLowerCase());
-    }
-
-    applyCheckedStyle(itemId, checked);
+// Tick every box whose ingredient is in `checkedItems` and untick the rest.
+// The strike-through follows the box itself in CSS
+// (`.list-checkbox:checked + label`), so the boxes are all there is to keep in
+// step — and a box set from script fires no `change`, so this can't loop back
+// into toggleItem().
+function applyCheckedStates() {
+    document.querySelectorAll('#list-content [data-action="toggle-item"]').forEach(box => {
+        box.checked = checkedItems.has(box.dataset.ingredientName.toLowerCase());
+    });
     updateCopyButtonVisibility();
 }
 
-function applyCheckedStyle(itemId, checked) {
-    const element = document.querySelector(`#${CSS.escape(itemId)}`);
-    if (!element) return;
-    const nameEl = element.parentElement.querySelector('.item-name');
-    if (nameEl) {
-        nameEl.style.textDecoration = checked ? 'line-through' : 'none';
-        nameEl.style.opacity = checked ? '0.6' : '1';
-    }
+function tickSnapshot() {
+    return { epoch: toggleEpoch, busy: togglesInFlight > 0 };
 }
 
-function loadCheckedStates() {
-    // Apply checked states from the set populated by displayShoppingList
-    document.querySelectorAll('.item-name').forEach(nameElement => {
-        const ingredientName = nameElement.textContent.trim();
-        if (checkedItems.has(ingredientName.toLowerCase())) {
-            const checkbox = nameElement.closest('li').querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = true;
-                nameElement.style.textDecoration = 'line-through';
-                nameElement.style.opacity = '0.6';
+// A read of the ticks couldn't be used because a tick overlapped it. Nothing
+// needs doing straight away: every tick that lands is announced back to this
+// page, and that announcement re-reads the ticks within a few hundred
+// milliseconds. This only makes sure a read still happens if no announcement
+// does — a failed tick has nothing to announce, and neither does a server
+// whose watcher didn't start.
+function resyncLater() {
+    clearTimeout(resyncTimer);
+    resyncTimer = setTimeout(() => requestRefresh('checked'), 1000);
+}
+
+// Adopt the server's ticks, read after `ticks` was taken — unless a tick made
+// on this page overlapped that read, which may then predate it. Applying such a
+// read would briefly untick a box the user had just ticked, inviting a second
+// tap that unticks it for real.
+function applyServerChecked(names, ticks) {
+    if (!ticks.busy && ticks.epoch === toggleEpoch) {
+        checkedItems = new Set(names.map(name => String(name).toLowerCase()));
+        clearTimeout(resyncTimer);
+    } else {
+        resyncLater();
+    }
+    applyCheckedStates();
+}
+
+function toggleItem(box) {
+    const name = box.dataset.ingredientName;
+    const key = name.toLowerCase();
+    const checked = box.checked;
+    const endpoint = checked ? 'check' : 'uncheck';
+
+    // Show the tick straight away; the request only has to confirm it.
+    if (checked) {
+        checkedItems.add(key);
+    } else {
+        checkedItems.delete(key);
+    }
+    applyCheckedStates();
+
+    togglesInFlight++;
+    toggleEpoch++;
+    toggleChain = toggleChain.then(async () => {
+        try {
+            const response = await fetch(`{{ prefix }}/api/shopping_list/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+
+            if (!response.ok) {
+                throw new Error(await response.text());
             }
+        } catch (error) {
+            console.error(`Failed to ${endpoint} item:`, error);
+            // Take the tick back, then re-read what the server has: nothing
+            // was written, so no announcement will come to do it.
+            if (checked) {
+                checkedItems.delete(key);
+            } else {
+                checkedItems.add(key);
+            }
+            applyCheckedStates();
+            resyncLater();
+        } finally {
+            togglesInFlight--;
         }
     });
 }
 
 loadCopyOptions();
-loadShoppingList();
+requestRefresh('list');
 
 // Subscribe to server-pushed change events so sync pulls, other-tab edits,
-// or direct `.shopping-list` edits refresh the UI without reload.
+// or direct `.shopping-list` edits refresh the UI without reload. Each event
+// names the file that changed, and a change to the ticks alone only re-reads
+// the ticks. This page's own changes come back too; they re-read, find nothing
+// new, and leave the page as it is.
 // EventSource auto-reconnects on disconnect; we just close it on unload.
 let shoppingListEvents = null;
-let reloadTimer = null;
+let eventRefreshTimer = null;
+let eventRefreshKind = null;
 function subscribeToShoppingListEvents() {
     try {
         shoppingListEvents = new EventSource('{{ prefix }}/api/shopping_list/events');
-        shoppingListEvents.addEventListener('change', () => {
+        // Whatever changed while there was no connection went unannounced —
+        // including between the first load above and this subscription — so
+        // every connection, first or reconnect, starts with a refresh.
+        shoppingListEvents.addEventListener('open', () => requestRefresh('list'));
+        shoppingListEvents.addEventListener('change', (event) => {
+            let file = null;
+            try {
+                file = JSON.parse(event.data).file;
+            } catch (e) {
+                // No usable payload: refresh everything.
+            }
+            if (eventRefreshKind !== 'list') {
+                eventRefreshKind = file === 'checked' ? 'checked' : 'list';
+            }
             // Coalesce bursts (e.g. .shopping-list and .shopping-checked
-            // changing together) into one fetch. Without this, two
-            // concurrent loadShoppingList() calls race on the module-level
-            // `shoppingList` variable.
-            clearTimeout(reloadTimer);
-            reloadTimer = setTimeout(() => loadShoppingList(), 100);
+            // changing together) into one refresh.
+            clearTimeout(eventRefreshTimer);
+            eventRefreshTimer = setTimeout(() => {
+                const kind = eventRefreshKind;
+                eventRefreshKind = null;
+                requestRefresh(kind);
+            }, 100);
         });
         shoppingListEvents.addEventListener('error', () => {
             // Browser will auto-reconnect. Nothing to do.

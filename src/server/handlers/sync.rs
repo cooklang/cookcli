@@ -1,6 +1,11 @@
-use crate::server::AppState;
+use crate::server::{activity, AppState};
 use crate::sync::{self, device_flow, PendingDeviceFlow, SyncSession};
-use axum::{extract::State, http::StatusCode, Json};
+use crate::web::viewer::Viewer;
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    Json,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,10 +25,15 @@ pub struct SyncStatusResponse {
     pub email: Option<String>,
     pub syncing: bool,
     pub pending_login: Option<PendingLogin>,
+    /// Why sync is currently off, e.g. `"payment_required"`. Absent while
+    /// syncing or when the last stop wasn't a known, user-actionable
+    /// condition. Additive field: older clients that don't read it are
+    /// unaffected.
+    pub reason: Option<String>,
 }
 
 pub async fn sync_status(State(state): State<Arc<AppState>>) -> Json<SyncStatusResponse> {
-    let (logged_in, email, syncing) = state.sync_status().await;
+    let (logged_in, email, syncing, reason) = state.sync_status().await;
 
     let pending_login = {
         let guard = state.pending_device_flow.lock().await;
@@ -43,6 +53,7 @@ pub async fn sync_status(State(state): State<Arc<AppState>>) -> Json<SyncStatusR
         email,
         syncing,
         pending_login,
+        reason,
     })
 }
 
@@ -56,6 +67,7 @@ pub struct LoginResponse {
 
 pub async fn sync_login(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<LoginResponse>, (StatusCode, Json<serde_json::Value>)> {
     if state.sync_session.lock().unwrap().is_some() {
         return Err((
@@ -120,6 +132,7 @@ pub async fn sync_login(
                             db_path,
                         ) {
                             Ok(handle) => {
+                                *state_clone.last_sync_reason.lock().unwrap() = None;
                                 *state_clone.sync_handle.lock().await = Some(handle);
                                 tracing::info!("Sync started after login");
                             }
@@ -137,6 +150,8 @@ pub async fn sync_login(
         }
     });
 
+    activity::record(&viewer, "started linking this server to cook.md");
+
     Ok(Json(LoginResponse {
         user_code: dc.user_code,
         verification_uri: dc.verification_uri,
@@ -145,10 +160,14 @@ pub async fn sync_login(
     }))
 }
 
-pub async fn sync_cancel_login(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+pub async fn sync_cancel_login(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+) -> Json<serde_json::Value> {
     let mut guard = state.pending_device_flow.lock().await;
     if let Some(p) = guard.take() {
         p.cancel.cancel();
+        activity::record(&viewer, "cancelled linking this server to cook.md");
         Json(serde_json::json!({ "cancelled": true }))
     } else {
         Json(serde_json::json!({ "cancelled": false }))
@@ -157,6 +176,7 @@ pub async fn sync_cancel_login(State(state): State<Arc<AppState>>) -> Json<serde
 
 pub async fn sync_logout(
     State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(p) = state.pending_device_flow.lock().await.take() {
         p.cancel.cancel();
@@ -165,11 +185,13 @@ pub async fn sync_logout(
     if let Some(handle) = state.sync_handle.lock().await.take() {
         handle.stop().await;
     }
+    *state.last_sync_reason.lock().unwrap() = None;
 
     *state.sync_session.lock().unwrap() = None;
     if let Err(e) = SyncSession::delete(&state.session_path) {
         tracing::warn!("Failed to delete session file: {e}");
     }
+    activity::record(&viewer, "unlinked this server from cook.md");
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }

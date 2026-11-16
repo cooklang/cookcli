@@ -1,3 +1,4 @@
+pub(crate) mod feed;
 mod index;
 mod links;
 mod renderer;
@@ -5,11 +6,12 @@ mod sitemap;
 mod writer;
 
 use crate::util::resolve_to_absolute_path;
-use crate::web::language::{parse_supported_language, system_language};
+use crate::web::language::{parse_supported_language, system_language, FeatureFlags};
 use crate::Context;
 use anyhow::{bail, Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
+use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Args)]
@@ -38,6 +40,7 @@ pub enum BuildCommand {
     ///   cook build web --base-url /recipes/    # Absolute URL prefix for subpath hosting
     ///   cook build web --lang fr-FR            # Render the site in French
     ///   cook build web --compress              # Also write .gz copies for precompressed hosting
+    ///   cook build web --sitemap https://recipes.example.com --feed  # Also write atom.xml, rss.xml and feed.json
     Web(WebBuildArgs),
 }
 
@@ -71,7 +74,7 @@ pub struct WebBuildArgs {
     ///
     /// Accepts a BCP-47 tag like `de-DE`, or a bare language code like `de`
     /// that matches a supported region. Supported: en-US, de-DE, nl-NL,
-    /// fr-FR, es-ES, eu-ES, sv-SE.
+    /// fr-FR, es-ES, eu-ES, sv-SE, it-IT, ja-JP, el-GR.
     #[arg(long, value_parser = parse_lang_arg)]
     pub lang: Option<LanguageIdentifier>,
 
@@ -84,6 +87,20 @@ pub struct WebBuildArgs {
     /// is independent of --base-url. Omit it to skip sitemap generation.
     #[arg(long)]
     pub sitemap: Option<String>,
+
+    /// Generate web feeds, optionally for a given site URL
+    ///
+    /// Writes `atom.xml`, `rss.xml` and `feed.json` (JSON Feed) at the output
+    /// root with one item per recipe and menu, newest first. An item's date is its `date` metadata
+    /// (YYYY-MM-DD or RFC 3339) when present, otherwise the file's
+    /// modification time.
+    ///
+    /// Feeds need absolute links, so they need the site's full base URL.
+    /// `--feed` alone reuses the --sitemap URL; `--feed=URL` (with `=`) sets
+    /// it explicitly. Like --sitemap, this is independent of --base-url.
+    /// Omit it to skip feed generation.
+    #[arg(long, value_name = "URL", num_args = 0..=1, require_equals = true)]
+    pub feed: Option<Option<String>>,
 
     /// URL of the recipe repository, linked from the site footer
     ///
@@ -104,7 +121,7 @@ pub struct WebBuildArgs {
 fn parse_lang_arg(s: &str) -> Result<LanguageIdentifier, String> {
     parse_supported_language(s).ok_or_else(|| {
         format!(
-            "unsupported language '{s}'. Supported: en-US, de-DE, nl-NL, fr-FR, es-ES, eu-ES, sv-SE"
+            "unsupported language '{s}'. Supported: en-US, de-DE, nl-NL, fr-FR, es-ES, eu-ES, sv-SE, it-IT, ja-JP, el-GR"
         )
     })
 }
@@ -129,6 +146,16 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         bail!("Source base path is not a directory: {source}");
     }
 
+    // `--feed https://...` (space, not `=`) leaves the URL as the positional
+    // output directory. Catch it before creating a directory named `https:`.
+    if let Some(dir) = &args.output_dir {
+        if dir.as_str().contains("://") {
+            bail!(
+                "Output directory looks like a URL: {dir}. To give --feed a URL, use --feed={dir}"
+            );
+        }
+    }
+
     let output_raw = args
         .output_dir
         .clone()
@@ -149,16 +176,22 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     // time rendering the whole site. The actual sitemap is written at the end.
     let sitemap_base = args.sitemap.as_deref();
     if let Some(base) = sitemap_base {
-        let parsed =
-            url::Url::parse(base).with_context(|| format!("Invalid --sitemap URL: {base}"))?;
-        if parsed.host().is_none()
-            || !matches!(parsed.scheme(), "http" | "https")
-            || parsed.query().is_some()
-            || parsed.fragment().is_some()
-        {
-            bail!("--sitemap must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
-        }
+        validate_site_url("--sitemap", base)?;
     }
+    // `--feed` alone reuses the --sitemap URL (already validated above).
+    let feed_base = match &args.feed {
+        None => None,
+        Some(Some(base)) => {
+            validate_site_url("--feed", base)?;
+            Some(base.as_str())
+        }
+        Some(None) => match sitemap_base {
+            Some(base) => Some(base),
+            None => bail!(
+                "--feed needs the site's URL: pass --sitemap <URL>, or --feed=<URL>, e.g. --feed=https://recipes.example.com"
+            ),
+        },
+    };
 
     // Validate the repo URL up front for the same reason as --sitemap above.
     let repo_url = args.repo_url.as_deref();
@@ -170,7 +203,13 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         }
     }
 
-    renderer::render_index(&source, &output, base_url, repo_url, &lang)?;
+    // Pages advertise the feeds only when this build writes them.
+    let features = FeatureFlags {
+        feeds: feed_base.is_some(),
+        ..FeatureFlags::default()
+    };
+
+    renderer::render_index(&source, &output, base_url, repo_url, &lang, features)?;
 
     let mut tree = cooklang_find::build_tree(&source)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
@@ -179,8 +218,8 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     // strip the output subtree so we don't re-process the previous run's
     // generated files. Without this, every run would nest `_site/recipe/...`
     // and `_site/api/static/...` one level deeper until the OS rejects the
-    // path length.
-    prune_output_subtree(&mut tree, &output);
+    // path length. The listing pages prune it the same way.
+    crate::web::builders::prune_subtree(&mut tree, &output);
     walk_directories(
         &tree,
         &source,
@@ -188,6 +227,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         base_url,
         repo_url,
         &lang,
+        features,
         String::new(),
     )?;
 
@@ -200,6 +240,7 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         base_url,
         repo_url,
         &lang,
+        features,
         String::new(),
     )?;
 
@@ -209,10 +250,13 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     let entries = index::build_search_index(&tree);
     let entry_count = entries.len();
     let json = serde_json::to_string(&entries)?;
+    // A script assigning a global, not JSON: file:// documents are opaque
+    // origins, so search.js cannot fetch the index from disk. See docs/build.md.
+    let script = format!("window.__SEARCH_INDEX__ = {json};\n");
     writer::write_bytes(
         &output,
-        camino::Utf8Path::new("static/search-index.json"),
-        json.as_bytes(),
+        camino::Utf8Path::new("static/search-index.js"),
+        script.as_bytes(),
     )?;
 
     // The URL was already validated near the top of run_web.
@@ -223,6 +267,19 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
         false
     };
 
+    let feed_count = if let Some(base) = feed_base {
+        let title = crate::web::i18n::LOCALES.lookup(&lang, "recipes-title");
+        Some(feed::write_feeds(
+            &output,
+            base,
+            &title,
+            &lang.to_string(),
+            &tree,
+        )?)
+    } else {
+        None
+    };
+
     let compressed_note = if args.compress {
         let compressed_count = writer::compress_output(&output)?;
         format!(", {compressed_count} files compressed")
@@ -231,18 +288,28 @@ fn run_web(ctx: &Context, args: WebBuildArgs) -> Result<()> {
     };
 
     let sitemap_note = if sitemap_written { ", sitemap.xml" } else { "" };
+    let feed_note = match feed_count {
+        Some(n) => format!(", atom.xml, rss.xml and feed.json ({n} items)"),
+        None => String::new(),
+    };
     println!(
-        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{compressed_note}"
+        "Wrote index, directories, {recipe_count} recipe pages, {image_count} images, {asset_count} static assets, {entry_count} search entries{sitemap_note}{feed_note}{compressed_note}"
     );
     Ok(())
 }
 
-fn prune_output_subtree(tree: &mut cooklang_find::RecipeTree, output: &camino::Utf8Path) {
-    tree.children
-        .retain(|_, child| !child.path.starts_with(output));
-    for child in tree.children.values_mut() {
-        prune_output_subtree(child, output);
+/// Check that `base` is an absolute http(s) site URL usable as a prefix for
+/// absolute page links (sitemap, feeds). `flag` names the option in errors.
+fn validate_site_url(flag: &str, base: &str) -> Result<()> {
+    let parsed = url::Url::parse(base).with_context(|| format!("Invalid {flag} URL: {base}"))?;
+    if parsed.host().is_none()
+        || !matches!(parsed.scheme(), "http" | "https")
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        bail!("{flag} must be an absolute http(s) URL with a host and no query or fragment, e.g. https://recipes.example.com");
     }
+    Ok(())
 }
 
 fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Result<usize> {
@@ -281,6 +348,7 @@ fn copy_all_images(source: &camino::Utf8Path, output: &camino::Utf8Path) -> Resu
     Ok(count)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_directories(
     tree: &cooklang_find::RecipeTree,
     source: &camino::Utf8Path,
@@ -288,6 +356,7 @@ fn walk_directories(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
+    features: FeatureFlags,
     prefix_path: String,
 ) -> Result<()> {
     for (name, child) in &tree.children {
@@ -299,8 +368,10 @@ fn walk_directories(
         } else {
             format!("{prefix_path}/{name}")
         };
-        renderer::render_directory(source, output, &sub, base_url, repo_url, lang)?;
-        walk_directories(child, source, output, base_url, repo_url, lang, sub)?;
+        renderer::render_directory(source, output, &sub, base_url, repo_url, lang, features)?;
+        walk_directories(
+            child, source, output, base_url, repo_url, lang, features, sub,
+        )?;
     }
     Ok(())
 }
@@ -314,6 +385,7 @@ fn walk_recipes(
     base_url: Option<&str>,
     repo_url: Option<&str>,
     lang: &unic_langid::LanguageIdentifier,
+    features: FeatureFlags,
     prefix_path: String,
 ) -> Result<usize> {
     let mut count = 0;
@@ -330,9 +402,9 @@ fn walk_recipes(
             } else {
                 format!("{prefix_path}/{leaf_name}")
             };
-            if let Err(e) =
-                renderer::render_recipe(source, output, &sub, aisle_path, base_url, repo_url, lang)
-            {
+            if let Err(e) = renderer::render_recipe(
+                source, output, &sub, aisle_path, base_url, repo_url, lang, features,
+            ) {
                 tracing::warn!("Skipping recipe {sub}: {e:#}");
                 continue;
             }
@@ -349,7 +421,7 @@ fn walk_recipes(
                 format!("{prefix_path}/{name}")
             };
             count += walk_recipes(
-                child, source, output, aisle_path, base_url, repo_url, lang, sub,
+                child, source, output, aisle_path, base_url, repo_url, lang, features, sub,
             )?;
         }
     }

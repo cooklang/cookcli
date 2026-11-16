@@ -34,26 +34,39 @@ use anyhow::{bail, Context as _, Result};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path},
-    http::{header, HeaderValue, Method, Response, StatusCode},
+    http::{header, HeaderValue, Response, StatusCode},
     routing::{get, post},
     Router,
 };
 use camino::Utf8PathBuf;
-use clap::Args;
+use clap::{Args, Subcommand};
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
 use std::{net::IpAddr, net::SocketAddr, sync::Arc};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::{services::ServeDir, set_header::SetResponseHeader};
 use tracing::{error, info};
 
+mod activity;
+mod aisle_file;
+pub mod auth;
+mod cors;
 mod fs_atomic;
 mod handlers;
 mod lsp_bridge;
+mod plan_text;
+mod private_paths;
+mod rename;
 mod shopping_list_watcher;
+mod static_files;
+mod title_image;
 mod ui;
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct ServerArgs {
+    #[command(subcommand)]
+    command: Option<ServerCommand>,
+
     /// Root directory containing your recipe files
     ///
     /// The server will recursively scan this directory for .cook files
@@ -68,7 +81,9 @@ pub struct ServerArgs {
     /// for security. Use this flag to allow access from other devices
     /// on your network. If an IP address is provided the server will
     /// only listen on that address. Be cautious when using this flag
-    /// on public networks.
+    /// on public networks. A device that opens the web UI by host name
+    /// rather than IP address (e.g. http://nas.local:9080) also needs that
+    /// origin passed to --cors-origin, or the server refuses to answer it.
     #[arg(long, num_args = 0..=1, value_name = "ADDRESS")]
     host: Option<Option<IpAddr>>,
 
@@ -85,8 +100,18 @@ pub struct ServerArgs {
     /// --url-prefix "/cook" will make the server available at /cook/ instead
     /// of /. This is useful when running behind a reverse proxy like nginx
     /// that maps a subpath to this server. The prefix must start with "/".
+    /// For a proxy that removes the prefix before forwarding, add
+    /// --proxy-strips-prefix.
     #[arg(long)]
     url_prefix: Option<String>,
+
+    /// The reverse proxy removes --url-prefix before forwarding requests
+    ///
+    /// Routes stay at / while links, redirects and cookies still carry the
+    /// prefix, as Home Assistant ingress, Traefik's StripPrefix or nginx's
+    /// `proxy_pass http://127.0.0.1:9080/;` need.
+    #[arg(long, requires = "url_prefix")]
+    proxy_strips_prefix: bool,
 
     /// Automatically open the web interface in your default browser
     ///
@@ -95,6 +120,95 @@ pub struct ServerArgs {
     // #[cfg(feature = "ui")]
     #[arg(long, default_value_t = false)]
     open: bool,
+
+    /// Origin allowed to make cross-origin browser requests (repeatable)
+    ///
+    /// Pass once per origin, e.g. --cors-origin http://localhost:3000. By
+    /// default no other origin may read from the server. Use "*" to let any
+    /// origin read; under it the server still refuses cross-origin writes
+    /// with 403. Naming explicit origins lets those origins read and write.
+    /// "*" cannot be combined with explicit origins. The host of a named
+    /// origin is also one the server answers at: any host name other than
+    /// localhost has to be named this way, even to open the web UI there.
+    /// Requests with no Origin header -- curl and other non-browser clients --
+    /// are affected only by that last rule. Origins may
+    /// also be named in COOK_CORS_ORIGIN, separated by commas, which this flag
+    /// overrides -- for containers, where a flag means restating the whole
+    /// command.
+    #[arg(long, value_name = "ORIGIN")]
+    cors_origin: Vec<String>,
+
+    /// Allow cross-origin requests to carry cookies and credentials
+    ///
+    /// Requires at least one explicit --cors-origin; browsers reject
+    /// credentialed requests against a wildcard origin.
+    #[arg(long, default_value_t = false)]
+    cors_allow_credentials: bool,
+
+    /// Disable same-origin enforcement: the Host check, writes and the editor's
+    /// language server
+    ///
+    /// By default the server answers only requests sent to localhost, an IP
+    /// address, or the host of a --cors-origin. Any other host name has to be
+    /// named, or a site could point a domain of its own at the server (DNS
+    /// rebinding) and read it as its own. A browser request that would modify
+    /// recipes is rejected unless its Origin is likewise the server's own
+    /// address or is named by --cors-origin, and the same rule decides which
+    /// browsers may open the recipe editor's language server. This has nothing
+    /// to do with the cross-origin read policy the other --cors-* flags
+    /// configure. Use it only when a reverse proxy rewrites Host in a way that
+    /// cannot be expressed with --cors-origin. The former spelling --no-cors
+    /// still works.
+    #[arg(long = "no-csrf-check", alias = "no-cors", action = clap::ArgAction::SetFalse)]
+    csrf_check: bool,
+
+    /// Maximum number of language server sessions to run at once
+    ///
+    /// The built-in editor opens one websocket per edit tab, and each one runs
+    /// a `cook lsp` subprocess for as long as that tab stays open. Once this
+    /// many are running, further connections are refused with 503 until one
+    /// closes; the editor reconnects on its own, so a refused tab recovers
+    /// when a slot frees up. Raise it if you keep many tabs open. Set it to 0
+    /// to turn the bridge off entirely, which is worth doing when serving
+    /// --host on a network you do not control.
+    #[arg(long, value_name = "N", default_value_t = lsp_bridge::DEFAULT_MAX_SESSIONS)]
+    max_lsp_sessions: u16,
+
+    /// Users who may sign in to make changes
+    ///
+    /// When a users file exists, anyone can still browse, but creating,
+    /// editing or deleting recipes and changing the pantry or the shopping
+    /// list needs a signed-in user. Without one the server is open to anyone
+    /// who can reach it. Defaults to the COOK_USERS_FILE environment variable
+    /// when set, otherwise users.toml in the configuration directory. Manage
+    /// it with `cook server user`.
+    #[arg(long, value_name = "PATH", value_hint = clap::ValueHint::FilePath)]
+    users_file: Option<Utf8PathBuf>,
+
+    /// Show visitors who are not signed in only the recipes
+    ///
+    /// They can browse, search and read recipes and menus, and pick a
+    /// language, but get no shopping list, pantry, editor, preferences or
+    /// API beyond reading recipes; the rest asks them to sign in. Signed-in
+    /// users keep everything their role allows. Without a users file nobody
+    /// can sign in, so this applies to every visitor. Also turned on by
+    /// setting COOK_RECIPES_ONLY to 1, true or yes.
+    #[arg(long)]
+    recipes_only: bool,
+}
+
+#[derive(Debug, Subcommand)]
+enum ServerCommand {
+    /// Manage the users who can sign in to make changes
+    ///
+    /// Examples:
+    ///   cook server user add alice      # Prompt for alice's password
+    ///   cook server user passwd alice   # Change it
+    ///   cook server user remove alice
+    ///   cook server user list
+    User(auth::cli::UserArgs),
+    /// Print an argon2 hash of a password, for editing users.toml by hand
+    HashPassword,
 }
 
 impl ServerArgs {
@@ -103,8 +217,16 @@ impl ServerArgs {
     }
 }
 
+pub fn run(ctx: Context, mut args: ServerArgs) -> Result<()> {
+    match args.command.take() {
+        Some(ServerCommand::User(user_args)) => auth::cli::run_user(user_args),
+        Some(ServerCommand::HashPassword) => auth::cli::run_hash_password(),
+        None => serve(ctx, args),
+    }
+}
+
 #[tokio::main]
-pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
+async fn serve(ctx: Context, args: ServerArgs) -> Result<()> {
     let addr = match args.host {
         Some(Some(addr)) => addr,
         Some(None) => "::".parse()?,
@@ -113,17 +235,35 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let addr = SocketAddr::from((addr, args.port));
     let open = args.open;
 
-    let state = build_state(ctx, args)?;
+    // Validate before binding or printing anything, so a bad flag combination
+    // fails immediately rather than after the "Listening on ..." banner.
+    let cors = Arc::new(cors::CorsConfig::from_args(
+        &cors_origins(&args),
+        args.cors_allow_credentials,
+    )?);
 
-    if state.url_prefix.is_empty() {
-        println!("Listening on http://{addr}");
+    let listens_beyond_localhost = args.host.is_some();
+    let proxy_strips_prefix = args.proxy_strips_prefix;
+    let state = build_state(ctx, args, Arc::clone(&cors))?;
+
+    // Where the server itself answers: without the prefix when the proxy
+    // strips it.
+    let route_prefix = if proxy_strips_prefix {
+        ""
     } else {
-        println!("Listening on http://{addr}{}", state.url_prefix);
+        state.url_prefix.as_str()
+    };
+    println!("Listening on http://{addr}{route_prefix}");
+    if proxy_strips_prefix {
+        println!(
+            "Links start with {}, for a proxy that strips it.",
+            state.url_prefix
+        );
     }
 
     // #[cfg(feature = "ui")]
     if open {
-        let url = format!("http://{addr}{}", state.url_prefix);
+        let url = format!("http://{addr}{route_prefix}");
         println!("Serving Web UI on {url}");
         tokio::task::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -142,6 +282,7 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
                 Ok(db_path) => {
                     match crate::sync::start_sync(session, state.base_path.to_string(), db_path) {
                         Ok(handle) => {
+                            *state.last_sync_reason.lock().unwrap() = None;
                             // Safe to use try_lock here: no contention before the server accepts connections
                             if let Ok(mut guard) = state.sync_handle.try_lock() {
                                 *guard = Some(handle);
@@ -164,6 +305,40 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     }
 
     println!("Serving recipe files from: {:?}", state.base_path);
+    match &state.auth {
+        Some(auth) => {
+            let users = auth.users();
+            println!(
+                "Sign-in: on, {} user(s) in {}. Guests can browse but not make changes.",
+                users.len(),
+                auth.users_path()
+            );
+            if users.is_empty() {
+                println!("No users are listed, so nobody can make changes.");
+            }
+            if !state.csrf_check {
+                tracing::warn!(
+                    "--no-csrf-check with sign-in on: signed-in browsers are protected from \
+                     other sites only by their cookie's SameSite=Lax"
+                );
+            }
+        }
+        None if listens_beyond_localhost => println!(
+            "Sign-in: off. Anyone who can reach this server can change your recipes; \
+             add a user with `cook server user add <name>` to require sign-in."
+        ),
+        None => {}
+    }
+    if state.recipes_only {
+        println!(
+            "Recipes only: {} only browse recipes.",
+            if state.auth.is_some() {
+                "guests"
+            } else {
+                "visitors"
+            }
+        );
+    }
 
     // Maximum request body size: 1MB (reasonable for recipe files)
     const MAX_BODY_SIZE: usize = 1024 * 1024;
@@ -171,20 +346,44 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     let inner = Router::new()
         .nest("/api", api(&state)?)
         .merge(ui::ui())
-        .route("/static/*file", get(serve_static))
-        .nest_service("/api/static", ServeDir::new(&state.base_path));
+        .route("/static/{*file}", get(serve_static))
+        // `no-cache` makes the browser ask again each time, which ServeDir
+        // answers with a 304 unless the file changed. Without it a title
+        // picture replaced under the same name keeps showing the old one.
+        .nest_service(
+            "/api/static",
+            Router::new()
+                .fallback_service(SetResponseHeader::overriding(
+                    ServeDir::new(&state.base_path),
+                    header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-cache"),
+                ))
+                .layer(axum::middleware::from_fn_with_state(
+                    Arc::clone(&state),
+                    static_files::only_pictures,
+                )),
+        )
+        // Inside the prefix nest, so it sees paths without the prefix; after
+        // every route, so it covers them all.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            auth::middleware::middleware,
+        ));
 
-    let app = if state.url_prefix.is_empty() {
+    let app = if route_prefix.is_empty() {
         inner
     } else {
-        Router::new().nest(&state.url_prefix, inner)
+        Router::new().nest(route_prefix, inner)
     };
 
     // Capture url_prefix before state is consumed by with_state.
     let url_prefix_for_features = state.url_prefix.clone();
+    let csrf_check = state.csrf_check;
 
     #[cfg(feature = "sync")]
     let state_for_shutdown = state.clone();
+
+    let cors_layer = cors.layer();
 
     let app = app
         .with_state(state)
@@ -195,12 +394,32 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
         ))
         .layer(axum::middleware::from_fn(
             crate::web::language::language_middleware,
+        ));
+
+    // Inside the CORS layer, so preflights are answered before it runs.
+    // `--no-csrf-check` omits it entirely.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&cors),
+            cors::write_guard,
         ))
-        .layer(
-            CorsLayer::new()
-                .allow_origin("*".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]),
-        );
+    } else {
+        app
+    };
+
+    // No `--cors-origin`, no CORS headers: see `cors::CorsOrigins::None`.
+    let app = match cors_layer {
+        Some(cors_layer) => app.layer(cors_layer),
+        None => app,
+    };
+
+    // Outside everything, so a host name the server does not trust gets no
+    // answer at all, not even to a preflight. `--no-csrf-check` omits it too.
+    let app = if csrf_check {
+        app.layer(axum::middleware::from_fn_with_state(cors, cors::host_guard))
+    } else {
+        app
+    };
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
@@ -240,7 +459,44 @@ pub async fn run(ctx: Context, args: ServerArgs) -> Result<()> {
     Ok(())
 }
 
-fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
+/// The `--cors-origin` values to use: the flag when it is given, otherwise
+/// `COOK_CORS_ORIGIN`.
+///
+/// The flag wins, so a command line can override whatever an image or a shell
+/// profile put in the environment. There is deliberately no equivalent for
+/// `--no-csrf-check`: turning the check off should take a command someone
+/// typed, not a variable inherited from somewhere else.
+fn cors_origins(args: &ServerArgs) -> Vec<String> {
+    if !args.cors_origin.is_empty() {
+        return args.cors_origin.clone();
+    }
+    std::env::var(cors::ORIGIN_ENV)
+        .map(|value| cors::origins_from_env(&value))
+        .unwrap_or_default()
+}
+
+/// Turns `--recipes-only` on from the environment, for containers.
+const RECIPES_ONLY_ENV: &str = "COOK_RECIPES_ONLY";
+
+/// Whether `--recipes-only` is on: the flag, or `COOK_RECIPES_ONLY`.
+fn recipes_only(args: &ServerArgs) -> bool {
+    args.recipes_only || std::env::var(RECIPES_ONLY_ENV).is_ok_and(|value| env_flag(&value))
+}
+
+/// Whether an environment variable's value turns its switch on. An empty or
+/// unrecognised value leaves it off.
+fn env_flag(value: &str) -> bool {
+    ["1", "true", "yes"]
+        .iter()
+        .any(|on| value.trim().eq_ignore_ascii_case(on))
+}
+
+fn build_state(
+    ctx: Context,
+    args: ServerArgs,
+    cors: Arc<cors::CorsConfig>,
+) -> Result<Arc<AppState>> {
+    let recipes_only = recipes_only(&args);
     let base_path = ctx.base_path().to_path_buf();
 
     let path = args.base_path.as_ref().unwrap_or(&base_path);
@@ -278,8 +534,31 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         .path()
         .map(camino::Utf8Path::to_path_buf);
 
+    // Before anything is started, so a bad users file stops the server
+    // without leaving a watcher behind.
+    let auth = auth::setup(args.users_file.as_deref(), &absolute_path)?;
+
     tracing::info!("Aisle configuration: {:?}", aisle_path);
     tracing::info!("Pantry configuration: {:?}", pantry_path);
+
+    let users_file = args
+        .users_file
+        .as_deref()
+        .and_then(|path| std::path::absolute(path).ok())
+        .and_then(|path| Utf8PathBuf::from_path_buf(path).ok());
+    let global_config = cookcli_core::global_config_path("session.json").ok();
+    private_paths::register(
+        &absolute_path,
+        [
+            global_config.as_deref(),
+            aisle_path.as_deref(),
+            pantry_path.as_deref(),
+            users_file.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(camino::Utf8Path::parent),
+    );
 
     let shopping_list_events = match shopping_list_watcher::spawn(absolute_path.clone()) {
         Ok(tx) => Some(tx),
@@ -309,12 +588,22 @@ fn build_state(ctx: Context, args: ServerArgs) -> Result<Arc<AppState>> {
         aisle_path,
         pantry_path,
         url_prefix,
+        csrf_check: args.csrf_check,
+        cors,
+        auth,
+        recipes_only,
+        lsp_sessions: lsp_bridge::SessionLimit::new(args.max_lsp_sessions),
         checked_log_lock: Arc::new(tokio::sync::Mutex::new(())),
+        aisle_lock: tokio::sync::Mutex::new(()),
+        pantry_lock: tokio::sync::Mutex::new(()),
+        pantry_warnings: std::sync::Mutex::new(Vec::new()),
         shopping_list_events,
         #[cfg(feature = "sync")]
         sync_session: Arc::new(Mutex::new(session)),
         #[cfg(feature = "sync")]
         sync_handle: Arc::new(tokio::sync::Mutex::new(None)),
+        #[cfg(feature = "sync")]
+        last_sync_reason: Arc::new(Mutex::new(None)),
         #[cfg(feature = "sync")]
         pending_device_flow: Arc::new(tokio::sync::Mutex::new(None)),
         #[cfg(feature = "sync")]
@@ -355,12 +644,37 @@ pub struct AppState {
     pub aisle_path: Option<Utf8PathBuf>,
     pub pantry_path: Option<Utf8PathBuf>,
     pub url_prefix: String,
+    /// When true, every request must be sent to a host `cors` trusts, and
+    /// browser requests that modify recipes, and browsers opening the LSP
+    /// websocket, must come from an origin it trusts: the server's own
+    /// address, or a `--cors-origin`. Cleared by `--no-csrf-check`.
+    pub csrf_check: bool,
+    /// The `--cors-origin` policy. Besides CORS, it decides which origins may
+    /// modify recipes and open the LSP websocket, for the write guard, the
+    /// new-recipe form and the bridge alike.
+    pub cors: Arc<cors::CorsConfig>,
+    /// Sign-in, when a users file exists. `None` leaves the server open to
+    /// anyone who can reach it.
+    pub auth: Option<Arc<auth::Auth>>,
+    /// `--recipes-only`: whoever is not signed in only browses recipes.
+    pub recipes_only: bool,
+    /// How many LSP websockets — and so how many `cook lsp` subprocesses —
+    /// may run at once. Set by `--max-lsp-sessions`.
+    pub lsp_sessions: lsp_bridge::SessionLimit,
     /// Serializes access to `.shopping-checked` within this process.
     /// File-level `flock` doesn't prevent two tasks in the *same* process
     /// from racing on the file (the kernel treats them as one lock owner),
     /// so we need an in-process mutex on top. All check / uncheck / compact
     /// handlers acquire this before touching the checked log.
     pub checked_log_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes changes to the aisle file, each a read, an edit and a
+    /// write that must not interleave with another.
+    pub aisle_lock: tokio::sync::Mutex<()>,
+    /// The same for the pantry file.
+    pub pantry_lock: tokio::sync::Mutex<()>,
+    /// The pantry file's warnings as last logged, so the pantry page logs
+    /// them once rather than on every view, and again only once they change.
+    pub pantry_warnings: std::sync::Mutex<Vec<String>>,
     /// Broadcasts filesystem changes to `.shopping-list` / `.shopping-checked`
     /// to every open SSE subscriber. `None` means watcher init failed; SSE
     /// clients can still connect but will never receive events.
@@ -369,6 +683,12 @@ pub struct AppState {
     pub sync_session: Arc<Mutex<Option<crate::sync::SyncSession>>>,
     #[cfg(feature = "sync")]
     pub sync_handle: Arc<tokio::sync::Mutex<Option<crate::sync::SyncHandle>>>,
+    /// Reason the most recent sync task stopped, surfaced by the status
+    /// endpoint after the (now finished) `SyncHandle` that observed it has
+    /// been cleaned up. Cleared whenever a new sync task starts or the user
+    /// logs out.
+    #[cfg(feature = "sync")]
+    pub last_sync_reason: Arc<Mutex<Option<crate::sync::SyncFailureReason>>>,
     #[cfg(feature = "sync")]
     pub pending_device_flow: Arc<tokio::sync::Mutex<Option<crate::sync::PendingDeviceFlow>>>,
     #[cfg(feature = "sync")]
@@ -377,11 +697,31 @@ pub struct AppState {
     pub shutdown_token: tokio_util::sync::CancellationToken,
 }
 
+impl AppState {
+    /// The aisle file the shopping list uses: the one found at startup, or
+    /// else `config/aisle.conf` in the recipe directory once it exists, so a
+    /// file created from the aisles page, or by hand, counts without a
+    /// restart.
+    pub fn aisle_file(&self) -> Option<Utf8PathBuf> {
+        self.aisle_path.clone().or_else(|| {
+            let local = self.local_aisle_file();
+            local.is_file().then_some(local)
+        })
+    }
+
+    /// Where the aisles page creates an aisle file when there is none.
+    pub fn local_aisle_file(&self) -> Utf8PathBuf {
+        self.base_path.join("config").join("aisle.conf")
+    }
+}
+
 #[cfg(feature = "sync")]
 impl AppState {
-    /// Check sync status: returns (logged_in, email, syncing).
+    /// Check sync status: returns (logged_in, email, syncing, reason).
+    /// `reason` explains why sync is off (e.g. `"payment_required"`), and is
+    /// `None` while syncing or when the last stop wasn't a known condition.
     /// Cleans up finished sync handles as a side effect.
-    pub async fn sync_status(&self) -> (bool, Option<String>, bool) {
+    pub async fn sync_status(&self) -> (bool, Option<String>, bool, Option<String>) {
         let (logged_in, email) = {
             let session = self.sync_session.lock().unwrap();
             (
@@ -393,14 +733,25 @@ impl AppState {
             let mut guard = self.sync_handle.lock().await;
             match guard.as_ref() {
                 Some(handle) if handle.is_running() => true,
-                Some(_) => {
+                Some(handle) => {
+                    if let Some(reason) = handle.last_error_reason() {
+                        *self.last_sync_reason.lock().unwrap() = Some(reason);
+                    }
                     guard.take();
                     false
                 }
                 None => false,
             }
         };
-        (logged_in, email, syncing)
+        let reason = if syncing {
+            None
+        } else {
+            self.last_sync_reason
+                .lock()
+                .unwrap()
+                .map(|r| r.as_str().to_string())
+        };
+        (logged_in, email, syncing, reason)
     }
 }
 
@@ -421,6 +772,11 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             post(handlers::remove_from_shopping_list),
         )
         .route("/shopping_list/clear", post(handlers::clear_shopping_list))
+        .route("/shopping_list/extra_items", get(handlers::get_extra_items))
+        .route(
+            "/shopping_list/remove_extra_item",
+            post(handlers::remove_extra_item),
+        )
         .route("/shopping_list/check", post(handlers::check_shopping_item))
         .route(
             "/shopping_list/uncheck",
@@ -431,26 +787,52 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
         .route("/shopping_list/events", get(handlers::shopping_list_events))
         .route("/pantry", get(handlers::get_pantry))
         .route("/pantry/add", post(handlers::add_pantry_item))
+        .route("/pantry/rename", post(handlers::rename_pantry_section))
+        .route(
+            "/pantry/raw",
+            get(handlers::get_raw_pantry).put(handlers::put_raw_pantry),
+        )
         .route("/pantry/expiring", get(handlers::get_expiring))
         .route("/pantry/depleted", get(handlers::get_depleted))
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::delete(handlers::remove_pantry_item),
         )
         .route(
-            "/pantry/:section/:name",
+            "/pantry/{section}/{name}",
             axum::routing::put(handlers::update_pantry_item),
         )
-        .route("/recipes", get(handlers::all_recipes))
-        .route("/recipes/raw/*path", get(handlers::recipe_raw)) // More specific route must come first
         .route(
-            "/recipes/*path",
+            "/aisles",
+            get(handlers::get_aisles).post(handlers::create_aisles),
+        )
+        .route("/aisles/changes", post(handlers::change_aisles))
+        .route(
+            "/aisles/raw",
+            get(handlers::get_raw_aisles).put(handlers::put_raw_aisles),
+        )
+        .route("/aisles/uncategorized", get(handlers::get_uncategorized))
+        .route("/recipes", get(handlers::all_recipes))
+        .route("/recipes/raw/{*path}", get(handlers::recipe_raw)) // More specific route must come first
+        .route(
+            "/recipes/{*path}",
             get(handlers::recipe)
                 .put(handlers::recipe_save)
                 .delete(handlers::recipe_delete),
         )
+        .route(
+            "/recipe_image/{*path}",
+            get(handlers::recipe_image_get)
+                .put(handlers::recipe_image_put)
+                .delete(handlers::recipe_image_delete)
+                // A phone photo is well past the 1 MiB every other route is
+                // held to; this layer sits inside that one, so it wins.
+                .layer(DefaultBodyLimit::max(title_image::MAX_UPLOAD_BYTES)),
+        )
+        .route("/recipe_rename/{*path}", post(handlers::recipe_rename))
         .route("/menus", get(handlers::list_menus))
-        .route("/menus/*path", get(handlers::get_menu))
+        .route("/menus/{*path}", get(handlers::get_menu))
+        .route("/plans/{*path}", post(handlers::plan_edit))
         .route("/search", get(handlers::search))
         .route("/stats", get(handlers::stats))
         .route("/reload", get(handlers::reload).post(handlers::reload))
@@ -484,4 +866,51 @@ async fn serve_static(Path(path): Path<String>) -> impl axum::response::IntoResp
                 .body(Body::from("404 Not Found"))
                 .unwrap()
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::args::{CliArgs, Command};
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn cli_definition_is_valid() {
+        CliArgs::command().debug_assert();
+    }
+
+    #[test]
+    fn recipes_only_env_values() {
+        for value in ["1", "true", "TRUE", "yes", " Yes "] {
+            assert!(super::env_flag(value), "{value:?}");
+        }
+        for value in ["", "0", "false", "no", "off", "2"] {
+            assert!(!super::env_flag(value), "{value:?}");
+        }
+    }
+
+    /// `cook server` takes an optional recipe directory *and* subcommands,
+    /// so check clap tells them apart.
+    #[test]
+    fn subcommands_and_recipe_directory_are_told_apart() {
+        let parse = |args: &[&str]| match CliArgs::try_parse_from(args).unwrap().command {
+            Command::Server(server) => server,
+            _ => panic!("not the server command"),
+        };
+
+        let serve = parse(&["cook", "server", "./recipes"]);
+        assert!(serve.command.is_none());
+        assert_eq!(
+            serve.base_path.as_deref().map(|p| p.as_str()),
+            Some("./recipes")
+        );
+
+        assert!(matches!(
+            parse(&["cook", "server", "user", "add", "alice"]).command,
+            Some(super::ServerCommand::User(_))
+        ));
+        assert!(matches!(
+            parse(&["cook", "server", "hash-password"]).command,
+            Some(super::ServerCommand::HashPassword)
+        ));
+    }
 }

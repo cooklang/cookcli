@@ -9,9 +9,15 @@ pub struct SearchEntry {
 }
 
 /// Build a flat list of search entries by walking the recipe tree.
+///
+/// Sorted by path, as the sitemap is: the tree's children are a `HashMap`, so
+/// the walk's order changed from one build to the next, and an unchanged
+/// collection wrote a different `search-index.js` every time. Search ranks by
+/// score with a stable sort, so equal scores now also list in path order.
 pub fn build_search_index(tree: &cooklang_find::RecipeTree) -> Vec<SearchEntry> {
     let mut out = Vec::new();
     collect(tree, String::new(), &mut out);
+    out.sort_by(|a, b| a.path.cmp(&b.path));
     out
 }
 

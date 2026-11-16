@@ -5,11 +5,15 @@
 //! The builders intentionally avoid any axum / tokio-async types so they can be
 //! reused from a non-async context (e.g. `cook build web`).
 
-use crate::util::menu_scale::{ref_info_or_default, reference_scale_factor, RecipeInfo};
+use crate::util::recipe_info::{
+    combined_quantity, ref_info_or_default_inside, reference_factor, RecipeInfo,
+};
 use crate::web::language::FeatureFlags;
 use crate::web::templates::*;
+use crate::web::viewer::Viewer;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang_find::MenuItem;
 use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
 
@@ -22,6 +26,31 @@ pub struct RecipesBuildInput<'a> {
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    pub viewer: Viewer,
+    /// A directory under `base_path` to leave out of the listing: the output
+    /// of `cook build web`, which holds copies of the recipes it renders.
+    pub exclude: Option<&'a Utf8Path>,
+}
+
+/// Drop every subtree of `tree` that lives inside `dir`.
+pub fn prune_subtree(tree: &mut cooklang_find::RecipeTree, dir: &Utf8Path) {
+    tree.children
+        .retain(|_, child| !child.path.starts_with(dir));
+    for child in tree.children.values_mut() {
+        prune_subtree(child, dir);
+    }
+}
+
+/// Drop every node of `tree` that resolves outside `base` once links are
+/// followed. The glob walk follows linked folders, so unfiltered listings,
+/// feeds and stats would publish the names of files outside the collection
+/// — and a linked folder would keep its whole outside subtree (#698).
+pub fn prune_outside(tree: &mut cooklang_find::RecipeTree, base: &Utf8Path) {
+    tree.children
+        .retain(|_, child| crate::util::inside_collection(base, &child.path));
+    for child in tree.children.values_mut() {
+        prune_outside(child, base);
+    }
 }
 
 /// Build a [`RecipesTemplate`] for either the root or a subdirectory.
@@ -34,16 +63,30 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         static_mode,
         repo_url,
         features,
+        viewer,
+        exclude,
     } = input;
 
     let search_path = if let Some(p) = sub_path {
+        // On the server `p` comes straight from the `/directory/{*path}` URL.
+        if !crate::util::is_safe_relative_path(p) {
+            anyhow::bail!("Invalid path: {p}");
+        }
         base_path.join(p)
     } else {
         base_path.to_path_buf()
     };
 
-    let tree = cooklang_find::build_tree(&search_path)
+    let mut tree = cooklang_find::build_tree(&search_path)
         .map_err(|e| anyhow::anyhow!("Failed to build recipe tree: {e}"))?;
+    if let Some(dir) = exclude {
+        prune_subtree(&mut tree, dir);
+    }
+    // A static site is built by its owner from their own collection and
+    // links; the server publishes, so it lists nothing that resolves out.
+    if !static_mode {
+        prune_outside(&mut tree, base_path);
+    }
 
     let mut items = Vec::new();
 
@@ -68,25 +111,12 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         };
 
         // Extract tags, image, is_menu, and file timestamps if this is a recipe
-        let (tags, nutrition_kcal, image_path, is_menu, modified_at, created_at) =
+        let (tags, nutrition_kcal, nutrition_ring, image_path, is_menu, modified_at, created_at) =
             if let Some(ref recipe) = child.recipe {
-                let img_path = recipe.title_image().clone().and_then(|img| {
-                    if img.starts_with("http://") || img.starts_with("https://") {
-                        Some(img)
-                    } else {
-                        // Make path relative to base and accessible via /api/static
-                        let img_path = camino::Utf8Path::new(&img);
-                        if let Ok(relative) = img_path.strip_prefix(base_path) {
-                            Some(format!("{url_prefix}/api/static/{relative}"))
-                        } else if !img_path.is_absolute() {
-                            Some(format!("{url_prefix}/api/static/{img_path}"))
-                        } else {
-                            img_path
-                                .file_name()
-                                .map(|name| format!("{url_prefix}/api/static/{name}"))
-                        }
-                    }
-                });
+                let img_path = recipe
+                    .title_image()
+                    .clone()
+                    .and_then(|img| get_image_path(base_path, url_prefix, img));
 
                 let (modified_at, created_at) = recipe
                     .path()
@@ -109,13 +139,14 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                 (
                     recipe.tags(),
                     crate::web::family_renderers::extract_nutrition_kcal(recipe.metadata()),
+                    crate::web::family_renderers::build_list_nutrition(recipe.metadata(), &lang),
                     img_path,
                     recipe.is_menu(),
                     modified_at,
                     created_at,
                 )
             } else {
-                (Vec::new(), None, None, false, None, None)
+                (Vec::new(), None, None, None, false, None, None)
             };
 
         items.push(RecipeItem {
@@ -130,6 +161,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             description: None,
             tags,
             nutrition_kcal,
+            nutrition_ring,
             image_path,
             is_menu,
             modified_at,
@@ -140,11 +172,16 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
     items.sort_by(|a, b| match (a.is_directory, b.is_directory) {
         (true, false) => std::cmp::Ordering::Less,
         (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.cmp(&b.name),
+        _ => natural_cmp(&a.name, &b.name),
     });
 
     let todays_menu = if sub_path.is_none() {
-        crate::web::menus::find_todays_menu(base_path)
+        // The date search follows links; on the server a menu it finds
+        // outside the collection must not be linked from the front page.
+        crate::web::menus::find_todays_menu(base_path, exclude).filter(|menu| {
+            static_mode
+                || crate::util::inside_collection(base_path, &base_path.join(&menu.menu_path))
+        })
     } else {
         None
     };
@@ -176,6 +213,28 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         Some(p) => format!("{url_prefix}/new?filename={}%2F", urlencoding::encode(p)),
         None => format!("{url_prefix}/new"),
     };
+    let new_menu_url = match sub_path {
+        Some(p) => format!(
+            "{url_prefix}/new?kind=menu&filename={}%2F",
+            urlencoding::encode(p)
+        ),
+        None => format!("{url_prefix}/new?kind=menu"),
+    };
+    let new_plan_url = match sub_path {
+        Some(p) => format!(
+            "{url_prefix}/new?kind=plan&filename={}%2F",
+            urlencoding::encode(p)
+        ),
+        None => format!("{url_prefix}/new?kind=plan"),
+    };
+
+    // The pick happens on the server (`/random`), so a static site has no
+    // button; neither does a folder with nothing but menus in it.
+    let random_recipe_url =
+        (!static_mode && !cook_recipe_paths(&tree).is_empty()).then(|| match sub_path {
+            Some(p) => format!("{url_prefix}/random/{}", crate::util::encode_url_path(p)),
+            None => format!("{url_prefix}/random"),
+        });
 
     Ok(RecipesTemplate {
         active: "recipes".to_string(),
@@ -184,12 +243,71 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         items,
         todays_menu,
         new_recipe_url,
+        new_menu_url,
+        new_plan_url,
+        random_recipe_url,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
         repo_url,
         features,
+        viewer,
     })
+}
+
+/// One chunk of a name for natural sorting: a run of digits compared by
+/// value, or a run of anything else compared as lowercase text.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum NaturalChunk {
+    Number(u128),
+    Text(String),
+}
+
+/// Split a name into digit runs and non-digit runs, lowercased, so that
+/// "Recipe 9" sorts before "Recipe 10" and case does not split otherwise
+/// equal names. This folds case and digits like the client-side
+/// `Intl.Collator` with `{ numeric: true, sensitivity: 'base' }` in
+/// `templates/recipes.html`, but not accents: non-ASCII letters keep code
+/// point order, so "Äpfel" sorts after "zucchini". The client therefore
+/// leaves the served order alone on the default sort and only re-sorts
+/// when the user picks another field or direction.
+fn natural_key(name: &str) -> Vec<NaturalChunk> {
+    let mut chunks = Vec::new();
+    let mut text = String::new();
+    let mut digits = String::new();
+
+    let flush_text = |text: &mut String, chunks: &mut Vec<NaturalChunk>| {
+        if !text.is_empty() {
+            chunks.push(NaturalChunk::Text(std::mem::take(text)));
+        }
+    };
+    let flush_digits = |digits: &mut String, chunks: &mut Vec<NaturalChunk>| {
+        if !digits.is_empty() {
+            // Cap absurdly long digit runs instead of panicking on overflow.
+            let value = digits.parse::<u128>().unwrap_or(u128::MAX);
+            digits.clear();
+            chunks.push(NaturalChunk::Number(value));
+        }
+    };
+
+    for c in name.chars() {
+        if c.is_ascii_digit() {
+            flush_text(&mut text, &mut chunks);
+            digits.push(c);
+        } else {
+            flush_digits(&mut digits, &mut chunks);
+            text.extend(c.to_lowercase());
+        }
+    }
+    flush_text(&mut text, &mut chunks);
+    flush_digits(&mut digits, &mut chunks);
+    chunks
+}
+
+/// Case-insensitive natural ordering. Ties (names that differ only in case
+/// or leading zeros) fall back to byte order so the sort stays deterministic.
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    natural_key(a).cmp(&natural_key(b)).then_with(|| a.cmp(b))
 }
 
 /// Inputs for [`build_recipe_template`].
@@ -199,16 +317,86 @@ pub struct RecipeBuildInput<'a> {
     pub recipe_path: &'a str,
     pub aisle_path: Option<&'a Utf8PathBuf>,
     pub scale: f64,
+    /// `?servings=`: wins over `scale` on a recipe that declares servings,
+    /// ignored everywhere else (menus, recipes without servings).
+    pub servings: Option<f64>,
     pub lang: LanguageIdentifier,
     pub static_mode: bool,
     pub repo_url: Option<String>,
     pub features: FeatureFlags,
+    pub viewer: Viewer,
 }
 
 /// Output of [`build_recipe_template`] — either a regular recipe or a menu.
 pub enum RecipeBuildOutput {
     Recipe(Box<RecipeTemplate>),
     Menu(Box<MenuTemplate>),
+}
+
+/// Converts a timer's quantity to a whole number of seconds, if its unit is a
+/// recognized time unit. Returns `None` for ranges, text values, or units this
+/// simple lookup doesn't recognize.
+fn timer_duration_seconds(quantity: &cooklang::quantity::Quantity) -> Option<i64> {
+    let cooklang::Value::Number(n) = quantity.value() else {
+        return None;
+    };
+    let multiplier = match quantity.unit()?.to_lowercase().as_str() {
+        "s" | "sec" | "secs" | "second" | "seconds" => 1.0,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60.0,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3600.0,
+        _ => return None,
+    };
+    Some((n.value() * multiplier).round() as i64)
+}
+
+/// A reference as the page links it: resolved against `recipe_dir`, the
+/// directory of the recipe writing it — the rule `resolve_scales` and the
+/// shopping list apply as well. `None` when it points out of the collection,
+/// so a `@../outside/x{}` links nowhere and is never looked up: looking it up
+/// is what would read outside the recipe directory.
+fn reference_link_path(
+    recipe_dir: &Utf8Path,
+    reference: &cooklang::model::RecipeReference,
+) -> Option<String> {
+    // For web URLs - always use forward slash
+    let authored = if reference.components.is_empty() {
+        reference.name.clone()
+    } else {
+        format!("{}/{}", reference.components.join("/"), reference.name)
+    };
+    cookcli_core::resolve_reference(recipe_dir, &authored).map(|p| p.to_string())
+}
+
+/// The factor a recipe or menu page applies, and its servings stepper.
+///
+/// A recipe that declares a whole, non-zero number of `servings` gets the
+/// stepper, which counts servings: `?servings=` sets them and wins over
+/// `?scale=`; without it the multiplier from `?scale=` still applies, shown as
+/// the servings it gives, so existing `?scale=` links keep their meaning.
+/// Anything else — no `servings`, text such as `4-6`, a fraction (cooklang
+/// only reads `u32`), or `0` — keeps the plain multiplier and returns no
+/// stepper.
+///
+/// Any positive `?servings=` is taken as is, like `?scale=`: the stepper's
+/// half-a-serving floor is for what people type, while a menu can link to 0.4
+/// of a 4-serving recipe.
+fn resolve_servings(
+    base: Option<u32>,
+    servings: Option<f64>,
+    scale: f64,
+) -> (f64, Option<ServingsScale>) {
+    let Some(base) = base.filter(|&n| n > 0) else {
+        return (scale, None);
+    };
+    let base_f = f64::from(base);
+    let (scale, chosen) = match servings.filter(|s| s.is_finite() && *s > 0.0) {
+        Some(s) => (s / base_f, s),
+        None => (scale, base_f * scale),
+    };
+    // Rounded for display only (`0.1 * 6` is 0.6000000000000001); the factor
+    // above is the exact one.
+    let chosen = (chosen * 100.0).round() / 100.0;
+    (scale, Some(ServingsScale { base, chosen }))
 }
 
 /// Build a [`RecipeTemplate`] or [`MenuTemplate`] for the given recipe path.
@@ -219,13 +407,26 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         recipe_path,
         aisle_path,
         scale,
+        servings,
         lang,
         static_mode,
         repo_url,
         features,
+        viewer,
     } = input;
 
+    // On the server `recipe_path` comes straight from the `/recipe/{*path}` URL.
+    if !crate::util::is_safe_relative_path(recipe_path) {
+        anyhow::bail!("Invalid path: {recipe_path}");
+    }
+
     let recipe_path_buf = Utf8PathBuf::from(recipe_path);
+    // Recipe references step up from the directory of the file writing them,
+    // the rule `resolve_scales` and the shopping list apply as well.
+    let recipe_dir = recipe_path_buf
+        .parent()
+        .map(Utf8Path::to_owned)
+        .unwrap_or_default();
     tracing::info!(
         "Looking for recipe at path: {}, extension: {:?}",
         recipe_path,
@@ -234,6 +435,22 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
     let entry = cooklang_find::get_recipe(vec![base_path], recipe_path_buf.as_path())
         .map_err(|e| anyhow::anyhow!("Recipe not found: {recipe_path}: {e}"))?;
+
+    // `get_recipe` follows links, so `Link/Secret.cook` through a
+    // `Link -> /outside` symlink is a hit and the page would serve the file
+    // it points to (#698). `cook build` keeps following them: there the
+    // collection and the links are the user's own. The page answers exactly
+    // as it does for a missing file, so the link reveals nothing.
+    if !static_mode
+        && entry
+            .path()
+            .is_some_and(|file| !crate::util::inside_collection(base_path, file))
+    {
+        anyhow::bail!(
+            "Recipe not found: {recipe_path}: {}",
+            cooklang_find::fetcher::FetchError::InvalidPath(recipe_path_buf.clone())
+        );
+    }
 
     let actual_path = entry.path();
     tracing::info!(
@@ -247,6 +464,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         let template = build_menu_template_inner(
             recipe_path.to_string(),
             scale,
+            servings,
             entry,
             base_path,
             url_prefix,
@@ -254,12 +472,38 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             static_mode,
             repo_url,
             features,
+            viewer,
         )?;
         return Ok(RecipeBuildOutput::Menu(Box::new(template)));
     }
 
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
+    let mut recipe = crate::util::parse_unscaled_recipe_from_entry(&entry)
         .map_err(|e| anyhow::anyhow!("Failed to parse recipe: {e}"))?;
+    let (scale, servings) = resolve_servings(
+        recipe.metadata.servings().and_then(|s| s.as_number()),
+        servings,
+        scale,
+    );
+    recipe.scale(scale, crate::util::PARSER.converter());
+
+    // A referenced recipe opens at the size this one asks for, worked out from
+    // the reference's quantity — scaled above along with everything else —
+    // against its servings or yield, read from disk once per recipe. A static
+    // site has no scaling, so its links stay plain, as a menu's do.
+    let mut ref_info_cache: std::collections::HashMap<String, RecipeInfo> =
+        std::collections::HashMap::new();
+    let mut link_query = |path: &str, quantity: Option<&cooklang::quantity::Quantity>| {
+        if static_mode {
+            return String::new();
+        }
+        let info = ref_info_cache
+            .entry(path.to_string())
+            .or_insert_with(|| ref_info_or_default_inside(base_path, path, path));
+        reference_query(
+            reference_factor(quantity, scale, info),
+            info.default_servings,
+        )
+    };
 
     // Load aisle config for cooking mode ingredient sorting
     let aisle_content = if let Some(path) = aisle_path {
@@ -289,9 +533,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let mut cookware = Vec::new();
     let mut sections = Vec::new();
 
-    // Group ingredients by display name and merge quantities
+    // Group ingredients by display name and merge quantities. Optional and
+    // required uses of one ingredient stay two entries, so the required amount
+    // is what the recipe cannot do without.
     let mut grouped_ingredients: std::collections::HashMap<
-        String,
+        (String, bool),
         (
             cooklang::quantity::GroupedQuantity,
             Vec<&cooklang::model::Ingredient>,
@@ -301,9 +547,10 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     for entry in recipe.group_ingredients(crate::util::PARSER.converter()) {
         let ingredient = entry.ingredient;
         let display_name = ingredient.display_name().to_string();
+        let optional = ingredient.modifiers().is_optional();
 
         grouped_ingredients
-            .entry(display_name)
+            .entry((display_name, optional))
             .and_modify(|(merged_qty, igrs)| {
                 merged_qty.merge(&entry.quantity, crate::util::PARSER.converter());
                 igrs.push(ingredient);
@@ -315,17 +562,18 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let mut sorted_ingredients: Vec<_> = grouped_ingredients.into_iter().collect();
     sorted_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
 
-    for (display_name, (quantity, ingredient_list)) in sorted_ingredients {
+    for ((display_name, optional), (quantity, ingredient_list)) in sorted_ingredients {
         // Use the first ingredient's data for reference path and notes
         let first_ingredient = ingredient_list[0];
-        let reference_path = first_ingredient.reference.as_ref().map(|r| {
-            // For web URLs - always use forward slash
-            if r.components.is_empty() {
-                r.name.clone()
-            } else {
-                format!("{}/{}", r.components.join("/"), r.name)
-            }
-        });
+        let reference_path = first_ingredient
+            .reference
+            .as_ref()
+            .and_then(|r| reference_link_path(&recipe_dir, r));
+
+        let reference_query = reference_path
+            .as_deref()
+            .map(|path| link_query(path, combined_quantity(&ingredient_list).as_ref()))
+            .unwrap_or_default();
 
         // Combine notes from all ingredients
         let combined_note = if ingredient_list.len() > 1 {
@@ -356,7 +604,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 .into_iter()
                 .map(|q| {
                     let qty_str =
-                        crate::util::format::number::format_quantity(q.value()).unwrap_or_default();
+                        crate::util::format::number::format_quantity_value(q).unwrap_or_default();
                     let unit_str = q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                     if unit_str.is_empty() {
                         qty_str
@@ -374,12 +622,16 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             unit: formatted_unit,
             note: combined_note,
             reference_path,
+            reference_query,
+            optional,
         });
     }
 
     for item in &recipe.group_cookware(crate::util::PARSER.converter()) {
         cookware.push(CookwareData {
             name: item.cookware.name.to_string(),
+            note: item.cookware.note.clone(),
+            optional: item.cookware.modifiers().is_optional(),
         });
     }
 
@@ -417,25 +669,26 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                 section_ingredient_indices.insert(*index);
                                 cooking_mode_ingredient_indices.push(*index);
                                 if let Some(ing) = recipe.ingredients.get(*index) {
-                                    let reference_path = ing.reference.as_ref().map(|r| {
-                                        // For web URLs - always use forward slash
-                                        if r.components.is_empty() {
-                                            r.name.clone()
-                                        } else {
-                                            format!("{}/{}", r.components.join("/"), r.name)
-                                        }
-                                    });
+                                    let reference_path = ing
+                                        .reference
+                                        .as_ref()
+                                        .and_then(|r| reference_link_path(&recipe_dir, r));
 
+                                    let reference_query = reference_path
+                                        .as_deref()
+                                        .map(|path| link_query(path, ing.quantity.as_ref()))
+                                        .unwrap_or_default();
                                     step_items.push(StepItem::Ingredient {
                                         name: ing.name.to_string(),
                                         reference_path,
+                                        reference_query,
                                     });
 
                                     // Also add to step ingredients list
                                     step_ingredients.push(StepIngredient {
                                         name: ing.name.to_string(),
                                         quantity: ing.quantity.as_ref().and_then(|q| {
-                                            crate::util::format::number::format_quantity(q.value())
+                                            crate::util::format::number::format_quantity_value(q)
                                         }),
                                         unit: ing
                                             .quantity
@@ -447,18 +700,22 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             }
                             Item::Cookware { index } => {
                                 if let Some(cw) = recipe.cookware.get(*index) {
-                                    step_items.push(StepItem::Cookware(cw.name.to_string()));
+                                    step_items.push(StepItem::Cookware {
+                                        name: cw.name.to_string(),
+                                        note: cw.note.clone(),
+                                    });
                                 }
                             }
                             Item::Timer { index } => {
                                 if let Some(timer) = recipe.timers.get(*index) {
                                     let mut timer_text = String::new();
+                                    let mut seconds = None;
 
                                     // Add timer quantity and unit
                                     if let Some(quantity) = &timer.quantity {
                                         if let Some(formatted) =
-                                            crate::util::format::number::format_quantity(
-                                                quantity.value(),
+                                            crate::util::format::number::format_quantity_value(
+                                                quantity,
                                             )
                                         {
                                             timer_text.push_str(&formatted);
@@ -469,6 +726,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                             }
                                             timer_text.push_str(unit);
                                         }
+                                        seconds = timer_duration_seconds(quantity);
                                     }
 
                                     // If no duration info, just show "timer"
@@ -476,13 +734,16 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                                         timer_text = "timer".to_string();
                                     }
 
-                                    step_items.push(StepItem::Timer(timer_text));
+                                    step_items.push(StepItem::Timer {
+                                        display: timer_text,
+                                        seconds,
+                                    });
                                 }
                             }
                             Item::InlineQuantity { index } => {
                                 if let Some(q) = recipe.inline_quantities.get(*index) {
                                     let mut qty =
-                                        crate::util::format::number::format_quantity(q.value())
+                                        crate::util::format::number::format_quantity_value(q)
                                             .unwrap_or_default();
                                     if let Some(unit) = q.unit() {
                                         if !qty.is_empty() {
@@ -497,17 +758,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                         }
                     }
 
-                    // Step images come in two naming conventions (issue #374):
-                    // `Recipe.S.N.ext` (section S, step N within it — used by the
-                    // iOS app) and `Recipe.N.ext` (step N counted continuously
-                    // across sections). Prefer the section-specific image.
-                    let section_image_path = entry
-                        .step_images()
-                        .get(section_index + 1, step_count + 1)
-                        .or_else(|| entry.step_images().get(0, total_steps + step_count + 1))
-                        .and_then(|img_path| {
-                            get_image_path(base_path, url_prefix, img_path.to_string())
-                        });
+                    let section_image_path =
+                        step_image(&entry, section_index + 1, step_count + 1, total_steps)
+                            .and_then(|img_path| {
+                                get_image_path(base_path, url_prefix, img_path.to_string())
+                            });
 
                     section_items.push(RecipeSectionItem::Step(StepData {
                         number: step_count + 1,
@@ -532,7 +787,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
             // Collect and group ingredients used in this section
             let mut section_grouped_ingredients: std::collections::HashMap<
-                String,
+                (String, bool),
                 (
                     cooklang::quantity::GroupedQuantity,
                     Vec<&cooklang::model::Ingredient>,
@@ -542,6 +797,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             for idx in section_ingredient_indices {
                 if let Some(ingredient) = recipe.ingredients.get(idx) {
                     let display_name = ingredient.display_name().to_string();
+                    let optional = ingredient.modifiers().is_optional();
                     let qty = if let Some(q) = &ingredient.quantity {
                         let mut grouped_qty = cooklang::quantity::GroupedQuantity::empty();
                         grouped_qty.add(q, crate::util::PARSER.converter());
@@ -551,7 +807,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     };
 
                     section_grouped_ingredients
-                        .entry(display_name)
+                        .entry((display_name, optional))
                         .and_modify(|(merged_qty, igrs)| {
                             if let Some(q) = &ingredient.quantity {
                                 merged_qty.add(q, crate::util::PARSER.converter());
@@ -568,16 +824,19 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             sorted_section_ingredients.sort_by(|a, b| a.0.cmp(&b.0));
 
             let mut section_ingredients = Vec::new();
-            for (display_name, (quantity, ingredient_list)) in sorted_section_ingredients {
+            for ((display_name, optional), (quantity, ingredient_list)) in
+                sorted_section_ingredients
+            {
                 let first_ingredient = ingredient_list[0];
-                let reference_path = first_ingredient.reference.as_ref().map(|r| {
-                    // For web URLs - always use forward slash
-                    if r.components.is_empty() {
-                        r.name.clone()
-                    } else {
-                        format!("{}/{}", r.components.join("/"), r.name)
-                    }
-                });
+                let reference_path = first_ingredient
+                    .reference
+                    .as_ref()
+                    .and_then(|r| reference_link_path(&recipe_dir, r));
+
+                let reference_query = reference_path
+                    .as_deref()
+                    .map(|path| link_query(path, combined_quantity(&ingredient_list).as_ref()))
+                    .unwrap_or_default();
 
                 // Combine notes from all ingredients in the section
                 let combined_note = if ingredient_list.len() > 1 {
@@ -608,9 +867,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                         crate::util::format::quantity::ordered_components(&quantity)
                             .into_iter()
                             .map(|q| {
-                                let qty_str =
-                                    crate::util::format::number::format_quantity(q.value())
-                                        .unwrap_or_default();
+                                let qty_str = crate::util::format::number::format_quantity_value(q)
+                                    .unwrap_or_default();
                                 let unit_str =
                                     q.unit().as_ref().map(|u| u.to_string()).unwrap_or_default();
                                 if unit_str.is_empty() {
@@ -629,6 +887,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                     unit: formatted_unit,
                     note: combined_note,
                     reference_path,
+                    reference_query,
+                    optional,
                 });
             }
 
@@ -646,7 +906,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 
                     let (formatted_quantity, formatted_unit) = if let Some(q) = &ingredient.quantity
                     {
-                        let qty_str = crate::util::format::number::format_quantity(q.value());
+                        let qty_str = crate::util::format::number::format_quantity_value(q);
                         let unit_str = q.unit().as_ref().map(|u| u.to_string());
                         (qty_str, unit_str)
                     } else {
@@ -661,6 +921,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                             unit: formatted_unit,
                             note: ingredient.note.clone(),
                             reference_path: None,
+                            reference_query: String::new(),
+                            optional: ingredient.modifiers().is_optional(),
                         },
                     ));
                 }
@@ -680,6 +942,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 .collect();
 
             sections.push(RecipeSection {
+                number: section_index + 1,
                 name: section.name.clone(),
                 items: section_items.clone(),
                 step_offset: total_steps,
@@ -717,6 +980,11 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
+                // The weight feeds the nutrition panel's per-100 g column; as a
+                // pill of its own it only adds noise.
+                if key_str == "weight" && recipe.metadata.get("nutrition").is_some() {
+                    continue;
+                }
                 // A key prefixed with "." is hidden from the recipe page.
                 if key_str.starts_with('.') {
                     continue;
@@ -726,13 +994,26 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             }
         }
 
-        let custom_lists = crate::web::family_renderers::build_custom_list_families(
+        // The servings the nutrition was written for and the ones shown, when
+        // the recipe declares a whole number of servings.
+        let nutrition_servings = servings.as_ref().map(|s| (f64::from(s.base), s.chosen));
+        let panels = crate::web::family_renderers::build_family_panels(
             recipe.metadata.map_filtered(),
-            &lang,
+            &crate::web::family_renderers::PanelContext {
+                lang: &lang,
+                servings: nutrition_servings,
+                weight: recipe.metadata.get("weight"),
+            },
         );
 
         Some(RecipeMetadata {
-            servings: get_field("servings"),
+            // The stepper's value rather than the metadata: `scale` rounds
+            // `servings` to a whole number, so half of a 4-serving recipe
+            // would read 1.
+            servings: servings
+                .as_ref()
+                .map(|s| s.chosen.to_string())
+                .or_else(|| get_field("servings")),
             time: get_field("time"),
             difficulty: get_field("difficulty"),
             course: get_field("course"),
@@ -751,7 +1032,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
-            custom_lists,
+            panels,
         })
     };
 
@@ -778,6 +1059,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         recipe_path: recipe_path.to_string(),
         breadcrumbs,
         scale,
+        servings,
         tags,
         ingredients,
         cookware,
@@ -788,6 +1070,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
         static_mode,
         repo_url,
         features,
+        viewer,
     };
 
     Ok(RecipeBuildOutput::Recipe(Box::new(template)))
@@ -797,6 +1080,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
 fn build_menu_template_inner(
     path: String,
     scale: f64,
+    servings: Option<f64>,
     entry: cooklang_find::RecipeEntry,
     base_path: &Utf8Path,
     url_prefix: &str,
@@ -804,184 +1088,117 @@ fn build_menu_template_inner(
     static_mode: bool,
     repo_url: Option<String>,
     features: FeatureFlags,
+    viewer: Viewer,
 ) -> Result<MenuTemplate> {
-    let recipe = crate::util::parse_recipe_from_entry(&entry, scale)
-        .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
-
-    // Recipe references need the quantity *as authored*, not the scaled one:
-    // the parser normalises units while scaling (750 ml x 3 becomes 2.25 l),
-    // which would break the yield-unit comparison in `reference_scale_factor`.
-    // Loose ingredients still come from the scaled parse above. Ingredient
-    // indices are identical between the two parses - scaling rewrites
-    // quantities in place without touching the ingredient list.
-    let unscaled = if scale == 1.0 {
-        std::sync::Arc::clone(&recipe)
-    } else {
-        crate::util::parse_recipe_from_entry(&entry, 1.0)
-            .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?
+    let menu_path = Utf8Path::new(&path);
+    // The menu's own `servings` decide the scale when the stepper counts
+    // servings; the references' factors are then resolved at that scale.
+    let menu_servings = |menu: &cooklang_find::Menu| {
+        menu.metadata.get("servings").and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+                .and_then(|n| u32::try_from(n).ok())
+        })
     };
+    let mut menu = crate::util::menu::parse_menu(&entry, menu_path, base_path)
+        .map_err(|e| anyhow::anyhow!("Failed to parse menu: {e}"))?;
+    // The planner needs the meals a plan names but has not filled yet.
+    if let Ok(content) = entry.content() {
+        crate::util::menu::keep_empty_meals(&mut menu, &content);
+    }
+    let (scale, servings) = resolve_servings(menu_servings(&menu), servings, scale);
+    menu.resolve_scales(&[base_path], scale);
 
-    // Referenced recipes are resolved from disk to read their `servings` /
-    // `yield` metadata. Menus repeat references, so memoise per build.
+    // Referenced recipes are read from disk for their default `servings`.
+    // Menus repeat references, so memoise per build.
     let mut ref_info_cache: std::collections::HashMap<String, RecipeInfo> =
         std::collections::HashMap::new();
 
     // Get the image path if available
-    let image_path = entry.title_image().clone().and_then(|img_path| {
-        if img_path.starts_with("http://") || img_path.starts_with("https://") {
-            Some(img_path)
-        } else {
-            let img_path = camino::Utf8Path::new(&img_path);
-            if let Ok(relative) = img_path.strip_prefix(base_path) {
-                Some(format!("{url_prefix}/api/static/{relative}"))
-            } else if !img_path.is_absolute() {
-                Some(format!("{url_prefix}/api/static/{img_path}"))
-            } else {
-                img_path
-                    .file_name()
-                    .map(|name| format!("{url_prefix}/api/static/{name}"))
-            }
-        }
-    });
+    let image_path = entry
+        .title_image()
+        .clone()
+        .and_then(|img_path| get_image_path(base_path, url_prefix, img_path));
 
     let breadcrumbs: Vec<String> = path.split('/').map(|s| s.to_string()).collect();
 
     // Parse sections and content
     let mut sections = Vec::new();
 
-    for section in &recipe.sections {
-        let section_name = section.name.clone();
-        let mut lines = Vec::new();
+    for section in &menu.sections {
+        let mut lines: Vec<Vec<MenuSectionItem>> = Vec::new();
 
-        for content in &section.content {
-            use cooklang::Content;
-            if let Content::Step(step) = content {
-                // Build the full step content first
-                let mut step_items = Vec::new();
-                let mut current_text = String::new();
+        for meal in &section.meals {
+            // The page shows a meal header as the line it was written as.
+            if let Some(meal_type) = &meal.meal_type {
+                let header = match &meal.time {
+                    Some(time) => format!("{meal_type} ({time}):"),
+                    None => format!("{meal_type}:"),
+                };
+                lines.push(vec![MenuSectionItem::Text(header)]);
+            }
 
-                for item in &step.items {
-                    use crate::web::templates::MenuSectionItem;
-                    use cooklang::Item;
-
-                    match item {
-                        Item::Text { value } => {
-                            // Check if this is an isolated dash (bullet marker)
-                            if value == "-" {
-                                // Bullet marker - complete current line and start new one
-                                if !current_text.is_empty() {
-                                    step_items.push(MenuSectionItem::Text(current_text.clone()));
-                                    current_text.clear();
-                                }
-                                if !step_items.is_empty() {
-                                    lines.push(step_items.clone());
-                                    step_items.clear();
-                                }
+            let mut line = Vec::new();
+            for item in &meal.items {
+                match item {
+                    MenuItem::RecipeReference {
+                        path,
+                        scale: factor,
+                        ..
+                    } => {
+                        let factor = factor.unwrap_or(1.0);
+                        let info = ref_info_cache.entry(path.clone()).or_insert_with(|| {
+                            // A reference out of the recipe directory is
+                            // not looked up: there is nothing inside to
+                            // find, and the lookup is what would reach
+                            // outside.
+                            if crate::util::menu::is_outside_reference(path) {
+                                RecipeInfo::default()
                             } else {
-                                // Split on newlines to preserve line breaks
-                                let parts: Vec<&str> = value.split('\n').collect();
-                                for (i, part) in parts.iter().enumerate() {
-                                    if i > 0 {
-                                        // Newline encountered - flush current text and line
-                                        if !current_text.is_empty() {
-                                            step_items
-                                                .push(MenuSectionItem::Text(current_text.clone()));
-                                            current_text.clear();
-                                        }
-                                        if !step_items.is_empty() {
-                                            lines.push(step_items.clone());
-                                            step_items.clear();
-                                        }
-                                    }
-                                    if !part.is_empty() {
-                                        current_text.push_str(part);
-                                    }
-                                }
+                                ref_info_or_default_inside(base_path, path, path)
                             }
-                        }
-                        Item::Ingredient { index } => {
-                            // First, add any pending text
-                            if !current_text.is_empty() {
-                                step_items.push(MenuSectionItem::Text(current_text.clone()));
-                                current_text.clear();
-                            }
+                        });
 
-                            if let Some(ing) = recipe.ingredients.get(*index) {
-                                // Check if this is a recipe reference using the reference field
-                                if let Some(ref recipe_ref) = ing.reference {
-                                    // Build the full path from components
-                                    // For web URLs - always use forward slash
-                                    let name = if recipe_ref.components.is_empty() {
-                                        recipe_ref.name.clone()
-                                    } else {
-                                        format!(
-                                            "{}/{}",
-                                            recipe_ref.components.join("/"),
-                                            recipe_ref.name
-                                        )
-                                    };
-
-                                    let authored_quantity = unscaled
-                                        .ingredients
-                                        .get(*index)
-                                        .and_then(|i| i.quantity.as_ref());
-
-                                    // Same resolution the menu JSON API and
-                                    // `add_menu` use, so all three agree.
-                                    let factor = match authored_quantity {
-                                        Some(quantity) => {
-                                            let lookup =
-                                                recipe_ref.path(cookcli_core::REFERENCE_SEPARATOR);
-                                            let info = ref_info_cache
-                                                .entry(lookup.clone())
-                                                .or_insert_with(|| {
-                                                    ref_info_or_default(base_path, &lookup, &name)
-                                                });
-                                            reference_scale_factor(Some(quantity), info, &name)
-                                                * scale
-                                        }
-                                        // No lookup needed: the factor is 1.0
-                                        // whatever the referenced recipe says.
-                                        None => scale,
-                                    };
-
-                                    // Display-only: a x1 badge on every
-                                    // unscaled reference would be pure noise,
-                                    // so suppress it. The number shown, when
-                                    // shown, is the same one the API reports.
-                                    step_items.push(MenuSectionItem::RecipeReference {
-                                        name,
-                                        scale: (factor != 1.0).then_some(factor),
-                                    });
-                                } else {
-                                    // Regular ingredient
-                                    let quantity = ing.quantity.as_ref().and_then(|q| {
-                                        crate::util::format::number::format_quantity(q.value())
-                                    });
-                                    let unit = ing
-                                        .quantity
-                                        .as_ref()
-                                        .and_then(|q| q.unit().as_ref().map(|u| u.to_string()));
-
-                                    step_items.push(MenuSectionItem::Ingredient {
-                                        name: ing.name.to_string(),
-                                        quantity,
-                                        unit,
-                                    });
-                                }
-                            }
-                        }
-                        _ => {} // Ignore other items in menu files
+                        // Display-only: a x1 badge on every unscaled reference
+                        // would be pure noise, so suppress it. The number
+                        // shown, when shown, is the same one the API reports.
+                        // A recipe with servings is linked by its servings, as
+                        // its page counts them.
+                        let scaled = factor != 1.0;
+                        line.push(MenuSectionItem::RecipeReference {
+                            name: path.clone(),
+                            scale: scaled.then_some(factor),
+                            servings: info
+                                .default_servings
+                                .filter(|&n| n > 0 && scaled)
+                                .map(|n| f64::from(n) * factor),
+                            menu: info.is_menu,
+                        });
                     }
+                    MenuItem::Ingredient {
+                        name,
+                        quantity,
+                        unit,
+                    } => {
+                        let (quantity, unit) = crate::util::menu::scaled_quantity(
+                            quantity.as_deref(),
+                            unit.as_deref(),
+                            scale,
+                        );
+                        line.push(MenuSectionItem::Ingredient {
+                            name: name.clone(),
+                            quantity,
+                            unit,
+                        });
+                    }
+                    MenuItem::Text { text } => line.push(MenuSectionItem::Text(text.clone())),
+                    MenuItem::LineBreak => lines.push(std::mem::take(&mut line)),
+                    // Notes are for the author, not the page.
+                    _ => {}
                 }
-
-                // Add any remaining content as a line
-                if !current_text.is_empty() {
-                    step_items.push(MenuSectionItem::Text(current_text));
-                }
-                if !step_items.is_empty() {
-                    lines.push(step_items);
-                }
+            }
+            if !line.is_empty() {
+                lines.push(line);
             }
         }
 
@@ -992,20 +1209,27 @@ fn build_menu_template_inner(
                 .all(|item| matches!(item, MenuSectionItem::Text(t) if t.trim().is_empty()))
         });
 
-        if !lines.is_empty() {
+        // An empty dated section is still a day of a plan; it is dropped
+        // below if the menu is not one.
+        let dated = section
+            .name
+            .as_deref()
+            .and_then(crate::web::plan::section_date)
+            .is_some();
+        if !lines.is_empty() || dated {
             sections.push(MenuSection {
-                name: section_name,
+                name: section.name.clone(),
                 lines,
             });
         }
     }
 
     // Get metadata
-    let metadata = if recipe.metadata.map.is_empty() {
+    let metadata = if menu.metadata == cooklang_find::Metadata::default() {
         None
     } else {
         let get_field = |key: &str| -> Option<String> {
-            recipe.metadata.get(key).and_then(|v| {
+            menu.metadata.get(key).and_then(|v| {
                 if let Some(s) = v.as_str() {
                     Some(s.to_string())
                 } else if let Some(n) = v.as_i64() {
@@ -1016,24 +1240,29 @@ fn build_menu_template_inner(
             })
         };
 
-        let mut custom_metadata = Vec::new();
-        for (key, value) in recipe.metadata.map_filtered() {
-            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
-                // A key prefixed with "." is hidden from the recipe page.
-                if key_str.starts_with('.') {
-                    continue;
-                }
-                custom_metadata.push((key_str.to_string(), val_str.to_string()));
-            }
-        }
+        // `Metadata` keeps its entries in a `HashMap` and offers no iterator,
+        // so custom fields come from its serialised form, sorted by key to
+        // keep the page stable from one load to the next.
+        let raw = serde_json::to_value(&menu.metadata).unwrap_or_default();
+        let mut custom_metadata: Vec<(String, String)> = raw
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(key, _)| key.parse::<cooklang::metadata::StdKey>().is_err())
+            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .collect();
+        custom_metadata.sort();
 
-        let custom_lists = crate::web::family_renderers::build_custom_list_families(
-            recipe.metadata.map_filtered(),
-            &lang,
-        );
+        // Menus expose their metadata as a plain map without YAML values, so
+        // the family panels (e.g. nutrition) are recipe-only for now.
+        let panels = Vec::new();
 
         Some(RecipeMetadata {
-            servings: get_field("servings"),
+            // As on the recipe page: `scale` rounds `servings` to a whole number.
+            servings: servings
+                .as_ref()
+                .map(|s| s.chosen.to_string())
+                .or_else(|| get_field("servings")),
             time: get_field("time"),
             difficulty: get_field("difficulty"),
             course: get_field("course"),
@@ -1050,21 +1279,17 @@ fn build_menu_template_inner(
             source: get_field("source").or_else(|| get_field("source.name")),
             source_url: get_field("source.url"),
             custom: custom_metadata,
-            custom_lists,
+            panels,
         })
     };
 
-    let menu_name = recipe
-        .metadata
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            path.split('/')
-                .next_back()
-                .unwrap_or(&path)
-                .replace(".menu", "")
-        });
+    let menu_name = menu.name.clone();
+
+    // Sections on two days or more are laid out as a calendar.
+    let plan = crate::web::plan::build_plan_view(&sections, &lang);
+    if plan.is_none() {
+        sections.retain(|section| !section.lines.is_empty());
+    }
 
     Ok(MenuTemplate {
         active: "recipes".to_string(),
@@ -1072,15 +1297,36 @@ fn build_menu_template_inner(
         recipe_path: path,
         breadcrumbs,
         scale,
+        servings,
         metadata,
         sections,
+        plan,
         image_path,
         tr: Tr::new(lang),
         prefix: url_prefix.to_string(),
         static_mode,
         repo_url,
         features,
+        viewer,
     })
+}
+
+/// Paths of every `.cook` recipe in `tree` and below it, menus left out.
+pub fn cook_recipe_paths(tree: &cooklang_find::RecipeTree) -> Vec<&Utf8Path> {
+    let mut paths = Vec::new();
+    let mut stack = vec![tree];
+    while let Some(node) = stack.pop() {
+        if let Some(path) = node
+            .recipe
+            .as_ref()
+            .filter(|recipe| !recipe.is_menu())
+            .and_then(|recipe| recipe.path())
+        {
+            paths.push(path.as_path());
+        }
+        stack.extend(node.children.values());
+    }
+    paths
 }
 
 fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
@@ -1097,7 +1343,21 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
     Some(count)
 }
 
-fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Option<String> {
+/// The URL a recipe's title or step picture is served at.
+///
+/// An `http(s)` address from the metadata is passed through. A file becomes
+/// `{prefix}/api/static/` followed by its path from the recipe directory,
+/// **each segment percent-encoded**. The path is built from folder and file
+/// names someone else may have chosen — a shared or synced collection, a
+/// cloned repository — so it can hold anything a name can: `"` and `'`, which
+/// end an attribute; `#` and `?`, which cut the URL short; `%`, which the
+/// server would decode. Encoded, it is inert wherever it lands, and those
+/// pictures load at all (#548).
+pub(crate) fn get_image_path(
+    base_path: &Utf8Path,
+    prefix: &str,
+    img_path: String,
+) -> Option<String> {
     tracing::debug!("Recipe image path from entry: {}", img_path);
     // If it's a URL, use it directly
     if img_path.starts_with("http://") || img_path.starts_with("https://") {
@@ -1108,15 +1368,575 @@ fn get_image_path(base_path: &Utf8Path, prefix: &str, img_path: String) -> Optio
 
         // Try to strip the base_path prefix to get a relative path
         if let Ok(relative) = img_path.strip_prefix(base_path) {
-            let result = format!("{prefix}/api/static/{relative}");
+            let result = static_url(prefix, relative);
             tracing::debug!("Image path relative to base: {}", result);
             Some(result)
         } else if !img_path.is_absolute() {
-            Some(format!("{prefix}/api/static/{img_path}"))
+            Some(static_url(prefix, img_path))
         } else {
             img_path
                 .file_name()
-                .map(|name| format!("{prefix}/api/static/{name}"))
+                .map(|name| static_url(prefix, Utf8Path::new(name)))
         }
+    }
+}
+
+/// The picture file shown for step `step` of section `section`, both
+/// one-based, with `steps_before` steps in the sections ahead of it.
+///
+/// Step pictures come in two naming conventions (#374): `Recipe.S.N.ext`
+/// (section S, step N within it — what the iOS app writes) and `Recipe.G.ext`
+/// (step G counted across every section). The section-specific one wins.
+/// `section` counts every section of the parsed recipe, empty ones included.
+pub(crate) fn step_image(
+    entry: &cooklang_find::RecipeEntry,
+    section: usize,
+    step: usize,
+    steps_before: usize,
+) -> Option<&String> {
+    let images = entry.step_images();
+    images
+        .get(section, step)
+        .or_else(|| images.get(0, steps_before + step))
+}
+
+/// `{prefix}/api/static/` and `relative`, one percent-encoded segment per
+/// path component. Joined with `/` whatever the platform's separator is, so a
+/// Windows path makes a working URL too.
+fn static_url(prefix: &str, relative: &Utf8Path) -> String {
+    let segments: Vec<_> = relative
+        .components()
+        .map(|component| urlencoding::encode(component.as_str()))
+        .collect();
+    format!("{prefix}/api/static/{}", segments.join("/"))
+}
+
+#[cfg(test)]
+mod image_path_tests {
+    use super::get_image_path;
+    use camino::Utf8Path;
+
+    fn url(base: &str, prefix: &str, image: &str) -> Option<String> {
+        get_image_path(Utf8Path::new(base), prefix, image.to_string())
+    }
+
+    /// The folder name from #548: unencoded, its `"` ended the `src`
+    /// attribute cooking mode wrote and the rest became an event handler.
+    #[test]
+    fn a_quote_in_a_folder_name_cannot_leave_the_url() {
+        let image = "/recipes/x\" onerror=\"alert(1)\" y=\"/Pancakes.1.jpg";
+        let url = url("/recipes", "", image).unwrap();
+        assert_eq!(
+            url,
+            "/api/static/x%22%20onerror%3D%22alert%281%29%22%20y%3D%22/Pancakes.1.jpg"
+        );
+        assert!(!url.contains(['"', '\'', '<', '>', ' ']), "{url}");
+    }
+
+    #[test]
+    fn every_segment_is_encoded_and_slashes_are_kept() {
+        assert_eq!(
+            url("/recipes", "", "/recipes/Breakfast/Easy Pancakes.jpg").as_deref(),
+            Some("/api/static/Breakfast/Easy%20Pancakes.jpg")
+        );
+        // `#`, `?` and `%` used to cut the URL short or be decoded by the
+        // server, so these pictures never loaded.
+        assert_eq!(
+            url("/recipes", "/cook", "/recipes/50% #1?/Tart's.png").as_deref(),
+            Some("/cook/api/static/50%25%20%231%3F/Tart%27s.png")
+        );
+    }
+
+    #[test]
+    fn relative_paths_are_encoded_too() {
+        assert_eq!(
+            url("/recipes", "", "Sub Dir/a b.jpg").as_deref(),
+            Some("/api/static/Sub%20Dir/a%20b.jpg")
+        );
+    }
+
+    /// Unix only: without a drive letter the path is not absolute on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn a_picture_outside_the_directory_is_encoded_by_name() {
+        assert_eq!(
+            url("/recipes", "", "/elsewhere/a \"b\".jpg").as_deref(),
+            Some("/api/static/a%20%22b%22.jpg")
+        );
+    }
+
+    #[test]
+    fn web_addresses_are_passed_through() {
+        let address = "https://example.com/a b.jpg?x=1#y";
+        assert_eq!(url("/recipes", "", address).as_deref(), Some(address));
+    }
+}
+
+#[cfg(test)]
+mod natural_sort_tests {
+    use super::{natural_cmp, natural_key};
+    use std::cmp::Ordering;
+
+    #[test]
+    fn non_ascii_letters_keep_code_point_order() {
+        // Accents are not folded: this pins the documented divergence from
+        // the browser collator so a change here is deliberate.
+        assert_eq!(natural_cmp("zucchini", "Äpfel"), Ordering::Less);
+        // Case still folds for non-ASCII letters.
+        assert_eq!(natural_key("äpfel"), natural_key("Äpfel"));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert_eq!(natural_cmp("apple pie", "Banana bread"), Ordering::Less);
+        assert_eq!(natural_cmp("Banana bread", "apple pie"), Ordering::Greater);
+    }
+
+    #[test]
+    fn digit_runs_compare_numerically() {
+        assert_eq!(natural_cmp("Recipe 9", "Recipe 10"), Ordering::Less);
+        assert_eq!(natural_cmp("Recipe 10", "Recipe 9"), Ordering::Greater);
+        assert_eq!(natural_cmp("Recipe 10", "Recipe 10"), Ordering::Equal);
+    }
+
+    #[test]
+    fn case_only_differences_are_stable_ties() {
+        // Equal under the natural key; byte order breaks the tie so the
+        // result is deterministic across runs.
+        assert_eq!(natural_cmp("a", "A"), Ordering::Greater);
+        assert_eq!(natural_cmp("A", "a"), Ordering::Less);
+        assert_eq!(natural_cmp("a", "a"), Ordering::Equal);
+    }
+
+    #[test]
+    fn sorts_like_the_client_collator() {
+        let mut names = vec![
+            "Recipe 10",
+            "banana bread",
+            "Recipe 9",
+            "Apple pie",
+            "recipe 2",
+        ];
+        names.sort_by(|a, b| natural_cmp(a, b));
+        assert_eq!(
+            names,
+            vec![
+                "Apple pie",
+                "banana bread",
+                "recipe 2",
+                "Recipe 9",
+                "Recipe 10"
+            ]
+        );
+    }
+
+    #[test]
+    fn directories_come_before_recipes() {
+        struct Item {
+            name: &'static str,
+            is_directory: bool,
+        }
+        let mut items = [
+            Item {
+                name: "zucchini",
+                is_directory: false,
+            },
+            Item {
+                name: "Soups",
+                is_directory: true,
+            },
+            Item {
+                name: "Apple pie",
+                is_directory: false,
+            },
+            Item {
+                name: "breakfast",
+                is_directory: true,
+            },
+        ];
+        items.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => natural_cmp(a.name, b.name),
+        });
+        let order: Vec<_> = items.iter().map(|i| i.name).collect();
+        assert_eq!(order, vec!["breakfast", "Soups", "Apple pie", "zucchini"]);
+    }
+}
+
+#[cfg(test)]
+mod servings_tests {
+    use super::*;
+    use askama::Template;
+
+    const SERVES_FOUR: &str = "---\nservings: 4\n---\n\nAdd @flour{200%g}.\n";
+    const NO_SERVINGS: &str = "Add @flour{200%g}.\n";
+
+    /// The recipe page for `recipe`, as `/recipe/Soup?scale=..&servings=..`.
+    fn page(recipe: &str, scale: f64, servings: Option<f64>) -> Box<RecipeTemplate> {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        std::fs::write(base.join("Soup.cook"), recipe).unwrap();
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Soup",
+            aisle_path: None,
+            scale,
+            servings,
+            lang: "en-US".parse().unwrap(),
+            static_mode: false,
+            repo_url: None,
+            features: FeatureFlags::default(),
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        match output {
+            RecipeBuildOutput::Recipe(template) => template,
+            RecipeBuildOutput::Menu(_) => panic!("Soup.cook is not a menu"),
+        }
+    }
+
+    fn stepper(template: &RecipeTemplate) -> Option<(u32, f64)> {
+        template.servings.as_ref().map(|s| (s.base, s.chosen))
+    }
+
+    #[test]
+    fn a_recipe_with_servings_starts_at_its_own_servings() {
+        let template = page(SERVES_FOUR, 1.0, None);
+        assert_eq!(stepper(&template), Some((4, 4.0)));
+        assert_eq!(template.scale, 1.0);
+
+        let html = template.render().unwrap();
+        assert!(html.contains(r#"id="servings""#), "{html}");
+        assert!(html.contains(r#"value="4""#));
+        assert!(html.contains(r#"data-base-servings="4""#));
+        assert!(!html.contains(r#"id="scale""#));
+        assert!(html.contains("👥 4 servings"));
+    }
+
+    #[test]
+    fn servings_set_the_factor() {
+        let template = page(SERVES_FOUR, 1.0, Some(6.0));
+        assert_eq!(template.scale, 1.5);
+        assert_eq!(stepper(&template), Some((4, 6.0)));
+
+        let html = template.render().unwrap();
+        assert!(html.contains("300"), "200 g x 1.5: {html}");
+        assert!(html.contains("👥 6 servings"));
+        assert!(html.contains("6 servings</div>"), "print header");
+    }
+
+    #[test]
+    fn half_a_serving_and_no_ceiling() {
+        let half = page(SERVES_FOUR, 1.0, Some(0.5));
+        assert_eq!(half.scale, 0.125);
+        // `scale` rounds the metadata to a whole serving; the pill must not.
+        assert!(half.render().unwrap().contains("👥 0.5 servings"));
+
+        assert_eq!(page(SERVES_FOUR, 1.0, Some(1000.0)).scale, 250.0);
+    }
+
+    /// Scaled away from its own servings, the page says what the recipe was
+    /// written for, since times and pan sizes do not always scale, and links
+    /// back to it.
+    #[test]
+    fn a_scaled_recipe_says_what_it_was_written_for() {
+        let html = page(SERVES_FOUR, 1.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original-servings"), "unscaled");
+
+        let html = page(SERVES_FOUR, 1.0, Some(6.0)).render().unwrap();
+        assert!(html.contains("📖 Written for 4 servings"), "{html}");
+        assert!(html.contains(r#"<a href="/recipe/Soup""#));
+
+        let one = "---\nservings: 1\n---\n\nAdd @flour{200%g}.\n";
+        let html = page(one, 2.0, None).render().unwrap();
+        assert!(html.contains("📖 Written for 1 serving<"));
+
+        let html = page(NO_SERVINGS, 2.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original-servings"), "no servings");
+    }
+
+    /// Without servings to count, a scaled recipe gives the same reminder as
+    /// a factor of the original, whether or not it has any metadata.
+    #[test]
+    fn a_recipe_scaled_by_the_multiplier_says_so() {
+        let html = page(NO_SERVINGS, 1.0, None).render().unwrap();
+        assert!(!html.contains("metadata-original"), "unscaled");
+
+        // No metadata at all: the badge gets a row of its own.
+        let html = page(NO_SERVINGS, 1.5, None).render().unwrap();
+        assert!(html.contains("📖 ×1.5 of the original recipe"), "{html}");
+        assert!(html.contains(r#"<a href="/recipe/Soup""#));
+
+        let titled = "---\ntitle: Soup\n---\n\nAdd @flour{200%g}.\n";
+        let html = page(titled, 0.333333, None).render().unwrap();
+        assert_eq!(html.matches("📖 ×0.333 of the original recipe").count(), 1);
+
+        // A recipe with servings says what it was written for instead.
+        let html = page(SERVES_FOUR, 1.5, None).render().unwrap();
+        assert!(!html.contains("metadata-original-scale"));
+        assert!(html.contains("metadata-original-servings"));
+    }
+
+    /// The half-a-serving floor is the stepper's; a menu can link below it.
+    #[test]
+    fn servings_below_the_stepper_floor_are_taken_as_is() {
+        let template = page(SERVES_FOUR, 1.0, Some(0.4));
+        assert_eq!(template.scale, 0.1);
+        assert_eq!(stepper(&template), Some((4, 0.4)));
+        assert!(template.render().unwrap().contains(r#"min="0.4""#));
+    }
+
+    #[test]
+    fn servings_win_over_scale() {
+        assert_eq!(page(SERVES_FOUR, 3.0, Some(2.0)).scale, 0.5);
+    }
+
+    /// Menu links and bookmarks carry `?scale=`: same factor, shown as servings.
+    #[test]
+    fn scale_links_keep_their_factor() {
+        let template = page(SERVES_FOUR, 1.5, None);
+        assert_eq!(template.scale, 1.5);
+        assert_eq!(stepper(&template), Some((4, 6.0)));
+
+        let odd = page("---\nservings: 6\n---\n\nAdd @flour{200%g}.\n", 0.1, None);
+        assert_eq!(odd.scale, 0.1);
+        assert_eq!(stepper(&odd), Some((6, 0.6)), "rounded for display");
+    }
+
+    #[test]
+    fn unusable_servings_fall_back_to_scale() {
+        for servings in [0.0, -2.0, f64::NAN, f64::INFINITY] {
+            let template = page(SERVES_FOUR, 2.0, Some(servings));
+            assert_eq!(template.scale, 2.0, "?servings={servings}");
+            assert_eq!(stepper(&template), Some((4, 8.0)));
+        }
+    }
+
+    #[test]
+    fn a_recipe_without_servings_keeps_the_multiplier() {
+        let template = page(NO_SERVINGS, 2.0, Some(6.0));
+        assert_eq!(template.scale, 2.0, "?servings= is ignored");
+        assert!(template.servings.is_none());
+
+        let html = template.render().unwrap();
+        assert!(html.contains(r#"id="scale""#));
+        assert!(html.contains(r#"max="200""#));
+        assert!(!html.contains(r#"id="servings""#));
+    }
+
+    #[test]
+    fn servings_that_are_not_a_whole_number_keep_the_multiplier() {
+        for servings in ["4-6", "1.5", "0"] {
+            let recipe = format!("---\nservings: {servings}\n---\n\nAdd @flour{{200%g}}.\n");
+            let template = page(&recipe, 2.0, Some(6.0));
+            assert_eq!(template.scale, 2.0, "servings: {servings}");
+            assert!(template.servings.is_none(), "servings: {servings}");
+        }
+    }
+
+    /// `Week.menu` serves 2 and references `Soup` (serves 4) and `Toast` (no
+    /// servings), rendered as `/recipe/Week.menu?scale=..&servings=..`.
+    fn menu_html(menu_servings: &str, scale: f64, servings: Option<f64>) -> (MenuTemplate, String) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        std::fs::write(base.join("Soup.cook"), SERVES_FOUR).unwrap();
+        std::fs::write(base.join("Toast.cook"), NO_SERVINGS).unwrap();
+        std::fs::write(
+            base.join("Week.menu"),
+            format!(
+                "---\n{menu_servings}---\n\n== Monday ==\n\nLunch: \\\n\
+                 - @./Soup{{2%servings}} \\\n- @./Toast{{3}} \\\n- @./Soup{{}}\n"
+            ),
+        )
+        .unwrap();
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Week.menu",
+            aisle_path: None,
+            scale,
+            servings,
+            lang: "en-US".parse().unwrap(),
+            static_mode: false,
+            repo_url: None,
+            features: FeatureFlags::default(),
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        let RecipeBuildOutput::Menu(template) = output else {
+            panic!("Week.menu is a menu");
+        };
+        let html = template.render().unwrap();
+        (*template, html)
+    }
+
+    /// The query string of every link to `Soup` or `Toast` in `html`, in
+    /// order. The page links to the menu itself too.
+    fn links(html: &str) -> Vec<&str> {
+        html.split(r#"href="/recipe/"#)
+            .skip(1)
+            .map(|rest| &rest[..rest.find('"').unwrap()])
+            .filter(|href| href.starts_with("Soup") || href.starts_with("Toast"))
+            .map(|href| href.split_once('?').map_or("", |(_, query)| query))
+            .collect()
+    }
+
+    #[test]
+    fn a_menu_with_servings_counts_servings() {
+        let (template, html) = menu_html("servings: 2\n", 1.0, None);
+        assert_eq!(
+            template.servings.as_ref().map(|s| (s.base, s.chosen)),
+            Some((2, 2.0))
+        );
+        assert!(html.contains(r#"id="servings""#));
+        assert!(!html.contains(r#"id="scale""#));
+
+        assert!(!html.contains("metadata-original-servings"));
+
+        let (template, html) = menu_html("servings: 2\n", 1.0, Some(4.0));
+        assert_eq!(template.scale, 2.0);
+        assert!(html.contains("👥 4 servings"));
+        assert!(html.contains("📖 Written for 2 servings"));
+    }
+
+    #[test]
+    fn a_menu_without_servings_keeps_the_multiplier() {
+        let (template, html) = menu_html("title: Week\n", 2.0, Some(4.0));
+        assert_eq!(template.scale, 2.0, "?servings= is ignored");
+        assert!(template.servings.is_none());
+        assert!(html.contains(r#"id="scale""#));
+        assert!(html.contains("📖 ×2 of the original recipe"));
+    }
+
+    /// A recipe that declares servings is linked by its servings, as its page
+    /// counts them; any other by its factor. A x1 reference has a plain link.
+    #[test]
+    fn menu_links_carry_servings_when_the_recipe_has_them() {
+        // Soup{2%servings} is x0.5 of 4 servings; Toast{3} x3; Soup{} x1.
+        let (_, html) = menu_html("servings: 2\n", 1.0, None);
+        assert_eq!(links(&html), vec!["servings=2", "scale=3", ""]);
+
+        // The whole menu at 4 servings doubles every factor, which brings
+        // Soup{2%servings} to x1, Soup's own 4 servings: a plain link.
+        let (_, html) = menu_html("servings: 2\n", 1.0, Some(4.0));
+        assert_eq!(links(&html), vec!["", "scale=6", "servings=8"]);
+
+        // Below the stepper's half a serving: 0.1 of 4 servings.
+        let (_, html) = menu_html("title: Week\n", 0.1, None);
+        assert_eq!(
+            links(&html),
+            vec!["servings=0.2", "scale=0.3", "servings=0.4"]
+        );
+    }
+}
+
+#[cfg(test)]
+mod reference_link_tests {
+    use super::*;
+    use askama::Template;
+
+    /// `Dinner` serves 2 and asks for each sub-recipe a different way.
+    const DINNER: &str = "---\nservings: 2\n---\n\n\
+        Make @./Sauce{2%servings}, @./Dough{}, @./Stock{250%ml}, @./Toast{3} \
+        and @./Jam{200%g}.\n";
+
+    /// The page for `Dinner` and its rendered HTML.
+    fn dinner(servings: Option<f64>, static_mode: bool) -> (RecipeTemplate, String) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = Utf8Path::from_path(dir.path()).unwrap();
+        for (name, content) in [
+            ("Dinner", DINNER),
+            ("Sauce", "---\nservings: 4\n---\n\nStir @tomato{4}.\n"),
+            ("Dough", "---\nservings: 4\n---\n\nKnead @flour{500%g}.\n"),
+            ("Stock", "---\nyield: 500%ml\n---\n\nBoil @bones{1%kg}.\n"),
+            ("Toast", "Toast @bread{2%slices}.\n"),
+            ("Jam", "Cook @fruit{1%kg}.\n"),
+        ] {
+            std::fs::write(base.join(format!("{name}.cook")), content).unwrap();
+        }
+        let output = build_recipe_template(RecipeBuildInput {
+            base_path: base,
+            url_prefix: "",
+            recipe_path: "Dinner",
+            aisle_path: None,
+            scale: 1.0,
+            servings,
+            lang: "en-US".parse().unwrap(),
+            static_mode,
+            repo_url: None,
+            features: FeatureFlags::default(),
+            viewer: Viewer::default(),
+        })
+        .unwrap();
+        let RecipeBuildOutput::Recipe(template) = output else {
+            panic!("Dinner.cook is not a menu");
+        };
+        let html = template.render().unwrap();
+        (*template, html)
+    }
+
+    /// The query every link to `name` carries — the ingredient list and the
+    /// step both link to it, and must agree. The link is the reference
+    /// resolved root-relative, so the `./` it is written with is gone.
+    fn query<'a>(html: &'a str, name: &str) -> &'a str {
+        let prefix = format!(r#"href="/recipe/{name}"#);
+        let queries: Vec<&str> = html
+            .match_indices(&prefix)
+            .map(|(at, _)| {
+                let rest = &html[at + prefix.len()..];
+                let rest = rest.strip_prefix(".html").unwrap_or(rest);
+                rest[..rest.find('"').unwrap()].trim_start_matches('?')
+            })
+            .collect();
+        assert!(queries.len() >= 2, "{name}: {queries:?}");
+        assert!(
+            queries.iter().all(|q| *q == queries[0]),
+            "{name}: {queries:?}"
+        );
+        queries[0]
+    }
+
+    #[test]
+    fn sub_recipes_open_at_the_size_the_recipe_asks_for() {
+        let (_, html) = dinner(None, false);
+        assert_eq!(query(&html, "Sauce"), "servings=2", "2 servings asked");
+        assert_eq!(query(&html, "Dough"), "", "no quantity: as made");
+        assert_eq!(query(&html, "Stock"), "scale=0.5", "250 ml of 500 ml");
+        assert_eq!(query(&html, "Toast"), "scale=3", "a plain number");
+        assert_eq!(query(&html, "Jam"), "", "grams of a recipe with no yield");
+    }
+
+    #[test]
+    fn scaling_the_recipe_scales_its_sub_recipes() {
+        let (_, html) = dinner(Some(4.0), false);
+        assert_eq!(
+            query(&html, "Sauce"),
+            "",
+            "4 servings is the sauce as written"
+        );
+        assert_eq!(query(&html, "Dough"), "servings=8", "follows the recipe");
+        assert_eq!(query(&html, "Stock"), "", "500 ml is the stock as written");
+        assert_eq!(query(&html, "Toast"), "scale=6");
+        assert_eq!(query(&html, "Jam"), "");
+    }
+
+    #[test]
+    fn a_static_site_links_plainly() {
+        let (_, html) = dinner(Some(4.0), true);
+        for name in ["Sauce", "Dough", "Stock", "Toast", "Jam"] {
+            assert_eq!(query(&html, name), "", "{name}");
+        }
+    }
+
+    #[test]
+    fn a_factor_written_as_one_links_plainly() {
+        assert_eq!(reference_query(Some(1.0004), None), "");
+        assert_eq!(reference_query(Some(1.0004), Some(4)), "");
+        assert_eq!(reference_query(Some(0.5), Some(4)), "?servings=2");
+        assert_eq!(reference_query(Some(1.0 / 3.0), None), "?scale=0.333");
+        assert_eq!(reference_query(None, Some(4)), "");
+        assert_eq!(reference_query(Some(f64::NAN), None), "");
     }
 }

@@ -1,0 +1,1239 @@
+//! CORS policy for `cook server`, built from the `--cors-origin` and
+//! `--cors-allow-credentials` flags.
+//!
+//! Without `--cors-origin` the server sends no CORS headers at all, so no page
+//! on another origin can read its answers; `--cors-origin '*'` opts back into
+//! read-only access for every origin.
+//!
+//! CORS is enforced by browsers only, so this governs what cross-origin web
+//! pages may do with the API. `curl` and every non-browser client are
+//! unaffected by it, and so is the web UI when it is opened at `localhost` or
+//! an IP address. Opened at any other host name, it needs that origin named
+//! with `--cors-origin`, or a site could point a name of its own at the server:
+//! see [`is_own_origin`] for writes and [`host_guard`] for everything else.
+
+use anyhow::{bail, Result};
+use axum::{
+    extract::{Request, State},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
+    middleware::Next,
+    response::{IntoResponse, Response},
+    Json,
+};
+use std::sync::Arc;
+use tower_http::cors::{AllowOrigin, CorsLayer};
+
+/// Which origins may make cross-origin requests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CorsOrigins {
+    /// No `--cors-origin`: same-origin only. No CORS headers are sent, so a
+    /// browser lets no other origin read an answer.
+    None,
+    /// `--cors-origin '*'`. Read-only: see [`CorsConfig::methods`].
+    Any,
+    /// One or more explicit origins, in the order given on the command line.
+    List(Vec<HeaderValue>),
+}
+
+/// A validated CORS policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorsConfig {
+    origins: CorsOrigins,
+    allow_credentials: bool,
+}
+
+impl CorsConfig {
+    /// Validates a `--cors-origin` / `--cors-allow-credentials` combination.
+    ///
+    /// `origins` is the raw repeated flag; empty means the flag was not given.
+    pub fn from_args(origins: &[String], allow_credentials: bool) -> Result<Self> {
+        let wildcard = origins.iter().any(|o| o == "*");
+        if wildcard && origins.iter().any(|o| o != "*") {
+            bail!(
+                "--cors-origin '*' cannot be combined with explicit origins; \
+                 pass either '*' or a list of origins, not both"
+            );
+        }
+
+        let origins = if origins.is_empty() {
+            CorsOrigins::None
+        } else if wildcard {
+            CorsOrigins::Any
+        } else {
+            let parsed = origins
+                .iter()
+                .map(|origin| parse_origin(origin))
+                .collect::<Result<Vec<_>>>()?;
+            CorsOrigins::List(parsed)
+        };
+
+        if allow_credentials && !matches!(origins, CorsOrigins::List(_)) {
+            bail!(
+                "--cors-allow-credentials requires explicit --cors-origin values; \
+                 browsers reject credentialed requests against a wildcard origin"
+            );
+        }
+
+        Ok(Self {
+            origins,
+            allow_credentials,
+        })
+    }
+
+    /// The methods this policy allows cross-origin.
+    ///
+    /// A wildcard origin means *any* page in the user's browser can reach the
+    /// server, so it gets read-only access. Naming an origin is an explicit
+    /// statement of trust, and unlocks the mutating routes.
+    fn methods(&self) -> Vec<Method> {
+        match &self.origins {
+            CorsOrigins::None => vec![],
+            CorsOrigins::Any => vec![Method::GET],
+            CorsOrigins::List(_) => {
+                vec![Method::GET, Method::POST, Method::PUT, Method::DELETE]
+            }
+        }
+    }
+
+    /// Builds the tower-http layer for this policy, or `None` when no origin
+    /// was named and the server sends no CORS headers at all.
+    ///
+    /// `content-type` is always allowed: without it a cross-origin JSON `POST`
+    /// fails preflight no matter what the origin setting is, so there is
+    /// nothing here worth making configurable. The CORS-safelisted request
+    /// headers (`Accept`, `Accept-Language`, `Content-Language`) need no entry
+    /// — browsers permit them regardless.
+    pub fn layer(&self) -> Option<CorsLayer> {
+        let allow_origin = match &self.origins {
+            CorsOrigins::None => return None,
+            CorsOrigins::Any => AllowOrigin::any(),
+            CorsOrigins::List(list) => AllowOrigin::list(list.iter().cloned()),
+        };
+
+        Some(
+            CorsLayer::new()
+                .allow_origin(allow_origin)
+                .allow_methods(self.methods())
+                .allow_headers([header::CONTENT_TYPE])
+                .allow_credentials(self.allow_credentials),
+        )
+    }
+
+    /// Whether a request with this method, these headers and this `Host` may
+    /// modify recipes.
+    ///
+    /// `allow_methods` cannot express this. `POST` is a CORS-safelisted method,
+    /// so a browser never consults `Access-Control-Allow-Methods` for it —
+    /// only a server-side check makes the wildcard default actually read-only.
+    fn allows_write(&self, method: &Method, headers: &HeaderMap, host: &str) -> bool {
+        if *method == Method::GET || *method == Method::HEAD || *method == Method::OPTIONS {
+            return true;
+        }
+        // No `Origin` means no browser. `curl` and other clients send none, and
+        // the API has no authentication for them to bypass.
+        let Some(origin) = headers.get(header::ORIGIN) else {
+            return true;
+        };
+        let Ok(origin) = origin.to_str() else {
+            return false;
+        };
+        self.trusts(origin, host)
+    }
+
+    /// Whether a browser request from `origin`, sent to `host`, may modify
+    /// recipes: it comes from the server's own address ([`is_own_origin`]),
+    /// or from an origin named with `--cors-origin`.
+    pub(super) fn trusts(&self, origin: &str, host: &str) -> bool {
+        is_own_origin(origin, host) || self.lists_origin(origin)
+    }
+
+    fn lists_origin(&self, origin: &str) -> bool {
+        self.listed()
+            .any(|listed| listed.as_bytes() == origin.as_bytes())
+    }
+
+    /// Whether a request sent to `host` may be answered at all.
+    ///
+    /// A page that has rebound its own name to this server (see
+    /// [`is_own_origin`]) is same-origin with it as far as the browser is
+    /// concerned: it needs no CORS to read the answers, and its `GET`s carry
+    /// no `Origin` for [`CorsConfig::trusts`] to look at. The `Host` they were
+    /// sent to is the one thing that gives it away, so only a host no DNS
+    /// answer can have pointed here is served, or the host of an origin named
+    /// with `--cors-origin`.
+    fn trusts_host(&self, host: &str) -> bool {
+        host_cannot_be_rebound(host)
+            || self.listed().any(|listed| {
+                listed
+                    .to_str()
+                    .is_ok_and(|origin| origin_matches_host(origin, host))
+            })
+    }
+
+    /// The origins named with `--cors-origin`; none for `*`.
+    fn listed(&self) -> std::slice::Iter<'_, HeaderValue> {
+        match &self.origins {
+            CorsOrigins::None | CorsOrigins::Any => [].iter(),
+            CorsOrigins::List(list) => list.iter(),
+        }
+    }
+}
+
+/// The `Host` header, if the request carries exactly one.
+///
+/// Deliberately ignores `Forwarded` / `X-Forwarded-Host`: those are set by
+/// whoever is on the other end of a direct connection, so a security decision
+/// must not depend on them. A deployment behind a proxy that rewrites `Host`
+/// names its public origin with `--cors-origin` instead.
+///
+/// More than one `Host` header is a malformed request (RFC 9112 §3.2 requires
+/// exactly one), and picking the first would let a raw client choose which one
+/// the guard sees — so that is treated as no host at all, which fails closed.
+pub(super) fn host_header(headers: &HeaderMap) -> Option<&str> {
+    let mut hosts = headers.get_all(header::HOST).iter();
+    let host = hosts.next()?;
+    if hosts.next().is_some() {
+        return None;
+    }
+    host.to_str().ok()
+}
+
+/// The authority this request was addressed to.
+///
+/// Deliberately reads the `Host` header (or, for HTTP/2, the URI authority)
+/// rather than `Forwarded` / `X-Forwarded-Host`. Those are set by whoever is
+/// on the other end of a direct connection, so a security decision must not
+/// depend on them — `Origin: http://evil.test` plus
+/// `X-Forwarded-Host: evil.test` would otherwise look same-origin. A
+/// deployment behind a proxy that rewrites `Host` names its public origin with
+/// `--cors-origin` instead.
+fn request_host(request: &Request) -> Option<&str> {
+    request_authority(request.headers(), request.uri())
+}
+
+/// [`request_host`] for a handler, which is given headers and URI separately
+/// rather than the whole [`Request`].
+pub(super) fn request_authority<'a>(headers: &'a HeaderMap, uri: &'a Uri) -> Option<&'a str> {
+    host_header(headers).or_else(|| uri.authority().map(|authority| authority.as_str()))
+}
+
+/// Whether an `Origin` value denotes the same host the request was sent to.
+///
+/// Necessary for a request to come from the server's own address, but not
+/// sufficient: a page can make its own host name resolve to this server. See
+/// [`is_own_origin`], the check to use.
+///
+/// `Origin` is `scheme://host[:port]` while `Host` is `host[:port]`, and a
+/// browser omits the port when it is the scheme's default — so the comparison
+/// has to allow `https://a.test` to match either `a.test` or `a.test:443`.
+///
+/// The scheme is deliberately not compared. `cook server` speaks plaintext
+/// HTTP, but is routinely fronted by a TLS-terminating proxy that passes
+/// `Host` through unchanged, so an `https://` origin against a bare `Host` is
+/// the *normal* proxied case. That lets an `https://` page match a plaintext
+/// server on port 80 too, which is harmless only because [`is_own_origin`]
+/// never trusts a name DNS could have pointed there, whatever the scheme.
+fn origin_matches_host(origin: &str, host: &str) -> bool {
+    let Ok(url) = url::Url::parse(origin) else {
+        return false;
+    };
+    let Some(origin_host) = url.host_str() else {
+        return false;
+    };
+    match url.port() {
+        Some(port) => host.eq_ignore_ascii_case(&format!("{origin_host}:{port}")),
+        None => match url.port_or_known_default() {
+            Some(default) => {
+                host.eq_ignore_ascii_case(origin_host)
+                    || host.eq_ignore_ascii_case(&format!("{origin_host}:{default}"))
+            }
+            None => host.eq_ignore_ascii_case(origin_host),
+        },
+    }
+}
+
+/// Whether `origin` is the server's own: it matches the `host` the request
+/// was sent to, under a name nobody can have pointed at this server.
+///
+/// A match alone proves nothing. A page served from `http://evil.test:9080`
+/// can make `evil.test` resolve to 127.0.0.1 once it has loaded — DNS
+/// rebinding — and its requests then carry `Origin: http://evil.test:9080`
+/// *and* `Host: evil.test:9080`. Only a host that takes no DNS lookup is safe
+/// from that ([`cannot_be_rebound`]); the web UI opened at any other name
+/// needs its origin named with `--cors-origin`.
+///
+/// Classifying the origin's host rather than `Host` itself comes to the same
+/// thing, since [`origin_matches_host`] has just found them equal, and `url`
+/// has already parsed it.
+fn is_own_origin(origin: &str, host: &str) -> bool {
+    origin_matches_host(origin, host)
+        && url::Url::parse(origin).is_ok_and(|url| url.host().is_some_and(cannot_be_rebound))
+}
+
+/// [`cannot_be_rebound`] for a `Host` header value, `host[:port]`.
+fn host_cannot_be_rebound(host: &str) -> bool {
+    parse_host(host).is_some_and(cannot_be_rebound)
+}
+
+/// The host in a `Host` header value, if it is a bare `host[:port]`.
+///
+/// Anything richer is refused rather than handed to a URL parser, which would
+/// read `evil.test@127.0.0.1` as a user name and an IP address, or decode
+/// `local%68ost`.
+fn parse_host(host: &str) -> Option<url::Host> {
+    let (name, port) = if host.starts_with('[') {
+        host.split_at(host.find(']')? + 1)
+    } else {
+        host.split_at(host.find(':').unwrap_or(host.len()))
+    };
+    let port_ok = port.is_empty()
+        || port.strip_prefix(':').is_some_and(|port| {
+            !port.is_empty()
+                && port.bytes().all(|b| b.is_ascii_digit())
+                && port.parse::<u16>().is_ok()
+        });
+    let name_ok = name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '[' | ']' | ':'));
+    if !port_ok || !name_ok {
+        return None;
+    }
+    url::Host::parse(name).ok()
+}
+
+/// Whether reaching `host` takes no DNS lookup, so no DNS answer can point it
+/// at another machine.
+///
+/// An IP address, or `localhost` itself, which browsers and operating systems
+/// resolve to loopback on their own. Not `*.localhost` or `.local` names:
+/// most systems resolve those locally too, but not all, and a name that falls
+/// through to DNS goes wherever whoever answers says.
+fn cannot_be_rebound<S: AsRef<str>>(host: url::Host<S>) -> bool {
+    match host {
+        url::Host::Ipv4(_) | url::Host::Ipv6(_) => true,
+        url::Host::Domain(name) => name.as_ref() == "localhost",
+    }
+}
+
+/// The origin of `url` as a browser sends it in `Origin` — scheme, host, and
+/// any port that is not the scheme's default — or `None` if it has none a
+/// browser would send (`file:`, extension pages and other non-web schemes).
+///
+/// Used for a `Referer`, which is a whole URL, and to quote an origin back
+/// without echoing anything else a header carried.
+pub(super) fn origin_of(url: &str) -> Option<String> {
+    let origin = url::Url::parse(url).ok()?.origin();
+    origin.is_tuple().then(|| origin.ascii_serialization())
+}
+
+/// The `--cors-origin` value that would admit `origin`, when it was refused
+/// only for being the server's own address under a host name.
+///
+/// That is the one refusal a legitimate user meets — the web UI opened at
+/// `http://nas.local:9080`, or behind a reverse proxy — so it is the one worth
+/// a precise hint. `None` for anything else.
+fn own_origin_by_name(origin: &str, host: &str) -> Option<String> {
+    if !origin_matches_host(origin, host) || is_own_origin(origin, host) {
+        return None;
+    }
+    origin_of(origin)
+}
+
+/// Environment variable naming `--cors-origin` values, comma-separated.
+pub(super) const ORIGIN_ENV: &str = "COOK_CORS_ORIGIN";
+
+/// The origins named by [`ORIGIN_ENV`].
+///
+/// Containers are the reason this exists: a compose file adds an environment
+/// variable in one line, where a flag means restating the image's whole
+/// command.
+///
+/// Entries are trimmed, and empty ones dropped — `COOK_CORS_ORIGIN=` is what
+/// an undefined compose variable expands to, and it has to read as "not set"
+/// rather than as an origin that fails validation. Everything else goes
+/// through [`parse_origin`] exactly as a flag would.
+pub(super) fn origins_from_env(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|origin| !origin.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Parses one `--cors-origin` value.
+///
+/// A browser sends a bare origin — lowercase scheme, lowercase host, optional
+/// numeric port — in the `Origin` header, and tower-http compares it byte for
+/// byte. Anything richer or differently cased would never match and would fail
+/// silently at request time, with no diagnostic anywhere, so it is rejected
+/// here instead.
+fn parse_origin(origin: &str) -> Result<HeaderValue> {
+    let Some((scheme, rest)) = origin.split_once("://") else {
+        bail!("invalid --cors-origin {origin:?}: expected a scheme, e.g. http://localhost:3000");
+    };
+    if scheme.is_empty() || rest.is_empty() {
+        bail!("invalid --cors-origin {origin:?}: expected scheme://host[:port]");
+    }
+    // Schemes are ASCII, and browsers lowercase them. `chrome-extension` and
+    // other non-http schemes are legitimate `Origin` values, so the rule is a
+    // character set rather than an allowlist.
+    if !scheme
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '+' | '-' | '.'))
+    {
+        bail!(
+            "invalid --cors-origin {origin:?}: {scheme:?} is not a valid lowercase scheme, \
+             e.g. http://localhost:3000"
+        );
+    }
+
+    // Check the whole remainder before splitting off a port, so userinfo and
+    // other extras are reported as what they are rather than as a bad port.
+    if let Some(bad) = rest
+        .chars()
+        .find(|c| c.is_whitespace() || c.is_ascii_uppercase() || matches!(c, '/' | '?' | '#' | '@'))
+    {
+        bail!(
+            "invalid --cors-origin {origin:?}: a browser sends a bare lowercase origin, \
+             so {bad:?} can never match; expected scheme://host[:port], \
+             e.g. http://localhost:3000"
+        );
+    }
+
+    // An IPv6 host is bracketed and full of colons, so the port can only be
+    // split off after the closing bracket.
+    let (host, port) = if let Some(rest) = rest.strip_prefix('[') {
+        let Some((host, after)) = rest.split_once(']') else {
+            bail!(
+                "invalid --cors-origin {origin:?}: unterminated IPv6 host, e.g. http://[::1]:3000"
+            );
+        };
+        let port = match after {
+            "" => None,
+            _ => Some(after.strip_prefix(':').ok_or_else(|| {
+                anyhow::anyhow!("invalid --cors-origin {origin:?}: expected scheme://host[:port]")
+            })?),
+        };
+        (host, port)
+    } else {
+        match rest.rsplit_once(':') {
+            Some((host, port)) => (host, Some(port)),
+            None => (rest, None),
+        }
+    };
+
+    if host.is_empty() {
+        bail!("invalid --cors-origin {origin:?}: missing host, expected scheme://host[:port]");
+    }
+    if let Some(port) = port {
+        if port.parse::<u16>().is_err() {
+            bail!("invalid --cors-origin {origin:?}: {port:?} is not a valid port number");
+        }
+    }
+
+    HeaderValue::from_str(origin)
+        .map_err(|e| anyhow::anyhow!("invalid --cors-origin {origin:?}: {e}"))
+}
+
+/// Rejects browser requests that would modify recipes unless the server
+/// trusts their origin ([`CorsConfig::trusts`]).
+///
+/// Applied inside the CORS layer, so tower-http has already answered any
+/// `OPTIONS` preflight before this runs.
+pub async fn write_guard(
+    State(config): State<Arc<CorsConfig>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let host = request_host(&request).unwrap_or_default();
+    if config.allows_write(request.method(), request.headers(), host) {
+        return next.run(request).await;
+    }
+
+    let method = request.method();
+    let path = request.uri().path();
+    let own_origin = request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|origin| origin.to_str().ok())
+        .and_then(|origin| own_origin_by_name(origin, host));
+
+    let error = match own_origin {
+        Some(origin) => {
+            // This is also exactly what a DNS rebinding attack looks like, so
+            // the log must not talk the operator into allowing it.
+            tracing::warn!(
+                %method,
+                %path,
+                "refused a request that would modify recipes: only localhost and IP \
+                 addresses count as this server's own address. If you open the web UI at \
+                 {origin}, restart the server with --cors-origin {origin}. If you do not \
+                 recognise that address, a web page may have tried a DNS rebinding attack: \
+                 change nothing."
+            );
+            format!(
+                "Only localhost and IP addresses are trusted as this server's own address, \
+                 since another site could point any other host name at it (DNS rebinding). \
+                 If you opened the web UI at {origin}, start the server with \
+                 --cors-origin {origin}, or with --no-csrf-check to disable this check."
+            )
+        }
+        None => {
+            tracing::warn!(
+                %method,
+                %path,
+                "refused a cross-origin request that would modify recipes"
+            );
+            "Cross-origin requests may not modify recipes. Start the server with \
+             --cors-origin <ORIGIN> to allow this origin, or --no-csrf-check to \
+             disable this check."
+                .to_string()
+        }
+    };
+
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({ "error": error })),
+    )
+        .into_response()
+}
+
+/// Refuses requests sent to a host name the server does not trust
+/// ([`CorsConfig::trusts_host`]), whatever their method: a page that has
+/// rebound a name of its own to this server could otherwise read everything
+/// the web UI can.
+///
+/// A request with no `Host` at all passes, since no browser sends one; two of
+/// them fail closed, as in [`host_header`].
+pub async fn host_guard(
+    State(config): State<Arc<CorsConfig>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let one_host = request
+        .headers()
+        .get_all(header::HOST)
+        .iter()
+        .nth(1)
+        .is_none();
+    let host = request_host(&request);
+    let trusted = one_host && host.is_none_or(|host| config.trusts_host(host));
+    if trusted {
+        return next.run(request).await;
+    }
+
+    // Quoted the way a browser would send it, not echoed back as received.
+    let origin = host
+        .filter(|host| one_host && parse_host(host).is_some())
+        .and_then(|host| origin_of(&format!("http://{host}")));
+    let method = request.method();
+    let path = request.uri().path();
+    let error = match origin {
+        Some(origin) => {
+            // As in `write_guard`: this is also what DNS rebinding looks
+            // like, so the log must not talk the operator into allowing it.
+            tracing::warn!(
+                %method,
+                %path,
+                "refused a request sent to a host name: only localhost and IP addresses count \
+                 as this server's own address. If you open the web UI at {origin}, restart the \
+                 server with --cors-origin {origin}. If you do not recognise that address, a web \
+                 page may have tried a DNS rebinding attack: change nothing."
+            );
+            format!(
+                "Only localhost and IP addresses are trusted as this server's own address, \
+                 since another site could point any other host name at it (DNS rebinding). \
+                 If you opened the web UI at {origin}, start the server with \
+                 --cors-origin {origin}, or with --no-csrf-check to disable this check."
+            )
+        }
+        None => {
+            tracing::warn!(%method, %path, "refused a request with a malformed Host header");
+            "The Host header of this request is malformed.".to_string()
+        }
+    };
+
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({ "error": error })),
+    )
+        .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn origins(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_flag_is_same_origin_only() {
+        // No CORS layer at all, so no response carries an
+        // Access-Control-Allow-Origin a browser would honour.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert_eq!(config.origins, CorsOrigins::None);
+        assert!(!config.allow_credentials);
+        assert!(config.layer().is_none());
+    }
+
+    #[test]
+    fn explicit_wildcard_is_any() {
+        let config = CorsConfig::from_args(&origins(&["*"]), false).expect("valid");
+        assert_eq!(config.origins, CorsOrigins::Any);
+        assert_eq!(config.methods(), vec![Method::GET]);
+        assert!(config.layer().is_some());
+    }
+
+    #[test]
+    fn explicit_origins_keep_order_and_allow_mutation() {
+        let config =
+            CorsConfig::from_args(&origins(&["http://a.test", "https://b.test:8443"]), false)
+                .expect("valid");
+        assert_eq!(
+            config.origins,
+            CorsOrigins::List(vec![
+                HeaderValue::from_static("http://a.test"),
+                HeaderValue::from_static("https://b.test:8443"),
+            ])
+        );
+        assert_eq!(
+            config.methods(),
+            vec![Method::GET, Method::POST, Method::PUT, Method::DELETE]
+        );
+    }
+
+    #[test]
+    fn wildcard_mixed_with_explicit_origin_is_rejected() {
+        let err = CorsConfig::from_args(&origins(&["*", "http://a.test"]), false)
+            .expect_err("must reject");
+        assert!(
+            err.to_string().contains("cannot be combined"),
+            "unhelpful error: {err}"
+        );
+    }
+
+    #[test]
+    fn credentials_with_wildcard_is_rejected() {
+        let err = CorsConfig::from_args(&[], true).expect_err("must reject");
+        assert!(
+            err.to_string().contains("--cors-origin"),
+            "error must point at the fix: {err}"
+        );
+
+        // The spelling a user actually types, and the one that would panic
+        // tower-http at request time if this guard ever stopped firing.
+        let err = CorsConfig::from_args(&origins(&["*"]), true).expect_err("must reject");
+        assert!(
+            err.to_string().contains("--cors-origin"),
+            "error must point at the fix: {err}"
+        );
+    }
+
+    #[test]
+    fn credentials_with_explicit_origins_is_allowed() {
+        let config = CorsConfig::from_args(&origins(&["http://a.test"]), true).expect("valid");
+        assert!(config.allow_credentials);
+    }
+
+    #[test]
+    fn origin_with_trailing_slash_is_rejected() {
+        let err =
+            CorsConfig::from_args(&origins(&["http://a.test/"]), false).expect_err("must reject");
+        assert!(
+            err.to_string().contains("http://a.test/"),
+            "error must name the bad origin: {err}"
+        );
+    }
+
+    #[test]
+    fn origin_without_scheme_is_rejected() {
+        let err = CorsConfig::from_args(&origins(&["a.test"]), false).expect_err("must reject");
+        assert!(
+            err.to_string().contains("expected a scheme"),
+            "unhelpful error: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_origin_is_rejected() {
+        let err = CorsConfig::from_args(&origins(&[""]), false).expect_err("must reject");
+        assert!(
+            err.to_string().contains("expected a scheme"),
+            "unhelpful error: {err}"
+        );
+    }
+
+    #[test]
+    fn origins_that_could_never_match_a_browser_are_rejected() {
+        // tower-http compares the `Origin` header byte for byte, and browsers
+        // send a bare lowercase origin. Each of these would start the server
+        // happily and then never match anything.
+        for bad in [
+            "HTTP://A.test",
+            "http://a.test ",
+            " http://a.test",
+            "http://a.test\t",
+            "http://a.test/foo",
+            "http://a.test?x=1",
+            "http://a.test#frag",
+            "http://user:pass@a.test",
+            "http://a.test:notaport",
+            "http://a.test:99999",
+            "*://a.test",
+            "://a.test",
+            "http://[::1",
+            "http://[::1]x",
+            "http://[]",
+            "http://:3000",
+        ] {
+            CorsConfig::from_args(&origins(&[bad]), false)
+                .expect_err(&format!("{bad:?} must be rejected"));
+        }
+    }
+
+    #[test]
+    fn unusual_but_valid_origins_are_accepted() {
+        // Browser extensions, desktop shells, and IPv6 hosts are legitimate
+        // `Origin` values.
+        for good in [
+            "chrome-extension://abcdefghijklmnop",
+            "moz-extension://abcdefghijklmnop",
+            "tauri://localhost",
+            "https://a.test:8443",
+            "http://[::1]:3000",
+            "http://[::1]",
+        ] {
+            CorsConfig::from_args(&origins(&[good]), false)
+                .unwrap_or_else(|e| panic!("{good:?} must be accepted: {e}"));
+        }
+    }
+
+    #[test]
+    fn userinfo_is_reported_as_userinfo_not_as_a_bad_port() {
+        let err = CorsConfig::from_args(&origins(&["http://user:pass@a.test"]), false)
+            .expect_err("must reject");
+        assert!(
+            err.to_string().contains("bare lowercase origin"),
+            "userinfo must not be misreported as a bad port: {err}"
+        );
+    }
+
+    /// tower-http's `ensure_usable_cors_rules` runs in `Layer::layer`, not in
+    /// the `CorsLayer` builder, so the layer has to be applied to a real
+    /// service for its assertions to fire.
+    fn assert_layer_applies(config: &CorsConfig) {
+        let _ = axum::Router::<()>::new()
+            .route("/", axum::routing::get(|| async {}))
+            .layer(config.layer().expect("a CORS layer"));
+    }
+
+    #[test]
+    fn layer_applies_for_wildcard() {
+        let config = CorsConfig::from_args(&origins(&["*"]), false).expect("valid");
+        assert_layer_applies(&config);
+    }
+
+    #[test]
+    fn layer_applies_for_explicit_origins_with_credentials() {
+        let config = CorsConfig::from_args(&origins(&["http://a.test"]), true).expect("valid");
+        assert_layer_applies(&config);
+    }
+
+    fn headers_with_origin(origin: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_str(origin).expect("valid"),
+        );
+        headers
+    }
+
+    #[test]
+    fn origin_matches_its_own_host() {
+        assert!(origin_matches_host("http://a.test:9080", "a.test:9080"));
+        assert!(origin_matches_host("http://a.test", "a.test"));
+        // `Host` may or may not spell out a scheme's default port.
+        assert!(origin_matches_host("https://a.test", "a.test:443"));
+        assert!(origin_matches_host("http://a.test", "a.test:80"));
+        // `Url::parse` lowercases the origin's host; the Host header is not
+        // normalized for us.
+        assert!(origin_matches_host("http://A.Test:9080", "a.test:9080"));
+        assert!(origin_matches_host("http://a.test:9080", "A.TEST:9080"));
+    }
+
+    #[test]
+    fn origin_on_a_different_port_is_not_the_same_host() {
+        assert!(!origin_matches_host("http://a.test:9080", "a.test"));
+        assert!(!origin_matches_host("http://a.test:9080", "a.test:3000"));
+        assert!(!origin_matches_host("http://a.test", "b.test"));
+        assert!(!origin_matches_host("not a url", "a.test"));
+    }
+
+    #[test]
+    fn the_scheme_is_not_compared() {
+        // Deliberate: see the note on `origin_matches_host`. A TLS-terminating
+        // proxy passing Host through is the normal case for an https origin.
+        assert!(origin_matches_host(
+            "https://cook.example.test",
+            "cook.example.test"
+        ));
+        // An explicit, non-default port still has to match exactly.
+        assert!(!origin_matches_host(
+            "https://cook.example.test",
+            "cook.example.test:80"
+        ));
+    }
+
+    fn headers_from(headers: &[(&str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in headers {
+            map.append(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).expect("valid header name"),
+                HeaderValue::from_str(value).expect("valid header value"),
+            );
+        }
+        map
+    }
+
+    fn request_with(headers: &[(&str, &str)]) -> Request {
+        let mut builder = axum::http::Request::builder().uri("/api/pantry/add");
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        builder
+            .body(axum::body::Body::empty())
+            .expect("valid request")
+    }
+
+    #[test]
+    fn host_comes_from_the_host_header_not_a_forwarded_one() {
+        // `Origin: http://evil.test` plus `X-Forwarded-Host: evil.test` must
+        // not read as same-origin: both are attacker-supplied.
+        let request = request_with(&[
+            ("host", "127.0.0.1:9080"),
+            ("x-forwarded-host", "evil.test"),
+            ("forwarded", "host=evil.test"),
+        ]);
+        assert_eq!(request_host(&request), Some("127.0.0.1:9080"));
+    }
+
+    #[test]
+    fn a_request_with_no_host_at_all_has_no_authority() {
+        // Nothing can then match same-origin, so writes need --cors-origin.
+        let request = request_with(&[]);
+        assert_eq!(request_host(&request), None);
+    }
+
+    #[test]
+    fn two_host_headers_are_treated_as_none() {
+        // Picking the first would let a raw client choose which host the guard
+        // compares against. Fail closed instead.
+        let request = request_with(&[("host", "evil.test"), ("host", "127.0.0.1:9080")]);
+        assert_eq!(request_host(&request), None);
+    }
+
+    #[test]
+    fn request_authority_ignores_a_forwarded_host() {
+        // `api_docs_page` renders this into a copyable URL, so a client that
+        // sets `X-Forwarded-Host` must not choose what the page tells the next
+        // reader to call.
+        let headers = headers_from(&[
+            ("host", "127.0.0.1:9080"),
+            ("x-forwarded-host", "evil.test"),
+        ]);
+        let uri: Uri = "/api-docs".parse().expect("valid uri");
+        assert_eq!(request_authority(&headers, &uri), Some("127.0.0.1:9080"));
+    }
+
+    #[test]
+    fn request_authority_has_nothing_without_a_host_or_authority() {
+        // An HTTP/1.1 request with no Host is malformed; the caller renders a
+        // relative URL rather than one with an empty authority.
+        let headers = headers_from(&[]);
+        let uri: Uri = "/api-docs".parse().expect("valid uri");
+        assert_eq!(request_authority(&headers, &uri), None);
+    }
+
+    #[test]
+    fn http2_falls_back_to_the_uri_authority() {
+        // h2 synthesises a Host header in practice, so this branch is belt and
+        // braces — but it must still be right.
+        let request = axum::http::Request::builder()
+            .uri("http://127.0.0.1:9080/api/pantry/add")
+            .body(axum::body::Body::empty())
+            .expect("valid request");
+        assert_eq!(request_host(&request), Some("127.0.0.1:9080"));
+    }
+
+    #[test]
+    fn reads_are_always_allowed() {
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for method in [Method::GET, Method::HEAD, Method::OPTIONS] {
+            assert!(
+                config.allows_write(&method, &headers_with_origin("http://evil.test"), "a.test"),
+                "{method} must pass the guard"
+            );
+        }
+    }
+
+    #[test]
+    fn a_request_without_an_origin_is_not_a_browser() {
+        // curl and every other non-browser client. The API has no auth, so
+        // rejecting these would break integrations and protect nothing.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(config.allows_write(&Method::POST, &HeaderMap::new(), "a.test"));
+    }
+
+    #[test]
+    fn same_origin_writes_are_allowed() {
+        // This is the web UI's own POST.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://127.0.0.1:9080"),
+            "127.0.0.1:9080"
+        ));
+    }
+
+    #[test]
+    fn cross_origin_writes_are_refused_under_the_wildcard_default() {
+        // The hole this guard exists to close: POST is CORS-safelisted, so
+        // Access-Control-Allow-Methods: GET does not stop it.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for method in [Method::POST, Method::PUT, Method::DELETE] {
+            assert!(
+                !config.allows_write(
+                    &method,
+                    &headers_with_origin("http://evil.test"),
+                    "a.test:9080"
+                ),
+                "cross-origin {method} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_listed_origin_may_write() {
+        let config =
+            CorsConfig::from_args(&origins(&["http://app.test:3000"]), false).expect("valid");
+        assert!(config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://app.test:3000"),
+            "a.test:9080"
+        ));
+        assert!(!config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://evil.test"),
+            "a.test:9080"
+        ));
+    }
+
+    #[test]
+    fn a_rebound_host_name_is_not_the_servers_own_origin() {
+        // DNS rebinding: a page on evil.test has re-pointed evil.test at this
+        // server, so its Origin and the Host it sends both say evil.test.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        assert!(!config.allows_write(
+            &Method::POST,
+            &headers_with_origin("http://evil.test:9080"),
+            "evil.test:9080"
+        ));
+        // https is no exception: `origin_matches_host` ignores the scheme, so
+        // an https page can still post a form to this server under its name.
+        assert!(!is_own_origin(
+            "https://cook.example.test",
+            "cook.example.test"
+        ));
+    }
+
+    #[test]
+    fn ip_addresses_and_localhost_are_the_servers_own_origin() {
+        for (origin, host) in [
+            ("http://127.0.0.1:9080", "127.0.0.1:9080"),
+            ("http://192.168.1.10:9080", "192.168.1.10:9080"),
+            ("http://[::1]:9080", "[::1]:9080"),
+            ("http://[::ffff:7f00:1]:9080", "[::ffff:7f00:1]:9080"),
+            ("http://localhost:9080", "localhost:9080"),
+            ("http://localhost:9080", "LOCALHOST:9080"),
+            // `Host` may or may not spell out the scheme's default port.
+            ("http://127.0.0.1", "127.0.0.1:80"),
+            ("http://localhost", "localhost"),
+        ] {
+            assert!(
+                is_own_origin(origin, host),
+                "{origin} sent to {host} must be the server's own origin"
+            );
+        }
+    }
+
+    #[test]
+    fn names_that_only_look_local_are_not_trusted() {
+        // Each of these reaches DNS in some browser or on some system, and
+        // whoever answers decides where it points.
+        for name in [
+            "sub.localhost",
+            "localhost.",
+            "localhost.evil.test",
+            "127.0.0.1.nip.io",
+            "nas.local",
+        ] {
+            let origin = format!("http://{name}:9080");
+            let host = format!("{name}:9080");
+            assert!(
+                origin_matches_host(&origin, &host),
+                "{origin} must match {host}, or this test proves nothing"
+            );
+            assert!(
+                !is_own_origin(&origin, &host),
+                "{origin} must not be trusted as the server's own origin"
+            );
+        }
+    }
+
+    #[test]
+    fn a_host_name_named_by_cors_origin_is_trusted() {
+        // How the web UI keeps working at a host name.
+        let config =
+            CorsConfig::from_args(&origins(&["http://nas.local:9080"]), false).expect("valid");
+        assert!(config.trusts("http://nas.local:9080", "nas.local:9080"));
+        assert!(!config.trusts("http://evil.test:9080", "evil.test:9080"));
+    }
+
+    #[test]
+    fn hosts_no_dns_answer_can_redirect_are_trusted() {
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for host in [
+            "127.0.0.1:9080",
+            "127.0.0.1",
+            "192.168.1.10:9080",
+            "[::1]:9080",
+            "[::1]",
+            "localhost:9080",
+            "LOCALHOST",
+            "localhost",
+        ] {
+            assert!(config.trusts_host(host), "{host} must be served");
+        }
+    }
+
+    #[test]
+    fn a_host_name_is_not_trusted_unless_named() {
+        // The same names `names_that_only_look_local_are_not_trusted` covers
+        // for writes, plus anything else that is not a bare host and port.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for host in [
+            "evil.test:9080",
+            "sub.localhost:9080",
+            "localhost.:9080",
+            "127.0.0.1.nip.io:9080",
+            "nas.local:9080",
+            "evil.test@127.0.0.1:9080",
+            "local%68ost:9080",
+            "127.0.0.1:9080/x",
+            "127.0.0.1:",
+            "127.0.0.1:+80",
+            "127.0.0.1:notaport",
+            "127.0.0.1:99999",
+            "::1",
+            "[::1",
+            "[::1]x",
+            "[evil.test]",
+            "",
+        ] {
+            assert!(!config.trusts_host(host), "{host:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn the_host_of_a_listed_origin_is_trusted() {
+        let config = CorsConfig::from_args(
+            &origins(&["http://nas.local:9080", "https://cook.example.test"]),
+            false,
+        )
+        .expect("valid");
+        for host in [
+            "nas.local:9080",
+            "NAS.local:9080",
+            "cook.example.test",
+            "cook.example.test:443",
+        ] {
+            assert!(config.trusts_host(host), "{host} must be served");
+        }
+        for host in ["nas.local:3000", "nas.local", "evil.test:9080"] {
+            assert!(!config.trusts_host(host), "{host} must be refused");
+        }
+    }
+
+    #[test]
+    fn the_wildcard_trusts_no_host_name() {
+        // `*` opens reads to other origins; it says nothing about which names
+        // this server may be reached under.
+        let config = CorsConfig::from_args(&origins(&["*"]), false).expect("valid");
+        assert!(config.trusts_host("127.0.0.1:9080"));
+        assert!(!config.trusts_host("evil.test:9080"));
+    }
+
+    async fn host_guard_status(config: CorsConfig, request: Request) -> StatusCode {
+        use tower::ServiceExt;
+        let app = axum::Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .layer(axum::middleware::from_fn_with_state(
+                Arc::new(config),
+                host_guard,
+            ));
+        app.oneshot(request).await.expect("infallible").status()
+    }
+
+    fn get_with_hosts(hosts: &[&str]) -> Request {
+        let mut builder = axum::http::Request::builder().uri("/");
+        for host in hosts {
+            builder = builder.header(header::HOST, *host);
+        }
+        builder
+            .body(axum::body::Body::empty())
+            .expect("valid request")
+    }
+
+    #[tokio::test]
+    async fn host_guard_answers_only_trusted_hosts() {
+        let config = || CorsConfig::from_args(&[], false).expect("valid");
+        for (hosts, status) in [
+            (&["127.0.0.1:9080"][..], StatusCode::OK),
+            (&["evil.test:9080"][..], StatusCode::FORBIDDEN),
+            // No browser leaves Host out, so there is nothing to protect.
+            (&[][..], StatusCode::OK),
+            // Malformed, and a raw client could otherwise pick which one
+            // counts: fail closed.
+            (
+                &["127.0.0.1:9080", "127.0.0.1:9080"][..],
+                StatusCode::FORBIDDEN,
+            ),
+        ] {
+            assert_eq!(
+                host_guard_status(config(), get_with_hosts(hosts)).await,
+                status,
+                "Host {hosts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_null_origin_is_never_trusted() {
+        // Sandboxed iframes, `file:` pages and some referrer policies send
+        // `Origin: null`, which names no site at all.
+        let config = CorsConfig::from_args(&[], false).expect("valid");
+        for host in ["127.0.0.1:9080", "null"] {
+            assert!(!config.allows_write(&Method::POST, &headers_with_origin("null"), host));
+        }
+    }
+
+    #[test]
+    fn nothing_is_the_servers_own_origin_without_a_host() {
+        // What `request_authority` gives a caller when the request carried no
+        // usable `Host`: no origin can match it, so only a listed one is
+        // trusted. The LSP websocket handler relies on this.
+        let config = CorsConfig::from_args(&origins(&["http://app.test"]), false).expect("valid");
+        assert!(!config.trusts("http://127.0.0.1:9080", ""));
+        assert!(config.trusts("http://app.test", ""));
+    }
+
+    #[test]
+    fn a_refused_host_name_gets_the_origin_to_name() {
+        assert_eq!(
+            own_origin_by_name("http://evil.test:9080", "evil.test:9080").as_deref(),
+            Some("http://evil.test:9080")
+        );
+        // Quoted the way a browser sends it, not echoed back as received.
+        assert_eq!(
+            own_origin_by_name("https://Cook.Example.Test", "cook.example.test").as_deref(),
+            Some("https://cook.example.test")
+        );
+        // Nothing to suggest for a request that was never the server's own
+        // origin under a name, or has no origin a browser would send.
+        for (origin, host) in [
+            ("http://127.0.0.1:9080", "127.0.0.1:9080"),
+            ("http://evil.test", "127.0.0.1:9080"),
+            ("null", "null"),
+            ("tauri://nas", "nas"),
+        ] {
+            assert_eq!(
+                own_origin_by_name(origin, host),
+                None,
+                "{origin} sent to {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_suggested_origin_is_one_cors_origin_accepts() {
+        // Following the advice must work: `--cors-origin` has to take the
+        // suggestion, and the policy it builds has to trust that origin.
+        for (origin, host) in [
+            ("http://nas.local:9080", "nas.local:9080"),
+            ("https://Cook.Example.Test", "cook.example.test"),
+        ] {
+            let suggested = own_origin_by_name(origin, host).expect("a suggestion");
+            let config = CorsConfig::from_args(std::slice::from_ref(&suggested), false)
+                .unwrap_or_else(|e| panic!("{suggested:?} must be a valid --cors-origin: {e}"));
+            assert!(
+                config.trusts(&suggested, host),
+                "{suggested} sent to {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn origin_of_keeps_only_what_a_browser_sends() {
+        for (url, origin) in [
+            ("http://a.test:9080/new?x=1#top", "http://a.test:9080"),
+            ("http://user:pass@a.test/new", "http://a.test"),
+            ("https://a.test:443/", "https://a.test"),
+            ("http://[::1]:9080/new", "http://[::1]:9080"),
+        ] {
+            assert_eq!(origin_of(url).as_deref(), Some(origin), "{url}");
+        }
+        for url in [
+            "file:///home/me/recipe.html",
+            "chrome-extension://abcdefghijklmnop/page.html",
+            "not a url",
+            "null",
+        ] {
+            assert_eq!(origin_of(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn the_origin_env_var_is_a_comma_separated_list() {
+        assert_eq!(
+            origins_from_env("http://a.test,https://b.test:8443"),
+            origins(&["http://a.test", "https://b.test:8443"])
+        );
+        // Spacing around the commas is a typo waiting to happen, not an error.
+        assert_eq!(
+            origins_from_env(" http://a.test , https://b.test "),
+            origins(&["http://a.test", "https://b.test"])
+        );
+    }
+
+    #[test]
+    fn an_empty_origin_env_var_reads_as_unset() {
+        // What `COOK_CORS_ORIGIN=${SOMETHING_UNDEFINED}` expands to in a
+        // compose file. It must not read as an origin and refuse to start.
+        for value in ["", " ", ",", " , "] {
+            assert!(origins_from_env(value).is_empty(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn origins_from_the_env_var_are_validated_like_flags() {
+        let err = CorsConfig::from_args(&origins_from_env("nas.local:9080"), false)
+            .expect_err("must reject");
+        assert!(
+            err.to_string().contains("expected a scheme"),
+            "unhelpful error: {err}"
+        );
+    }
+}

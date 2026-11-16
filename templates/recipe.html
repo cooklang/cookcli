@@ -4,18 +4,17 @@
 
 {% block content %}
 <script type="application/ld+json">{{ self.recipe_jsonld()|safe }}</script>
-
 <div>
     <nav class="mb-4 breadcrumb print:hidden">
-        <ol class="flex items-center space-x-2 text-sm text-gray-600">
-            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-gray-900">{{ tr.t("nav-recipes") }}</a></li>
+        <ol class="flex items-center space-x-2 text-sm text-muted">
+            <li><a href="{{ prefix }}/{% if static_mode %}index.html{% endif %}" class="hover:text-text">{{ tr.t("nav-recipes") }}</a></li>
             {% for crumb in breadcrumbs %}
             <li class="flex items-center">
-                <span class="mx-2 text-gray-400">/</span>
+                <span class="mx-2 text-faint">/</span>
                 {% if loop.last %}
-                    <span class="text-gray-900">{{ crumb }}</span>
+                    <span class="text-text">{{ crumb }}</span>
                 {% else %}
-                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-gray-900">{{ crumb }}</a>
+                    <a href="{{ prefix }}/directory/{{ breadcrumbs[..loop.index0 + 1].join("/") }}{% if static_mode %}.html{% endif %}" class="hover:text-text">{{ crumb }}</a>
                 {% endif %}
             </li>
             {% endfor %}
@@ -27,65 +26,90 @@
         {% match image_path %}
         {% when Some with (img) %}
         <div class="mb-6 max-w-4xl mx-auto flex justify-center">
-            <img src="{{ img }}" alt="{{ recipe.name }}" class="rounded-xl shadow-lg max-w-full h-auto max-h-[500px]">
+            <img src="{{ img }}" alt="{{ recipe.name }}" class="rounded-xl shadow-[var(--shadow-card)] max-w-full h-auto max-h-[500px]">
         </div>
         {% when None %}
         {% endmatch %}
 
         <!-- Title bar with scale and shopping list button -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 print:flex-row print:items-center">
-            <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent print:text-2xl">
+            <h1 class="text-display font-bold text-text print:text-2xl">
                 {{ recipe.name }}
             </h1>
             {% if scale != 1.0 %}
-            <div class="hidden print:block text-lg font-normal text-gray-700">{{ tr.t("recipe-scale-label") }}: {{ scale }}x</div>
+            {% match servings %}
+            {% when Some with (servings) %}
+            <div class="hidden print:block text-lg font-normal text-muted">{{ servings.chosen }} {{ tr.t("recipe-servings-label") }}</div>
+            {% when None %}
+            <div class="hidden print:block text-lg font-normal text-muted">{{ tr.t("recipe-scale-label") }}: {{ scale }}x</div>
+            {% endmatch %}
             {% endif %}
             <div class="flex flex-wrap items-center gap-2 lg:gap-3 print:hidden">
                 {% if !static_mode %}
                 <div class="flex items-center">
-                    <label for="scale" class="text-sm font-medium text-gray-700 mr-2">{{ tr.t("recipe-scale-label") }}:</label>
-                    <input type="number"
-                           id="scale"
-                           value="{{ scale }}"
-                           min="0.5"
-                           max="200"
-                           step="0.5"
-                           class="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
-                           onchange="window.location.href = `{{ prefix }}/recipe/{{ recipe_path }}?scale=${this.value}`">
+                    {% match servings %}
+                    {% when Some with (servings) %}
+                    {# The recipe declares servings: count servings, from half a
+                       serving up, with no upper bound. A menu's `?scale=` can
+                       still land below half a serving or between steps, so
+                       the field takes that the way the scale field does. #}
+                    <label for="servings" class="text-sm font-medium text-muted mr-2">{{ tr.t("label-servings") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-servings") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="servings"
+                               value="{{ servings.chosen }}"
+                               min="{% if servings.chosen < 0.5 %}{{ servings.chosen }}{% else %}0.5{% endif %}"
+                               step="any"
+                               data-base-servings="{{ servings.base }}"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-servings") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% when None %}
+                    <label for="scale" class="text-sm font-medium text-muted mr-2">{{ tr.t("recipe-scale-label") }}:</label>
+                    <div class="stepper">
+                        <button type="button" aria-label="{{ tr.t("aria-decrease-scale") }}" onclick="adjustScale(-0.5)">&minus;</button>
+                        <input type="number"
+                               id="scale"
+                               value="{{ scale }}"
+                               {#- A menu can open a recipe at any factor, such as 0.333 for one
+                                   serving of three: the field takes it rather than showing it as
+                                   invalid, and − stops there rather than jumping up to 0.5. #}
+                               min="{% if scale < 0.5 %}{{ scale }}{% else %}0.5{% endif %}"
+                               max="200"
+                               step="any"
+                               onchange="goToScale(this.value)">
+                        <button type="button" aria-label="{{ tr.t("aria-increase-scale") }}" onclick="adjustScale(0.5)">+</button>
+                    </div>
+                    {% endmatch %}
                 </div>
-                <a href="{{ prefix }}/edit/{{ recipe_path }}"
-                   class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
-                   title="{{ tr.t("action-edit") }}">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {% if viewer.can_edit_recipes() %}
+                <a href="{{ prefix }}/edit/{{ recipe_path }}" class="btn" title="{{ tr.t("action-edit") }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
                     <span class="hidden lg:inline">{{ tr.t("action-edit") }}</span>
                 </a>
-                <button onclick="addToShoppingList(event, {{ recipe_path|json }})"
-                        class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
-                        title="{{ tr.t("recipe-add-to-shopping") }}">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {% endif %}
+                {% if viewer.can_edit_lists() %}
+                <button onclick="addToShoppingList(event, {{ recipe_path|json }})" class="btn" title="{{ tr.t("recipe-add-to-shopping") }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
                     <span class="hidden lg:inline">{{ tr.t("recipe-add-to-shopping") }}</span>
                 </button>
                 {% endif %}
-                <button id="start-cooking-btn"
-                        onclick="startCookingMode()"
-                        class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap print:hidden"
-                        title="Start Cooking">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {% endif %}
+                <button id="start-cooking-btn" onclick="startCookingMode()" class="btn btn-primary" title="Start Cooking">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <span class="hidden lg:inline">Cook</span>
                 </button>
                 {% if static_mode %}
-                <a href="{{ prefix }}/recipe/{{ recipe_path }}.cook"
-                   download
-                   class="px-3 lg:px-4 py-2 text-sm lg:text-base bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all shadow-md flex items-center gap-1.5 lg:gap-2 whitespace-nowrap"
-                   title="Download .cook source">
-                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}.cook" download class="btn" title="Download .cook source">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path>
                     </svg>
                     <span class="hidden lg:inline">.cook</span>
@@ -111,21 +135,38 @@
             <!-- Description if present -->
             {% match metadata.description %}
             {% when Some with (description) %}
-            <div class="bg-gradient-to-r from-orange-50 to-yellow-50 p-4 rounded-xl border border-orange-200">
-                <p class="text-gray-700 italic">{{ description }}</p>
+            <div class="recipe-note">
+                <p class="m-0">{{ description }}</p>
             </div>
             {% when None %}
             {% endmatch %}
 
             <!-- Metadata row -->
             <div id="metadata-container" class="flex flex-wrap gap-3">
-                <!-- Display all metadata items -->
-
                 {% match metadata.servings %}
                 {% when Some with (servings) %}
                 <span class="metadata-pill metadata-servings">👥 {{ servings }} {{ tr.t("recipe-servings-label") }}</span>
                 {% when None %}
                 {% endmatch %}
+                {#- Scaled away from the servings it was written for: say so, since
+                    times, pan sizes and seasoning do not always follow the
+                    quantities. Links back to the original servings. #}
+                {% if let Some(servings) = servings %}
+                {% match servings.original_servings() %}
+                {% when Some with (count) %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-servings"
+                   title="{{ tr.t("recipe-written-for-hint") }}">📖 {{ tr.tn("recipe-written-for", count) }}</a>
+                {% when None %}
+                {% endmatch %}
+                {% endif %}
+                {#- Scaled by the multiplier (no servings to count): the same
+                    reminder, as a factor of the original. #}
+                {% if servings.is_none() && scale != 1.0 %}
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+                {% endif %}
 
                 {% match metadata.time %}
                 {% when Some with (time) %}
@@ -177,141 +218,102 @@
 
                 {% match metadata.source %}
                 {% when Some with (source) %}
+                {% if source|is_web_url %}
+                <span class="metadata-pill metadata-source">📖 <a href="{{ source.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-source">📖 {{ source }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 {% match metadata.source_url %}
                 {% when Some with (source_url) %}
-                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url }}" class="text-blue-600 hover:text-blue-800 hover:underline">{{ source_url|hostname }}</a></span>
+                {% if source_url|is_web_url %}
+                <span class="metadata-pill metadata-source-url">🔗 <a href="{{ source_url.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ source_url.trim()|hostname }}</a></span>
+                {% else %}
+                <span class="metadata-pill metadata-source-url">🔗 {{ source_url }}</span>
+                {% endif %}
                 {% when None %}
                 {% endmatch %}
 
                 <!-- Custom metadata -->
                 {% for (key, value) in metadata.custom %}
+                {% if value|is_web_url %}
+                <span class="metadata-pill metadata-custom">{{ key }}: <a href="{{ value.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{{ value.trim()|hostname }}</a></span>
+                {% else %}
                 <span class="metadata-pill metadata-custom">{{ key }}: {{ value }}</span>
+                {% endif %}
                 {% endfor %}
             </div>
 
-            <!-- Custom metadata families (e.g. nutrition): one line per family -->
-            {% if !metadata.custom_lists.is_empty() %}
-            <div class="space-y-1.5">
-                {% for family in metadata.custom_lists %}
-                <div class="flex items-start gap-2 text-sm">
-                    <div class="min-w-[80px] pt-1">
-                        <span class="block uppercase tracking-wide text-xs text-gray-500">{{ family.label }}</span>
-                        {% match family.note %}
-                        {% when Some with (note) %}
-                        <span class="block text-[9px] leading-tight text-gray-400 italic">{{ note }}</span>
-                        {% when None %}
-                        {% endmatch %}
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        {% for item in family.items %}
-                        <span class="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-gray-700">
-                            {% match item.icon %}
-                            {% when Some with (icon) %}
-                            <span class="w-3.5 h-3.5 text-orange-500 [&>svg]:w-full [&>svg]:h-full">{{ icon|safe }}</span>
-                            {% when None %}
-                            {% endmatch %}
-                            {{ item.text }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
+            <!-- Metadata families (nutrition, file, ...): one panel each -->
+            {% include "panels/families.html" %}
 
             {% when None %}
+            {% if scale != 1.0 %}
+            <div id="metadata-container" class="flex flex-wrap gap-3">
+                <a href="{{ prefix }}/recipe/{{ recipe_path }}"
+                   class="metadata-pill metadata-original metadata-original-scale"
+                   title="{{ tr.t("recipe-scaled-from-original-hint") }}">📖 {{ tr.tf("recipe-scaled-from-original", scale) }}</a>
+            </div>
+            {% endif %}
             {% endmatch %}
         </div>
     </div>
 
-    <div class="grid md:grid-cols-3 gap-8 mb-8">
+    <div id="recipe-body" class="grid md:grid-cols-3 gap-8 mb-8">
         <div class="md:col-span-1">
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4 text-orange-600">🥘 {{ tr.t("recipe-ingredients") }}</h2>
-
+            <div class="card p-6">
+                <h2 class="text-title font-bold mb-4 text-accent-text">🥘 {{ tr.t("recipe-ingredients") }}</h2>
                 {% if sections.len() > 1 %}
-                    <!-- Display ingredients grouped by section -->
-                    {% for section in sections %}
-                        {% if section.ingredients.len() > 0 %}
-                            {% match section.name %}
-                            {% when Some with (name) %}
-                                <h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">{{ name }}</h3>
-                            {% when None %}
-                                {% if !loop.first %}<h3 class="text-lg font-semibold mt-4 mb-2 text-orange-700">{{ tr.t("recipe-main-section") }}</h3>{% endif %}
-                            {% endmatch %}
-
-                            <ul class="space-y-3 {% if !loop.last %}mb-4{% endif %}">
-                            {% for ingredient in section.ingredients %}
-                            <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
-                                <div class="flex-1 flex items-center">
-                                    {% match ingredient.reference_path %}
-                                    {% when Some with (path) %}
-                                        {% if !static_mode %}
-                                        <input type="checkbox" checked
-                                               class="ref-checkbox w-4 h-4 text-blue-600 rounded-sm focus:ring-blue-500 mr-2 shrink-0"
-                                               data-ref-path="{{ path }}"
-                                               title="{{ tr.t("shopping-include-in-list") }}">
-                                        {% endif %}
-                                        <a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-                                            </svg>
-                                            {{ ingredient.name }}
-                                        </a>
-                                    {% when None %}
-                                        <span class="font-medium">{{ ingredient.name }}</span>
-                                    {% endmatch %}
-                                    {% match ingredient.note %}
-                                    {% when Some with (note) %}
-                                        <span class="text-sm text-gray-600 italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
-                                    {% when None %}
-                                    {% endmatch %}
-                                </div>
-                                <span class="text-orange-700 font-semibold ml-2">
-                                    {% match ingredient.quantity %}
-                                    {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
-                                    {% match ingredient.unit %}
-                                    {% when Some with (unit) %} {{ unit }}{% when None %}{% endmatch %}
-                                </span>
-                            </li>
-                            {% endfor %}
-                            </ul>
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <!-- Fallback to original flat list for recipes without sections -->
-                    <ul class="space-y-3">
-                    {% for ingredient in ingredients %}
-                    <li class="flex justify-between items-center bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg px-3 py-2">
+                <!-- Display ingredients grouped by section -->
+                {% for section in sections %}
+                {% if section.ingredients.len() > 0 %}
+                {% match section.name %}
+                {% when Some with (name) %}
+                <h3 class="text-title font-semibold mt-4 mb-2 text-accent-text">{{ name }}</h3>
+                {% when None %}
+                {% if !loop.first %}<h3 class="text-title font-semibold mt-4 mb-2 text-accent-text">{{ tr.t("recipe-main-section") }}</h3>{% endif %}
+                {% endmatch %}
+                <ul class="ingredient-list space-y-3 {% if !loop.last %}mb-4{% endif %}">
+                    {% for ingredient in section.ingredients %}
+                    <li class="ingredient-row">
                         <div class="flex-1 flex items-center">
                             {% match ingredient.reference_path %}
                             {% when Some with (path) %}
-                                {% if !static_mode %}
-                                <input type="checkbox" checked
-                                       class="ref-checkbox w-4 h-4 text-blue-600 rounded-sm focus:ring-blue-500 mr-2 shrink-0"
-                                       data-ref-path="{{ path }}"
-                                       title="{{ tr.t("shopping-include-in-list") }}">
-                                {% endif %}
-                                <a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-                                    </svg>
-                                    {{ ingredient.name }}
-                                </a>
+                            {% if !static_mode && viewer.can_edit_lists() && !ingredient.optional %}
+                            <input type="checkbox" checked
+                                   class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-ref-path="{{ path }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}"
+                                   aria-label="{{ tr.t("shopping-include-in-list") }}: {{ ingredient.name }}">
+                            {% endif %}
+                            <a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}{{ ingredient.reference_query }}" class="font-medium text-info hover:underline flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                                {{ ingredient.name }}
+                            </a>
                             {% when None %}
-                                <span class="font-medium">{{ ingredient.name }}</span>
+                            {% if !static_mode && viewer.can_edit_lists() && ingredient.optional %}
+                            <input type="checkbox"
+                                   class="opt-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-name="{{ ingredient.name }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}"
+                                   aria-label="{{ tr.t("shopping-include-in-list") }}: {{ ingredient.name }}">
+                            {% endif %}
+                            <span class="font-medium">{{ ingredient.name }}</span>
                             {% endmatch %}
                             {% match ingredient.note %}
                             {% when Some with (note) %}
-                                <span class="text-sm text-gray-600 italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
+                            <span class="row-note italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
                             {% when None %}
                             {% endmatch %}
+                            {% if ingredient.optional %}
+                            <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                            {% endif %}
                         </div>
-                        <span class="text-orange-700 font-semibold ml-2">
+                        <span class="row-value ml-2">
                             {% match ingredient.quantity %}
                             {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
                             {% match ingredient.unit %}
@@ -319,73 +321,140 @@
                         </span>
                     </li>
                     {% endfor %}
-                    </ul>
+                </ul>
+                {% endif %}
+                {% endfor %}
+                {% else %}
+                <!-- Fallback to original flat list for recipes without sections -->
+                <ul class="ingredient-list space-y-3">
+                    {% for ingredient in ingredients %}
+                    <li class="ingredient-row">
+                        <div class="flex-1 flex items-center">
+                            {% match ingredient.reference_path %}
+                            {% when Some with (path) %}
+                            {% if !static_mode && viewer.can_edit_lists() && !ingredient.optional %}
+                            <input type="checkbox" checked
+                                   class="ref-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-ref-path="{{ path }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}"
+                                   aria-label="{{ tr.t("shopping-include-in-list") }}: {{ ingredient.name }}">
+                            {% endif %}
+                            <a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}{{ ingredient.reference_query }}" class="font-medium text-info hover:underline flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                                {{ ingredient.name }}
+                            </a>
+                            {% when None %}
+                            {% if !static_mode && viewer.can_edit_lists() && ingredient.optional %}
+                            <input type="checkbox"
+                                   class="opt-checkbox accent-[var(--accent)] mr-2 shrink-0"
+                                   data-name="{{ ingredient.name }}"
+                                   title="{{ tr.t("shopping-include-in-list") }}"
+                                   aria-label="{{ tr.t("shopping-include-in-list") }}: {{ ingredient.name }}">
+                            {% endif %}
+                            <span class="font-medium">{{ ingredient.name }}</span>
+                            {% endmatch %}
+                            {% match ingredient.note %}
+                            {% when Some with (note) %}
+                            <span class="row-note italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
+                            {% when None %}
+                            {% endmatch %}
+                            {% if ingredient.optional %}
+                            <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="row-value ml-2">
+                            {% match ingredient.quantity %}
+                            {% when Some with (quantity) %}{{ quantity }}{% when None %}{% endmatch %}
+                            {% match ingredient.unit %}
+                            {% when Some with (unit) %} {{ unit }}{% when None %}{% endmatch %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
                 {% endif %}
 
-            {% if cookware.len() > 0 %}
-            <h2 class="text-xl font-bold mt-6 mb-4 text-green-600">🍳 {{ tr.t("recipe-cookware") }}</h2>
-            <ul class="cookware-list space-y-2">
-                {% for item in cookware %}
-                <li class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg px-3 py-2">
-                    <span class="font-medium">{{ item.name }}</span>
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
+                {% if cookware.len() > 0 %}
+                <h2 class="text-title font-bold mt-6 mb-4 text-text">🍳 {{ tr.t("recipe-cookware") }}</h2>
+                <ul class="cookware-list ingredient-list space-y-2">
+                    {% for item in cookware %}
+                    <li class="ingredient-row">
+                        <div class="flex-1 flex items-center">
+                            <span class="font-medium">{{ item.name }}</span>
+                            {% match item.note %}
+                            {% when Some with (note) %}
+                            <span class="row-note italic ml-1 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>
+                            {% when None %}
+                            {% endmatch %}
+                        </div>
+                        {% if item.optional %}
+                        <span class="row-note italic ml-1">{{ tr.t("recipe-optional") }}</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
             </div>
         </div>
 
         <div class="md:col-span-2">
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                {% for section in sections %}
-                    {% match section.name %}
-                    {% when Some with (name) %}
-                        <h3 class="text-xl font-semibold mt-6 mb-4 text-orange-700 border-b-2 border-orange-200 pb-2">{{ name }}</h3>
-                    {% when None %}
-                    {% endmatch %}
-
-                    <ol class="space-y-4 {% if !loop.first %}mt-4{% endif %}">
-                        {% for item in section.items %}
-                            {% match item %}
-                                {% when crate::web::templates::RecipeSectionItem::Step with (step) %}
-                                <li class="bg-gradient-to-r from-gray-50 to-orange-50 rounded-xl p-4">
-                                    <div class="flex flex-col gap-4">
-                                        {% match step.image_path %}
-                                        {% when Some with (img) %}
-                                        <img class="image-step" src="{{ img }}" />
-                                        {% when None %}
-                                        {% endmatch %}
-                                        <div class="flex gap-4">
-                                            <div class="step-number">{{ step.number }}</div>
-                                            <div class="flex-1">
-                                                <div class="text-gray-700 mb-2 leading-8">
-                                                {% for step_item in step.items %}
-                                                    {% match step_item %}
-                                                        {% when crate::web::templates::StepItem::Text with (text) %}{{ text }}{% when crate::web::templates::StepItem::Ingredient with { name, reference_path } %}{% match reference_path %}{% when Some with (path) %}<a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Cookware with (name) %}<span class="cookware-badge">{{ name }}</span>{% when crate::web::templates::StepItem::Timer with (name) %}<span class="timer-badge">⏱️ {{ name }}</span>{% when crate::web::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-orange-600">{{ qty }}</span>{% when crate::web::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
-                                                </div>
-                                                {% if step.ingredients.len() > 0 %}
-                                                <div class="text-sm text-gray-600 mt-2 pl-4 border-l-2 border-orange-300">
-                                                    {% for ing in step.ingredients %}
-                                                        <span class="inline-block mr-3">
-                                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-gray-600 break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
-                                                        </span>
-                                                    {% endfor %}
-                                                </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                {% when crate::web::templates::RecipeSectionItem::Note with (note) %}
-                                <li class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-3 border-l-4 border-blue-400">
-                                    <div class="flex items-start gap-2">
-                                        <span class="text-blue-600">📝</span>
-                                        <p class="text-gray-700 italic" style="white-space: pre-line">{{ note }}</p>
-                                    </div>
-                                </li>
+            <div class="card p-6" data-recipe-path="{{ recipe_path }}">
+                {% for (section_index, section) in sections.iter().enumerate() %}
+                {% match section.name %}
+                {% when Some with (name) %}
+                <h2 class="text-title font-semibold mt-6 mb-4 text-accent-text border-b border-line pb-2">{{ name }}</h2>
+                {% when None %}
+                {% endmatch %}
+                <ol class="step-list space-y-4 {% if section_index > 0 %}mt-4{% endif %}">
+                    {% for item in section.items %}
+                    {% match item %}
+                    {% when crate::web::templates::RecipeSectionItem::Step with (step) %}
+                    <li class="step-box">
+                        <div class="flex flex-col gap-4">
+                            {% match step.image_path %}
+                            {% when Some with (img) %}
+                            <img class="image-step" src="{{ img }}" />
+                            {% when None %}
                             {% endmatch %}
-                        {% endfor %}
-                    </ol>
+                            <div class="flex gap-4">
+                                <div class="step-number">{{ step.number }}</div>
+                                <div class="flex-1">
+                                    <div class="step-body mb-2">
+                                        {% for (item_index, step_item) in step.items.iter().enumerate() %}
+                                        {% match step_item %}
+                                        {% when crate::web::templates::StepItem::Text with (text) %}{{ text }}{% when crate::web::templates::StepItem::Ingredient with { name, reference_path, reference_query } %}{% match reference_path %}{% when Some with (path) %}<a href="{{ prefix }}/recipe/{{ path }}{% if static_mode %}.html{% endif %}{{ reference_query }}" class="ingredient-badge hover:underline" title="View recipe: {{ name }}">{{ name }}</a>{% when None %}<span class="ingredient-badge">{{ name }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Cookware with { name, note } %}<span class="cookware-badge">{{ name }}</span>{% match note %}{% when Some with (n) %} <span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ n }}">({{ n }})</span>{% when None %}{% endmatch %}{% when crate::web::templates::StepItem::Timer with { display, seconds } %}{% match seconds %}{% when Some with (secs) %}<span class="timer-badge" data-timer data-timer-key="{{ section_index }}-{{ step.number }}-{{ item_index }}" data-seconds="{{ secs }}" data-display="{{ display }}" data-section="{% match section.name %}{% when Some with (n) %}{{ n }}{% when None %}{% endmatch %}" data-step="{{ step.number }}" role="button" tabindex="0">⏱️ {{ display }}</span>{% when None %}<span class="timer-badge">⏱️ {{ display }}</span>{% endmatch %}{% when crate::web::templates::StepItem::Quantity with (qty) %}<span class="font-bold text-accent-text">{{ qty }}</span>{% when crate::web::templates::StepItem::LineBreak %}<br>{% endmatch %}{% endfor %}
+                                    </div>
+                                    {% if step.ingredients.len() > 0 %}
+                                    <div class="step-refs">
+                                        {% for ing in step.ingredients %}
+                                        <span class="inline-block mr-3">
+                                            {{ ing.name }}{% match ing.quantity %}{% when Some with (q) %}: {{ q }}{% when None %}{% endmatch %}{% match ing.unit %}{% when Some with (u) %} {{ u }}{% when None %}{% endmatch %}{% match ing.note %}{% when Some with (note) %} <span class="italic text-faint break-words" aria-label="{{ tr.t("recipe-preparation") }}: {{ note }}">({{ note }})</span>{% when None %}{% endmatch %}{% if !loop.last %},{% endif %}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% if !static_mode && viewer.can_edit_recipes() %}
+                                {% let picture_label %}{% if step.image_path.is_some() %}{% let picture_label = tr.t("step-picture-change") %}{% else %}{% let picture_label = tr.t("step-picture-add") %}{% endif %}
+                                <a href="{{ prefix }}/edit/{{ recipe_path }}#picture={{ section.number }}.{{ step.number }}" class="icon-btn step-picture-link shrink-0 -mt-1 -mr-2" title="{{ picture_label }}" aria-label="{{ picture_label }}">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </li>
+                    {% when crate::web::templates::RecipeSectionItem::Note with (note) %}
+                    <li class="recipe-note mb-3">
+                        <span>📝</span>
+                        <p class="m-0" style="white-space: pre-line">{{ note }}</p>
+                    </li>
+                    {% endmatch %}
+                    {% endfor %}
+                </ol>
                 {% endfor %}
             </div>
         </div>
@@ -398,8 +467,23 @@
 
 {% if !static_mode %}
 <script>
+// An optional ingredient used in several sections has a checkbox in each;
+// they are one choice, so keep them in step.
+document.querySelectorAll('.opt-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+        document.querySelectorAll('.opt-checkbox').forEach(other => {
+            if (other.dataset.name === cb.dataset.name) other.checked = cb.checked;
+        });
+    });
+});
+
 async function addToShoppingList(event, recipePath) {
-    const scale = document.getElementById('scale').value;
+    // The servings stepper holds servings; the list wants the factor.
+    const scaleInput = document.getElementById(SCALE_PARAM);
+    let scale = parseFloat(scaleInput.value);
+    if (scaleInput.dataset.baseServings) {
+        scale /= parseFloat(scaleInput.dataset.baseServings);
+    }
     // Hide any previous error
     const existingError = document.getElementById('recipe-error-banner');
     if (existingError) existingError.remove();
@@ -408,12 +492,20 @@ async function addToShoppingList(event, recipePath) {
     const refCheckboxes = document.querySelectorAll('.ref-checkbox');
     let payload = {
         path: recipePath,
-        scale: parseFloat(scale)
+        scale: scale
     };
     if (refCheckboxes.length > 0) {
         payload.included_references = Array.from(refCheckboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.dataset.refPath);
+    }
+    // Optional ingredients are left off unless ticked. The same ingredient
+    // can appear in several sections, so the names are de-duplicated.
+    const optionalNames = Array.from(document.querySelectorAll('.opt-checkbox'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.name);
+    if (optionalNames.length > 0) {
+        payload.optional_ingredients = [...new Set(optionalNames)];
     }
 
     try {
@@ -430,19 +522,17 @@ async function addToShoppingList(event, recipePath) {
             const button = event.target.closest('button');
             const originalContent = button.innerHTML;
             button.innerHTML = `
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
                 {{ tr.t("recipe-added") }}
             `;
-            button.classList.add('bg-gradient-to-r', 'from-green-500', 'to-green-600');
-            button.classList.remove('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+            button.classList.add('bg-ok-soft', 'text-ok', 'border-ok');
 
             // Reset after 2 seconds
             setTimeout(() => {
                 button.innerHTML = originalContent;
-                button.classList.remove('from-green-500', 'to-green-600');
-                button.classList.add('from-purple-500', 'to-pink-500', 'hover:from-purple-600', 'hover:to-pink-600');
+                button.classList.remove('bg-ok-soft', 'text-ok', 'border-ok');
             }, 2000);
         } else {
             const data = await response.json().catch(() => ({}));
@@ -460,26 +550,81 @@ function showRecipeError(message) {
 
     const banner = document.createElement('div');
     banner.id = 'recipe-error-banner';
-    banner.className = 'mb-4 bg-red-50 border border-red-200 rounded-xl p-4';
+    banner.className = 'mb-4 card p-4 border-l-[3px] border-l-danger bg-danger-soft';
     banner.innerHTML = `
         <div class="flex items-start gap-3">
-            <div class="shrink-0 text-red-500">
-                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="shrink-0 text-danger">
+                <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                 </svg>
             </div>
-            <p class="flex-1 text-red-700 text-sm font-mono whitespace-pre-wrap">${message}</p>
-            <button onclick="this.closest('#recipe-error-banner').remove()" class="text-red-400 hover:text-red-600">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <p class="flex-1 text-text text-sm font-mono whitespace-pre-wrap"></p>
+            <button type="button" onclick="this.closest('#recipe-error-banner').remove()" class="icon-btn shrink-0" aria-label="{{ tr.t("aria-dismiss") }}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
         </div>
     `;
+    banner.querySelector('p').textContent = message;
     // Insert before the main content
-    const content = document.querySelector('.grid');
+    const content = document.getElementById('recipe-body');
     content.parentNode.insertBefore(banner, content);
 }
+
+// Scale navigation stashes the scroll position so a scale tap does not
+// jump the reader back to the top of the recipe.
+const SCALE_SCROLL_KEY = 'recipe-scale-scroll';
+// |json puts the path in a JS string literal with <, >, & escaped as
+// \uXXXX, so it survives the <script> context (Askama's HTML escaping
+// would not be decoded here the way it is inside an attribute).
+const RECIPE_URL = {{ prefix|json|safe }} + '/recipe/' + {{ recipe_path|json|safe }};
+// A recipe that declares servings has a servings stepper and `?servings=`
+// URLs; any other has the multiplier and `?scale=`. The stepper input's id
+// is the query parameter's name.
+{% match servings %}
+{% when Some with (servings) %}
+const SCALE_PARAM = 'servings';
+const DEFAULT_SCALE = {{ servings.chosen }};
+{% when None %}
+const SCALE_PARAM = 'scale';
+const DEFAULT_SCALE = {{ scale }};
+{% endmatch %}
+
+function goToScale(value) {
+    const input = document.getElementById(SCALE_PARAM);
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) {
+        // Cleared or non-numeric: put the current value back, do not navigate.
+        input.value = DEFAULT_SCALE;
+        return;
+    }
+    const min = parseFloat(input.min) || 0.5;
+    // The servings stepper has no max.
+    const max = input.max === '' ? Infinity : parseFloat(input.max);
+    const clamped = Math.min(max, Math.max(min, n));
+    try {
+        sessionStorage.setItem(SCALE_SCROLL_KEY, window.location.pathname + '|' + window.scrollY);
+    } catch (e) { /* private mode / storage disabled */ }
+    window.location.href = RECIPE_URL + '?' + SCALE_PARAM + '=' + encodeURIComponent(clamped);
+}
+
+// Only ever set immediately before a scale navigation, cleared as soon as it
+// is read, and only honoured on the same recipe path, so a stale stash from a
+// failed navigation cannot scroll a different recipe.
+(function restoreScaleScroll() {
+    let stashed = null;
+    try {
+        stashed = sessionStorage.getItem(SCALE_SCROLL_KEY);
+        if (stashed !== null) sessionStorage.removeItem(SCALE_SCROLL_KEY);
+    } catch (e) { return; }
+    if (stashed === null) return;
+    const sep = stashed.lastIndexOf('|');
+    if (sep === -1 || stashed.slice(0, sep) !== window.location.pathname) return;
+    const y = parseInt(stashed.slice(sep + 1), 10);
+    if (!Number.isFinite(y) || y <= 0) return;
+    window.addEventListener('load', function () { window.scrollTo(0, y); });
+})();
 </script>
 {% endif %}
 {% endblock %}
@@ -487,4 +632,5 @@ function showRecipeError(message) {
 {% block scripts %}
 <link rel="stylesheet" href="{{ prefix }}/static/css/cooking-mode.css">
 <script src="{{ prefix }}/static/js/cooking-mode.js"></script>
+<script src="{{ prefix }}/static/js/timers.js"></script>
 {% endblock %}

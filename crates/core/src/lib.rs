@@ -10,6 +10,7 @@
 
 #![warn(missing_docs)]
 
+pub mod aisle;
 pub mod context;
 pub mod diagnostic;
 pub mod doctor;
@@ -26,13 +27,17 @@ pub mod search;
 pub mod shopping_list;
 pub mod source;
 
-pub use context::{global_config_path, Context};
-pub use diagnostic::{Diagnostic, Location, Severity, Span};
+pub use context::{global_config_path, Context, CONFIG_DIR_ENV};
+pub use diagnostic::{Diagnostic, DiagnosticKind, Location, Severity, Span, UnscalableCause};
 pub use error::CoreError;
-pub use find::REFERENCE_SEPARATOR;
+pub use find::{
+    get_recipe_inside, inside_base, is_safe_relative_path, resolve_reference, REFERENCE_SEPARATOR,
+};
 pub use format::{PaperSize, Style};
 pub use outcome::Outcome;
-pub use parser::{parse_recipe, parse_recipe_at, render_report, PARSER};
+pub use parser::{
+    parse_file, parse_options, parse_recipe, parse_recipe_at, render_report, strip_bom, PARSER,
+};
 
 /// The `cooklang` crate this library was built against.
 ///

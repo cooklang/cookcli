@@ -11,6 +11,7 @@ pref-aisle-path = Gang Configuratie
 pref-pantry-path = Voorraadkast Configuratie
 pref-base-path = Receptenmap
 pref-not-configured = Niet geconfigureerd
+pref-global-config = Globale configuratie
 
 # Version
 pref-version = Versie

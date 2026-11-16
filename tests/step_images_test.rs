@@ -21,10 +21,12 @@ fn build(dir: &Utf8Path, recipe_name: &str) -> RecipeTemplate {
         recipe_path: recipe_name,
         aisle_path: None,
         scale: 1.0,
+        servings: None,
         lang: EN_US,
         static_mode: false,
         repo_url: None,
         features: FeatureFlags::default(),
+        viewer: Default::default(),
     })
     .expect("failed to build recipe template");
 
@@ -115,4 +117,20 @@ fn section_convention_wins_over_linear_for_same_step() {
         "the section-specific image should win, got {:?}",
         images[1]
     );
+}
+
+#[test]
+fn cookware_notes_are_preserved_in_the_template() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = Utf8Path::from_path(tmp.path()).unwrap();
+    std::fs::write(
+        dir.join("Cookware.cook"),
+        "Heat a #pot{}(big) on the stove.\n",
+    )
+    .unwrap();
+
+    let template = build(dir, "Cookware");
+    assert_eq!(template.cookware.len(), 1);
+    assert_eq!(template.cookware[0].name, "pot");
+    assert_eq!(template.cookware[0].note.as_deref(), Some("big"));
 }

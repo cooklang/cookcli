@@ -26,7 +26,7 @@ test.describe('Navigation', () => {
 
     if (count > 0) {
       const firstRecipe = recipeCards.first();
-      const recipeName = await firstRecipe.locator('h3').textContent();
+      const recipeName = await firstRecipe.locator('.recipe-card-title').textContent();
 
       await firstRecipe.click();
       await page.waitForLoadState('networkidle');
@@ -139,7 +139,7 @@ test.describe('Navigation', () => {
     const simpleRecipeCard = page.locator('a[href="/recipe/lamb-chops"]');
     await expect(simpleRecipeCard).toBeVisible();
 
-    const recipeName = await simpleRecipeCard.locator('h3').textContent();
+    const recipeName = await simpleRecipeCard.locator('.recipe-card-title').textContent();
     expect(recipeName).toContain('Sicilian-style Scottadito Lamb Chops');
 
     await simpleRecipeCard.click();
@@ -212,5 +212,19 @@ test.describe('Feature flag nav visibility', () => {
     const shoppingPill = page.locator('nav a.nav-pill.active');
     await expect(shoppingPill).toBeVisible();
     await expect(shoppingPill).toContainText(/Shopping/i);
+  });
+});
+
+test.describe('Random recipe', () => {
+  test('opens a recipe from the current folder', async ({ page }) => {
+    await page.goto('/directory/Breakfast');
+    await page.waitForLoadState('domcontentloaded');
+
+    const dice = page.getByRole('link', { name: 'Random recipe' });
+    await expect(dice).toHaveAttribute('href', '/random/Breakfast');
+    await dice.click();
+
+    await expect(page).toHaveURL(/\/recipe\/Breakfast\/[^/]+$/);
+    await expect(page.locator('h1').first()).toBeVisible();
   });
 });

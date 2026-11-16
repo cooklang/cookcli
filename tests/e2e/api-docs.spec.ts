@@ -36,7 +36,7 @@ test.describe('API documentation page', () => {
   test('documents endpoints with method badges and paths', async ({ page }) => {
     await helpers.navigateTo('/api-docs');
     await expect(page.getByText('/api/shopping_list/items').first()).toBeVisible();
-    await expect(page.locator('#pantry').getByText('/api/pantry/:section/:name').first()).toBeVisible();
+    await expect(page.locator('#pantry').getByText('/api/pantry/{section}/{name}').first()).toBeVisible();
 
     // Every verb the API uses should appear as a badge somewhere on the page.
     for (const method of ['GET', 'POST', 'PUT', 'DELETE']) {

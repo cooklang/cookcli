@@ -52,6 +52,21 @@ export class TestHelpers {
   }
 
   /**
+   * Scale a recipe that declares servings to a number of servings
+   */
+  async setServings(servings: number) {
+    const servingsInput = this.page.locator('#servings');
+    await Promise.all([
+      this.page.waitForEvent('framenavigated'),
+      servingsInput.evaluate((input: HTMLInputElement, val: string) => {
+        input.value = val;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }, servings.toString()),
+    ]);
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
    * Add ingredients to shopping list
    */
   async addToShoppingList() {
@@ -80,8 +95,8 @@ export class TestHelpers {
    * Navigate to shopping list
    * Avoids 'networkidle' because the page opens a persistent EventSource
    * (/api/shopping_list/events) which keeps the network non-idle indefinitely.
-   * Instead, waits until the JS-driven loadShoppingList() has rendered either
-   * the empty state or actual list content into #list-content.
+   * Instead, waits until the page's first refresh has rendered either the
+   * empty state or actual list content into #list-content.
    */
   async goToShoppingList() {
     await this.page.goto('/shopping-list');

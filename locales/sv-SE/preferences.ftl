@@ -11,6 +11,7 @@ pref-aisle-path = Redskap Konfiguration
 pref-pantry-path = Skafferi Konfiguration
 pref-base-path = Recept Katalog
 pref-not-configured = Ej konfigurerat
+pref-global-config = Global konfiguration
 
 # Version
 pref-version = Version

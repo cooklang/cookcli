@@ -6,6 +6,10 @@
 //! [`Outcome`] for the rule. [`broken_references`] follows up on what it found,
 //! resolving the recipe references a report collected.
 //!
+//! Validation uses the shared [`PARSER`](crate::PARSER). A timer whose
+//! quantity is text, such as `~{a few%minutes}`, is reported here as a warning
+//! and left alone by every other command.
+//!
 //! [`aisle_coverage`] and [`pantry_coverage`] answer the other two questions
 //! `cook doctor` asks: which of a collection's ingredients are categorised in
 //! `aisle.conf`, and which of them are already in the pantry.
@@ -13,12 +17,13 @@
 use crate::{
     diagnostic::{parse_failure, Severity},
     find::{build_tree, listed_ingredients, parse_or_skip, walk},
-    parser::{collect_diagnostics, render_report, PARSER},
-    ConfigSource, Context, CoreError, Diagnostic, Outcome, Style,
+    parser::{bom_len, collect_diagnostics, parse_file, render_report, shift_spans, PARSER},
+    ConfigSource, Context, CoreError, Diagnostic, Outcome, Span, Style,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cooklang_find::RecipeEntry;
 use std::collections::{BTreeMap, BTreeSet};
+use yansi::Paint;
 
 /// A validation run.
 ///
@@ -82,7 +87,9 @@ pub struct RecipeValidation {
     /// Nothing here has been resolved: a name in this list need not exist, and
     /// checking that is the caller's job. Empty for a recipe with errors, since
     /// `cooklang` produces no recipe to read them off — so a broken recipe's
-    /// references go unchecked rather than being reported as missing.
+    /// references go unchecked rather than being reported as missing. A warning
+    /// does not do that: a textual timer quantity is a warning, and the recipe
+    /// is still produced, so its references are checked.
     pub references: Vec<String>,
 }
 
@@ -221,6 +228,18 @@ impl ValidationReport {
 /// `cook doctor validate --strict` fails on either, which is why it does its
 /// own arithmetic over the two.
 ///
+/// # Timer quantities
+///
+/// The walk uses [`PARSER`](crate::PARSER), then warns when a timer's
+/// quantity is text — `~{a few%minutes}`, `~{overnight}`, `~{½%hour}` — but
+/// not a numeric range such as `~{10-20%minutes}`, which the parser reads as
+/// text only because range values are off. The unit is not checked, so
+/// `~{1%hr}` and `~{10%Minutes}` are not diagnostics, and neither is a textual
+/// ingredient quantity (`@salt{to taste}`). A named timer with no quantity
+/// (`~dough`) stays valid. The warning does not drop the recipe, so its
+/// references are still collected. Nothing else about a recipe changes: the
+/// parser is the one every other command uses.
+///
 /// # Errors
 ///
 /// - [`CoreError::Search`] if the root does not exist, is not a directory, or
@@ -292,17 +311,40 @@ fn validate_entry(entry: &RecipeEntry, base_dir: &Utf8Path, style: Style) -> Rec
         }
     };
 
-    let parsed = PARSER.parse(&content);
-    let diagnostics = collect_diagnostics(parsed.report(), Some(&path));
+    // Parse the stripped text but report spans in the file's own
+    // coordinates — the BOM is three bytes before everything else.
+    let shift = bom_len(&content);
+    let (content, parsed) = parse_file(&content);
+    let mut diagnostics = collect_diagnostics(parsed.report(), Some(&path));
+    shift_spans(&mut diagnostics, shift);
+
+    // Textual timer quantities are warnings on top of the shared parser, which
+    // accepts them. They are not errors, so the recipe — and its references —
+    // are still produced.
+    let timer_warnings = if parsed.output().is_some() {
+        textual_timer_warnings(content, &path)
+    } else {
+        Vec::new()
+    };
 
     // `write` on an empty report produces an empty string anyway; the guard is
     // to skip indexing the source lines of every healthy recipe in a
-    // collection, which is the common case.
-    let rendered = if diagnostics.is_empty() {
-        String::new()
-    } else {
-        render_report(parsed.report(), path.as_str(), &content, style.is_ansi())
-    };
+    // collection, which is the common case. Timer warnings are appended so a
+    // recipe whose only finding is one of them still has something to print.
+    // `render_findings` slices the stripped text by span, so it must see the
+    // warnings in stripped coordinates — they move to the file's only after
+    // it has run. (Shifting first sliced 3 bytes too far, which could land
+    // past the end of the text entirely.)
+    let rendered = render_findings(
+        parsed.report(),
+        &timer_warnings,
+        path.as_str(),
+        content,
+        style,
+    );
+    let mut timer_warnings = timer_warnings;
+    shift_spans(&mut timer_warnings, shift);
+    diagnostics.extend(timer_warnings);
 
     // No output means no references: `cooklang` produces none for a recipe
     // with errors, so a broken recipe contributes nothing here.
@@ -347,6 +389,99 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
     path.strip_prefix(base_dir).unwrap_or(path).to_owned()
 }
 
+/// One warning per timer whose quantity is text.
+///
+/// The timers come from a [`PullParser`](cooklang::parser::PullParser) run
+/// with the extensions of [`PARSER`], so each value carries the exact span of
+/// its source, frontmatter included. Timers without a unit are skipped:
+/// the parser already warns "missing unit" for them at the same spot, so
+/// `~{a while}` reports one defect, not two. `~{1%hr}` is a number and is
+/// not warned about. Range values are turned on for this pass
+/// only, so a range such as `~{10-20%minutes}` comes back as a range, by
+/// cooklang's own rules, and is not warned about either. Its errors are not
+/// collected: the shared parser has already reported on the recipe.
+fn textual_timer_warnings(source: &str, path: &Utf8Path) -> Vec<Diagnostic> {
+    use cooklang::{
+        parser::{Event, PullParser},
+        Extensions,
+    };
+
+    let mut warnings = Vec::new();
+    let extensions = PARSER.extensions() | Extensions::RANGE_VALUES;
+    for event in PullParser::new(source, extensions) {
+        let Event::Timer(timer) = event else {
+            continue;
+        };
+        let Some(quantity) = timer.quantity.as_ref() else {
+            continue;
+        };
+        // A unit-less timer already draws the parser's own "missing unit"
+        // warning at the same spot; adding "value is text" as well reports
+        // one defect twice.
+        if quantity.unit.is_none() {
+            continue;
+        }
+        let cooklang::Value::Text(text) = quantity.value.value.value() else {
+            continue;
+        };
+        let span = quantity.value.span();
+        // The value runs up to `%`, so it can end in whitespace.
+        let end = span.start() + source[span.range()].trim_end().len();
+        let mut diagnostic =
+            Diagnostic::warning(format!("Timer value is text: {text}")).at_file(path);
+        if let Some(location) = diagnostic.location.as_mut() {
+            location.span = Some(Span {
+                start: span.start(),
+                end,
+            });
+        }
+        warnings.push(diagnostic);
+    }
+    warnings
+}
+
+/// The parser's report, with timer warnings appended when the parser itself
+/// had nothing to say about them. Each one is labelled and located the way
+/// the parser's own findings are, by file and line.
+fn render_findings(
+    report: &cooklang::error::SourceReport,
+    timer_warnings: &[Diagnostic],
+    display_path: &str,
+    content: &str,
+    style: Style,
+) -> String {
+    if report.is_empty() && timer_warnings.is_empty() {
+        return String::new();
+    }
+    let mut rendered = if report.is_empty() {
+        String::new()
+    } else {
+        render_report(report, display_path, content, style.is_ansi())
+    };
+    if timer_warnings.is_empty() {
+        return rendered;
+    }
+    if !rendered.is_empty() && !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    for warning in timer_warnings {
+        let label = if style.is_ansi() {
+            "Warning:".yellow().to_string()
+        } else {
+            "Warning:".to_string()
+        };
+        let location = match warning.location.as_ref().and_then(|l| l.span) {
+            Some(span) => {
+                let line = content[..span.start].matches('\n').count() + 1;
+                format!("{display_path}:{line}")
+            }
+            None => display_path.to_string(),
+        };
+        rendered.push_str(&format!("{label} {} ({location})\n", warning.message));
+    }
+    rendered
+}
+
 // ---------------------------------------------------------------------------
 // Recipe references
 // ---------------------------------------------------------------------------
@@ -360,10 +495,12 @@ fn relative_to(base_dir: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
 /// whose references resolve are left out entirely, so an empty map means every
 /// reference in the collection is good.
 ///
-/// Every reference is resolved against [`ValidationReport::base_dir`], the root
-/// that was validated, rather than against the directory of the recipe making
-/// it. That is what `cook doctor validate` has always done, and it means a
-/// reference is judged by whether *the collection* holds a recipe of that name.
+/// Every reference is resolved by [`find::resolve_reference`], the same way
+/// the shopping list follows one: from [`ValidationReport::base_dir`], the root
+/// that was validated, except for a `..`, which steps up from the directory of
+/// the recipe making it. A reference is judged by whether *the collection*
+/// holds a recipe of that name, so one pointing outside the validated root is
+/// broken however readable the file it lands on happens to be.
 ///
 /// "Broken" is the whole of "could not be resolved to a readable recipe": a
 /// reference naming a file that exists but cannot be opened counts, exactly as
@@ -378,9 +515,17 @@ pub fn broken_references(report: &ValidationReport) -> BTreeMap<&Utf8Path, Vec<S
         .references()
         .into_iter()
         .filter_map(|(recipe, references)| {
+            // `recipe` is the referring file, relative to the validated root;
+            // its directory is what a `..` in one of its references steps up
+            // from.
+            let from = recipe.parent().unwrap_or(Utf8Path::new("")).to_owned();
             let broken: Vec<String> = references
                 .iter()
-                .filter(|reference| crate::find::get_recipe(&report.base_dir, reference).is_err())
+                .filter(|reference| {
+                    crate::find::resolve_reference(&from, reference).is_none_or(|path| {
+                        crate::find::get_recipe(&report.base_dir, path.as_str()).is_err()
+                    })
+                })
                 .cloned()
                 .collect();
             (!broken.is_empty()).then_some((recipe, broken))
@@ -400,6 +545,13 @@ pub fn broken_references(report: &ValidationReport) -> BTreeMap<&Utf8Path, Vec<S
 pub struct CoverageRequest {
     /// Directory whose recipes to scan. Defaults to the context base path.
     pub base_dir: Option<Utf8PathBuf>,
+    /// Skip entries whose file leaves `base_dir` once links are followed.
+    /// [`build_tree`](crate::find::build_tree) walks into linked folders, so
+    /// without this a `Linked -> /outside` directory lists its outside
+    /// recipes — names and paths a caller answering for someone else must
+    /// not publish (#698). The CLI leaves it off: it reads under the user's
+    /// own permissions anyway.
+    pub confined: bool,
 }
 
 /// One ingredient a collection uses, and whether a configuration knows it.
@@ -415,6 +567,16 @@ pub struct CheckedIngredient {
     pub name: String,
     /// Whether the configuration names this ingredient.
     pub known: bool,
+    /// The recipes that write this ingredient, as paths relative to the
+    /// scanned directory, in path order and without repeats.
+    ///
+    /// Spellings are separate ingredients here, so the recipes writing `Salt`
+    /// and those writing `salt` are listed against their own spelling. That is
+    /// the point of tracking them: it is how a collection's inconsistencies —
+    /// `ground cumin`, `cumin powder`, `cummin` — become findable.
+    ///
+    /// Never empty: an ingredient is only here because some recipe used it.
+    pub recipes: Vec<Utf8PathBuf>,
 }
 
 /// How much of a collection's ingredients a configuration accounts for.
@@ -456,7 +618,8 @@ impl IngredientCoverage {
     /// The ingredients the configuration knows, in the order of
     /// [`ingredients`](IngredientCoverage::ingredients).
     pub fn known(&self) -> impl Iterator<Item = &str> {
-        self.filtered(true)
+        self.known_entries()
+            .map(|ingredient| ingredient.name.as_str())
     }
 
     /// The ingredients the configuration does not know, in the order of
@@ -466,14 +629,30 @@ impl IngredientCoverage {
     /// known. Ask [`ConfigSource::is_unset`] if you need to tell that from a
     /// configuration that simply covers nothing.
     pub fn unknown(&self) -> impl Iterator<Item = &str> {
+        self.unknown_entries()
+            .map(|ingredient| ingredient.name.as_str())
+    }
+
+    /// As [`known`](IngredientCoverage::known), but keeping each ingredient
+    /// whole — its [`recipes`](CheckedIngredient::recipes) along with its name.
+    pub fn known_entries(&self) -> impl Iterator<Item = &CheckedIngredient> {
+        self.filtered(true)
+    }
+
+    /// As [`unknown`](IngredientCoverage::unknown), but keeping each ingredient
+    /// whole — its [`recipes`](CheckedIngredient::recipes) along with its name.
+    ///
+    /// This is the view that answers "which recipes do I have to go and fix?":
+    /// an uncategorised ingredient is usually a misspelling of a categorised
+    /// one, and the recipes listed against it are where that misspelling is.
+    pub fn unknown_entries(&self) -> impl Iterator<Item = &CheckedIngredient> {
         self.filtered(false)
     }
 
-    fn filtered(&self, known: bool) -> impl Iterator<Item = &str> {
+    fn filtered(&self, known: bool) -> impl Iterator<Item = &CheckedIngredient> {
         self.ingredients
             .iter()
             .filter(move |ingredient| ingredient.known == known)
-            .map(|ingredient| ingredient.name.as_str())
     }
 }
 
@@ -492,7 +671,9 @@ impl IngredientCoverage {
 ///
 /// A configuration that parses with warnings — a duplicate entry, say — is a
 /// successful check carrying those warnings as [`Outcome::diagnostics`],
-/// located in the file when it came from one.
+/// located in the file when it came from one. So is a line that looks like a
+/// `#` or `--` comment, which the parser reads as an ingredient: see
+/// [`comment_lookalikes`](crate::aisle::comment_lookalikes).
 ///
 /// # Errors
 ///
@@ -519,6 +700,11 @@ pub fn aisle_coverage(
         let conf = parsed
             .output()
             .ok_or_else(|| config_error(source, "aisle", &diagnostics))?;
+        diagnostics.extend(
+            crate::aisle::comment_lookalikes(&text)
+                .iter()
+                .map(|found| found.diagnostic(source.path())),
+        );
         // The map is keyed by each name and synonym, already lowercased.
         known.extend(conf.ingredients_info().into_keys());
     }
@@ -590,24 +776,51 @@ fn coverage(
 
     let tree = build_tree(&base_dir)?;
     let entries = walk(&tree);
+    // A linked folder the walk followed contributes outside recipes;
+    // confine drops them before they are read or listed.
+    let entries: Vec<_> = if req.confined {
+        entries
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .path()
+                    .is_none_or(|path| crate::find::inside_base(&base_dir, path))
+            })
+            .collect()
+    } else {
+        entries
+    };
     let total_recipes = entries.len();
 
-    // A set, so an ingredient two recipes share is one ingredient. Ordered, so
-    // that the answer does not depend on the order `cooklang-find` happened to
-    // yield the directories in.
-    let mut names: BTreeSet<String> = BTreeSet::new();
+    // A map, so an ingredient two recipes share is one ingredient carrying
+    // both of them. Ordered throughout, so that neither the ingredients nor
+    // any one ingredient's recipes depend on the order `cooklang-find`
+    // happened to yield the directories in.
+    let mut names: BTreeMap<String, BTreeSet<Utf8PathBuf>> = BTreeMap::new();
     for entry in entries {
         let Some(recipe) = parse_or_skip(entry, &mut diagnostics) else {
             continue;
         };
-        names.extend(listed_ingredients(&recipe));
+        // Relative to the directory that was scanned, as `validate` reports a
+        // recipe's path, so that both halves of `cook doctor` name a file the
+        // same way. The fallbacks are `validate_entry`'s and unreachable for
+        // the same reason: `build_tree` only makes named, file-backed entries.
+        let path = entry
+            .path()
+            .map(|path| relative_to(&base_dir, path))
+            .or_else(|| entry.name().clone().map(Utf8PathBuf::from))
+            .unwrap_or_else(|| Utf8PathBuf::from("unknown"));
+        for name in listed_ingredients(&recipe) {
+            names.entry(name).or_default().insert(path.clone());
+        }
     }
 
     let ingredients = names
         .into_iter()
-        .map(|name| CheckedIngredient {
+        .map(|(name, recipes)| CheckedIngredient {
             known: known.contains(&name.to_lowercase()),
             name,
+            recipes: recipes.into_iter().collect(),
         })
         .collect();
 
@@ -1141,6 +1354,389 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // Timer quantities
+    // -----------------------------------------------------------------------
+
+    /// The bytes a diagnostic underlines, taken from the recipe that produced it.
+    fn underlined<'a>(diagnostic: &Diagnostic, source: &'a str) -> &'a str {
+        let span = diagnostic
+            .location
+            .as_ref()
+            .and_then(|location| location.span)
+            .unwrap_or_else(|| panic!("expected a span: {diagnostic:?}"));
+        &source[span.start..span.end]
+    }
+
+    /// Textual quantities are a warning in both shapes of timer, and the report
+    /// counts the recipe they came from. Two quantities, so this is the check
+    /// and not a special case of one phrase. A warning, not an error: the
+    /// recipe is still produced.
+    #[test]
+    fn a_textual_timer_quantity_is_a_warning_in_either_shape() {
+        let anon = "a few";
+        let named = "a couple";
+        let source = format!("Cook for ~{{{anon}%minutes}}.\nBake the ~loaf{{{named}%minutes}}.\n");
+
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("timer.cook"), &source);
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        assert_eq!(timer.diagnostics.len(), 2, "{:?}", timer.diagnostics);
+        for (diagnostic, quantity) in timer.diagnostics.iter().zip([anon, named]) {
+            assert_eq!(diagnostic.severity, Severity::Warning, "{diagnostic:?}");
+            assert!(
+                diagnostic.message.contains("Timer value is text"),
+                "{:?}",
+                diagnostic.message
+            );
+            assert!(
+                diagnostic.message.contains(quantity),
+                "{:?} should name {quantity}",
+                diagnostic.message
+            );
+            let location = diagnostic.location.as_ref().expect("location set");
+            assert_eq!(location.file.as_deref(), Some(Utf8Path::new("timer.cook")));
+            assert_eq!(underlined(diagnostic, &source), quantity);
+            assert!(
+                timer.rendered.contains(quantity),
+                "the report should identify {quantity}: {}",
+                timer.rendered
+            );
+        }
+
+        assert_eq!(report.total_recipes(), 1);
+        assert_eq!(report.total_errors(), 0);
+        assert_eq!(report.recipes_with_errors(), 0);
+        assert_eq!(report.total_warnings(), 2);
+        assert_eq!(report.recipes_with_warnings(), 1);
+    }
+
+    /// Integers and decimals with any unit are valid: the check is
+    /// [`cooklang::quantity::Value::is_text`], not a unit table. A textual
+    /// ingredient quantity beside them is not a timer warning.
+    #[test]
+    fn numeric_timers_stay_valid_beside_a_textual_ingredient() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("dish.cook"),
+            "Bake for ~{40%minutes}, then rest ~{1.5%hours}.\n\
+             Add @salt{to taste}.\n",
+        );
+
+        let report = run(&base(&dir));
+        let dish = recipe(&report, "dish.cook");
+        assert!(
+            dish.diagnostics.is_empty(),
+            "a numeric timer must not be reported: {:?}",
+            dish.diagnostics
+        );
+        assert!(dish.rendered.is_empty());
+        assert_eq!(report.total_errors(), 0);
+        assert_eq!(report.total_warnings(), 0);
+    }
+
+    /// The shared parser's own timer rules, unchanged. A named timer with no
+    /// quantity is valid. A number with no unit is the parser's missing-unit
+    /// warning. A unit the old table did not list is not a diagnostic: the
+    /// check does not look the unit up.
+    #[test]
+    fn timer_edges_follow_the_shared_parser() {
+        let named = "Rest the ~dough.\n";
+        let bare = "Cook for ~{30}.\n";
+        let unit = "Cook for ~{5%fortnights}, ~{1%hr}, ~{10%Minutes} and ~{5%минут}.\n";
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("named.cook"), named);
+        write(&base.join("bare.cook"), bare);
+        write(&base.join("units.cook"), unit);
+
+        let report = run(&base);
+
+        let named = recipe(&report, "named.cook");
+        assert!(
+            named.diagnostics.is_empty(),
+            "a named timer with no quantity stays valid: {:?}",
+            named.diagnostics
+        );
+
+        let bare = recipe(&report, "bare.cook");
+        assert_eq!(bare.diagnostics.len(), 1, "{:?}", bare.diagnostics);
+        assert_eq!(bare.diagnostics[0].severity, Severity::Warning);
+        assert!(
+            bare.diagnostics[0]
+                .message
+                .contains("Invalid timer quantity: missing unit"),
+            "{:?}",
+            bare.diagnostics[0]
+        );
+        assert_eq!(bare.count(Severity::Error), 0);
+
+        let units = recipe(&report, "units.cook");
+        assert!(
+            units.diagnostics.is_empty(),
+            "a numeric timer is valid in any unit: {:?}",
+            units.diagnostics
+        );
+
+        assert_eq!(report.recipes_with_errors(), 0);
+        assert_eq!(report.recipes_with_warnings(), 1);
+        assert_eq!(report.total_errors(), 0);
+        assert_eq!(report.total_warnings(), 1);
+    }
+
+    /// A range is text to the shared parser, which has range values off, but
+    /// it is still a number, so it is not reported. What cooklang does not
+    /// read as a number is: words, a Unicode fraction, and digits that only
+    /// look numeric.
+    #[test]
+    fn a_numeric_range_is_not_a_warning() {
+        let source = "Knead for ~{10-20%minutes}, then ~{1.5 - 2%hours} or ~{1 1/2-2%hours}.\n\
+                      Prove ~{a few%minutes}, leave it ~{overnight}, rest ~{½%hour}.\n\
+                      Wait ~{1 2%minutes}, ~{1.2.3%minutes} or ~{1/2/3%minutes}.\n";
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("timer.cook"), source);
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        // `~{overnight}` has no unit, so only the parser's own missing-unit
+        // warning reports it — "value is text" would describe the same defect
+        // a second time.
+        let text: Vec<_> = timer
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.message.starts_with("Timer value is text"))
+            .map(|diagnostic| underlined(diagnostic, source))
+            .collect();
+        assert_eq!(
+            text,
+            ["a few", "½", "1 2", "1.2.3", "1/2/3"],
+            "{:?}",
+            timer.diagnostics
+        );
+        assert!(
+            timer
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("missing unit")),
+            "~{{overnight}} keeps the parser's missing-unit warning: {:?}",
+            timer.diagnostics
+        );
+        assert_eq!(timer.count(Severity::Error), 0);
+    }
+
+    /// The span is the timer's own value, taken from the parser, not the first
+    /// matching text: not an ingredient with the same quantity, not a later
+    /// one when the timer's whitespace differs, and not a `{` in frontmatter.
+    #[test]
+    fn the_span_covers_the_timer_value() {
+        let cases = [
+            (
+                "Add @salt{a few}, then cook ~{a few%minutes}.\n",
+                "a few",
+                "~{",
+            ),
+            ("Rest ~{a  few%minutes}, add @x{a few}.\n", "a  few", "~{"),
+            ("---\nnote: \"{x\"\n---\nSimmer ~{x%minutes}.\n", "x", "~{"),
+        ];
+        for (source, value, marker) in cases {
+            let dir = tempfile::TempDir::new().unwrap();
+            write(&base(&dir).join("timer.cook"), source);
+            let report = run(&base(&dir));
+            let timer = recipe(&report, "timer.cook");
+
+            assert_eq!(
+                timer.diagnostics.len(),
+                1,
+                "{source}: {:?}",
+                timer.diagnostics
+            );
+            let span = timer.diagnostics[0]
+                .location
+                .as_ref()
+                .and_then(|location| location.span)
+                .expect("a span");
+            assert_eq!(
+                span.start,
+                source.find(marker).unwrap() + marker.len(),
+                "{source}"
+            );
+            assert_eq!(underlined(&timer.diagnostics[0], source), value, "{source}");
+        }
+    }
+
+    /// The rendered warning is labelled and located like the parser's own.
+    #[test]
+    fn the_rendered_warning_names_its_file_and_line() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("timer.cook"),
+            "---\ntitle: Bread\n---\nMix.\nProve ~{a while%minutes}.\n",
+        );
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        assert!(
+            timer
+                .rendered
+                .contains("Warning: Timer value is text: a while (timer.cook:5)"),
+            "{}",
+            timer.rendered
+        );
+    }
+
+    /// A unit-less textual timer is *one* defect: the parser's missing-unit
+    /// warning covers it, and "value is text" must not repeat it.
+    #[test]
+    fn a_unitless_textual_timer_warns_once() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("timer.cook"), "Bake ~{a while}.\n");
+        let report = run(&base(&dir));
+        let timer = recipe(&report, "timer.cook");
+
+        assert_eq!(
+            timer.count(Severity::Warning),
+            1,
+            "exactly one warning for the timer: {:?}",
+            timer.diagnostics
+        );
+        assert!(
+            timer.diagnostics[0].message.contains("missing unit"),
+            "{:?}",
+            timer.diagnostics[0]
+        );
+        assert_eq!(report.total_warnings(), 1);
+    }
+
+    /// Ingredient quantities stay on the shared parser. These are text there
+    /// and an error under a parser with advanced units and ranges turned on.
+    #[test]
+    fn ingredient_quantities_follow_the_shared_parser() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("dish.cook"),
+            "Add @flour{1/0 cups} and @beans{1-1/0%cans}.\n",
+        );
+        let report = run(&base(&dir));
+        let dish = recipe(&report, "dish.cook");
+        assert!(
+            dish.diagnostics.is_empty(),
+            "the shared parser accepts these as text: {:?}",
+            dish.diagnostics
+        );
+    }
+
+    /// One bad timer does not stop the walk, and it does not disturb the
+    /// checks that were already there: a broken ingredient, a deprecated
+    /// metadata warning, and a recipe reference.
+    #[test]
+    fn a_mixed_collection_still_reports_every_recipe() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(
+            &base.join("timer.cook"),
+            "Cook for ~{a few%minutes}. Make @./sauce{} and @./missing{}.\n",
+        );
+        write(&base.join("clean.cook"), "Bake for ~{40%minutes}.\n");
+        write(&base.join("broken.cook"), BROKEN);
+        write(&base.join("deprecated.cook"), DEPRECATED);
+        write(&base.join("sauce.cook"), CLEAN);
+        write(
+            &base.join("with_ref.cook"),
+            "Make @./sauce{} and @./missing{}.\n",
+        );
+
+        let outcome = validate(&Context::new(base), ValidateRequest::default())
+            .expect("errors in recipes are data, not a failed command");
+        let report = &outcome.value;
+
+        assert_eq!(
+            paths(report),
+            [
+                "broken.cook",
+                "clean.cook",
+                "deprecated.cook",
+                "sauce.cook",
+                "timer.cook",
+                "with_ref.cook",
+            ]
+        );
+        assert_eq!(report.total_recipes(), 6);
+
+        let timer = recipe(report, "timer.cook");
+        assert_eq!(timer.count(Severity::Warning), 1, "{:?}", timer.diagnostics);
+        assert_eq!(timer.count(Severity::Error), 0, "{:?}", timer.diagnostics);
+        assert!(timer.rendered.contains("a few"), "{}", timer.rendered);
+        assert_eq!(
+            timer.references,
+            ["./sauce", "./missing"],
+            "a warning must not hide the recipe's references: {:?}",
+            timer.references
+        );
+
+        let broken_recipe = recipe(report, "broken.cook");
+        assert_eq!(
+            broken_recipe.diagnostics.len(),
+            2,
+            "{:?}",
+            broken_recipe.diagnostics
+        );
+        assert!(
+            broken_recipe
+                .rendered
+                .contains("Add @{1%tsp} and @{2%tsp}."),
+            "{}",
+            broken_recipe.rendered
+        );
+
+        assert!(recipe(report, "clean.cook").diagnostics.is_empty());
+        assert!(recipe(report, "sauce.cook").diagnostics.is_empty());
+
+        let deprecated = recipe(report, "deprecated.cook");
+        assert_eq!(
+            deprecated.diagnostics.len(),
+            1,
+            "{:?}",
+            deprecated.diagnostics
+        );
+        assert_eq!(deprecated.diagnostics[0].severity, Severity::Warning);
+
+        assert_eq!(
+            recipe(report, "with_ref.cook").references,
+            ["./sauce", "./missing"]
+        );
+        assert_eq!(
+            broken(report),
+            [
+                ("timer.cook".to_string(), vec!["./missing".to_string()]),
+                ("with_ref.cook".to_string(), vec!["./missing".to_string()])
+            ]
+        );
+
+        assert_eq!(report.total_errors(), 2);
+        assert_eq!(report.recipes_with_errors(), 1);
+        assert_eq!(report.total_warnings(), 2);
+        assert_eq!(report.recipes_with_warnings(), 2);
+        assert!(outcome.has_errors());
+        assert_eq!(
+            outcome.diagnostics.len(),
+            report.total_errors() + report.total_warnings()
+        );
+    }
+
+    /// The timer check belongs to validation. Other commands keep the shared
+    /// parser, which still accepts the quantity this command now reports.
+    #[test]
+    fn the_shared_parser_still_accepts_a_textual_timer() {
+        let parsed = crate::PARSER.parse("Cook for ~{a few%minutes}.\n");
+        assert!(
+            !parsed.report().has_errors(),
+            "the shared parser must not grow this check"
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // Recipe references
     // -----------------------------------------------------------------------
 
@@ -1300,6 +1896,24 @@ mod tests {
             .collect()
     }
 
+    /// The recipes listed against one ingredient, by name.
+    ///
+    /// As paths rather than strings, so that the expectations can be written
+    /// with `/` and still hold on Windows: `Utf8Path` compares component by
+    /// component, where `&str` would compare `Breakfast/porridge.cook` against
+    /// the `Breakfast\porridge.cook` the platform actually produces.
+    fn recipes_for<'a>(coverage: &'a IngredientCoverage, name: &str) -> Vec<&'a Utf8Path> {
+        coverage
+            .ingredients
+            .iter()
+            .find(|ingredient| ingredient.name == name)
+            .unwrap_or_else(|| panic!("{name} is in the coverage"))
+            .recipes
+            .iter()
+            .map(Utf8PathBuf::as_path)
+            .collect()
+    }
+
     #[test]
     fn an_aisle_splits_the_collection_into_categorised_and_not() {
         let dir = one_recipe("Add @salt{1%tsp}, @water{1%l} and @leek{1}.\n");
@@ -1443,6 +2057,74 @@ mod tests {
             ["oats"],
             "a subdirectory must be walked"
         );
+        assert_eq!(
+            recipes_for(&coverage, "oats"),
+            [Utf8Path::new("Breakfast/porridge.cook")],
+            "a recipe is named relative to the directory that was scanned"
+        );
+    }
+
+    /// The point of the recipe list: an odd spelling is one recipe against the
+    /// collection's many, and the list says which one to go and open.
+    #[test]
+    fn an_ingredient_carries_every_recipe_that_writes_it() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(
+            &base(&dir).join("curry.cook"),
+            "Add @ground cumin{1%tsp}.\n",
+        );
+        write(&base(&dir).join("dal.cook"), "Add @ground cumin{2%tsp}.\n");
+        write(&base(&dir).join("stew.cook"), "Add @cumin powder{1%tsp}.\n");
+
+        let coverage = checked(&aisle_ctx(&dir, "[spices]\nground cumin\n"), true).value;
+
+        assert_eq!(
+            recipes_for(&coverage, "ground cumin"),
+            [Utf8Path::new("curry.cook"), Utf8Path::new("dal.cook")],
+            "shared by two recipes, listed once each, in path order"
+        );
+        assert_eq!(
+            recipes_for(&coverage, "cumin powder"),
+            [Utf8Path::new("stew.cook")]
+        );
+    }
+
+    /// A recipe naming the same ingredient twice is still one recipe: the
+    /// count beside the name is recipes, not mentions.
+    #[test]
+    fn a_recipe_using_an_ingredient_twice_is_listed_once() {
+        let dir = one_recipe("Add @salt{1%tsp}, then more @salt{1%tsp}.\n");
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("dish.cook")]);
+    }
+
+    /// Spellings are separate ingredients, so each keeps its own recipes —
+    /// otherwise the report could not tell which file writes `Salt`.
+    #[test]
+    fn each_spelling_keeps_its_own_recipes() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("a.cook"), "Add @Salt{1%tsp}.\n");
+        write(&base(&dir).join("b.cook"), "Add @salt{1%tsp}.\n");
+
+        let coverage = checked(&aisle_ctx(&dir, "[pantry]\nsalt\n"), true).value;
+        assert_eq!(recipes_for(&coverage, "Salt"), [Utf8Path::new("a.cook")]);
+        assert_eq!(recipes_for(&coverage, "salt"), [Utf8Path::new("b.cook")]);
+    }
+
+    /// The pantry check tracks recipes too: it says which of your recipes an
+    /// item in stock is keeping off the shopping list.
+    #[test]
+    fn the_pantry_check_lists_recipes_as_well() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write(&base(&dir).join("a.cook"), "Add @rice{100%g}.\n");
+        write(&base(&dir).join("b.cook"), "Add @rice{200%g}.\n");
+
+        let coverage = checked(&pantry_ctx(&dir, "[pantry]\nrice = \"5%kg\"\n"), false).value;
+        assert_eq!(known(&coverage), ["rice"]);
+        assert_eq!(
+            recipes_for(&coverage, "rice"),
+            [Utf8Path::new("a.cook"), Utf8Path::new("b.cook")]
+        );
     }
 
     /// A recipe that cannot be parsed still counts as scanned — the CLI has
@@ -1541,6 +2223,7 @@ mod tests {
             &aisle_ctx(&ignored, "[pantry]\nsalt\n"),
             CoverageRequest {
                 base_dir: Some(base(&scanned)),
+                ..Default::default()
             },
         )
         .expect("the check succeeds")
@@ -1569,9 +2252,35 @@ mod tests {
         assert_eq!(known(&outcome.value), ["leek"]);
     }
 
-    /// The pantry's mirror of the test above. It exists because deleting
-    /// `pantry_coverage`'s `collect_diagnostics` call left every other test in
-    /// this module passing: the aisle twin does not cover it.
+    /// A `#` comment is an ingredient to the parser, and one at the end of a
+    /// line takes a synonym with it: `tomato` below is not known.
+    #[test]
+    fn a_comment_written_with_a_hash_comes_back_as_a_warning() {
+        let dir = one_recipe("Add @tomato{1} and @leek{1}.\n");
+        let conf = "[produce]\n# veg\nleek\ntomatoes | tomato # cherry\n";
+        let outcome = checked(&aisle_ctx(&dir, conf), true);
+
+        let messages: Vec<&str> = outcome
+            .diagnostics
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "line 2 is read as an ingredient: # veg (comments in aisle.conf start with //)",
+                "line 4 is read as an ingredient: tomatoes | tomato # cherry \
+                 (comments in aisle.conf start with //)",
+            ]
+        );
+        assert_eq!(unknown(&outcome.value), ["tomato"]);
+    }
+
+    /// The pantry's mirror of
+    /// `a_warning_in_the_aisle_configuration_comes_back_as_a_diagnostic`. It
+    /// exists because deleting `pantry_coverage`'s `collect_diagnostics` call
+    /// left every other test in this module passing: the aisle twin does not
+    /// cover it.
     #[test]
     fn a_warning_in_the_pantry_configuration_comes_back_as_a_diagnostic() {
         let dir = one_recipe("Add @ice{1}.\n");

@@ -4,22 +4,30 @@
   var results = document.getElementById("search-results");
   if (!input || !results) return;
 
-  var index = null;
+  var indexPromise = null;
   var selectedIndex = -1;
 
+  // Loaded as a classic <script>, never fetched: file:// documents are opaque
+  // origins, so a fetch is blocked and search returns nothing from disk. Must
+  // stay classic — module scripts are CORS-gated and fail the same way.
   function loadIndex() {
-    if (index !== null) return Promise.resolve(index);
-    return fetch(prefix + "/static/search-index.json")
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        index = data;
-        return data;
-      })
-      .catch(function (e) {
-        console.error("search-index load failed", e);
-        index = [];
-        return index;
-      });
+    if (indexPromise) return indexPromise;
+    indexPromise = new Promise(function (resolve) {
+      var script = document.createElement("script");
+      script.src = prefix + "/static/search-index.js";
+      script.onload = function () {
+        if (!window.__SEARCH_INDEX__) {
+          console.error("search-index loaded but set no index: " + script.src);
+        }
+        resolve(window.__SEARCH_INDEX__ || []);
+      };
+      script.onerror = function () {
+        console.error("search-index failed to load: " + script.src);
+        resolve([]);
+      };
+      document.head.appendChild(script);
+    });
+    return indexPromise;
   }
 
   function score(entry, q) {
@@ -36,12 +44,12 @@
 
   function render(matches) {
     if (matches.length === 0) {
-      results.innerHTML = '<div class="p-4 text-gray-500 text-center">No recipes found</div>';
+      results.innerHTML = '<div class="p-4 text-muted text-center">No recipes found</div>';
     } else {
       results.innerHTML = matches.map(function (m) {
         var href = prefix + "/" + m.path;
-        return '<a href="' + escapeHtml(href) + '" class="search-result block px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-colors border-b border-gray-100 last:border-b-0">' +
-          '<div class="font-medium text-gray-800">' + escapeHtml(m.title) + '</div>' +
+        return '<a href="' + escapeHtml(href) + '" class="search-result block px-4 py-3 hover:bg-sunk border-b border-line last:border-b-0">' +
+          '<div class="font-medium text-text">' + escapeHtml(m.title) + '</div>' +
           '</a>';
       }).join("");
     }

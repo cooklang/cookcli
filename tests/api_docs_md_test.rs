@@ -30,8 +30,10 @@ fn docs_api_md_is_up_to_date() {
             path.display()
         )
     });
-    // Git on Windows may check the file out with CRLF endings; compare content,
-    // not line endings.
+    // .gitattributes pins *.md to LF, so a fresh checkout never has CRLF here.
+    // Adding that rule does not rewrite a working tree that already existed,
+    // though, so an older Windows clone can still hold a CRLF copy until the
+    // path is checked out again. Compare content, not line endings.
     let actual = actual.replace("\r\n", "\n");
 
     assert_eq!(

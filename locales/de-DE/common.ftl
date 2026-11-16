@@ -7,6 +7,8 @@ nav-preferences = Einstellungen
 # Search
 search-placeholder = Rezepte suchen...
 search-no-results = Keine Rezepte gefunden
+search-title = Suchergebnisse
+search-see-all = Alle Ergebnisse anzeigen
 
 # Common Actions
 action-add = Hinzufügen
@@ -19,6 +21,7 @@ action-delete = Löschen
 action-clear = Leeren
 action-print = Drucken
 action-preview = Vorschau
+action-done = Fertig
 
 # Common Labels
 label-scale = Skalierung
@@ -33,7 +36,57 @@ editor-unsaved-changes = Ungespeicherte Änderungen
 editor-saved = Gespeichert
 editor-saving = Speichern...
 editor-save-failed = Speichern fehlgeschlagen
+editor-not-saved-gone = Nicht gespeichert: anderswo umbenannt oder gelöscht
+editor-save-failed-detail = Speichern fehlgeschlagen: %s
+editor-file-gone = Diese Datei wurde in einem anderen Tab oder auf einem anderen Gerät umbenannt oder gelöscht. Deine Änderungen wurden nicht gespeichert: Kopiere sie, bevor du die Seite verlässt.
 editor-placeholder = Geben Sie hier Ihr Rezept ein...
+
+# Editor toolbar
+editor-toolbar-label = Cooklang-Formatierung
+editor-toolbar-inline = Elemente im Text
+editor-toolbar-block = Zeilenelemente
+editor-toolbar-ingredient = Zutat
+editor-toolbar-ingredient-title = Zutat einfügen (@) oder die Auswahl in eine Zutat umwandeln
+editor-toolbar-cookware = Kochgeschirr
+editor-toolbar-cookware-title = Kochgeschirr einfügen (#) oder die Auswahl in Kochgeschirr umwandeln
+editor-toolbar-timer = Timer
+editor-toolbar-timer-title = Timer in Minuten einfügen (~) oder nach der Auswahl benennen
+editor-toolbar-section = Abschnitt
+editor-toolbar-section-title = Neuen Abschnitt beginnen (== Abschnitt ==), benannt nach der Auswahl
+editor-toolbar-section-default = Abschnitt
+editor-toolbar-note = Notiz
+editor-toolbar-note-title = Aktuelle Zeilen in eine Notiz umwandeln (>) oder zurück in Schritte
+editor-toolbar-comment = Kommentar
+editor-toolbar-comment-title = Aktuelle Zeilen auskommentieren (--) oder die Auswahl innerhalb einer Zeile
+editor-toolbar-metadata = Metadaten
+editor-toolbar-metadata-title = Metadatenzeile im Frontmatter hinzufügen (---)
+editor-toolbar-menu = Menüelemente
+editor-toolbar-other = Weitere Elemente
+editor-toolbar-day = Tag
+editor-toolbar-day-title = Einen neuen Tag beginnen (== Tag ==), mit Datum, wenn eines gewählt ist
+editor-toolbar-day-default = Tag
+editor-toolbar-day-date = Datum des nächsten Tags
+editor-toolbar-day-date-title = Optionales Datum für den nächsten Tag, etwa == Samstag (2026-03-07) ==
+editor-toolbar-meal = Mahlzeit
+editor-toolbar-meal-title = Eine Mahlzeit beginnen (Frühstück: \), mit einem ersten Eintrag
+editor-toolbar-meal-breakfast = Frühstück
+editor-toolbar-meal-lunch = Mittagessen
+editor-toolbar-meal-dinner = Abendessen
+editor-toolbar-meal-snacks = Snacks
+editor-toolbar-add-recipe = Rezept hinzufügen
+editor-toolbar-add-recipe-title = Ein Rezept zur aktuellen Mahlzeit hinzufügen (- @./Rezept{"{}"})
+editor-toolbar-recipe-reference = Rezeptverweis
+editor-toolbar-recipe-reference-title = Auf ein anderes Rezept verweisen (@./Rezept{"{}"})
+
+# Recipe picker
+recipe-picker-title = Rezept auswählen
+recipe-picker-search = Rezepte suchen
+recipe-picker-results = Rezepte
+recipe-picker-servings = Portionen
+recipe-picker-servings-hint = Leer lassen, um die Portionen des Rezepts zu übernehmen.
+recipe-picker-insert = Einfügen
+recipe-picker-no-results = Keine Rezepte gefunden
+recipe-picker-load-failed = Rezepte konnten nicht geladen werden
 
 # LSP Status
 lsp-connected = LSP verbunden
@@ -48,7 +101,90 @@ new-recipe-placeholder = Abendessen/Italienisch/Pasta Carbonara
 new-recipe-hint = Format: Ordner/Rezeptname
 new-recipe-create = Rezept erstellen
 
+# New Menu
+new-menu = Neues Menü
+new-menu-path = Menüpfad
+new-menu-placeholder = Planung/Woche 12
+new-menu-hint = Format: Ordner/Menüname
+new-menu-create = Menü erstellen
+new-plan = Neuer Essensplan
+new-plan-path = Pfad des Essensplans
+new-plan-placeholder = Pläne/Oktober
+new-plan-hint = Format: Ordner/Planname
+new-plan-create = Essensplan erstellen
+new-plan-start = Erster Tag
+new-plan-today = Heute
+new-plan-this-week = Diese Woche
+new-plan-next-week = Nächste Woche
+new-plan-days = Anzahl der Tage
+new-plan-one-week = 1 Woche
+new-plan-two-weeks = 2 Wochen
+new-plan-meals = Mahlzeiten
+
 # Delete Recipe
 delete-recipe = Rezept löschen
 delete-recipe-confirm = Möchten Sie dieses Rezept wirklich löschen?
 delete-recipe-warning = Diese Aktion kann nicht rückgängig gemacht werden.
+
+# Rename Recipe
+action-rename = Umbenennen
+rename-title = Datei umbenennen
+rename-label = Neuer Name
+rename-hint = Die Datei bleibt in ihrem Ordner. Ihre Bilder werden mit umbenannt, und Rezepte und Menüs, die sie verwenden, erhalten den neuen Namen.
+rename-failed = Umbenennen fehlgeschlagen: %s
+rename-skipped = Umbenannt, aber einige Verweise wurden nicht geändert: %s
+rename-write-failed = Umbenannt, aber diese Dateien konnten nicht aktualisiert werden: %s
+rename-shopping-list = Die Einkaufsliste verwendet noch den alten Namen; füge es über seine neue Seite erneut hinzu.
+
+# Title Picture
+picture-button = Bild
+picture-title = Titelbild
+picture-none = Noch kein Bild. Wählen Sie eines aus oder ziehen Sie es hierher.
+picture-choose = Bild auswählen
+picture-replace = Bild ersetzen
+picture-remove = Entfernen
+picture-remove-confirm = Dieses Bild entfernen? Die Datei wird gelöscht und kann nicht wiederhergestellt werden.
+picture-hint = JPEG, PNG oder WebP. Wird als JPEG gespeichert; große Bilder werden auf 2048 px verkleinert.
+picture-from-metadata = Das Bild dieses Rezepts wird durch das Feld image in seinen Metadaten festgelegt. Entfernen Sie diese Zeile, um ein hochgeladenes Bild zu verwenden.
+picture-uploading = Wird hochgeladen...
+picture-removing = Wird entfernt...
+picture-load-failed = Das Bild konnte nicht geladen werden
+picture-upload-failed = Hochladen fehlgeschlagen
+picture-remove-failed = Das Bild konnte nicht entfernt werden
+picture-too-large = Dieses Bild ist zu groß. Die Grenze liegt bei 10 MB.
+picture-heif = HEIC- und AVIF-Fotos können nicht gelesen werden. Laden Sie sie über den Browser des Telefons hoch, der sie in JPEG umwandelt, oder stellen Sie die iPhone-Kamera auf „Maximale Kompatibilität“ (Einstellungen > Kamera > Formate).
+picture-for = Bild für
+picture-step-title = Schrittbild
+picture-target-step = Schritt { $step }: { $text }
+picture-target-section = Abschnitt { $section }
+picture-step-note = Ein Schrittbild gehört zur Position des Schritts, nicht zu seinem Text: Wird weiter oben in diesem Abschnitt ein Schritt eingefügt oder entfernt, landet es bei einem anderen Schritt.
+step-picture-add = Bild zu diesem Schritt hinzufügen
+step-picture-change = Bild dieses Schritts ändern
+# Sign-in (users are managed on the server with `cook server user`)
+sign-in = Anmelden
+sign-out = Abmelden
+sign-in-intro = Melden Sie sich an, um Rezepte hinzuzufügen, zu bearbeiten oder zu löschen und die Vorratskammer oder die Einkaufsliste zu ändern.
+sign-in-username = Benutzername
+sign-in-password = Passwort
+sign-in-failed = Falscher Benutzername oder falsches Passwort.
+signed-in-as = Angemeldet als
+role-forbidden = Dein Konto darf das nicht. Bitte die Person, die diesen Server betreibt, um eine andere Rolle.
+role-forbidden-change = Ihre Rolle erlaubt diese Änderung nicht
+sign-in-to-change = Melden Sie sich an, um Änderungen vorzunehmen
+signed-out-notice = Sie sind nicht mehr angemeldet, daher wurde diese Änderung nicht übernommen.
+
+# Errors
+error-title = Etwas ist schiefgelaufen
+error-back-home = Zurück zu den Rezepten
+
+# Icon button labels (aria-label / title)
+aria-toggle-theme = Design umschalten
+aria-keyboard-shortcuts = Tastenkürzel
+aria-more-options = Weitere Optionen
+aria-preferences = Einstellungen
+aria-dismiss = Schließen
+aria-decrease-scale = Skalierung verringern
+aria-increase-scale = Skalierung erhöhen
+aria-decrease-servings = Portionen verringern
+aria-increase-servings = Portionen erhöhen
+aria-close = Schließen

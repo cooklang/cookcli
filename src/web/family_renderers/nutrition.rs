@@ -22,7 +22,9 @@
 
 //! Specific renderer for the `nutrition:` family.
 
-use super::FamilyRenderer;
+use super::{list_family, FamilyRenderer, PanelContext};
+use crate::util::format::nutrition::find;
+use crate::web::templates::FamilyPanel;
 use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
 
@@ -37,7 +39,7 @@ const ICON_BREAD: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const ICON_SALT: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 4H8l1-4Z"/><path d="M8 7h8l1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L8 7Z"/><circle cx="10.5" cy="12.5" r=".6" fill="currentColor" stroke="none"/><circle cx="13.5" cy="12.5" r=".6" fill="currentColor" stroke="none"/><circle cx="12" cy="15.5" r=".6" fill="currentColor" stroke="none"/></svg>"##;
 
 /// Specific renderer for the `nutrition` family. Used both for the recipe
-/// page's family line ([`super::build_custom_list_families`]) and, directly,
+/// page's family line ([`super::build_family_panels`]) and, directly,
 /// for the recipe list page's kcal badge ([`super::extract_nutrition_kcal`]).
 pub(super) struct NutritionRenderer;
 
@@ -63,16 +65,21 @@ impl FamilyRenderer for NutritionRenderer {
 
     fn mapping_icon(&self, field: &str) -> Option<&'static str> {
         // Mapping form: the field name stays in English regardless of the
-        // UI locale, so match on it directly instead of the translated text.
-        match field.to_lowercase().as_str() {
-            "kcal" | "cal" | "calories" | "energy" => Some(ICON_FLAME),
-            "proteins" | "protein" => Some(ICON_MEAT),
-            "lipids" | "lipid" | "fat" | "fats" => Some(ICON_DROPLET),
-            "saturated-fat" | "saturated_fat" => Some(ICON_DROPLET_FILLED),
-            "sugars" | "sugar" => Some(ICON_CANDY),
-            "fibers" | "fiber" | "fibre" | "fibres" => Some(ICON_WHEAT),
-            "carbohydrates" | "carbohydrate" | "carbs" => Some(ICON_BREAD),
-            "salt" | "sodium" => Some(ICON_SALT),
+        // UI locale, so match on the nutrient it names, not on the text.
+        match find(field)?.name {
+            "calories" => Some(ICON_FLAME),
+            "proteinContent" => Some(ICON_MEAT),
+            "fatContent" => Some(ICON_DROPLET),
+            "saturatedFatContent" => Some(ICON_DROPLET_FILLED),
+            "unsaturatedFatContent"
+            | "monounsaturatedFatContent"
+            | "polyunsaturatedFatContent"
+            | "transFatContent" => Some(ICON_DROPLET),
+            "starchContent" => Some(ICON_BREAD),
+            "sugarContent" => Some(ICON_CANDY),
+            "fiberContent" => Some(ICON_WHEAT),
+            "carbohydrateContent" => Some(ICON_BREAD),
+            "salt" => Some(ICON_SALT),
             _ => None,
         }
     }
@@ -94,7 +101,10 @@ impl FamilyRenderer for NutritionRenderer {
                 unit = default_unit.to_string();
             }
         }
-        if unit.is_empty() || unit.eq_ignore_ascii_case(field) {
+        if unit.is_empty()
+            || unit.eq_ignore_ascii_case(field)
+            || find(field).is_some_and(|n| n.energy)
+        {
             format!("{amount} {unit}").trim().to_string()
         } else {
             let label = translated_nutrient_label(field, lang).unwrap_or_else(|| field.to_string());
@@ -105,6 +115,19 @@ impl FamilyRenderer for NutritionRenderer {
     fn note(&self, lang: &LanguageIdentifier) -> Option<String> {
         Some(crate::web::i18n::LOCALES.lookup(lang, "nutrition-per-serving"))
     }
+
+    /// A mapping of numbers becomes the nutrition table; the list form and
+    /// anything else keeps the generic line of chips.
+    fn panel(
+        &self,
+        family: &str,
+        value: &serde_yaml::Value,
+        ctx: &PanelContext<'_>,
+    ) -> Option<FamilyPanel> {
+        super::panel::build_nutrition_panel(Some(value), ctx.weight, ctx.servings, ctx.lang)
+            .map(|panel| FamilyPanel::Nutrition(Box::new(panel)))
+            .or_else(|| list_family(self, family, value, ctx.lang).map(FamilyPanel::Generic))
+    }
 }
 
 /// The unit implied by a nutrient field name when the recipe author wrote a
@@ -112,28 +135,27 @@ impl FamilyRenderer for NutritionRenderer {
 /// `"value%unit"` form. Returns `None` for unknown fields, which are then
 /// shown with no unit at all rather than a guessed one.
 fn default_nutrition_unit(field: &str) -> Option<&'static str> {
-    match field.to_lowercase().as_str() {
-        "kcal" | "cal" | "calories" | "energy" => Some("kcal"),
-        "proteins" | "protein" | "lipids" | "lipid" | "fat" | "fats" | "saturated-fat"
-        | "saturated_fat" | "carbohydrates" | "carbohydrate" | "carbs" | "sugars" | "sugar"
-        | "fibers" | "fiber" | "fibre" | "fibres" | "salt" | "sodium" => Some("g"),
-        _ => None,
-    }
+    find(field).map(|n| n.default_unit)
 }
 
 /// Translates a known nutrient field name via the app's Fluent locales.
 /// Returns `None` for anything else (including `kcal`, which needs no
 /// translation), so the caller can fall back to the raw field name as
 /// authored.
-fn translated_nutrient_label(field: &str, lang: &LanguageIdentifier) -> Option<String> {
-    let key = match field.to_lowercase().as_str() {
-        "proteins" | "protein" => "nutrition-proteins",
-        "lipids" | "lipid" | "fat" | "fats" => "nutrition-lipids",
-        "saturated-fat" | "saturated_fat" => "nutrition-saturated-fat",
-        "carbohydrates" | "carbohydrate" | "carbs" => "nutrition-carbohydrates",
-        "sugars" | "sugar" => "nutrition-sugars",
-        "fibers" | "fiber" | "fibre" | "fibres" => "nutrition-fibers",
-        "salt" | "sodium" => "nutrition-salt",
+pub(super) fn translated_nutrient_label(field: &str, lang: &LanguageIdentifier) -> Option<String> {
+    let key = match find(field)?.name {
+        "proteinContent" => "nutrition-proteins",
+        "fatContent" => "nutrition-lipids",
+        "saturatedFatContent" => "nutrition-saturated-fat",
+        "unsaturatedFatContent" => "nutrition-unsaturated-fat",
+        "monounsaturatedFatContent" => "nutrition-monounsaturated-fat",
+        "polyunsaturatedFatContent" => "nutrition-polyunsaturated-fat",
+        "transFatContent" => "nutrition-trans-fat",
+        "starchContent" => "nutrition-starch",
+        "carbohydrateContent" => "nutrition-carbohydrates",
+        "sugarContent" => "nutrition-sugars",
+        "fiberContent" => "nutrition-fibers",
+        "salt" => "nutrition-salt",
         _ => return None,
     };
     Some(crate::web::i18n::LOCALES.lookup(lang, key))

@@ -9,7 +9,8 @@
 //! [`plan`] is the odd one out: it answers "what should I stock?" by looking at
 //! the recipe collection alone, and never reads the pantry at all.
 //!
-//! [`add`], [`remove`] and [`update`] change the pantry and write it back.
+//! [`add`], [`remove`], [`update`] and [`rename_section`] change the pantry and
+//! write it back.
 //! They are the only functions in this crate that write to a file the user
 //! owns, so read [`write_atomically`] and **[what a write
 //! touches](#what-a-write-touches)** before calling them.
@@ -56,19 +57,17 @@
 
 use crate::{
     diagnostic::parse_failure,
-    find::{build_tree, listed_ingredients, parse_or_skip, walk},
+    find::{build_tree, parse_or_skip, required_ingredients, walk},
     fs_atomic::write_atomically,
     parser::collect_diagnostics,
     ConfigSource, Context, CoreError, Diagnostic, Outcome,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use cooklang_find::RecipeEntry;
-use regex::Regex;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
-    sync::LazyLock,
 };
 
 /// How [`ExpiringItem::expire_date`] is written, whatever the file used.
@@ -134,6 +133,35 @@ impl PantryItem {
             low: self.low.clone(),
         })
         .is_low()
+    }
+
+    /// True when the stock has run out: a quantity whose number is zero,
+    /// whatever its unit.
+    ///
+    /// False for an item with no quantity and for one that is not a number
+    /// (`"unlim"`), since neither says the item is gone.
+    pub fn is_out(&self) -> bool {
+        self.quantity
+            .as_deref()
+            .and_then(parsed_quantity)
+            .is_some_and(|(amount, _)| amount == 0.0)
+    }
+
+    /// True when [`depleted`] lists this item without
+    /// [`DepletedRequest::all`]: low by its own threshold, or by the built-in
+    /// ones when it sets none that can be compared with its stock.
+    pub fn is_depleted(&self) -> bool {
+        is_depleted(self, false)
+    }
+
+    /// Days from `today` until this item expires — `0` on the day, negative
+    /// once it has passed — or `None` when it has no expiry date that reads as
+    /// one. See [`expiring`] for the spellings read.
+    pub fn days_until_expiry(&self, today: NaiveDate) -> Option<i64> {
+        self.expire
+            .as_deref()
+            .and_then(parse_date)
+            .map(|date| (date - today).num_days())
     }
 
     fn from_cooklang(section: &str, item: &cooklang::pantry::PantryItem) -> Self {
@@ -234,13 +262,37 @@ pub fn load(ctx: &Context) -> Result<Outcome<PantryContents>, CoreError> {
     tracing::trace!("loading pantry from {:?}", path);
 
     let parsed = cooklang::pantry::parse_lenient(&text);
-    let diagnostics = collect_diagnostics(parsed.report(), path);
+    let mut diagnostics = collect_diagnostics(parsed.report(), path);
 
     match parsed.output() {
-        Some(conf) => Ok(Outcome::with_diagnostics(
-            PantryContents::from_conf(conf),
-            diagnostics,
-        )),
+        Some(conf) => {
+            let contents = PantryContents::from_conf(conf);
+            // A hand-edited `quantity` or `low` that nothing can read back is
+            // skipped by `depleted`, the stock dots and the shopping list
+            // alike — warn instead of letting it stand there looking stocked
+            // (#710). `unlim`/`unlimited` are deliberate spellings, not junk.
+            for item in contents.items() {
+                for (key, value) in [("quantity", &item.quantity), ("low", &item.low)] {
+                    let Some(value) = value else { continue };
+                    if parsed_quantity(value).is_none()
+                        && !matches!(value.as_str(), "unlim" | "unlimited")
+                    {
+                        // The name and value are quoted so a hand-edited
+                        // newline in either cannot smuggle a second, forged
+                        // warning into the line.
+                        let mut diagnostic = Diagnostic::warning(format!(
+                            "{:?} has a {key} that cannot be read back: {value:?}",
+                            item.name
+                        ));
+                        if let Some(path) = path {
+                            diagnostic = diagnostic.at_file(path);
+                        }
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            Ok(Outcome::with_diagnostics(contents, diagnostics))
+        }
         None => Err(CoreError::Config {
             path: path.map(ToOwned::to_owned),
             message: parse_failure(&diagnostics, "pantry"),
@@ -515,9 +567,10 @@ pub struct RecipeMatches {
 /// An ingredient counts as in stock when its name matches a pantry item's,
 /// compared lowercased and otherwise exactly — no unit or quantity is
 /// considered, so a recipe needing a kilo of flour matches a pantry holding a
-/// gram of it. References to other recipes are ignored, and a recipe left with
-/// no ingredients at all matches nothing. See [`listed_ingredients`] for what
-/// else is left out.
+/// gram of it. References to other recipes are ignored, and so are optional
+/// ingredients (`@?chives`): a recipe whose only absent ingredients are
+/// optional is a full match. A recipe left with no ingredients at all matches
+/// nothing. See [`required_ingredients`] for what else is left out.
 ///
 /// Recipes are found by walking the collection, `.menu` files included. A
 /// recipe that cannot be read or parsed is left out, with a warning in
@@ -549,7 +602,7 @@ pub fn recipes(ctx: &Context, req: RecipesRequest) -> Result<Outcome<RecipeMatch
         };
         // Lowercased into the set, so a recipe naming `Salt` and `salt` wants
         // one ingredient rather than two.
-        let wanted: BTreeSet<String> = listed_ingredients(&recipe)
+        let wanted: BTreeSet<String> = required_ingredients(&recipe)
             .iter()
             .map(|name| name.to_lowercase())
             .collect();
@@ -665,7 +718,8 @@ impl PantryPlan {
 /// Only `.cook` files are considered; `.menu` files are skipped, and so are
 /// recipes that list no ingredients — and, as in [`recipes`], any that cannot
 /// be read or parsed, each with a warning in [`Outcome::diagnostics`].
-/// Ingredients are those of [`listed_ingredients`], compared exactly as
+/// Ingredients are those of [`required_ingredients`] — optional ones are
+/// never worth stocking to make a recipe cookable — compared exactly as
 /// recipes write them, so `Flour` and `flour` are two ingredients — unlike
 /// [`recipes`], which lowercases.
 ///
@@ -683,7 +737,7 @@ pub fn plan(ctx: &Context, req: PlanRequest) -> Result<Outcome<PantryPlan>, Core
         .into_iter()
         .filter(|entry| !entry.is_menu())
         .filter_map(|entry| parse_or_skip(entry, &mut diagnostics))
-        .map(|recipe| listed_ingredients(&recipe))
+        .map(|recipe| required_ingredients(&recipe))
         .filter(|ingredients| !ingredients.is_empty())
         .collect();
 
@@ -754,9 +808,9 @@ fn most_wanted(missing: &[BTreeSet<String>]) -> Option<String> {
 /// keeps a literal working if it grows a field.
 #[derive(Debug, Clone, Default)]
 pub struct AddRequest {
-    /// The section to add it under, matched and written exactly as given —
-    /// unlike [`ListRequest::section`], case counts, so adding to `Dairy` when
-    /// the file says `dairy` makes a second section.
+    /// The section to add it under, matched and written exactly as given once
+    /// trimmed — unlike [`ListRequest::section`], case counts, so adding to
+    /// `Dairy` when the file says `dairy` makes a second section.
     pub section: String,
     /// The ingredient's name.
     pub name: String,
@@ -769,6 +823,93 @@ pub struct AddRequest {
     pub expire: Option<String>,
     /// The quantity at or below which it counts as low.
     pub low: Option<String>,
+}
+
+impl AddRequest {
+    /// The request with the spaces around each field taken off, and blank
+    /// attributes left unset. A blank section or name is refused.
+    fn trimmed(self) -> Result<Self, CoreError> {
+        let section = self.section.trim().to_string();
+        let name = self.name.trim().to_string();
+        for (what, value) in [("section", &section), ("item name", &name)] {
+            if value.is_empty() {
+                return Err(CoreError::PantryEdit {
+                    message: format!("the {what} cannot be empty"),
+                });
+            }
+        }
+
+        Ok(Self {
+            section,
+            name,
+            quantity: attribute(self.quantity),
+            bought: attribute(self.bought),
+            expire: attribute(self.expire),
+            low: attribute(self.low),
+        })
+    }
+}
+
+/// An attribute as the file should hold it: trimmed, or `None` when blank.
+fn attribute(value: Option<String>) -> Option<String> {
+    value
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// Refuse attribute values the file would write but nothing could read back:
+/// a quantity [`PantryItem::parsed_quantity`] cannot read is never subtracted
+/// from a shopping list nor judged against `low`, and a date [`parse_date`]
+/// cannot read never expires — stored anyway, they are junk every later read
+/// quietly ignores (#710). `unlim`/`unlimited` are the documented spellings
+/// for "stocked, not measurable" — the seed pantry ships them and the server
+/// treats them specially — so `quantity` allows them, but a `low` threshold
+/// that never compares is the same junk the check exists for. `nan`, `inf`
+/// and negatives parse as numbers yet cannot mean an amount on a shelf; a
+/// two-digit year reads as the year 27, which is a typo, not a date.
+/// Checked before the document is opened, so nothing is written.
+fn check_attribute_values(attributes: &edit::Attributes) -> Result<(), CoreError> {
+    for (key, value) in [("quantity", &attributes.quantity), ("low", &attributes.low)] {
+        let Some(value) = value else { continue };
+        let readable = match parsed_quantity(value) {
+            // `-0` reads as zero but is not one: `is_sign_negative` is the
+            // only check that catches it.
+            Some((amount, _)) => amount.is_finite() && amount >= 0.0 && !amount.is_sign_negative(),
+            None => key == "quantity" && matches!(value.as_str(), "unlim" | "unlimited"),
+        };
+        if !readable {
+            // `unlim` is a valid quantity but a `low` threshold that can
+            // never trip, so only the first message offers it.
+            let suggestion = if key == "quantity" {
+                ", or `unlim`"
+            } else {
+                ""
+            };
+            return Err(CoreError::PantryEdit {
+                message: format!(
+                    "the {key} '{value}' is not a quantity a pantry file can \
+                     read back: write a number, with a unit if it has one, \
+                     such as `500%g` or `3`{suggestion}"
+                ),
+            });
+        }
+    }
+    for (key, value) in [
+        ("bought", &attributes.bought),
+        ("expire", &attributes.expire),
+    ] {
+        let Some(value) = value else { continue };
+        let readable = parse_date(value).is_some_and(|date| date.year() >= 100);
+        if !readable {
+            return Err(CoreError::PantryEdit {
+                message: format!(
+                    "the {key} date '{value}' is not a date a pantry file can \
+                     read back: write it like `2027-01-01`"
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Which item to take out of the pantry.
@@ -810,6 +951,10 @@ pub struct UpdateRequest {
 /// is where [`Context::discover`] looks first. That is the one case where this
 /// crate invents a path rather than being told one.
 ///
+/// Spaces around the section, the name and each attribute are dropped first,
+/// and a blank attribute is left unset: the pantry is matched against recipe
+/// ingredients by name, and ` milk` would never match `milk`.
+///
 /// Returns the pantry as it now stands on disk, so a caller need not read it
 /// back, together with any warnings from parsing what was there before.
 ///
@@ -821,23 +966,42 @@ pub struct UpdateRequest {
 /// - [`CoreError::ReadOnlyConfig`] if the context carries the pantry inline.
 ///   There is nowhere to write it, and inventing a path would put an editor's
 ///   unsaved buffer on someone's disk.
-/// - [`CoreError::PantryEdit`] if the section already holds an item of that
-///   name, compared exactly. Nothing is written; [`update`] is how an item is
-///   changed.
+/// - [`CoreError::PantryEdit`] if the section or the name is blank, if a
+///   quantity or a date given is not one the file could read back, or if the
+///   section already holds an item of that name, compared exactly once
+///   trimmed. Nothing is written; [`update`] is how an item is changed. The
+///   same refusal covers a name taken by a different kind of entry — a
+///   section where a `general` item would go, or a top-level item where a
+///   section would — since inserting there would replace it wholesale.
 /// - [`CoreError::Config`] if the existing file cannot be parsed at all, and
 ///   [`CoreError::Io`] if it cannot be read or the new one cannot be written.
 pub fn add(ctx: &Context, req: AddRequest) -> Result<Outcome<PantryContents>, CoreError> {
+    let req = req.trimmed()?;
     let attributes = edit::Attributes {
         quantity: req.quantity,
         bought: req.bought,
         expire: req.expire,
         low: req.low,
     };
+    check_attribute_values(&attributes)?;
     edit::check_general_attributes(&req.section, &req.name, &attributes)?;
 
     let path = path_to_create(ctx)?;
     let (mut doc, mut diagnostics) = read_document_or_empty(&path)?;
 
+    // `name_taken_differently` runs first: `item_exists` counts `[[milk]]`
+    // as a `general` item (an array of tables is not table-like), which
+    // would report a section collision as a nonexistent "item 'milk'".
+    if let Some(kind) = edit::name_taken_differently(&doc, &req.section, &req.name) {
+        let taken = if req.section == edit::GENERAL {
+            &req.name
+        } else {
+            &req.section
+        };
+        return Err(CoreError::PantryEdit {
+            message: format!("{kind} named '{taken}' already exists"),
+        });
+    }
     if edit::item_exists(&doc, &req.section, &req.name) {
         return Err(CoreError::PantryEdit {
             message: format!(
@@ -906,18 +1070,19 @@ pub fn remove(ctx: &Context, req: RemoveRequest) -> Result<Outcome<PantryContent
 /// # Errors
 ///
 /// - [`CoreError::PantryEdit`] if the request sets no attribute at all, since
-///   that could only rewrite the file to what it already said; or if there is
-///   no such section, or no such item in it. Nothing is written.
+///   that could only rewrite the file to what it already said; if a quantity
+///   or a date given is not one the file could read back; or if there is no
+///   such section, or no such item in it. Nothing is written.
 /// - [`CoreError::MissingConfig`] if the context carries no pantry, and
 ///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
 /// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
 ///   written.
 pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContents>, CoreError> {
     let attributes = edit::Attributes {
-        quantity: req.quantity,
-        bought: req.bought,
-        expire: req.expire,
-        low: req.low,
+        quantity: attribute(req.quantity),
+        bought: attribute(req.bought),
+        expire: attribute(req.expire),
+        low: attribute(req.low),
     };
 
     // Checked before anything is read: an update of nothing is a mistake
@@ -931,6 +1096,7 @@ pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContent
         });
     }
 
+    check_attribute_values(&attributes)?;
     edit::check_general_attributes(&req.section, &req.name, &attributes)?;
 
     let path = path_to_edit(ctx)?;
@@ -947,6 +1113,107 @@ pub fn update(ctx: &Context, req: UpdateRequest) -> Result<Outcome<PantryContent
     edit::apply(&mut doc, &req.section, &req.name, &attributes)?;
 
     save(&path, &doc, diagnostics)
+}
+
+/// Which section to rename, and what to.
+///
+/// Not `#[non_exhaustive]`: consumers construct this.
+#[derive(Debug, Clone, Default)]
+pub struct RenameSectionRequest {
+    /// The section to rename, matched exactly.
+    pub section: String,
+    /// Its new name, written exactly as given once trimmed.
+    pub new_name: String,
+}
+
+/// Give a section a new name and write the pantry back.
+///
+/// The section keeps its place in the file, its items, and the comments around
+/// it; only its name changes. Changing nothing but the case of its own name is
+/// allowed.
+///
+/// Returns the pantry as it now stands on disk, and any warnings from parsing
+/// what was there before.
+///
+/// # Errors
+///
+/// - [`CoreError::PantryEdit`] if the new name is blank or the same as the old
+///   one; if either name is `general`, which is not a `[header]` but the
+///   entries above the first one; if there is no such section; or if another
+///   section — or an item above the first header — already goes by the new
+///   name, ignoring case. Nothing is written.
+/// - [`CoreError::MissingConfig`] if the context carries no pantry, and
+///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
+/// - As [`load`] otherwise, plus [`CoreError::Io`] if the file cannot be
+///   written.
+pub fn rename_section(
+    ctx: &Context,
+    req: RenameSectionRequest,
+) -> Result<Outcome<PantryContents>, CoreError> {
+    let edit_error = |message: String| CoreError::PantryEdit { message };
+    let section = req.section;
+    let new_name = req.new_name.trim().to_string();
+
+    if new_name.is_empty() {
+        return Err(edit_error("the section name cannot be empty".to_string()));
+    }
+    if new_name == section {
+        return Err(edit_error(format!(
+            "section '{section}' is already called that"
+        )));
+    }
+    if [section.as_str(), new_name.as_str()].contains(&edit::GENERAL) {
+        return Err(edit_error(format!(
+            "'{}' is the name for the items above the first section header and cannot be renamed",
+            edit::GENERAL
+        )));
+    }
+
+    let path = path_to_edit(ctx)?;
+    let (mut doc, mut diagnostics) = read_document(&path)?;
+
+    diagnostics.extend(normalise_array_section(&mut doc, &section, &path));
+    if !edit::section_exists(&doc, &section) {
+        return Err(section_not_found(&section));
+    }
+    if let Some(taken) = edit::root_key_like(&doc, &new_name, &section) {
+        return Err(edit_error(format!(
+            "there is already a section or item called '{taken}'"
+        )));
+    }
+
+    edit::rename_section(&mut doc, &section, &new_name);
+
+    save(&path, &doc, diagnostics)
+}
+
+/// Replace the whole pantry file with `text`, as someone editing it by hand
+/// would, once it reads as a pantry.
+///
+/// `text` is written exactly as given — this is the one write that touches
+/// everything, because everything is what was asked for. It is checked the way
+/// every edit reads a file first, so a pantry the other functions here could not
+/// edit afterwards is never written, and it is written the same way they write,
+/// atomically and through a symlink.
+///
+/// Returns the pantry `text` describes, and the warnings from parsing it.
+///
+/// # Errors
+///
+/// - [`CoreError::Config`] if `text` is not a pantry, quoting the parser's
+///   complaint and the line it is on. Nothing is written.
+/// - [`CoreError::MissingConfig`] if the context carries no pantry, and
+///   [`CoreError::ReadOnlyConfig`] if it carries one inline.
+/// - [`CoreError::Io`] if the file cannot be written.
+pub fn replace(ctx: &Context, text: &str) -> Result<Outcome<PantryContents>, CoreError> {
+    let path = path_to_edit(ctx)?;
+    let (_, diagnostics) = parse_document(&path, text)?;
+    write_atomically(&path, text)?;
+    let (conf, _) = parse_conf(&path, text)?;
+    Ok(Outcome::with_diagnostics(
+        PantryContents::from_conf(&conf),
+        diagnostics,
+    ))
 }
 
 fn section_not_found(section: &str) -> CoreError {
@@ -1116,19 +1383,26 @@ fn recipe_name(entry: &RecipeEntry) -> String {
 // Reading quantities and dates
 // ---------------------------------------------------------------------------
 
-/// A quantity as pantry files write it: a number, an optional `%`, then an
-/// optional unit. The unit group matches the empty string, so a bare count
-/// parses with no unit rather than failing.
-static QUANTITY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\d+(?:\.\d+)?)\s*%?\s*(.*)$").expect("the quantity pattern is valid")
-});
+/// A pantry quantity as `cooklang`'s own reader understands it:
+/// `(number, lowercased unit)` — `""` for a bare count — or `None` when it
+/// is not a quantity. Routing every reader through `parsed_quantity` keeps
+/// one definition of the format: a private regex read `.3%kg`, `1e2%g` and
+/// `.0` differently from the file's own parser (#710).
+fn parsed_quantity(quantity: &str) -> Option<(f64, String)> {
+    cooklang::pantry::PantryItem::WithAttributes(cooklang::pantry::ItemWithAttributes {
+        name: String::new(),
+        bought: None,
+        expire: None,
+        quantity: Some(quantity.to_string()),
+        low: None,
+    })
+    .parsed_quantity()
+}
 
 /// The unit of a quantity, lowercased, or `None` if it is not a quantity at
 /// all. A bare count has an empty unit.
 fn unit_of(quantity: &str) -> Option<String> {
-    QUANTITY
-        .captures(quantity)
-        .map(|captures| captures[2].to_lowercase())
+    parsed_quantity(quantity).map(|(_, unit)| unit)
 }
 
 /// Whether two quantities are written in the same unit, and so can be
@@ -1143,14 +1417,11 @@ fn units_match(quantity: &str, low_threshold: &str) -> bool {
 /// The built-in "running out" thresholds, for items that set none of their
 /// own. False for anything that is not a quantity.
 fn is_low_quantity(quantity: &str) -> bool {
-    let Some(captures) = QUANTITY.captures(quantity) else {
-        return false;
-    };
-    let Ok(amount) = captures[1].parse::<f64>() else {
+    let Some((amount, unit)) = parsed_quantity(quantity) else {
         return false;
     };
 
-    match captures[2].to_lowercase().as_str() {
+    match unit.as_str() {
         "g" | "ml" => amount <= 100.0,
         "kg" | "l" => amount < 0.5,
         // A bare count, `item`, `items`, and every unit not listed above.

@@ -126,6 +126,8 @@ cook pantry expiring [OPTIONS]
 
 List recipes that can be made with items currently in pantry.
 
+Optional ingredients (`@?chives`) are not counted: a recipe whose only missing ingredients are optional is a full match.
+
 ```
 cook pantry recipes [OPTIONS]
 ```
@@ -138,6 +140,8 @@ cook pantry recipes [OPTIONS]
 ### `plan` (alias: `pl`)
 
 Analyze ingredient usage across recipes to help plan pantry items.
+
+Only required ingredients are planned for; optional ones (`@?chives`) never are.
 
 ```
 cook pantry plan [OPTIONS]
@@ -153,7 +157,9 @@ cook pantry plan [OPTIONS]
 
 The pantry inventory is defined in `pantry.conf` (TOML format), searched in:
 1. `./config/pantry.conf` — local to recipe directory
-2. `~/.config/cook/pantry.conf` — global configuration
+2. `~/.config/cook/pantry.conf` — global configuration (`~/Library/Application
+   Support/cook/` on macOS, `%APPDATA%\cook\config\` on Windows, or
+   `$COOK_CONFIG_DIR` when that is set)
 
 When you run `cook pantry add` and no pantry file exists, one is created
 at `./config/pantry.conf` automatically.
@@ -172,6 +178,8 @@ salt = "1%kg"
 ```
 
 Item attributes: `quantity`, `low` (threshold), `bought` (date), `expire` (date). Simple format (`item = "quantity"`) is also supported.
+
+A `quantity` or `low` that does not parse as a number — other than `unlim`/`unlimited`, which mean "stocked, not measurable" — is skipped by `depleted`, the stock indicators and the shopping list alike. `cook pantry` warns about such values when the file loads, so a hand-edit cannot hide there.
 
 ## Examples
 

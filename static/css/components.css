@@ -1,0 +1,1051 @@
+/* ============================================================
+   COMPONENT LAYER
+   Imported from input.css after the token registration. Everything here
+   resolves through the tokens; never introduce raw hex values or Tailwind
+   palette utilities. Dimensions match what main rendered before the token
+   migration — this file changes how things look, not how big they are.
+   Colour transitions are deliberately absent: transitioning a token-valued
+   property races Chrome's custom-property invalidation when .dark flips,
+   and elements keep the outgoing theme's colour until the next recalc.
+   ============================================================ */
+@layer components {
+    /* ---------- Focus ---------- */
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    /* ---------- Surfaces ---------- */
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .card-head h2,
+    .card-head h3 {
+        margin: 0;
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .card-head.plain h2,
+    .card-head.plain h3 {
+        font-size: var(--text-body);
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--text);
+    }
+
+    .card-head .count {
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The nav container: main's rounded card, not sticky. */
+    .nav-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        margin-bottom: 2rem;
+    }
+
+    /* ---------- Controls ---------- */
+    /* 40px: main's px-4 py-2 buttons at 16px text. */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 16px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-body);
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+    }
+
+    .btn:hover {
+        background: var(--surface-sunk);
+    }
+
+    .btn:active { background: var(--surface-sunk); filter: brightness(.97); }
+    .btn-primary:active { background: var(--accent-strong); filter: brightness(.9); }
+    .btn-danger:active { background: var(--danger); filter: brightness(.97); }
+
+    .btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
+
+    /* One accent-filled button per view. Everything else is neutral.
+       Hover and active darken rather than brighten so the white label never
+       drops below AA on the fill. */
+    .btn-primary {
+        background: var(--accent-strong);
+        border-color: var(--accent-strong);
+        color: var(--accent-ink);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-strong);
+        filter: brightness(.94);
+    }
+
+    /* The commit half of a destructive confirmation. */
+    .btn-danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: var(--danger-ink);
+    }
+
+    .btn-danger:hover {
+        background: var(--danger);
+        filter: brightness(1.06);
+    }
+
+    /* Compact control for inline forms that sit inside a card row. */
+    .btn-sm {
+        height: 32px;
+        padding: 0 12px;
+        font-size: var(--text-ui);
+    }
+
+    .btn-sm svg { width: 16px; height: 16px; }
+
+    .icon-btn {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .icon-btn:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .icon-btn svg { width: 20px; height: 20px; }
+
+    .select {
+        height: 40px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .select:hover { background: var(--surface-sunk); }
+
+    .stepper {
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+    }
+
+    .stepper button {
+        width: 32px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: var(--text-read);
+    }
+
+    .stepper button:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .stepper button:active { background: var(--surface-sunk); filter: brightness(.97); }
+
+    .stepper input {
+        width: 56px;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        text-align: center;
+        font-size: var(--text-body);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+    .stepper input::-webkit-outer-spin-button,
+    .stepper input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .stepper input:focus { outline: none; }
+
+    .stepper:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    .search-input {
+        width: 100%;
+        height: 44px;
+        padding: 0 16px 0 40px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+    }
+
+    .search-input::placeholder { color: var(--text-faint); }
+
+    .search-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    /* ---------- Navigation ---------- */
+    .nav-pill {
+        padding: .5rem 1.25rem;
+        border-radius: 9999px;
+        font-size: var(--text-body);
+        font-weight: 500;
+        color: var(--text-muted);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .nav-pill:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .nav-pill.active {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* Rows of the small-screen overflow menu. A component rather than
+       text-muted + a conditional text-accent-text: two utilities of equal
+       specificity collide and the active colour silently loses. */
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 16px;
+        font-size: var(--text-body);
+        color: var(--text-muted);
+        text-decoration: none;
+        background: transparent;
+        border: 0;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .menu-item:hover {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+
+    .menu-item.active {
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+
+    /* The brand mark is orange with dark dots on transparency; it needs a
+       light backing on a dark nav. */
+    .dark .brand-mark {
+        background: var(--text);
+        padding: 2px;
+    }
+
+    /* ---------- Lists ---------- */
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 14px;
+        font-size: var(--text-body);
+    }
+
+    .row + .row { border-top: 1px solid var(--border); }
+
+    .row .row-name { flex: 1; min-width: 0; }
+
+    .row-value {
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--accent-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .row-note {
+        color: var(--text-faint);
+        font-size: var(--text-meta);
+    }
+
+    /* Checkbox sizes live here, not in w-* / h-* utilities, so the
+       coarse-pointer override further down can actually win. */
+    .ref-checkbox { width: 16px; height: 16px; }
+    .list-checkbox { width: 20px; height: 20px; }
+
+    /* A ticked-off shopping list item is struck through by its own checkbox,
+       so the tick shows the moment it is made and a refresh that re-ticks
+       boxes needs no styling of its own. */
+    .list-checkbox:checked + label .item-name {
+        text-decoration: line-through;
+        opacity: .6;
+    }
+
+    /* Recipe ingredient rows: main's tinted row, on the sunk surface. */
+    .ingredient-list { list-style: none; margin: 0; padding: 0; }
+
+    .ingredient-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .5rem .75rem;
+        border-radius: var(--radius-control);
+        background: var(--surface-sunk);
+    }
+
+    .section-label {
+        font-size: var(--text-label);
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin: 18px 0 8px;
+        padding: 0 14px;
+    }
+
+    /* ---------- Text ---------- */
+    .metaline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 0;
+        font-size: var(--text-ui);
+        color: var(--text-muted);
+    }
+
+    .metaline > *:not(:last-child)::after {
+        content: "·";
+        margin: 0 8px;
+        color: var(--text-faint);
+    }
+
+    .metaline b { font-weight: 600; color: var(--text); }
+
+    /* Recipe-reference links. --info is a warm orange, so the underline is
+       what makes it read as a link. */
+    a.text-info { text-decoration: underline; text-underline-offset: 2px; }
+
+    /* ---------- Status ---------- */
+    .item-status-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .item-status-dot.in-stock { background: var(--ok); }
+
+    .item-status-dot.low-stock { background: var(--accent); }
+
+    .item-status-dot.out-of-stock { background: var(--danger); }
+
+    /* ---------- Inline recipe entities ---------- */
+    /* Weight + tint, not bordered gradient pills, so they stop competing with
+       the prose they sit inside. */
+    .ingredient-badge {
+        color: var(--accent-text);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* Distinguished from an ingredient by texture, not hue, so the split is
+       visible to red-green deficient readers. */
+    .cookware-badge {
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+        text-decoration: underline dotted var(--inactive);
+        text-underline-offset: 3px;
+    }
+
+    .timer-badge {
+        padding: 1px 6px;
+        border-radius: 5px;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /* Timers are only interactive inside cooking mode (static/js/timers.js) —
+       the same badge in the plain recipe view stays a plain, static label. */
+    .cooking-overlay .timer-badge[data-timer] {
+        cursor: pointer;
+    }
+
+    .cooking-overlay .timer-badge[data-timer]:hover,
+    .cooking-overlay .timer-badge[data-timer]:focus-visible {
+        border-color: var(--border-strong);
+    }
+
+    .timer-badge.timer-running {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-text);
+    }
+
+    .timer-badge.timer-done {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* Compact per-timer pill shown in the header while a recipe has active timers. */
+    .timer-chip {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+        color: var(--accent-text);
+        cursor: pointer;
+    }
+
+    .timer-chip.timer-done {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* Large countdown in the enlarged single-timer view. */
+    .timer-modal-time {
+        font-size: 3rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent-text);
+    }
+
+    .timer-modal-time.timer-done {
+        color: var(--danger);
+    }
+
+    /* main's 32px circle, on a flat accent tint. */
+    .step-number {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-size: var(--text-body);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: var(--text-meta);
+        font-weight: 500;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    /* Neutral bordered pill. The metadata-* key classes stay in the markup as
+       hooks but carry no colour of their own any more. */
+    .metadata-pill {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        min-width: 0;
+        padding: .25rem .75rem;
+        border-radius: 1rem;
+        font-size: var(--text-body);
+        font-weight: 500;
+        /* A long value (a URL, a source) wraps inside the pill rather than
+           pushing the page wider than a phone. */
+        white-space: normal;
+        overflow-wrap: anywhere;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    /* What a scaled recipe was written for (its servings, or x1): accent-
+       tinted so it is noticed, and a link back to the original. */
+    .metadata-original {
+        background: var(--accent-soft);
+        border-color: transparent;
+        color: var(--accent-ink);
+    }
+    .metadata-original:hover {
+        text-decoration: underline;
+    }
+
+    .metadata-pill svg {
+        width: 1rem;
+        height: 1rem;
+        margin-right: .5rem;
+    }
+
+    /* ---------- Recipes index ---------- */
+    /* main's tall card: block layout, p-6 content from the template, no
+       gradient stripe, no scale transform. */
+    .recipe-card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        text-decoration: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    .recipe-card:hover { border-color: var(--border-strong); }
+
+    .recipe-card-icon {
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        font-size: 24px;
+        margin-bottom: 1rem;
+    }
+
+    /* An <h2>, not an <h3>: the index has an <h1> and nothing between. */
+    .recipe-card-title {
+        display: block;
+        margin: 0 0 .5rem;
+        font-size: var(--text-title);
+        font-weight: 700;
+        line-height: 1.35;
+        color: var(--text);
+    }
+
+    .recipe-card-sub {
+        display: block;
+        font-size: var(--text-meta);
+        color: var(--text-faint);
+    }
+
+    /* ---------- Recipe page ---------- */
+    .step-list { list-style: none; margin: 0; padding: 0; }
+
+    /* main's per-step box. */
+    .step-box {
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        padding: 1rem;
+    }
+
+    /* Step prose keeps main's leading-8 (2.0) on 16px text — the one place
+       the reading step's line-height is overridden, by decision. */
+    .step-body {
+        font-size: var(--text-read);
+        line-height: 2;
+        color: var(--text);
+    }
+
+    .step-refs {
+        margin-top: .5rem;
+        padding-left: 1rem;
+        border-left: 2px solid var(--accent);
+        font-size: var(--text-body);
+        color: var(--text-muted);
+    }
+
+    .recipe-note {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        background: var(--surface-sunk);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .image-step {
+        @apply w-full max-h-80 object-contain;
+        border-radius: var(--radius-card);
+    }
+
+    .recipe-image-placeholder {
+        background: var(--surface-sunk);
+        border: 1px solid var(--border);
+        color: var(--accent-text);
+        @apply w-30 h-30 rounded-full flex items-center justify-center text-5xl;
+    }
+
+    /* ---------- Meal plan ---------- */
+    /* Day cards of the planner. The page script marks today and the days
+       gone by against the reader's own clock. */
+    .plan-day-today {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+    }
+    .plan-day-past {
+        background: var(--surface-sunk);
+    }
+    .plan-day-past > h2 {
+        color: var(--text-faint);
+    }
+
+    /* Controls that change the plan from the calendar (planner.js). Small:
+       a day card is a seventh of the page. */
+    .plan-add,
+    .plan-line-button {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+    .plan-add svg,
+    .plan-line-button svg { width: 16px; height: 16px; }
+    .plan-add:hover,
+    .plan-line-button:hover,
+    .plan-line-button[aria-expanded="true"] {
+        background: var(--surface-sunk);
+        color: var(--text);
+    }
+    .plan-line[draggable="true"] { cursor: grab; }
+    /* A day card is narrow: let a loose ingredient wrap rather than run
+       under the line's button. */
+    .plan-line .ingredient-badge { white-space: normal; }
+    .plan-line > div > * { min-width: 0; max-width: 100%; }
+    .plan-meal.plan-drop {
+        outline: 2px dashed var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+    }
+    .plan-popup {
+        position: absolute;
+        z-index: 40;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-overlay);
+    }
+    .plan-popup[hidden] { display: none; }
+    .plan-popup [role="menuitem"] {
+        height: 32px;
+        padding: 0 12px;
+        text-align: left;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        color: var(--text);
+        cursor: pointer;
+    }
+    .plan-popup [role="menuitem"]:hover,
+    .plan-popup [role="menuitem"]:focus {
+        background: var(--surface-sunk);
+        outline: none;
+    }
+
+    /* ---------- Pantry ---------- */
+    /* One row per item. The quantity is plain text while there is enough,
+       and takes the stock colour once the item runs low or out. */
+    .pantry-row .row-value { color: var(--text); font-weight: 500; }
+    .pantry-row[data-stock="low"] .row-value { color: var(--accent-text); font-weight: 600; }
+    .pantry-row[data-stock="out"] .row-value { color: var(--danger); font-weight: 600; }
+
+    /* A filter hides rows; the first one left shown sits under the heading's
+       own rule, and the row after an open editor gets one back. */
+    .pantry-row.first-shown { border-top: 0; }
+    .pantry-editor + .row { border-top: 1px solid var(--border); }
+    .pantry-row.editing { background: var(--surface-sunk); }
+
+    .pantry-meta { font-size: var(--text-meta); color: var(--text-faint); }
+
+    /* Expiry: tinted only as it nears, so a pantry of far-off dates stays calm. */
+    .pantry-expiry { white-space: nowrap; }
+
+    .pantry-expiry.soon,
+    .pantry-expiry.today {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-text);
+    }
+
+    .pantry-expiry.expired {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* Row actions appear on hover or focus. */
+    .pantry-actions { opacity: 0; }
+
+    .pantry-row:hover .pantry-actions,
+    .pantry-row:focus-within .pantry-actions,
+    .pantry-row.editing .pantry-actions { opacity: 1; }
+
+    /* Row icons stay compact so the name keeps its width on narrow screens. */
+    .pantry-actions .icon-btn { width: 28px; height: 28px; }
+    .pantry-actions .icon-btn svg { width: 16px; height: 16px; }
+
+    /* ---------- Editor toolbar ---------- */
+    /* Cooklang insert buttons above the recipe editor. Groups wrap as a
+       whole on narrow screens, then their buttons wrap inside them. */
+    .editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 6px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+    }
+
+    .editor-toolbar-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .editor-toolbar-group + .editor-toolbar-group {
+        padding-left: 12px;
+        border-left: 1px solid var(--border);
+    }
+
+    /* Groups stack here, so the divider would hang off the second row. */
+    @media (max-width: 767px) {
+        .editor-toolbar-group + .editor-toolbar-group {
+            padding-left: 0;
+            border-left: 0;
+        }
+    }
+
+    .editor-toolbar .btn-sm { padding: 0 10px; gap: 6px; }
+
+    .editor-toolbar-glyph {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-weight: 600;
+        color: var(--accent-text);
+    }
+
+    /* Optional date for the next Day, beside its button. */
+    .editor-toolbar-date {
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-ui);
+    }
+
+    .editor-toolbar-menu { position: relative; }
+
+    /* Popup of a toolbar menu button (the meals). */
+    .editor-toolbar-popup {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 40;
+        min-width: 100%;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-overlay);
+    }
+
+    .editor-toolbar-popup[hidden] { display: none; }
+
+    .editor-toolbar-popup [role="menuitem"] {
+        height: 32px;
+        padding: 0 12px;
+        text-align: left;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        font-size: var(--text-ui);
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    .editor-toolbar-popup [role="menuitem"]:hover,
+    .editor-toolbar-popup [role="menuitem"]:focus {
+        background: var(--surface-sunk);
+        outline: none;
+    }
+
+    /* ---------- Recipe picker ---------- */
+    .picker-search,
+    .picker-servings {
+        height: 40px;
+        padding: 0 12px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+    }
+
+    .picker-search { width: 100%; }
+    .picker-servings { width: 7rem; }
+
+    .picker-search:focus,
+    .picker-servings:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    .picker-results {
+        margin-top: 8px;
+        max-height: 18rem;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+    }
+
+    .picker-results:empty { display: none; }
+
+    .picker-option {
+        display: flex;
+        flex-direction: column;
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .picker-option:last-child { border-bottom: 0; }
+    .picker-option:hover { background: var(--surface-sunk); }
+
+    .picker-option[aria-selected="true"] {
+        background: var(--accent-soft);
+        box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .picker-option-name { color: var(--text); font-weight: 500; }
+
+    .picker-option-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: var(--text-ui);
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    /* ---------- Coarse pointers ---------- */
+    /* Touch targets per WCAG 2.2 SC 2.5.8. Only active on touch devices. */
+    @media (pointer: coarse) {
+        .btn { height: 44px; }
+        .select { height: 44px; }
+        .stepper { height: 46px; }
+        .stepper button { width: 44px; }
+        .icon-btn { width: 44px; height: 44px; }
+        .ref-checkbox,
+        .list-checkbox { width: 24px; height: 24px; }
+        .pantry-actions { opacity: 1; }
+        .plan-add,
+        .plan-line-button { width: 36px; height: 36px; }
+    }
+
+    /* ---------- Metadata panels (file, nutrition, ...) ---------- */
+    /* A frame like the Ingredients card, as wide as the page, with the title
+       on its top border so no column is spent on a label. */
+    .panel-frame {
+        margin: 0; min-width: 0; width: 100%; max-width: 100%;
+        padding: .375rem .875rem .75rem;
+        border: 1px solid var(--border); border-radius: var(--radius-card);
+        background: var(--surface); box-shadow: var(--shadow-card);
+    }
+    .panel-frame > legend {
+        padding: 0 .375rem; margin-left: -.25rem;
+        font-size: var(--text-meta); line-height: 1.2; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+
+    /* ---------- Nutrition panel and card ---------- */
+    /* The block is as wide as its content, and the open table fills exactly that width:
+       its right edge is the right edge of the button above it. */
+    .nutri { min-width: 0; width: 100%; }
+    .nutri-top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; }
+    /* The side takes the width the donut leaves: the macros keep their size, the
+       cards share the rest in one row (two by two when it gets narrow). */
+    .nutri-side { flex: 1 1 22rem; min-width: 0; display: flex; flex-direction: column; gap: .625rem; }
+    .nutri-cols { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem 1.75rem; }
+    .nutri-macros { flex: 0 0 auto; }
+
+    /* The donut: arcs on a circle of circumference 100, from the top. */
+    .nutri-ring { position: relative; width: 6.5rem; height: 6.5rem; flex: none; }
+    .nutri-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .nutri-ring-mid {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; line-height: 1.05; text-align: center;
+        pointer-events: none; /* the slices under the text stay clickable */
+    }
+    .nutri-ring-mid b { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .nutri-ring-mid span { font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-ring-small { width: 4.5rem; height: 4.5rem; }
+    .nutri-ring-small .nutri-ring-mid b { font-size: 1.05rem; }
+    .nutri-ring-small .nutri-ring-mid span { font-size: .625rem; }
+    .nutri-arc { stroke-linecap: butt; }
+
+    /* A click on a slice of the donut (or on its legend line) highlights what
+       belongs to it: the sub-nutrients, in the cards and in the table. */
+    .nutri [data-pick] { cursor: pointer; }
+    .nutri-arc.nutri-hl { stroke-width: 5.75; }
+    .nutri-dim { opacity: .3; }
+    .nutri-macros li.nutri-hl, .nutri-card.nutri-hl { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-control); }
+    .nutri-full tr.nutri-hl > th, .nutri-full tr.nutri-hl > td { background: var(--accent-soft); }
+    /* The donut shares the palette of the small cards: orange, green, red. */
+    .nutri-arc-fat { stroke: var(--accent); }
+    .nutri-arc-carb { stroke: var(--ok); }
+    .nutri-arc-prot { stroke: var(--danger); }
+    .nutri-kcal { font-size: var(--text-body); color: var(--text-muted); }
+    .nutri-kcal b { font-size: 1.5rem; color: var(--text); }
+
+    .nutri-macros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; font-size: var(--text-ui); }
+    .nutri-macros li { display: flex; gap: 1rem; align-items: baseline; justify-content: flex-start; }
+    .nutri-macros li > span { min-width: 5.75rem; }
+    .nutri-macros b { font-variant-numeric: tabular-nums; }
+    .nutri-pct { color: var(--text-muted); font-weight: 500; }
+    .nutri-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; margin-right: .375rem; }
+    .nutri-dot-fat { background: var(--accent); }
+    .nutri-dot-carb { background: var(--ok); }
+    .nutri-dot-prot { background: var(--danger); }
+
+    /* Small cards, two by two: the colour is the level per 100 g, and a word
+       says it too. */
+    .nutri-cards { flex: 1 1 17rem; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .375rem; }
+    .nutri-card {
+        display: flex; flex-direction: column; gap: 0; min-width: 0;
+        padding: .25rem .625rem .3125rem; border-radius: var(--radius-card);
+        border: 1px solid var(--border-strong); background: var(--surface-sunk); color: var(--text-muted);
+    }
+    .nutri-card-head { display: flex; align-items: center; gap: .3125rem; font-size: var(--text-meta); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nutri-card-icon { width: .8125rem; height: .8125rem; flex: none; }
+    .nutri-card-icon svg { width: 100%; height: 100%; }
+    .nutri-card-value { font-size: var(--text-body); line-height: 1.35; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: .375rem; color: var(--text); }
+    .nutri-card-value small { font-size: var(--text-meta); font-weight: 500; color: inherit; opacity: .9; }
+    .nutri-card-low, .nutri-card-good { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+    .nutri-card-mid { background: var(--warn-soft); border-color: var(--warn); color: var(--warn-text); }
+    .nutri-card-high { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+    /* No threshold to judge it by: blue, so it is never mistaken for a level. */
+    .nutri-card-neutral { background: var(--cool-soft); border-color: var(--cool); color: var(--cool); }
+    .nutri-card-low .nutri-card-value, .nutri-card-good .nutri-card-value,
+    .nutri-card-mid .nutri-card-value, .nutri-card-high .nutri-card-value,
+    .nutri-card-neutral .nutri-card-value { color: inherit; }
+
+    /* What the colours of the cards mean. */
+    .nutri-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .875rem; font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-legend-item { display: inline-flex; align-items: center; gap: .3125rem; }
+    .nutri-swatch { display: inline-block; width: .75rem; height: .75rem; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--surface-sunk); }
+    .nutri-swatch.nutri-card-low, .nutri-swatch.nutri-card-good { background: var(--ok-soft); border-color: var(--ok); }
+    .nutri-swatch.nutri-card-mid { background: var(--warn-soft); border-color: var(--warn); }
+    .nutri-swatch.nutri-card-high { background: var(--danger-soft); border-color: var(--danger); }
+    .nutri-swatch.nutri-card-neutral { background: var(--cool-soft); border-color: var(--cool); }
+
+    /* Spread over the width of the macros and the cards: the button ends under the last card (Salt). */
+    .nutri-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem .75rem; font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-more {
+        margin-left: auto; /* always the right end of the row, under the last card */
+        display: inline-flex; align-items: center; gap: .375rem; cursor: pointer;
+        padding: .125rem .625rem; border-radius: var(--radius-control);
+        border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: var(--text-meta);
+    }
+    .nutri-more:hover { background: var(--surface-sunk); }
+    .nutri-more::after {
+        content: ""; width: .375rem; height: .375rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+        transform: translateY(-2px) rotate(45deg);
+    }
+    .nutri-more[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+
+    /* The full table keeps to its content instead of stretching across the page. */
+    .nutri-full { margin-top: .625rem; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+    .nutri-full table { width: 100%; border-collapse: collapse; font-size: var(--text-ui); font-variant-numeric: tabular-nums; }
+    .nutri-full th, .nutri-full td { padding: .3125rem .875rem; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
+    .nutri-full thead th { border-top: 0; color: var(--text-muted); font-size: var(--text-meta); font-weight: 600; vertical-align: bottom; }
+    .nutri-full tbody th { text-align: left; font-weight: 500; min-width: 11rem; }
+    .nutri-full tr.nutri-sub th { padding-left: 2.125rem; font-weight: 400; color: var(--text-muted); }
+    .nutri-full tr.nutri-sub td { color: var(--text-muted); }
+    .nutri-full thead th:last-child { color: var(--accent-text); }
+    .nutri-total { background: var(--surface-sunk); font-weight: 700; }
+    .nutri-row-icon { display: inline-block; width: .8125rem; height: .8125rem; margin-right: .5rem; vertical-align: -2px; color: var(--accent); }
+    .nutri-row-icon svg { width: 100%; height: 100%; }
+    .nutri-sub .nutri-row-icon { color: var(--text-faint); }
+
+    /* On a recipe card: the donut with the three macros, per serving. */
+    .nutri-list { display: flex; align-items: center; gap: .875rem; }
+    .nutri-list .nutri-macros { flex: 1; min-width: 0; }
+    .nutri-list .nutri-macros li { justify-content: space-between; }
+    .nutri-list .nutri-macros li > span { min-width: 0; }
+    .nutri-list-note { margin-top: .25rem; font-size: var(--text-meta); color: var(--text-faint); }
+}

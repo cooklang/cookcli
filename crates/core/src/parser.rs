@@ -7,15 +7,47 @@
 use crate::{CoreError, Diagnostic, Location, Outcome, Severity, Span};
 use camino::Utf8Path;
 use cooklang::{
+    analysis::CheckResult,
     error::{SourceDiag, SourceReport},
-    Converter, CooklangParser, Extensions, Recipe,
+    metadata::StdKey,
+    Converter, CooklangParser, Extensions, ParseOptions, Recipe,
 };
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 /// The shared parser. Matches CookCLI's configuration exactly: no extensions,
 /// default converter for unit support.
 pub static PARSER: LazyLock<CooklangParser> =
     LazyLock::new(|| CooklangParser::new(Extensions::empty(), Converter::default()));
+
+/// The [`ParseOptions`] CookCLI parses with.
+///
+/// Carries a `metadata_validator` working around an upstream quirk: a `>>`
+/// metadata value always reaches the std checks as a YAML *string*, so
+/// `>> servings: 4` fails the "expected number" check and warns. When the
+/// string parses to a `u32` — which is exactly what `Metadata::servings()`
+/// accepts — the warning is spurious and the std check is suppressed for
+/// that entry only. `>> servings: many` still warns, as does
+/// `servings: "many"` in YAML front matter. Quoted `servings: "4"` in front
+/// matter is suppressed too, harmlessly: `servings()` reads it the same way.
+/// Other keys are left alone: suppressing e.g. `time` would also hide the
+/// real "Time overridden" warning.
+pub fn parse_options() -> ParseOptions<'static> {
+    ParseOptions {
+        metadata_validator: Some(Box::new(|key, value, action| {
+            let (Some(key_str), Some(value_str)) = (key.as_str(), value.as_str()) else {
+                return CheckResult::Ok;
+            };
+            if matches!(StdKey::from_str(key_str), Ok(StdKey::Servings))
+                && value_str.parse::<u32>().is_ok()
+            {
+                action.run_std_checks(false);
+            }
+            CheckResult::Ok
+        })),
+        ..Default::default()
+    }
+}
 
 /// Parse recipe text, scale it, and collect diagnostics.
 ///
@@ -27,8 +59,10 @@ pub static PARSER: LazyLock<CooklangParser> =
 ///
 /// # Scale
 ///
-/// `scale` must be finite; NaN and infinity give [`CoreError::InvalidScale`].
-/// Zero and negative factors are *accepted*, matching what the CLI does today.
+/// `scale` must be a finite, non-negative number: NaN, infinity and negative
+/// factors give [`CoreError::InvalidScale`]. A negative factor is nonsense for
+/// every output — it leaves quantities like `-400 g` that no format can write
+/// as scalable amounts (#722).
 pub fn parse_recipe(text: &str, name: &str, scale: f64) -> Result<Outcome<Recipe>, CoreError> {
     parse_recipe_at(text, name, scale, None)
 }
@@ -44,13 +78,61 @@ pub fn parse_recipe_at(
     scale: f64,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    if !scale.is_finite() {
+    // `is_sign_negative` covers `-0.0` too: it scales cleanly to zero but
+    // prints `-0 g` in human output, which reads as a parser bug.
+    if !scale.is_finite() || scale.is_sign_negative() {
         return Err(CoreError::InvalidScale { scale });
     }
 
     let mut outcome = parse_unscaled(text, name, file)?;
     outcome.value.scale(scale, PARSER.converter());
     Ok(outcome)
+}
+
+/// Strip a leading UTF-8 byte-order mark.
+///
+/// `cooklang`'s frontmatter fence check runs on the raw text, so in a BOM'd
+/// file `﻿---` is not a fence and the whole frontmatter becomes a phantom
+/// step — the title and every other key are silently lost (upstream bug;
+/// menus already get this treatment in `util/menu.rs`).
+pub fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// How many bytes a BOM took, for shifting spans produced from the stripped
+/// text back into the file's own coordinates.
+pub fn bom_len(text: &str) -> usize {
+    text.len() - strip_bom(text).len()
+}
+
+/// Strip a leading BOM and parse with CookCLI's [`parse_options`].
+///
+/// The returned `&str` is the text the recipe and its diagnostics came from,
+/// so a caller rendering report spans or slicing by them works on the same
+/// string; a caller reporting `Diagnostic` spans against the file shifts them
+/// by [`bom_len`] (#712, #713).
+pub fn parse_file(text: &str) -> (&str, cooklang::RecipeResult) {
+    let text = strip_bom(text);
+    (text, PARSER.parse_with_options(text, parse_options()))
+}
+
+/// Move every diagnostic's span `shift` bytes right — e.g. by [`bom_len`],
+/// so `Diagnostic.location.span` still indexes the original file, not the
+/// stripped text it was computed from.
+pub(crate) fn shift_spans(diagnostics: &mut [Diagnostic], shift: usize) {
+    if shift == 0 {
+        return;
+    }
+    for diagnostic in diagnostics {
+        if let Some(span) = diagnostic
+            .location
+            .as_mut()
+            .and_then(|location| location.span.as_mut())
+        {
+            span.start += shift;
+            span.end += shift;
+        }
+    }
 }
 
 /// Parse recipe text and collect diagnostics, without scaling it.
@@ -71,18 +153,27 @@ pub(crate) fn parse_unscaled(
     name: &str,
     file: Option<&Utf8Path>,
 ) -> Result<Outcome<Recipe>, CoreError> {
-    let parsed = PARSER.parse(text);
+    // Diagnostics come from the stripped text — the rendered report lines up
+    // — but `Diagnostic.location.span` is shifted back onto the file, which
+    // includes the BOM.
+    let shift = bom_len(text);
+    let (text, parsed) = parse_file(text);
     let display_path = file.map_or_else(|| name.to_string(), |p| p.to_string());
     let parse_error = |report: &SourceReport| CoreError::Parse {
         name: name.to_string(),
-        diagnostics: collect_diagnostics(report, file),
+        diagnostics: {
+            let mut diagnostics = collect_diagnostics(report, file);
+            shift_spans(&mut diagnostics, shift);
+            diagnostics
+        },
         rendered: render_report(report, &display_path, text, false),
     };
 
     if parsed.report().has_errors() {
         return Err(parse_error(parsed.report()));
     }
-    let diagnostics = collect_diagnostics(parsed.report(), file);
+    let mut diagnostics = collect_diagnostics(parsed.report(), file);
+    shift_spans(&mut diagnostics, shift);
 
     match parsed.into_result() {
         Ok((recipe, _)) => Ok(Outcome::with_diagnostics(recipe, diagnostics)),
@@ -141,6 +232,7 @@ fn convert_diagnostic(diag: &SourceDiag, file: Option<&Utf8Path>) -> Diagnostic 
         // Often a ready-to-apply replacement, which is exactly the payload
         // the CLI's `warn!` used to discard.
         hints: diag.hints.iter().map(|h| h.to_string()).collect(),
+        kind: None,
     }
 }
 
@@ -208,6 +300,50 @@ mod tests {
         );
     }
 
+    /// `Diagnostic.location.span` indexes the file, BOM included — the three
+    /// bytes the parser never saw are put back, so a caller underlining the
+    /// warning in the original buffer lands on the right text.
+    #[test]
+    fn a_utf8_bom_keeps_spans_in_file_coordinates() {
+        let recipe = "Cook @salt{=1}.\n";
+        let plain = parse_recipe(recipe, "a", 1.0).expect("parses");
+        let bommed = parse_recipe(&format!("\u{feff}{recipe}"), "a", 1.0).expect("parses");
+
+        let span = |outcome: &Outcome<Recipe>| {
+            outcome.diagnostics[0]
+                .location
+                .as_ref()
+                .and_then(|l| l.span)
+                .expect("the warning has a span")
+        };
+        let plain = span(&plain);
+        let bommed = span(&bommed);
+        assert_eq!(bommed.start, plain.start + 3);
+        assert_eq!(bommed.end, plain.end + 3);
+    }
+
+    /// A leading UTF-8 BOM must not defeat the frontmatter fence: the file
+    /// should parse exactly as if the BOM were absent. Upstream `cooklang`
+    /// does not strip it; cookcli does, on every file-content entry point.
+    #[test]
+    fn a_utf8_bom_does_not_break_frontmatter() {
+        let text = "\u{feff}---\ntitle: BOM Recipe\n---\n\nMix @flour{2%cups}.\n";
+        let outcome = parse_recipe(text, "bom", 1.0).expect("parses");
+        assert_eq!(outcome.value.metadata.title(), Some("BOM Recipe"));
+        assert_eq!(outcome.value.ingredients.len(), 1);
+        assert!(
+            outcome
+                .value
+                .sections
+                .iter()
+                .flat_map(|s| &s.content)
+                .filter(|c| c.is_step())
+                .count()
+                == 1,
+            "the frontmatter must not become a phantom step"
+        );
+    }
+
     /// The reason `parse_unscaled` exists: scaling by one is not a no-op in
     /// `cooklang`'s contract, because it re-fits units.
     ///
@@ -248,18 +384,24 @@ mod tests {
         }
     }
 
-    /// Zero and negative scale are accepted, because the CLI accepts them.
-    /// Rejecting them would be a behaviour change smuggled into a refactor.
+    /// Zero scale zeroes every quantity; a negative one would produce amounts
+    /// like `-400 g` that no output format can represent, so it is rejected
+    /// (#722).
     #[test]
-    fn zero_and_negative_scale_are_accepted() {
+    fn zero_scale_is_accepted_but_negative_is_rejected() {
         assert_eq!(
             quantity_value(&parse_recipe(GOOD, "s", 0.0).unwrap().value, 0),
             0.0
         );
-        assert_eq!(
-            quantity_value(&parse_recipe(GOOD, "s", -1.0).unwrap().value, 0),
-            -2.0
-        );
+        assert!(matches!(
+            parse_recipe(GOOD, "s", -1.0),
+            Err(CoreError::InvalidScale { scale }) if scale == -1.0
+        ));
+        // `-0.0` is not `< 0.0` but still spells `-0 g` in output.
+        assert!(matches!(
+            parse_recipe(GOOD, "s", -0.0),
+            Err(CoreError::InvalidScale { scale }) if scale == 0.0 && scale.is_sign_negative()
+        ));
     }
 
     #[test]
@@ -279,6 +421,71 @@ mod tests {
             );
         }
         assert!(!outcome.has_errors());
+    }
+
+    /// `>>` metadata values reach upstream's std checks as strings, so
+    /// `>> servings: 4` used to warn "Unsupported value for key" even though
+    /// the value is a perfectly good servings count. The validator in
+    /// [`parse_options`] suppresses the check only when the string parses to
+    /// a `u32`, matching `Metadata::servings()` exactly. The deprecation
+    /// warning must remain.
+    #[test]
+    fn legacy_numeric_metadata_does_not_warn() {
+        let text = ">> servings: 4\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .all(|d| !d.message.contains("Unsupported value")),
+            "no spurious type warning: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.severity == Severity::Warning),
+            "the deprecation warning itself must remain"
+        );
+    }
+
+    /// A `>>` value that is not a valid `u32` must still warn — suppression
+    /// is for the spurious string-typing, not for bad input. `4 # x` matters:
+    /// it must not be validated by a YAML re-parse, since `servings()` itself
+    /// would reject it.
+    #[test]
+    fn legacy_bad_numeric_metadata_still_warns() {
+        for text in [
+            ">> servings: many\n\nBoil @water{}.\n",
+            ">> servings: 4 # x\n\nBoil @water{}.\n",
+        ] {
+            let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+            assert!(
+                outcome
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("Unsupported value")),
+                "bad value must keep its warning: {:?}",
+                outcome.diagnostics
+            );
+        }
+    }
+
+    /// The validator only touches `servings`; warnings for other keys must be
+    /// unaffected. `time` plus `prep time` keeps its "Time overridden".
+    #[test]
+    fn legacy_time_override_warning_is_preserved() {
+        let text = ">> time: 30\n>> prep time: 10\n\nBoil @water{}.\n";
+        let outcome = parse_recipe(text, "old", 1.0).expect("parses");
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("Time overridden")),
+            "time override warning must survive: {:?}",
+            outcome.diagnostics
+        );
     }
 
     /// Pins the severity mapping in both directions at once, so that inverting

@@ -280,6 +280,24 @@ fn depleted_reports_what_is_at_or_below_its_own_threshold() {
     assert!(!reported.contains(&"butter".to_string()), "{reported:?}");
 }
 
+/// `.3%kg` and `0.3%kg` are the same quantity to the file's own reader, and
+/// `1e2%g` a hundred grams — a private regex read them differently, so
+/// `depleted` answered `.3%kg` as not-a-quantity and `1e2%g` as `1` of a
+/// unit called `e2%g` (#710).
+#[test]
+fn depleted_reads_quantities_the_same_way_the_file_does() {
+    let reported = depleted_names(
+        "[store]\nlead_dot = \".3%kg\"\nnormal = \"0.3%kg\"\nexponent = \"1e2%g\"\nout = \".0%g\"\n",
+        false,
+    );
+
+    // Both spellings of 0.3 kg are under the 0.5 kg line, 1e2 g sits on the
+    // 100 g one, and .0%g is simply out.
+    for name in ["lead_dot", "normal", "exponent", "out"] {
+        assert!(reported.contains(&name.to_string()), "{name}: {reported:?}");
+    }
+}
+
 #[test]
 fn depleted_reports_in_file_order_with_the_section_on_each_item() {
     let items = depleted(&ctx_with(PANTRY), DepletedRequest { all: true })
@@ -396,6 +414,52 @@ fn is_low_reads_only_the_quantity_and_the_threshold() {
         !item(Some("50%g"), Some("2%kg")).is_low(),
         "units that do not match are not compared"
     );
+}
+
+#[test]
+fn an_item_reports_its_own_stock_and_expiry() {
+    let item = |quantity: Option<&str>, low: Option<&str>, expire: Option<&str>| PantryItem {
+        name: "x".to_string(),
+        section: "s".to_string(),
+        quantity: quantity.map(ToOwned::to_owned),
+        bought: None,
+        expire: expire.map(ToOwned::to_owned),
+        low: low.map(ToOwned::to_owned),
+    };
+
+    assert!(item(Some("0"), None, None).is_out());
+    assert!(item(Some("0%kg"), None, None).is_out(), "whatever the unit");
+    assert!(item(Some("0.0 l"), None, None).is_out());
+    assert!(!item(Some("0.5%kg"), None, None).is_out());
+    assert!(!item(None, None, None).is_out(), "no quantity says nothing");
+    assert!(!item(Some("unlim"), None, None).is_out());
+
+    assert!(item(Some("50%ml"), Some("200%ml"), None).is_depleted());
+    assert!(
+        item(Some("50%g"), None, None).is_depleted(),
+        "built-in threshold"
+    );
+    assert!(!item(Some("500%g"), Some("100%g"), None).is_depleted());
+    assert!(!item(None, None, None).is_depleted());
+
+    let today = on(10);
+    assert_eq!(
+        item(None, None, Some("2025-06-12")).days_until_expiry(today),
+        Some(2)
+    );
+    assert_eq!(
+        item(None, None, Some("10.06.2025")).days_until_expiry(today),
+        Some(0)
+    );
+    assert_eq!(
+        item(None, None, Some("2025-06-07")).days_until_expiry(today),
+        Some(-3)
+    );
+    assert_eq!(
+        item(None, None, Some("soon")).days_until_expiry(today),
+        None
+    );
+    assert_eq!(item(None, None, None).days_until_expiry(today), None);
 }
 
 // ---------------------------------------------------------------------------
@@ -576,10 +640,15 @@ fn the_built_in_thresholds_are_per_unit() {
     assert!(is_low_quantity("100 G"));
     assert!(!is_low_quantity("101 G"));
 
-    // Not a quantity at all.
-    for not_a_quantity in ["", "always available", "a few", "-1%g"] {
+    // Not a quantity at all. A negative one is nonsense but parses, and is
+    // below every threshold — safer listed than not.
+    for not_a_quantity in ["", "always available", "a few"] {
         assert!(!is_low_quantity(not_a_quantity), "{not_a_quantity:?}");
     }
+    assert!(
+        is_low_quantity("-1%g"),
+        "a negative amount is below any line"
+    );
 }
 
 #[test]
@@ -706,6 +775,48 @@ fn a_reference_to_another_recipe_is_not_counted() {
         ["pasta"],
         "pasta is the only ingredient that counts: {found:?}"
     );
+}
+
+/// A missing optional ingredient is not missing: a recipe whose only absent
+/// ingredients are optional is a full match, and a partial match's percentage
+/// and missing list are over what it requires.
+#[test]
+fn optional_ingredients_are_not_wanted() {
+    let dir = temp();
+    let base = base(&dir);
+    write(
+        &base.join("eggs on toast.cook"),
+        "Fry @eggs{2}, serve on @bread{2%slices} with @?chives.\n",
+    );
+    write(
+        &base.join("cake.cook"),
+        "Mix @flour{200%g} and @eggs{2}, dust with @?icing sugar{10%g}.\n",
+    );
+
+    let found = matches(&dir, STOCKED, 50);
+    assert_eq!(found.full, ["eggs on toast"]);
+    assert_eq!(
+        found.partial,
+        [PartialMatch {
+            name: "cake".to_string(),
+            percentage: 50,
+            missing: vec!["flour".to_string()],
+        }]
+    );
+}
+
+/// An ingredient used both ways is required.
+#[test]
+fn an_ingredient_also_used_optionally_is_still_wanted() {
+    let dir = temp();
+    write(
+        &base(&dir).join("risotto.cook"),
+        "Stir @parmesan{100%g} into @rice{300%g}, top with @?parmesan{50%g}.\n",
+    );
+
+    let found = matches(&dir, "[test]\nrice = \"1%kg\"\n", 50);
+    assert!(found.full.is_empty(), "{found:?}");
+    assert_eq!(found.partial[0].missing, ["parmesan"]);
 }
 
 /// With CookCLI's parser configuration there is no such thing as a hidden
@@ -865,6 +976,19 @@ fn plan_collection() -> tempfile::TempDir {
     );
     write(&base.join("tea.cook"), "Steep @tea{1}.\n");
     dir
+}
+
+/// Optional ingredients are never worth stocking to make a recipe cookable.
+#[test]
+fn the_plan_leaves_out_optional_ingredients() {
+    let dir = temp();
+    write(
+        &base(&dir).join("tea.cook"),
+        "Steep @tea{1}, add @?lemon{1%slice}.\n",
+    );
+
+    let plan = planned(&dir, PlanRequest::default());
+    assert_eq!(steps(&plan), [("tea", 1, 1)]);
 }
 
 #[test]
@@ -1242,6 +1366,111 @@ fn add_refuses_an_item_the_section_already_holds() {
     );
 }
 
+/// A `general` item whose name is a section's would replace the whole table:
+/// `item_exists` does not see `[milk]` as an item, but inserting `milk` at
+/// the root is where the section sits.
+/// <https://github.com/cooklang/cookcli/issues/695>
+#[test]
+fn add_refuses_a_general_item_named_like_a_section() {
+    let pantry = "[milk]\ncarton = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "general".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'milk' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
+/// `[[milk]]` occupies the same root key `[milk]` would: an array of tables
+/// is not `is_table_like`, so without it being named here the collision
+/// fell through to `item_exists` and reported a nonexistent *item*
+/// 'milk' in `general`.
+#[test]
+fn add_refuses_a_general_item_named_like_an_array_of_tables() {
+    let pantry = "[[milk]]\ncarton = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "general".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'milk' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
+/// The same collision in the other direction: a section whose name is a
+/// top-level item cannot be created over it.
+/// <https://github.com/cooklang/cookcli/issues/695>
+#[test]
+fn add_refuses_a_section_named_like_a_top_level_item() {
+    let pantry = "fridge = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "milk".to_string(),
+            quantity: Some("3%l".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a top-level item named 'fridge' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the item must be untouched");
+}
+
+/// An array-of-tables section is a section too: it is not table-like to
+/// `toml_edit`, so opening `[fridge]` over `[[fridge]]` would replace it.
+#[test]
+fn add_refuses_a_section_named_like_an_array_of_tables() {
+    let pantry = "[[fridge]]\nmilk = \"2%l\"\n";
+    let (_dir, ctx) = planted(pantry);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: "fridge".to_string(),
+            name: "eggs".to_string(),
+            quantity: Some("3".to_string()),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "a section named 'fridge' already exists")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    assert_eq!(read_back(&ctx), pantry, "the section must be untouched");
+}
+
 /// Item names are compared exactly too, so `Flour` and `flour` are two items
 /// in one section rather than a clash. TOML keeps them apart as keys, so this
 /// survives a round trip.
@@ -1261,6 +1490,69 @@ fn add_matches_the_item_name_exactly() {
 
     let reread = load(&ctx).expect("reads back").into_value();
     assert_eq!(names(&reread.sections[0].items), ["flour", "Flour"]);
+}
+
+/// Spaces typed around a name are not part of it: ` flour ` is the `flour`
+/// already there, not a second item no recipe would ever match.
+#[test]
+fn add_trims_what_it_is_given() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match add(
+        &ctx,
+        AddRequest {
+            section: " pantry ".to_string(),
+            name: " flour ".to_string(),
+            ..Default::default()
+        },
+    ) {
+        Err(CoreError::PantryEdit { message }) => {
+            assert_eq!(message, "item 'flour' already exists in section 'pantry'")
+        }
+        other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
+    }
+
+    add(
+        &ctx,
+        AddRequest {
+            section: " dairy\t".to_string(),
+            name: "  milk ".to_string(),
+            quantity: Some(" 2%l ".to_string()),
+            low: Some("  ".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("adds");
+
+    let reread = load(&ctx).expect("reads back").into_value();
+    let milk = reread
+        .items()
+        .find(|item| item.name == "milk")
+        .expect("milk is there under its trimmed name");
+    assert_eq!(milk.section, "dairy");
+    assert_eq!(milk.quantity.as_deref(), Some("2%l"));
+    assert_eq!(milk.low, None, "a blank attribute is not written");
+}
+
+#[test]
+fn add_refuses_a_blank_section_or_name() {
+    let (_dir, ctx) = planted(SMALL);
+
+    for (section, name) in [("pantry", "   "), (" ", "milk"), ("", "")] {
+        let result = add(
+            &ctx,
+            AddRequest {
+                section: section.to_string(),
+                name: name.to_string(),
+                ..Default::default()
+            },
+        );
+        assert!(
+            matches!(result, Err(CoreError::PantryEdit { .. })),
+            "{section:?} / {name:?} must be refused"
+        );
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing is written");
 }
 
 /// The same name in another section is a different item.
@@ -1372,6 +1664,296 @@ fn remove_refuses_a_section_that_is_not_there() {
         other => panic!("expected PantryEdit, got {:?}", other.map(|o| o.value)),
     }
     assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
+}
+
+/// What `add` refuses to write: a quantity that is not one never subtracts
+/// from a shopping list, and a date that is not one never expires — junk the
+/// next read would quietly ignore (#710). The file must be left alone either
+/// way.
+#[test]
+fn add_refuses_an_attribute_nothing_could_read_back() {
+    for (key, request) in [
+        (
+            "quantity",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                quantity: Some("garbage".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "low",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                low: Some("plenty".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "expire",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                expire: Some("32/13/2025".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "bought",
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                bought: Some("last tuesday".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = add(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
+}
+
+/// The spellings #710 was opened with, and the ones that parse yet cannot
+/// mean an amount: `nan`/`inf`/`-5` count as covered-or-not by accident of
+/// `NaN` comparisons, and `unlim` under `low` is a threshold that never
+/// trips. A date with a two-digit year stores as the year 27.
+#[test]
+fn add_refuses_quantities_and_dates_that_parse_to_nonsense() {
+    for (key, request) in [
+        ("quantity", "500g"),
+        ("quantity", "1/2%cup"),
+        ("quantity", "1,5%kg"),
+        ("quantity", "nan%g"),
+        ("quantity", "inf%g"),
+        ("quantity", "-5%g"),
+        // `-0` is not `< 0`: it needs the explicit sign check.
+        ("quantity", "-0"),
+        ("quantity", "-0%g"),
+    ]
+    .map(|(key, value)| {
+        (
+            key,
+            AddRequest {
+                section: "pantry".to_string(),
+                name: "sugar".to_string(),
+                quantity: Some(value.to_string()),
+                ..Default::default()
+            },
+        )
+    })
+    .into_iter()
+    .chain([(
+        "low",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("unlim".to_string()),
+            ..Default::default()
+        },
+    )])
+    .chain([(
+        "low",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("-0".to_string()),
+            ..Default::default()
+        },
+    )])
+    .chain([(
+        "expire",
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            expire: Some("27-01-02".to_string()),
+            ..Default::default()
+        },
+    )]) {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = add(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
+}
+
+/// What `add` accepts: every spelling the file's readers can parse —
+/// `unlim`/`unlimited` as the seed pantry writes them, a bare count, the
+/// `VALUE%UNIT` form, its spaced variants, a leading-dot decimal — and every
+/// date format `parse_date` understands (#710).
+#[test]
+fn add_accepts_the_quantities_and_dates_readers_use() {
+    for (quantity, bought, expire) in [
+        (Some("unlim"), None, None),
+        (Some("unlimited"), None, None),
+        (Some("2"), None, None),
+        (Some("500%g"), None, None),
+        (Some("500 g"), None, None),
+        (Some(".5%kg"), None, None),
+        (Some("2%kg"), Some("2025-01-02"), Some("02.01.2026")),
+        // `01/13/2026` is unambiguous: 13 is a day but not a month, so only
+        // the `%m/%d/%Y` format can read it — `01/02` would parse as
+        // `%d/%m/%Y` first and leave that one untested.
+        (Some("12"), Some("02/01/2025"), Some("01/13/2026")),
+        (Some("1%l"), Some("2025.01.02"), Some("02-01-2026")),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        add(
+            &ctx,
+            AddRequest {
+                section: "pantry".to_string(),
+                name: format!("item-{quantity:?}-{bought:?}"),
+                quantity: quantity.map(str::to_string),
+                bought: bought.map(str::to_string),
+                expire: expire.map(str::to_string),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("{quantity:?} must be accepted: {error}"));
+    }
+}
+
+/// A file edited by hand can hold a `quantity` or `low` nothing reads back.
+/// Every consumer then skips it silently — `depleted`, the stock dots, the
+/// shopping list — so `load` says so rather than leaving it looking stocked
+/// (#710).
+#[test]
+fn load_warns_on_a_value_nothing_can_read_back() {
+    let outcome = load(&ctx_with(
+        "[pantry]\n\
+         flour = { quantity = \"0g\" }\n\
+         salt = { quantity = \"1%kg\", low = \"sometimes\" }\n\
+         sugar = { quantity = \"unlim\" }\n\
+         forged = { quantity = \"x\\nWARN looks real\" }\n\
+         \"named\\nWARN looks real\" = { quantity = \"0g\" }\n",
+    ))
+    .expect("an unreadable value is not fatal");
+
+    let messages: Vec<&str> = outcome
+        .diagnostics
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("\"flour\" has a quantity that cannot be read back: \"0g\"")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("\"salt\" has a low that cannot be read back: \"sometimes\"")),
+        "{messages:?}"
+    );
+    // `unlim` is a spelling, not junk.
+    assert!(
+        !messages.iter().any(|m| m.contains("\"sugar\"")),
+        "{messages:?}"
+    );
+    // A value or a name carrying a newline must stay one message line,
+    // escaped.
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("\"x\\nWARN looks real\"")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.starts_with("\"named\\nWARN looks real\" has a quantity")),
+        "{messages:?}"
+    );
+    assert!(!messages.iter().any(|m| m.contains('\n')), "{messages:?}");
+}
+
+/// The `low` refusal must not suggest `unlim` — it is exactly what was just
+/// refused.
+#[test]
+fn a_refused_low_does_not_suggest_it() {
+    let (_dir, ctx) = planted(SMALL);
+    let error = add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "sugar".to_string(),
+            low: Some("sometimes".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("unreadable low must be refused");
+    assert!(!error.to_string().contains("or `unlim`"), "{error}");
+}
+
+/// `unlimited` is a spelling for "still stocked" — a `quantity`, not a
+/// `low` threshold: a threshold that is not a number never trips `is_low`,
+/// so storing it is the junk this command exists to refuse.
+#[test]
+fn add_refuses_unlimited_as_a_low_threshold() {
+    let (_dir, ctx) = planted(SMALL);
+    let before = read_back(&ctx);
+    add(
+        &ctx,
+        AddRequest {
+            section: "pantry".to_string(),
+            name: "salt".to_string(),
+            quantity: Some("1%kg".to_string()),
+            low: Some("unlimited".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect_err("unlimited low must be refused");
+    assert_eq!(read_back(&ctx), before, "nothing may be written");
+}
+
+/// The same values through `update` (#710), where a fresh pantry with a bad
+/// value stored it verbatim before.
+#[test]
+fn update_refuses_an_attribute_nothing_could_read_back() {
+    for (key, request) in [
+        (
+            "quantity",
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                quantity: Some("heaps".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "expire",
+            UpdateRequest {
+                section: "pantry".to_string(),
+                name: "flour".to_string(),
+                expire: Some("next friday".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let (_dir, ctx) = planted(SMALL);
+        let before = read_back(&ctx);
+
+        let error = update(&ctx, request).expect_err("must be refused");
+        assert!(
+            error.to_string().contains(key),
+            "{key}: the refusal should name it: {error}"
+        );
+        assert_eq!(read_back(&ctx), before, "{key}: nothing may be written");
+    }
 }
 
 #[test]
@@ -2277,4 +2859,114 @@ fn a_general_add_with_attributes_is_refused() {
         "{error}"
     );
     assert_eq!(read_back(&ctx), original, "nothing may be written");
+}
+
+// ---------------------------------------------------------------------------
+// rename_section
+// ---------------------------------------------------------------------------
+
+fn rename(
+    ctx: &Context,
+    section: &str,
+    new_name: &str,
+) -> Result<Outcome<PantryContents>, CoreError> {
+    rename_section(
+        ctx,
+        RenameSectionRequest {
+            section: section.to_string(),
+            new_name: new_name.to_string(),
+        },
+    )
+}
+
+/// Only the header changes: the comments, the items and the other sections are
+/// the file as it was, and what comes back is the pantry under its new name.
+#[test]
+fn rename_section_changes_only_the_header() {
+    let original = "# my pantry\n[dairy]\nmilk = \"1%l\" # semi\n\n[produce]\napple = \"5\"\n";
+    let (_dir, ctx) = planted(original);
+
+    let contents = rename(&ctx, "dairy", " Fridge ")
+        .expect("renames")
+        .into_value();
+
+    assert_eq!(
+        contents
+            .sections
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Fridge", "produce"]
+    );
+    assert_eq!(read_back(&ctx), original.replace("[dairy]", "[Fridge]"));
+}
+
+#[test]
+fn rename_section_may_change_only_the_case_of_its_own_name() {
+    let (_dir, ctx) = planted("[dairy]\nmilk = \"1%l\"\n");
+    rename(&ctx, "dairy", "Dairy").expect("renames");
+    assert_eq!(read_back(&ctx), "[Dairy]\nmilk = \"1%l\"\n");
+}
+
+#[test]
+fn rename_section_refuses_and_writes_nothing() {
+    let original = "salt = \"1%kg\"\n[dairy]\nmilk = \"1%l\"\n[produce]\napple = \"5\"\n";
+    for (section, new_name, expected) in [
+        ("dairy", "  ", "the section name cannot be empty"),
+        ("dairy", "dairy", "section 'dairy' is already called that"),
+        ("freezer", "cold", "section 'freezer' not found"),
+        (
+            "dairy",
+            "Produce",
+            "there is already a section or item called 'produce'",
+        ),
+        (
+            "dairy",
+            "SALT",
+            "there is already a section or item called 'salt'",
+        ),
+        ("general", "top", "cannot be renamed"),
+        ("dairy", "general", "cannot be renamed"),
+    ] {
+        let (_dir, ctx) = planted(original);
+        match rename(&ctx, section, new_name) {
+            Err(CoreError::PantryEdit { message }) => assert!(
+                message.contains(expected),
+                "{section} → {new_name}: {message}"
+            ),
+            other => panic!(
+                "{section} → {new_name}: expected PantryEdit, got {:?}",
+                other.map(|o| o.value)
+            ),
+        }
+        assert_eq!(read_back(&ctx), original, "nothing may be written");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// replace
+// ---------------------------------------------------------------------------
+
+#[test]
+fn replace_writes_the_text_exactly() {
+    let (_dir, ctx) = planted(SMALL);
+    let text = "# hand-written\n[fridge]\nmilk   =   \"1%l\"   # odd spacing\n";
+
+    let contents = replace(&ctx, text).expect("replaces").into_value();
+
+    assert_eq!(read_back(&ctx), text);
+    assert_eq!(names(&contents.sections[0].items), ["milk"]);
+}
+
+#[test]
+fn replace_refuses_text_that_is_not_a_pantry_and_writes_nothing() {
+    let (_dir, ctx) = planted(SMALL);
+
+    match replace(&ctx, "[fridge]\nmilk = \"1%l\"\nmilk = \"2%l\"\n") {
+        Err(CoreError::Config { message, .. }) => {
+            assert!(message.contains("line 3"), "{message}")
+        }
+        other => panic!("expected Config, got {:?}", other.map(|o| o.value)),
+    }
+    assert_eq!(read_back(&ctx), SMALL, "nothing may be written");
 }

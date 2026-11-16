@@ -439,3 +439,151 @@ Add @pepper{}/black pepper.
         "the alias is not what a shopping list shows: {stdout}"
     );
 }
+
+#[test]
+fn test_shopping_list_directory_skips_hidden_files() {
+    // macOS writes AppleDouble `._<name>` companions next to files it touches
+    // on a non-HFS share. They end in `.cook` but are binary resource forks.
+    // https://github.com/cooklang/cookcli/issues/555
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let dinner = temp_dir.path().join("dinner");
+    fs::create_dir_all(&dinner).unwrap();
+    fs::write(dinner.join("soup.cook"), "Boil @leeks{2}.\n").unwrap();
+    fs::write(
+        dinner.join("._soup.cook"),
+        b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        @phantom{1}",
+    )
+    .unwrap();
+    fs::write(dinner.join(".draft.cook"), "Add @ghost{1}.\n").unwrap();
+
+    Command::cargo_bin("cook")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("shopping-list")
+        .arg("--plain")
+        .arg("--ignore-pantry")
+        .arg("dinner")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("leeks"))
+        .stdout(predicate::str::contains("phantom").not())
+        .stdout(predicate::str::contains("ghost").not());
+}
+
+#[test]
+fn test_shopping_list_menu_only_directory_errors_clearly() {
+    // A directory of only menus has nothing to expand to. Falling back to the
+    // path itself surfaced as "recipe not found"; name what is really there.
+    // https://github.com/cooklang/cookcli/issues/723
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let plans = temp_dir.path().join("plans");
+    fs::create_dir_all(&plans).unwrap();
+    fs::write(plans.join("week.menu"), "@./dish{}\n").unwrap();
+    fs::write(plans.join("weekend.menu"), "@./dish{}\n").unwrap();
+
+    shopping_list_in(temp_dir.path())
+        .arg("plans")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("contains no .cook files"))
+        .stderr(predicate::str::contains("2 .menu file(s)"));
+}
+
+// -- Some days of a menu: --from / --to -------------------------------------
+
+/// `cook shopping-list` in `dir`, its config kept away from the developer's.
+fn shopping_list_in(dir: &std::path::Path) -> Command {
+    let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("cook"));
+    common::with_isolated_config(&mut cmd, dir);
+    cmd.current_dir(dir)
+        .arg("shopping-list")
+        .arg("--ignore-pantry")
+        .arg("--plain");
+    Command::from_std(cmd)
+}
+
+fn week_dir() -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().unwrap();
+    fs::write(dir.path().join("stew.cook"), "Simmer @beans{200%g}.\n").unwrap();
+    fs::write(
+        dir.path().join("week.menu"),
+        "== Monday (2026-10-05) ==\n\nDinner: \\\n- @./stew{} \\\n- @almonds{50%g}\n\n\
+         == Tuesday (2026-10-06) ==\n\nDinner: \\\n- @./stew{} \\\n- @bread{1}\n",
+    )
+    .unwrap();
+    dir
+}
+
+#[test]
+fn test_shopping_list_from_to_keeps_only_those_days() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--from", "2026-10-06", "--to", "2026-10-06"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bread"))
+        .stdout(predicate::str::is_match(r"beans\s+200 g").unwrap())
+        .stdout(predicate::str::contains("almonds").not());
+
+    // Without a range, both days.
+    shopping_list_in(dir.path())
+        .arg("week.menu")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_match(r"beans\s+400 g").unwrap())
+        .stdout(predicate::str::contains("almonds"));
+}
+
+#[test]
+fn test_shopping_list_to_alone_is_open_ended() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--to", "2026-10-05"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("almonds"))
+        .stdout(predicate::str::contains("bread").not());
+}
+
+#[test]
+fn test_shopping_list_warns_when_no_day_is_in_range() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--from", "2027-01-01"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("None of this menu's days"))
+        .stdout(predicate::str::contains("beans").not());
+}
+
+#[test]
+fn test_shopping_list_rejects_a_bad_or_reversed_range() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--from", "next week"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("expected a date as YYYY-MM-DD"));
+
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--from", "2026-10-07", "--to", "2026-10-01"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("comes after --to"));
+}
+
+#[test]
+fn test_shopping_list_from_today_is_accepted() {
+    let dir = week_dir();
+
+    // Whatever today is, the 2026 days are behind or ahead of it; the flag
+    // itself must parse.
+    shopping_list_in(dir.path())
+        .args(["week.menu", "--from", "today"])
+        .assert()
+        .success();
+}

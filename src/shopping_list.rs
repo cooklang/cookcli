@@ -29,13 +29,14 @@
 // SOFTWARE.
 
 use anyhow::Result;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
+use chrono::NaiveDate;
 use clap::{Args, ValueEnum};
 use tracing::warn;
 
 use cookcli_core::{
     format::shopping_list as fmt,
-    shopping_list::{generate, GenerateRequest, ScaledRecipe},
+    shopping_list::{generate, DayRange, GenerateRequest, ScaledRecipe},
     ConfigSource,
 };
 
@@ -151,6 +152,82 @@ pub struct ShoppingListArgs {
     /// into its aisle category, and is subtracted from by the pantry.
     #[arg(long, value_name = "ITEM")]
     extra: Vec<String>,
+
+    /// Include optional ingredients
+    ///
+    /// Ingredients a recipe marks as optional (`@?chives`) are left off the
+    /// list by default, along with everything an optional recipe reference
+    /// (`@?./sauce{}`) would add. This flag includes them, marked as optional
+    /// and kept apart from any required amount of the same ingredient.
+    #[arg(long)]
+    include_optional: bool,
+
+    /// Shop for a menu's days from this date on
+    ///
+    /// A menu's days are its sections whose name holds a `YYYY-MM-DD` date,
+    /// as meal plans and the web editor write them: `== Wednesday (2026-10-07) ==`
+    /// or `= 2026-10-07 Dinner`. With
+    /// `--from` and/or `--to`, only the days in that range go on the list:
+    /// the recipes they reference and the ingredients written into them.
+    /// Sections with no date are left out too. A recipe, or a menu with no
+    /// dated section, is taken whole.
+    ///
+    /// Takes a date (`2026-10-07`) or `today`.
+    ///
+    /// Examples:
+    ///   cook shopping-list Plans/October.menu --from 2026-10-07 --to 2026-10-13
+    ///   cook shopping-list Week.menu --from today
+    #[arg(long, value_name = "DATE", value_parser = parse_day, verbatim_doc_comment)]
+    from: Option<NaiveDate>,
+
+    /// Shop for a menu's days up to this date, included
+    ///
+    /// See `--from`. Takes a date (`2026-10-13`) or `today`.
+    #[arg(long, value_name = "DATE", value_parser = parse_day)]
+    to: Option<NaiveDate>,
+}
+
+/// Refuse to write the shopping list over one of the recipes it was built
+/// from.
+///
+/// The comparison is canonical on both sides: symlinks and `./` segments make
+/// a byte-wise path check unreliable, and the recipe side can be a bare name
+/// that only resolves through `cooklang-find`. An output that does not exist
+/// yet can only be skipped — a missing file is never an input.
+fn refuse_output_over_input(ctx: &Context, output: &Utf8Path, recipes: &[String]) -> Result<()> {
+    let Ok(output_path) = std::fs::canonicalize(output) else {
+        return Ok(());
+    };
+    let Some(output_path) = Utf8PathBuf::from_path_buf(output_path).ok() else {
+        return Ok(());
+    };
+
+    for recipe in recipes {
+        let (name, _) =
+            split_recipe_name_and_scaling_factor(recipe).unwrap_or((recipe.as_str(), 1.0));
+        let Ok(entry) = cookcli_core::find::get_recipe(ctx.base_path(), name) else {
+            continue;
+        };
+        let Some(path) = entry.path() else {
+            continue;
+        };
+        let Ok(canonical) = std::fs::canonicalize(path.as_std_path()) else {
+            continue;
+        };
+        if Utf8Path::from_path(&canonical).is_some_and(|p| p == output_path) {
+            anyhow::bail!("Output path '{output}' is an input recipe; refusing to overwrite it");
+        }
+    }
+    Ok(())
+}
+
+/// A day on the command line: `YYYY-MM-DD`, or `today` in local time.
+fn parse_day(value: &str) -> std::result::Result<NaiveDate, String> {
+    if value.eq_ignore_ascii_case("today") {
+        return Ok(chrono::Local::now().date_naive());
+    }
+    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map_err(|_| format!("expected a date as YYYY-MM-DD, or `today`, not `{value}`"))
 }
 
 impl ShoppingListArgs {
@@ -170,6 +247,7 @@ enum OutputFormat {
 pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
     // Expand directories to .cook files
     let mut expanded_recipes = Vec::new();
+    let mut empty_dirs = Vec::new();
     for entry in &args.recipes {
         let path = if entry.contains(':') {
             // Handle recipe:scaling syntax
@@ -181,12 +259,19 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
         // Check if it's a directory
         if path.is_dir() {
-            // Find all .cook files in the directory
+            let mut found = false;
+            let mut menus = 0usize;
+            // Find all .cook files in the directory, skipping hidden ones such
+            // as macOS `._<name>.cook` AppleDouble companions (#555)
             for dir_entry in std::fs::read_dir(&path)? {
                 let dir_entry = dir_entry?;
+                if dir_entry.file_name().to_string_lossy().starts_with('.') {
+                    continue;
+                }
                 let file_path = dir_entry.path();
                 if let Some(ext) = file_path.extension() {
                     if ext == "cook" {
+                        found = true;
                         if let Ok(utf8_path) = Utf8PathBuf::from_path_buf(file_path) {
                             // Preserve the scaling factor if it was specified
                             if entry.contains(':') {
@@ -196,8 +281,13 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
                                 expanded_recipes.push(utf8_path.to_string());
                             }
                         }
+                    } else if ext == "menu" {
+                        menus += 1;
                     }
                 }
+            }
+            if !found {
+                empty_dirs.push((path, menus));
             }
         } else {
             // Not a directory, use as-is
@@ -207,7 +297,27 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     // If no recipes were expanded (empty directory or no directories), use original list
     if expanded_recipes.is_empty() && !args.recipes.is_empty() {
+        // Falling back to the raw arguments made a directory full of menus —
+        // or of nothing edible — report itself as a missing recipe. Name what
+        // was actually wrong.
+        if let Some((dir, menus)) = empty_dirs.into_iter().next() {
+            let mut msg = format!("Directory '{dir}' contains no .cook files");
+            if menus > 0 {
+                msg.push_str(&format!(
+                    " — it has {menus} .menu file(s) that can be passed by name"
+                ));
+            }
+            anyhow::bail!(msg);
+        }
         expanded_recipes = args.recipes.clone();
+    } else {
+        for (dir, menus) in empty_dirs {
+            if menus > 0 {
+                warn!("{dir} contains no .cook files (only {menus} .menu file(s))");
+            } else {
+                warn!("{dir} contains no .cook files");
+            }
+        }
     }
 
     // Aisle and pantry resolution: an explicit flag wins, and otherwise the
@@ -244,6 +354,14 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
         None => OutputFormat::Human,
     });
 
+    let days = match (args.from, args.to) {
+        (None, None) => None,
+        (Some(from), Some(to)) if from > to => {
+            anyhow::bail!("--from {from} comes after --to {to}, so no day is in between");
+        }
+        (from, to) => Some(DayRange { from, to }),
+    };
+
     // `name:factor` is this CLI's argument spelling, so it is unpicked here
     // rather than in core, which takes the factor as its own field.
     let recipes = expanded_recipes
@@ -254,6 +372,10 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             }
             None => ScaledRecipe::new(cookcli_core::RecipeSource::Path(entry.as_str().into())),
         })
+        .map(|recipe| match days {
+            Some(days) => recipe.on_days(days),
+            None => recipe,
+        })
         .collect();
 
     let outcome = generate(
@@ -262,6 +384,7 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
             recipes,
             ignore_references: args.ignore_references,
             extra_items: args.extra,
+            include_optional: args.include_optional,
         },
     )
     .map_err(cli_error)?;
@@ -278,13 +401,24 @@ pub fn run(ctx: &Context, args: ShoppingListArgs) -> Result<()> {
 
     let list = outcome.value;
 
+    // The inputs are read before the output is written, so `-o` could
+    // silently overwrite one of them: `cook sl m5.cook -o m5.cook` replaced
+    // the recipe with its own shopping list.
+    if let Some(output) = args.output.as_deref() {
+        refuse_output_over_input(ctx, output, &expanded_recipes)?;
+    }
+
     write_to_output(args.output.as_deref(), |w| {
         if args.ingredients_only {
             match format {
                 OutputFormat::Human => {
                     // Simple output: one ingredient per line, no amounts
                     for item in &list.items {
-                        writeln!(w, "{}", item.name)?;
+                        if item.optional {
+                            writeln!(w, "{} (optional)", item.name)?;
+                        } else {
+                            writeln!(w, "{}", item.name)?;
+                        }
                     }
                 }
                 OutputFormat::Json => {

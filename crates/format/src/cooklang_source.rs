@@ -40,7 +40,7 @@ use cooklang::{
     metadata::Metadata,
     model::{Item, Section, Step},
     parser::Modifiers,
-    quantity::Quantity,
+    quantity::{Number, Quantity, Value},
     Recipe,
 };
 use regex::Regex;
@@ -49,8 +49,46 @@ use regex::Regex;
 ///
 /// Metadata is emitted as YAML front-matter; steps are re-wrapped to the
 /// terminal width without breaking a component across lines.
+///
+/// Errors before writing anything when a quantity cannot be expressed in the
+/// grammar: a negative or non-finite number — a recipe can only hold one by
+/// being scaled by a negative or degenerate factor — would parse back as
+/// text, silently unscaling the recipe (#722). Fractions, and ranges for
+/// consumers parsing with `RANGE_VALUES`, are core syntax and round-trip
+/// fine, so they pass as long as their value is finite and non-negative.
 pub fn print_cooklang(recipe: &Recipe, mut writer: impl io::Write) -> io::Result<()> {
     let w = &mut writer;
+
+    fn writable(number: &cooklang::quantity::Number) -> bool {
+        let value = number.value();
+        // `Number`'s Display rounds with `(n * 1000.0).round() / 1000.0`,
+        // which overflows to `inf` above ~1.8e305 — a finite value that
+        // still writes a non-numeric quantity.
+        value.is_finite() && value >= 0.0 && (value * 1000.0).is_finite()
+    }
+
+    for q in recipe
+        .ingredients
+        .iter()
+        .flat_map(|i| &i.quantity)
+        .chain(recipe.cookware.iter().flat_map(|c| &c.quantity))
+        .chain(recipe.timers.iter().flat_map(|t| &t.quantity))
+    {
+        let writable = match q.value() {
+            cooklang::Value::Number(n) => writable(n),
+            cooklang::Value::Range { start, end } => writable(start) && writable(end),
+            cooklang::Value::Text(_) => true,
+        };
+        if !writable {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "cannot write a quantity of {q} as cooklang: \
+                     it would read back as text, not a scalable amount"
+                ),
+            ));
+        }
+    }
 
     metadata(w, &recipe.metadata)?;
     writeln!(w)?;
@@ -170,7 +208,17 @@ fn w_step(w: &mut impl io::Write, step: &Step, recipe: &Recipe) -> io::Result<()
     }
     let width = textwrap::termwidth().min(80);
     let options = textwrap::Options::new(width)
-        .word_separator(textwrap::WordSeparator::Custom(component_word_separator));
+        .word_separator(textwrap::WordSeparator::Custom(component_word_separator))
+        // The default HyphenSplitter breaks "extra-virgin" at the dash —
+        // inside a component name that corrupts the recipe on reparse
+        // (`@extra-\nvirgin olive oil` reads back as a different
+        // ingredient), and plain text like "well-known" gets a space it
+        // never had.
+        .word_splitter(textwrap::WordSplitter::NoHyphenation)
+        // And a word wider than the wrap must not be cut mid-word either:
+        // a long component name split at an arbitrary character reads back
+        // as two.
+        .break_words(false);
     let lines = textwrap::wrap(step_str.trim(), options);
     for line in lines {
         writeln!(w, "{line}")?;
@@ -183,7 +231,10 @@ fn w_text_block(w: &mut impl io::Write, text: &str) -> io::Result<()> {
     let indent = "> ";
     let options = textwrap::Options::new(width)
         .initial_indent(indent)
-        .subsequent_indent(indent);
+        .subsequent_indent(indent)
+        .word_separator(textwrap::WordSeparator::AsciiSpace)
+        .word_splitter(textwrap::WordSplitter::NoHyphenation)
+        .break_words(false);
     let lines = textwrap::wrap(text.trim(), options);
     for line in lines {
         writeln!(w, "{line}")?;
@@ -200,12 +251,18 @@ fn component_word_separator<'a>(
 
     let re = {
         static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-        RE.get_or_init(|| regex::Regex::new(r"[@#~][^@#~]*\{[^\}]*\}").unwrap())
+        // The note is part of the component: a break between `}` and `(`
+        // would write the note on its own line, where it reparses as
+        // ordinary step text.
+        RE.get_or_init(|| regex::Regex::new(r"[@#~][^@#~]*\{[^\}]*\}(\([^)]*\))?").unwrap())
     };
 
     let mut words = vec![];
     let mut last_added = 0;
-    let default_separator = textwrap::WordSeparator::new();
+    // AsciiSpace, not the Unicode line-break rules: `/`, em and en dashes
+    // and the rest are not safe to break at — `foo/bar` or `stir—gently`
+    // broken apart reparse as two words where the source had one.
+    let default_separator = textwrap::WordSeparator::AsciiSpace;
 
     for component in re.find_iter(line) {
         if last_added < component.start() {
@@ -255,6 +312,63 @@ enum ComponentKind {
     Timer,
 }
 
+/// Write a quantity value exactly as source.
+///
+/// `Value`'s own `Display` rounds every number to 3 decimal places — the
+/// right summary for a person, wrong for a file that will be read back:
+/// `0.0005%g` of saffron came out as `0.001`. Numbers keep enough of
+/// their value to reparse to it; ranges keep their display form.
+fn write_value(w: &mut String, value: &Value) {
+    match value {
+        Value::Number(n) => write_number(w, *n),
+        Value::Range { start, end } => {
+            write_number(w, *start);
+            w.push('-');
+            write_number(w, *end);
+        }
+        Value::Text(t) => w.push_str(t),
+    }
+}
+
+fn write_number(w: &mut String, n: Number) {
+    match n {
+        Number::Regular(v) => w.push_str(&shortest(v)),
+        // A fraction whose `err` is zero displays exactly (`1/2`,
+        // `2 1/2`). One carrying an error — a lossy conversion can attach
+        // it — would lose the error to `Display`, so write its full value
+        // instead.
+        n @ Number::Fraction { err, .. } => {
+            if err == 0.0 {
+                write!(w, "{n}").unwrap()
+            } else {
+                w.push_str(&shortest(n.value()))
+            }
+        }
+    }
+}
+
+/// `v` written the shortest way that reparses to it — `f64`'s `Display` —
+/// except when that carries float noise from scaling: `0.1` scaled by 3
+/// prints `0.30000000000000004`, `1/3` scaled by 2 `0.6666666666666666`.
+/// Ten decimals with the zeros trimmed snaps those back to `0.3` and
+/// `0.6666666667` while `0.0005` and `1e-7` still print exactly. Anything
+/// it would collapse to `0` — a real value below ~1e-10 — keeps the long
+/// form. And `-0` writes as `0`: it means the same amount, and `-0` would
+/// reparse as text.
+fn shortest(v: f64) -> String {
+    if v == 0.0 {
+        return "0".to_string();
+    }
+    let exact = v.to_string();
+    let rounded = format!("{v:.10}");
+    let rounded = rounded.trim_end_matches('0').trim_end_matches('.');
+    if !matches!(rounded, "0" | "-0") && rounded.len() < exact.len() {
+        rounded.to_string()
+    } else {
+        exact
+    }
+}
+
 impl ComponentFormatter<'_> {
     fn format(self, w: &mut String) {
         w.push(match self.kind {
@@ -286,7 +400,23 @@ impl ComponentFormatter<'_> {
         }
         if let Some(q) = self.quantity {
             w.push('{');
-            w.push_str(&q.value().to_string());
+            // The `=` scaling lock has to be re-emitted or the quantity
+            // silently becomes scalable on reparse (`@egg{=2}` read back as
+            // `@egg{2}` scales ×10 to 20 eggs). Only an ingredient with a
+            // non-text value may carry it: on cookware, timers or text the
+            // parser warns the lock has no effect.
+            if matches!(self.kind, ComponentKind::Ingredient)
+                && !q.scalable()
+                && !q.value().is_text()
+            {
+                w.push('=');
+            }
+            match q.value() {
+                // `-0.0` passes the non-negative check but spells as `-0`,
+                // which reparses as text — write it as `0` (#722).
+                cooklang::Value::Number(n) if n.value() == 0.0 => w.push('0'),
+                value => write_value(w, value),
+            }
             if let Some(unit) = q.unit() {
                 write!(w, "%{unit}").unwrap();
             }
@@ -425,6 +555,88 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
         String::from_utf8(buf).expect("utf-8")
     }
 
+    /// A negative scale leaves a negative quantity in the recipe, and
+    /// cooklang has no spelling for one: `{-400%g}` reparses as *text*, so
+    /// the amount silently stops scaling and aggregating. The same holds for
+    /// `inf`/`NaN` from a degenerate factor. Writing the recipe would
+    /// corrupt it, so the format refuses instead (#722). The values are
+    /// planted by hand: the CLI also refuses a negative scale up front, but
+    /// the format crate must not depend on that to stay safe.
+    #[test]
+    fn an_unwritable_quantity_is_refused_not_written_as_text() {
+        // `1e308` is finite but `Number`'s Display rounds it through
+        // `n * 1000.0`, which overflows — it would spell `inf`.
+        for value in [-400.0, f64::INFINITY, f64::NAN, 1e308] {
+            let mut recipe = parse_recipe("Mix @flour{400%g}.\n", "r", 1.0)
+                .expect("parses")
+                .value;
+            recipe.ingredients[0].quantity = Some(Quantity::new(
+                cooklang::Value::Number(value.into()),
+                Some("g".to_string()),
+            ));
+
+            let mut out = Vec::new();
+            let error = print_cooklang(&recipe, &mut out).expect_err("must refuse");
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData, "{value}");
+            assert!(out.is_empty(), "{value}: nothing may be written first");
+        }
+    }
+
+    /// Fractions are core quantity grammar — `1/2` and `1 1/2` reparse under
+    /// `Extensions::empty()` — so they must keep formatting, including in
+    /// timers and cookware and behind a scaling lock (#722, #737).
+    #[test]
+    fn fraction_quantities_still_format() {
+        let text = "Mix @flour{1/2%cup} in a #pan{1/2}, rest ~{1/2%hour}, \
+                    knead @dough{=1 1/2%ball}.\n";
+        let recipe = parse_recipe(text, "r", 1.0).expect("parses").value;
+
+        let mut out = Vec::new();
+        print_cooklang(&recipe, &mut out).expect("fractions are writable");
+        let printed = String::from_utf8(out).expect("utf-8");
+        assert!(printed.contains("1/2"), "{printed}");
+
+        // Everything written must read back as a quantity, not text.
+        let reparsed = parse_recipe(&printed, "r", 1.0).expect("reparses").value;
+        for quantity in reparsed
+            .ingredients
+            .iter()
+            .flat_map(|i| &i.quantity)
+            .chain(reparsed.cookware.iter().flat_map(|c| &c.quantity))
+            .chain(reparsed.timers.iter().flat_map(|t| &t.quantity))
+        {
+            assert!(!quantity.value().is_text(), "{printed}");
+        }
+    }
+
+    /// `-0.0` is `>= 0.0`, so the check passes it — but `-0` reparses as
+    /// text. It must be written as `0` (#722).
+    #[test]
+    fn negative_zero_is_written_as_zero() {
+        let mut recipe = parse_recipe("Mix @flour{1%g}.\n", "r", 1.0)
+            .expect("parses")
+            .value;
+        recipe.ingredients[0].quantity = Some(Quantity::new(
+            cooklang::Value::Number(cooklang::quantity::Number::Regular(-0.0)),
+            Some("g".to_string()),
+        ));
+
+        let mut out = Vec::new();
+        print_cooklang(&recipe, &mut out).expect("writable");
+        let printed = String::from_utf8(out).expect("utf-8");
+        // `Quantity::new` is non-scalable, so the value carries the `=` lock;
+        // what matters is `0` in it, not `-0`.
+        assert!(printed.contains("{=0%g}"), "{printed}");
+
+        let reparsed = parse_recipe(&printed, "r", 1.0).expect("reparses").value;
+        assert!(!reparsed.ingredients[0]
+            .quantity
+            .as_ref()
+            .unwrap()
+            .value()
+            .is_text());
+    }
+
     /// The formatter's whole contract: what it writes must parse back into
     /// the same recipe. This catches escaping, `{}` placement and wrapping
     /// regressions in one assertion.
@@ -499,6 +711,261 @@ Dust with @icing sugar{1%tbsp}(sifted) using a #fine sieve.
             assert!(
                 !line.starts_with(' '),
                 "step lines must not be indented: {line:?}\n--- rendered ---\n{rendered}"
+            );
+        }
+    }
+
+    /// The `=` lock marks a quantity that must not scale. Dropping it made
+    /// the reparse scalable, so `@egg{=2}` at ×10 became 20 eggs
+    /// (<https://github.com/cooklang/cookcli/issues/702>).
+    #[test]
+    fn a_locked_quantity_keeps_its_lock() {
+        let source = "Add @egg{=2} and @milk{100%ml}.\n";
+        let rendered = format_to_string(&parse_recipe(source, "r", 1.0).unwrap().value);
+        assert!(rendered.contains("@egg{=2}"), "got: {rendered}");
+
+        let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
+        assert!(
+            !reparsed.ingredients[0]
+                .quantity
+                .as_ref()
+                .unwrap()
+                .scalable(),
+            "the lock was lost on reparse: {rendered}"
+        );
+    }
+
+    /// Scaling first does not drop the lock either: `@egg{=2}` at ×10 is
+    /// still `=2`, while an unlocked quantity has already grown.
+    #[test]
+    fn a_locked_quantity_survives_scaling() {
+        let source = "Add @egg{=2} and @milk{100%ml}.\n";
+        let scaled = parse_recipe(source, "r", 10.0).unwrap().value;
+        let rendered = format_to_string(&scaled);
+        assert!(rendered.contains("@egg{=2}"), "got: {rendered}");
+        assert!(rendered.contains("@milk{1000%ml}"), "got: {rendered}");
+    }
+
+    /// Quantities are written for reparse, not display: rounding to 3
+    /// decimal places silently doubled a 0.0005g saffron measure
+    /// (<https://github.com/cooklang/cookcli/issues/701>).
+    #[test]
+    fn quantities_keep_their_full_precision() {
+        let source =
+            "Add @saffron{0.0005%g} and @water{12.3456%ml} with #spray bottle{0.0000001%l}.\n";
+        let rendered = format_to_string(&parse_recipe(source, "r", 1.0).unwrap().value);
+        assert!(rendered.contains("@saffron{0.0005%g}"), "got: {rendered}");
+        assert!(rendered.contains("@water{12.3456%ml}"), "got: {rendered}");
+        assert!(
+            rendered.contains("#spray bottle{0.0000001%l}"),
+            "got: {rendered}"
+        );
+        // And the rendered text reparses to the same quantities.
+        let reparsed = parse_recipe(&rendered, "r", 1.0).unwrap().value;
+        let original = parse_recipe(source, "r", 1.0).unwrap().value;
+        let value = |recipe: &cooklang::Recipe, name: &str| {
+            recipe
+                .ingredients
+                .iter()
+                .find(|i| i.name == name)
+                .and_then(|i| i.quantity.as_ref())
+                .map(|q| q.value().clone())
+        };
+        for name in ["saffron", "water"] {
+            assert_eq!(value(&reparsed, name), value(&original, name), "{name}");
+        }
+    }
+
+    /// Precision does not mean printing float noise: `0.1` scaled by 3 is
+    /// `0.30000000000000004` and `1/3` scaled by 2 `0.6666666666666666`,
+    /// and writing either verbatim is lossless but unreadable (#701).
+    #[test]
+    fn scaled_quantities_do_not_print_float_noise() {
+        let rendered =
+            format_to_string(&parse_recipe("Add @salt{0.1%g}.\n", "r", 3.0).unwrap().value);
+        assert!(rendered.contains("@salt{0.3%g}"), "got: {rendered}");
+
+        let rendered = format_to_string(
+            &parse_recipe("Add @water{1/3%cup}.\n", "r", 2.0)
+                .unwrap()
+                .value,
+        );
+        assert!(
+            rendered.contains("@water{0.6666666667%cup}"),
+            "got: {rendered}"
+        );
+    }
+
+    /// A fraction whose `err` is zero displays exactly; one carrying an
+    /// error would lose it to `Display`, so its full value is written
+    /// instead.
+    #[test]
+    fn a_fractions_error_is_written_into_its_value() {
+        let mut s = String::new();
+        write_number(
+            &mut s,
+            Number::Fraction {
+                whole: 0,
+                num: 1,
+                den: 3,
+                err: 0.001,
+            },
+        );
+        let written: f64 = s.parse().expect("writes a readable number");
+        assert!(
+            (written - (1.0 / 3.0 + 0.001)).abs() < 1e-10,
+            "the error must reach the output: {s}"
+        );
+
+        let mut s = String::new();
+        write_number(
+            &mut s,
+            Number::Fraction {
+                whole: 2,
+                num: 1,
+                den: 2,
+                err: 0.0,
+            },
+        );
+        assert_eq!(s, "2 1/2", "an exact fraction keeps its display form");
+    }
+
+    /// Hyphenated component names must reach the next line whole: the
+    /// default word splitter breaks "extra-virgin" at the dash, and the
+    /// reparse then sees a different ingredient
+    /// (<https://github.com/cooklang/cookcli/issues/700>).
+    #[test]
+    fn a_hyphenated_name_survives_wrapping() {
+        let source = "Mix @all-purpose flour{1%cup} with @super-fine caster \
+                      sugar{2%tbsp} and @extra-virgin olive oil{1%tbsp} in a bowl.\n";
+        let recipe = parse_recipe(source, "r", 1.0).unwrap().value;
+        let rendered = format_to_string(&recipe);
+
+        let reparsed = parse_recipe(&rendered, "r", 1.0)
+            .unwrap_or_else(|e| panic!("reparse failed:\n{rendered}\n{e}"))
+            .value;
+        let names: Vec<String> = reparsed
+            .ingredients
+            .iter()
+            .map(|i| i.name.to_string())
+            .collect();
+        assert!(
+            names.contains(&"extra-virgin olive oil".to_string()),
+            "the hyphenated name changed\nnames: {names:?}\n--- rendered ---\n{rendered}"
+        );
+    }
+
+    /// Unicode line-breaking also allows breaks after `/`, em dash and en
+    /// dash — all of which split a word the source wrote as one (#700). The
+    /// token has to reach the wrap column for a splitter to matter, so each
+    /// one is swept across the whole line.
+    #[test]
+    fn wrapping_only_breaks_at_spaces() {
+        // No spaces in a token — a space break is a legitimate wrap.
+        for token in ["stir—gently", "foo/bar", "1–2", "well-known"] {
+            for pad in 0..80 {
+                let source = format!(
+                    "{}{token} then keep going on and on and on for a while longer.\n",
+                    "x ".repeat(pad)
+                );
+                let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+                assert!(
+                    rendered.lines().any(|line| line.contains(token)),
+                    "{token} at column {} split\n--- rendered ---\n{rendered}",
+                    pad * 2
+                );
+            }
+        }
+    }
+
+    /// A note is part of its component: broken off at `}(`, it lands on
+    /// its own line and reparses as ordinary step text (#700). The break has
+    /// to land between `}` and `(` to detach it, so the component is swept
+    /// across the wrap column.
+    #[test]
+    fn a_note_stays_attached_to_its_component() {
+        for pad in 0..80 {
+            let source = format!(
+                "{}@salt{{a big pinch}}(or two or more if you like) then stir well.\n",
+                "x ".repeat(pad)
+            );
+            let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+            assert!(
+                rendered
+                    .lines()
+                    .any(|line| line.contains("@salt{a big pinch}(or two or more if you like)")),
+                "pad {pad}: the note detached\n--- rendered ---\n{rendered}"
+            );
+            let reparsed = parse_recipe(&rendered, "r", 1.0)
+                .unwrap_or_else(|e| panic!("pad {pad}: reparse failed:\n{rendered}\n{e}"))
+                .value;
+            assert_eq!(
+                reparsed.ingredients[0].note.as_deref(),
+                Some("or two or more if you like"),
+                "pad {pad}: the note must still be the ingredient's note"
+            );
+        }
+    }
+
+    /// `break_words` would cut a word wider than the wrap at an arbitrary
+    /// character — a long component name would reparse as two (#700). The
+    /// word has to be wider than the wrap for `break_words` to run at all,
+    /// and the check is on the rendered line: splitting `@name` and `{}`
+    /// apart reparses to the same name either way, so it only shows if the
+    /// whole component is required on one line.
+    #[test]
+    fn a_word_wider_than_the_wrap_is_not_split() {
+        let name =
+            "averyverylongingredientnamethatneverendsandkeepsongoingforaverylongreasonindeed";
+        assert!(name.len() > 78, "must not fit under the 80-column wrap");
+        let source = format!("Add @{name}{{2%kg}} to the bowl and mix it in thoroughly.\n");
+        let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+        assert!(
+            rendered
+                .lines()
+                .any(|line| line.contains(&format!("@{name}{{2%kg}}"))),
+            "the component was split\n--- rendered ---\n{rendered}"
+        );
+        let reparsed = parse_recipe(&rendered, "r", 1.0)
+            .unwrap_or_else(|e| panic!("reparse failed:\n{rendered}\n{e}"))
+            .value;
+        assert_eq!(reparsed.ingredients[0].name, name, "{rendered}");
+
+        // A plain-text word with no break opportunities at all exercises
+        // `break_words` itself: it must overflow, not split mid-word.
+        let word = "x".repeat(100);
+        let source = format!("Stir in the {word} until smooth.\n");
+        let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+        assert!(
+            rendered.lines().any(|line| line.contains(&word)),
+            "the word was cut\n--- rendered ---\n{rendered}"
+        );
+    }
+
+    /// A `>` text block takes the same options: it wraps only at spaces,
+    /// keeps every line quoted, and reparses to the same text (#700). The
+    /// risky token is swept across the wrap column.
+    #[test]
+    fn a_text_block_wraps_intact() {
+        for pad in 0..40 {
+            let source = format!(
+                "> {}covered—draft-free if your kitchen runs cold for the best possible rise.\n\n\
+                 Mix @flour{{2%cups}}.\n",
+                "x ".repeat(pad)
+            );
+            let rendered = format_to_string(&parse_recipe(&source, "r", 1.0).unwrap().value);
+            let note_lines: Vec<&str> = rendered
+                .lines()
+                .skip_while(|l| l.is_empty())
+                .take_while(|l| l.starts_with('>'))
+                .collect();
+            assert!(
+                note_lines.iter().all(|l| l.starts_with("> ")),
+                "pad {pad}: every wrapped line keeps the quote: {note_lines:?}"
+            );
+            assert!(
+                rendered.contains("covered—draft-free"),
+                "pad {pad}: the em dash must not split: {rendered}"
             );
         }
     }

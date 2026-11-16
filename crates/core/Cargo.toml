@@ -1,6 +1,6 @@
 [package]
 name = "cookcli-core"
-version = "0.34.0"
+version = "0.41.1"
 edition = "2021"
 description = "Recipe, shopping list, pantry and report operations for Cooklang, extracted from CookCLI"
 license = "MIT"
@@ -21,17 +21,23 @@ chrono = "0.4"
 # deliberately absent: enabling it here would switch it back on for `cookcli`
 # through feature unification and undo #433, which removed it so quantities
 # keep their authored units.
-cooklang = { version = "0.18.5", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+# On a version bump, re-run the two tests that pin this crate's *error*
+# behaviour rather than its results: `a_yield_target_in_another_unit_is_a_...`
+# and `a_servings_target_on_a_recipe_without_servings_is_a_...`. The shopping
+# list re-derives `scale_to_target`'s factor locally (`target_factor`) to pass
+# it down a reference chain, and falls back to 1 where it cannot — safe only
+# while every such case is one this crate refuses outright.
+cooklang = { version = "0.19.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 # Recipe lookup by path or bare name. Keep this declaration in step with the
 # root manifest's, so both crates resolve the same version.
-cooklang-find = { version = "0.6.1", default-features = false }
+cooklang-find = { version = "0.12.0", default-features = false }
 # The output formatters, split out so other projects can render recipes
 # without depending on the CLI's internals. `version` + `path`: local builds
 # use the workspace copy, the published crate resolves from crates.io.
-cooklang-format = { version = "0.34.0", path = "../format" }
+cooklang-format = { version = "0.41.1", path = "../format" }
 # Jinja2 report rendering. Keep this declaration in step with the root
 # manifest's, so both crates resolve the same version.
-cooklang-reports = "0.5.1"
+cooklang-reports = "0.7.0"
 directories = "6"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
@@ -46,6 +52,11 @@ thiserror = "2"
 toml_edit = "0.25"
 tracing = "0.1"
 yansi = "1"
+
+# `statfs`, to tell a network share from a local disk before replacing a file
+# on it (`fs_atomic`, #814).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 # Only the tests strip escape codes now; the formatters that emit them moved to

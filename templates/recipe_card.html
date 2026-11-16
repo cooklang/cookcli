@@ -1,0 +1,76 @@
+{#- One recipe or menu card, shared by the recipe index and the search page.
+    Needs `item` (a RecipeItem), `prefix`, `static_mode` and `tr` in scope. -#}
+<a href="{{ prefix }}/{% if static_mode %}{% if item.is_menu %}menu{% else %}recipe{% endif %}{% else %}recipe{% endif %}/{{ item.path }}{% if static_mode %}.html{% endif %}"
+   data-type="recipe"
+   data-name="{{ item.name }}"
+   {% if let Some(ts) = item.modified_at %}data-modified="{{ ts }}"{% endif %}
+   {% if let Some(ts) = item.created_at %}data-created="{{ ts }}"{% endif %}
+   class="recipe-card">
+    {% match item.image_path %}
+    {% when Some with (img) %}
+    <div class="h-48 bg-sunk overflow-hidden">
+        <img src="{{ img }}" alt="{{ item.name }}" class="w-full h-full object-cover">
+    </div>
+    <div class="p-6">
+    {% when None %}
+    <div class="p-6">
+        <div class="recipe-card-icon">
+            <span>{% if item.is_menu %}📋{% else %}🍽️{% endif %}</span>
+        </div>
+    {% endmatch %}
+        <div class="flex flex-wrap items-center gap-2">
+            <h2 class="recipe-card-title">{{ item.name }}</h2>
+            {% if item.is_menu %}
+            <span class="tag mb-2">{{ tr.t("recipe-type-menu") }}</span>
+            {% endif %}
+        </div>
+        {% match item.description %}
+        {% when Some with (description) %}
+        <p class="text-muted text-sm">{{ description }}</p>
+        {% when None %}
+        {% endmatch %}
+        {% if !item.tags.is_empty() || item.nutrition_kcal.is_some() %}
+        <div class="mt-3 flex flex-wrap gap-2">
+            {% for tag in item.tags.iter().take(3) %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+            {% if item.tags.len() > 3 %}
+            <span class="text-xs text-faint">+{{ item.tags.len() - 3 }}</span>
+            {% endif %}
+            {% match item.nutrition_ring %}
+            {% when None %}
+            {% match item.nutrition_kcal %}
+            {% when Some with (kcal) %}
+            <span class="tag inline-flex items-center gap-1">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c1 3-2 4-2 7a2 2 0 0 0 4 0c1 1 2 2.5 2 4.5A6 6 0 0 1 4 13.5C4 9 8 7 8 3c1.5 1 2 2.5 1.5 4C10 5 11 3.5 12 2Z"/></svg>
+                {{ kcal }}
+            </span>
+            {% when None %}
+            {% endmatch %}
+            {% when Some with (n) %}
+            {% endmatch %}
+        </div>
+        {% endif %}
+        {% match item.nutrition_ring %}
+        {% when Some with (n) %}
+        <div class="nutri-list mt-3">
+            <div class="nutri-ring nutri-ring-small" role="img" aria-label="{{ n.kcal }} kcal {{ n.per_serving }}">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    {% for arc in n.arcs %}
+                    <circle class="nutri-arc nutri-arc-{{ arc.kind }}" cx="18" cy="18" r="15.9155" fill="none" stroke-width="4.5"
+                            stroke-dasharray="{{ arc.dasharray }}" stroke-dashoffset="{{ arc.dashoffset }}"/>
+                    {% endfor %}
+                </svg>
+                <div class="nutri-ring-mid"><b>{{ n.kcal }}</b><span>kcal</span></div>
+            </div>
+            <ul class="nutri-macros">
+                {% for m in n.macros %}
+                <li><span><i class="nutri-dot nutri-dot-{{ m.kind }}"></i>{{ m.label }}</span><b>{{ m.amount }}</b></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="nutri-list-note">{{ n.per_serving }}</div>
+        {% when None %}
+        {% endmatch %}
+    </div>
+</a>

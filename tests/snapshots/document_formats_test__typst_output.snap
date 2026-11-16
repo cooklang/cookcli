@@ -26,7 +26,7 @@ expression: "render(\"typst\")"
 // END_TITLE
 
 // TAGS: dinner
-*Tags:* `dinner`
+*Tags:* #raw("dinner");
 
 // SERVINGS: 4
 // BEGIN_METADATA
@@ -37,30 +37,30 @@ Servings: 4
 
 == Ingredients
 
-- *200 g* #ingredient("plain flour")
-- *250 ml* #ingredient("whole milk")
-- #ingredient("fine sea salt")
-- #ingredient("sauce") _(see recipe: ./sauce)_
-- *1 tbsp* #ingredient("icing sugar") --- sifted
+- *200 g* #ingredient("plain flour");
+- *250 ml* #ingredient("whole milk");
+- #ingredient("fine sea salt");
+- #ingredient("sauce"); _(see recipe: ./sauce)_
+- *1 tbsp* #ingredient("icing sugar"); --- sifted
 
 == Cookware
 
-- #cookware("large mixing bowl")
-- *2* #cookware("pan")
+- #cookware("large mixing bowl");
+- *2* #cookware("pan");
 
 == Instructions
 
 === Section 1
 
-+ Mix #ingredient("plain flour") with #ingredient("whole milk") in a #cookware("large mixing bowl") and beat until smooth, then add #ingredient("fine sea salt").
-+ Simmer #timer("gently: 10 minutes") in a #cookware("pan"), then rest #timer("5 minutes").
++ Mix #ingredient("plain flour"); with #ingredient("whole milk"); in a #cookware("large mixing bowl"); and beat until smooth, then add #ingredient("fine sea salt");.
++ Simmer #timer("gently: 10 minutes"); in a #cookware("pan");, then rest #timer("5 minutes");.
 
 _Note: Rest the dough somewhere warm, covered._
 
 
 === Finishing
 
-+ Serve with #ingredient("sauce") and dust with #ingredient("icing sugar").
++ Serve with #ingredient("sauce"); and dust with #ingredient("icing sugar");.
 
 // END_RECIPE_CONTENT
 

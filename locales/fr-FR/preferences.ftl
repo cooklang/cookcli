@@ -11,6 +11,7 @@ pref-aisle-path = Configuration des Allées
 pref-pantry-path = Configuration du Garde-Manger
 pref-base-path = Répertoire des Recettes
 pref-not-configured = Non configuré
+pref-global-config = Configuration globale
 
 # Version
 pref-version = Version

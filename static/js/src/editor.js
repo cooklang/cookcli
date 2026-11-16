@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
@@ -6,7 +6,21 @@ import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter } from "@codemirror/lint";
 import { autocompletion, snippet } from "@codemirror/autocomplete";
 import { tags as t } from "@lezer/highlight";
-import { cooklang } from "./cooklang-mode.js";
+import { cooklang, quantityTag } from "./cooklang-mode.js";
+import {
+    initToolbar,
+    recipeActions,
+    wrapSelection,
+    prefixLines,
+    insertBlock,
+    findFrontmatter,
+    ensureFrontmatter,
+    menuActions,
+    pickerActions,
+    insertMenuItem,
+    continueMeal
+} from "./toolbar.js";
+import { initRecipePicker } from "./picker.js";
 
 // Diagnostics support
 let currentDiagnostics = [];
@@ -40,8 +54,9 @@ async function cooklangCompletions(context) {
     const textBefore = line.text.slice(0, pos - line.from);
 
     // Check for trigger characters (@, #, ~)
-    // Include . / - in character class so @./path file references trigger completion
-    const match = textBefore.match(/[@#~]([a-zA-Z0-9_./\-]*)$/);
+    // Include . / - in character class so @./path file references trigger completion.
+    // Letters, marks and digits of any script, so @crème, @μέλι or @豆腐 complete too.
+    const match = textBefore.match(/[@#~]([\p{L}\p{M}\p{N}_./\-]*)$/u);
     if (!match) return null;
 
     const prefix = match[1];
@@ -56,7 +71,7 @@ async function cooklangCompletions(context) {
             from: from,
             // Keep completion open while user types path chars; CodeMirror's
             // built-in FuzzyMatcher handles client-side narrowing.
-            validFor: /^[a-zA-Z0-9_./\-]*$/,
+            validFor: /^[\p{L}\p{M}\p{N}_./\-]*$/u,
             options: items.map(item => {
                 const type = item.kind === 17 ? 'file' : item.kind === 6 ? 'variable' : item.kind === 14 ? 'keyword' : 'text';
                 // Prefer textEdit.newText (used by recipe references with explicit ranges),
@@ -89,16 +104,19 @@ async function cooklangCompletions(context) {
     }
 }
 
-// Custom highlight style for Cooklang syntax
+// Custom highlight style for Cooklang syntax. Each token kind gets a fixed
+// class; colour and weight live in static/css/input.css (`.cm-cook-*`) so
+// they resolve through the theme tokens and flip with light/dark.
 const cooklangHighlightStyle = HighlightStyle.define([
-  { tag: t.variableName, color: "#ea580c", fontWeight: "600" },  // Ingredients (orange)
-  { tag: t.keyword, color: "#16a34a", fontWeight: "600" },       // Cookware (green)
-  { tag: t.number, color: "#dc2626", fontWeight: "600" },        // Timers (red)
-  { tag: t.comment, color: "#9ca3af", fontStyle: "italic" },     // Comments
-  { tag: t.meta, color: "#8b5cf6" },                             // Metadata
-  { tag: t.unit, color: "#6366f1" },                             // Units
-  { tag: t.heading, color: "#0891b2", fontWeight: "700", fontSize: "1.1em" },  // Sections (cyan)
-  { tag: t.string, color: "#d97706", fontStyle: "italic" }       // Prep instructions (amber italic)
+  { tag: t.variableName, class: "cm-cook-ingredient" },
+  { tag: t.keyword, class: "cm-cook-cookware" },
+  { tag: t.number, class: "cm-cook-timer" },
+  { tag: t.comment, class: "cm-cook-comment" },
+  { tag: t.meta, class: "cm-cook-metadata" },
+  { tag: t.unit, class: "cm-cook-unit" },
+  { tag: t.heading, class: "cm-cook-section" },
+  { tag: t.string, class: "cm-cook-prep" },
+  { tag: quantityTag, class: "cm-cook-quantity" }
 ]);
 
 // Editor base theme for layout
@@ -127,7 +145,11 @@ export function setCursorPositionCallback(callback) {
 }
 
 // Initialize editor
-export function initEditor(container, initialContent, onChange) {
+// `menu`: the file is a `.menu`, where Enter continues the current meal (see
+// `continueMeal`). Ahead of the default Enter, but behind autocompletion,
+// which takes Enter while its list is open.
+// `labelledBy` is the id of the element naming the text box for screen readers.
+export function initEditor(container, initialContent, onChange, { menu = false, labelledBy = null } = {}) {
   const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged && onChange) {
       onChange(update.state.doc.toString());
@@ -163,8 +185,10 @@ export function initEditor(container, initialContent, onChange) {
         ...historyKeymap,
         ...searchKeymap
       ]),
+      menu ? Prec.high(keymap.of([{ key: "Enter", run: continueMeal }])) : [],
       updateListener,
-      EditorView.lineWrapping
+      EditorView.lineWrapping,
+      labelledBy ? EditorView.contentAttributes.of({ "aria-labelledby": labelledBy }) : []
     ]
   });
 
@@ -205,5 +229,16 @@ window.CooklangEditor = {
   setContent,
   setDiagnostics,
   setCompletionResolver,
-  setCursorPositionCallback
+  setCursorPositionCallback,
+  initToolbar,
+  recipeActions,
+  wrapSelection,
+  prefixLines,
+  insertBlock,
+  findFrontmatter,
+  ensureFrontmatter,
+  menuActions,
+  pickerActions,
+  insertMenuItem,
+  initRecipePicker
 };

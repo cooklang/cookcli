@@ -37,8 +37,10 @@
 pub mod file;
 pub mod generic;
 pub mod nutrition;
+pub mod panel;
 
-use crate::web::templates::{MetaListFamily, MetaListItem};
+use crate::web::templates::{FamilyPanel, MetaListFamily, MetaListItem};
+pub use panel::build_list_nutrition;
 use unic_langid::LanguageIdentifier;
 
 /// Converts a YAML scalar to its display string, matching the number
@@ -115,6 +117,19 @@ trait FamilyRenderer {
     fn note(&self, _lang: &LanguageIdentifier) -> Option<String> {
         None
     }
+
+    /// The panel this family is shown in. A renderer that needs its own
+    /// layout overrides this and returns its own [`FamilyPanel`] variant,
+    /// drawn by its own template under `templates/panels/`. The default is
+    /// the generic line of chips.
+    fn panel(
+        &self,
+        family: &str,
+        value: &serde_yaml::Value,
+        ctx: &PanelContext<'_>,
+    ) -> Option<FamilyPanel> {
+        list_family(self, family, value, ctx.lang).map(FamilyPanel::Generic)
+    }
 }
 
 /// The renderer "registry": maps a family's YAML key to its
@@ -129,16 +144,100 @@ fn renderer_for(family: &str) -> Box<dyn FamilyRenderer> {
     }
 }
 
-/// Builds the "one line per family" metadata view from every non-standard
-/// key in a recipe's metadata whose value is a YAML **list** (`nutrition:
-/// [...]`, the original form) or **mapping** (`nutrition: {kcal: ...}`, or
-/// any other family like `file:`). `tags` is always excluded — it has its
-/// own row. See [`renderer_for`] for how a family picks its rendering.
-pub fn build_custom_list_families<'a>(
-    map_filtered: impl Iterator<Item = (&'a serde_yaml::Value, &'a serde_yaml::Value)>,
+/// What a renderer may need beyond its own family's value: the page language
+/// and the servings the page is scaled to.
+pub struct PanelContext<'a> {
+    /// The page language.
+    pub lang: &'a LanguageIdentifier,
+    /// The servings the recipe was written for and the ones the page is scaled
+    /// to, when the recipe declares a whole number of servings. `None` for a
+    /// recipe without `servings` or with a range such as `10-12`: its
+    /// nutrition can only be shown per serving.
+    pub servings: Option<(f64, f64)>,
+    /// The recipe's `weight:` metadata, when it has one.
+    pub weight: Option<&'a serde_yaml::Value>,
+}
+
+/// The host of `raw` when it is an absolute http(s) URL, so a chip shows
+/// `github.com` and links to the whole address.
+fn web_host(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.contains(char::is_whitespace) {
+        return None;
+    }
+    let url = url::Url::parse(raw).ok()?;
+    matches!(url.scheme(), "http" | "https").then(|| {
+        url.host_str()
+            .map(|h| h.trim_start_matches("www.").to_string())
+    })?
+}
+
+/// One family as a line of entries: every item of a YAML **list**
+/// (`nutrition: [...]`, the original form) or **mapping** (`file: {...}`),
+/// formatted by `renderer`. `None` when the value is neither or is empty.
+fn list_family<R: FamilyRenderer + ?Sized>(
+    renderer: &R,
+    family: &str,
+    value: &serde_yaml::Value,
     lang: &LanguageIdentifier,
-) -> Vec<MetaListFamily> {
-    let mut families = Vec::new();
+) -> Option<MetaListFamily> {
+    let items: Vec<MetaListItem> = if let Some(seq) = value.as_sequence() {
+        seq.iter()
+            .filter_map(|v| v.as_str())
+            .map(|raw| match web_host(raw) {
+                Some(host) => MetaListItem {
+                    icon: None,
+                    text: host,
+                    url: Some(raw.trim().to_string()),
+                },
+                None => {
+                    let text = renderer.format_list_entry(raw);
+                    let icon = renderer.list_icon(&text).map(str::to_string);
+                    MetaListItem {
+                        icon,
+                        text,
+                        url: None,
+                    }
+                }
+            })
+            .collect()
+    } else if let Some(mapping) = value.as_mapping() {
+        mapping
+            .iter()
+            .filter_map(|(k, v)| Some((k.as_str()?, scalar_to_string(v)?)))
+            .filter(|(field, _)| !field.starts_with('.'))
+            .map(|(field, raw)| {
+                let host = web_host(&raw);
+                let text =
+                    renderer.format_mapping_entry(field, host.as_deref().unwrap_or(&raw), lang);
+                let icon = renderer.mapping_icon(field).map(str::to_string);
+                MetaListItem {
+                    icon,
+                    text,
+                    url: host.map(|_| raw.trim().to_string()),
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    (!items.is_empty()).then(|| MetaListFamily {
+        label: capitalize(family),
+        note: renderer.note(lang),
+        items,
+    })
+}
+
+/// Builds one panel per non-standard metadata key whose value is a YAML list
+/// or mapping, in the order the recipe writes them. `tags` is excluded — it
+/// has its own row — and so is any key starting with `.`, which hides it.
+/// Each family's renderer ([`renderer_for`]) decides which panel it gets.
+pub fn build_family_panels<'a>(
+    map_filtered: impl Iterator<Item = (&'a serde_yaml::Value, &'a serde_yaml::Value)>,
+    ctx: &PanelContext<'_>,
+) -> Vec<FamilyPanel> {
+    let mut panels = Vec::new();
     for (key, value) in map_filtered {
         let Some(key_str) = key.as_str() else {
             continue;
@@ -152,41 +251,12 @@ pub fn build_custom_list_families<'a>(
         if key_str.starts_with('.') {
             continue;
         }
-        let renderer = renderer_for(key_str);
-
-        let items: Vec<MetaListItem> = if let Some(seq) = value.as_sequence() {
-            seq.iter()
-                .filter_map(|v| v.as_str())
-                .map(|raw| {
-                    let text = renderer.format_list_entry(raw);
-                    let icon = renderer.list_icon(&text).map(str::to_string);
-                    MetaListItem { icon, text }
-                })
-                .collect()
-        } else if let Some(mapping) = value.as_mapping() {
-            mapping
-                .iter()
-                .filter_map(|(k, v)| Some((k.as_str()?, scalar_to_string(v)?)))
-                .filter(|(field, _)| !field.starts_with('.'))
-                .map(|(field, raw)| {
-                    let text = renderer.format_mapping_entry(field, &raw, lang);
-                    let icon = renderer.mapping_icon(field).map(str::to_string);
-                    MetaListItem { icon, text }
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        if !items.is_empty() {
-            families.push(MetaListFamily {
-                label: capitalize(key_str),
-                note: renderer.note(lang),
-                items,
-            });
+        if let Some(panel) = renderer_for(key_str).panel(key_str, value, ctx) {
+            panels.push(panel);
         }
     }
-    families
+    // The panels come in the order the recipe's front matter lists its families.
+    panels
 }
 
 /// Extracts the calorie entry from a recipe's `nutrition:` metadata, for the
@@ -210,7 +280,9 @@ pub fn extract_nutrition_kcal(metadata: &cooklang_find::Metadata) -> Option<Stri
 
     if let Some(mapping) = nutrition_value.as_mapping() {
         for (k, v) in mapping {
-            if k.as_str().is_some_and(|f| f.eq_ignore_ascii_case("kcal")) {
+            if k.as_str()
+                .is_some_and(|f| crate::util::format::nutrition::find(f).is_some_and(|n| n.energy))
+            {
                 if let Some(raw) = scalar_to_string(v) {
                     // "kcal" needs no translation, so any locale works here.
                     return Some(nutrition::NutritionRenderer.format_mapping_entry(

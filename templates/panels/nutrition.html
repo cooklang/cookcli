@@ -1,0 +1,162 @@
+{#- The nutrition panel: a donut and the macros, a few small cards, and the
+    full table behind a button. Needs `panel` (a NutritionPanel) and `tr`. -#}
+<fieldset class="panel-frame">
+    <legend>{{ panel.title }}</legend>
+
+    <div class="nutri">
+        <div class="nutri-top">
+            {% match panel.ring %}
+            {% when Some with (arcs) %}
+            <div class="nutri-ring" role="img" aria-label="{% match panel.kcal_total %}{% when Some with (kcal) %}{{ kcal }}{% when None %}{% endmatch %} kcal, {% if panel.per_serving_only %}{{ panel.per_serving_label }}{% else %}{{ panel.servings }} {{ tr.t("recipe-servings-label") }}{% endif %}">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    {% for arc in arcs %}
+                    <circle class="nutri-arc nutri-arc-{{ arc.kind }}" data-macro="{{ arc.kind }}" data-pick="{{ arc.kind }}" cx="18" cy="18" r="15.9155" fill="none" stroke-width="4.5"
+                            stroke-dasharray="{{ arc.dasharray }}" stroke-dashoffset="{{ arc.dashoffset }}"/>
+                    {% endfor %}
+                </svg>
+                <div class="nutri-ring-mid">
+                    <b>{% match panel.kcal_total %}{% when Some with (kcal) %}{{ kcal }}{% when None %}{% endmatch %}</b>
+                    <span>kcal</span>
+                </div>
+            </div>
+            {% when None %}
+            {% match panel.kcal_total %}
+            {% when Some with (kcal) %}
+            <div class="nutri-kcal"><b>{{ kcal }}</b> <span>kcal{% if panel.per_serving_only %} {{ panel.per_serving_label }}{% else %} &middot; {{ panel.servings }} {{ tr.t("recipe-servings-label") }}{% endif %}</span></div>
+            {% when None %}
+            {% endmatch %}
+            {% endmatch %}
+
+            <div class="nutri-side">
+                <div class="nutri-cols">
+                {% if !panel.macros.is_empty() %}
+                <ul class="nutri-macros">
+                    {% for m in panel.macros %}
+                    <li data-macro="{{ m.kind }}" data-pick="{{ m.kind }}" role="button" tabindex="0" aria-pressed="false">
+                        <span><i class="nutri-dot nutri-dot-{{ m.kind }}"></i>{{ m.label }}</span>
+                        <b>{{ m.amount }}{% match m.pct %}{% when Some with (pct) %}<span class="nutri-pct"> &middot; {{ pct }} %</span>{% when None %}{% endmatch %}</b>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if !panel.cards.is_empty() %}
+                <ul class="nutri-cards">
+                    {% for c in panel.cards %}
+                    <li class="nutri-card nutri-card-{{ c.level }}" data-macro="{{ c.group }}">
+                        <span class="nutri-card-head">
+                            {% match c.icon %}
+                            {% when Some with (icon) %}
+                            <span class="nutri-card-icon">{{ icon|safe }}</span>
+                            {% when None %}
+                            {% endmatch %}
+                            {{ c.label }}
+                        </span>
+                        <span class="nutri-card-value">{{ c.value }}{% match c.word %}{% when Some with (word) %}<small>{{ word }}</small>{% when None %}{% endmatch %}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                </div>
+
+                {% if !panel.legend.is_empty() %}
+                <div class="nutri-legend" role="note">
+                    <span>{{ panel.legend_label }}</span>
+                    {% for item in panel.legend %}
+                    <span class="nutri-legend-item"><i class="nutri-swatch nutri-card-{{ item.level }}"></i>{{ item.word }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="nutri-foot">
+                    <span>{% if panel.per_serving_only %}{{ panel.per_serving_label }}{% else %}{{ panel.for_label }} <b>{{ panel.servings }}</b> {{ tr.t("recipe-servings-label") }}{% match panel.kcal_per_serving %}{% when Some with (kcal) %} &middot; {{ kcal }} kcal {{ panel.per_serving_label }}{% when None %}{% endmatch %}{% endif %}</span>
+                    <button type="button" class="nutri-more" aria-expanded="false" aria-controls="nutrition-full">{{ panel.full_table_label }}</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="nutrition-full" class="nutri-full" hidden>
+            <table id="nutrition-table">
+                <thead>
+                    <tr>
+                        <th scope="col"></th>
+                        {% if panel.has_100g %}
+                        <th scope="col">{{ panel.per_100g_label }}</th>
+                        {% endif %}
+                        <th scope="col">{{ panel.per_serving_label }}</th>
+                        {% if !panel.per_serving_only %}
+                        <th scope="col">{{ panel.whole_recipe_label }} ({{ panel.servings }} {{ tr.t("recipe-servings-label") }})</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in panel.rows %}
+                    <tr{% if row.sub %} class="nutri-sub"{% endif %} data-macro="{{ row.group }}">
+                        <th scope="row">
+                            {% match row.icon %}
+                            {% when Some with (icon) %}
+                            <span class="nutri-row-icon">{{ icon|safe }}</span>
+                            {% when None %}
+                            {% endmatch %}
+                            {% if row.sub %}{{ panel.of_which }} {% endif %}{{ row.label }}
+                        </th>
+                        {% if panel.has_100g %}
+                        <td>{% match row.per_100g %}{% when Some with (value) %}{{ value }}{% when None %}{% endmatch %}</td>
+                        {% endif %}
+                        <td>{{ row.per_serving }}</td>
+                        {% if !panel.per_serving_only %}
+                        <td class="nutri-total">{{ row.total }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var root = document.querySelector('.nutri');
+        if (!root) return;
+        // What the reader chose survives the reload that follows a change of servings.
+        var OPEN = 'cook-nutrition-open', ACTIVE = 'cook-nutrition-active';
+        function save(key, value) {
+            try { if (value) sessionStorage.setItem(key, value); else sessionStorage.removeItem(key); } catch (e) {}
+        }
+        function load(key) {
+            try { return sessionStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        var more = root.querySelector('.nutri-more');
+        var full = document.getElementById('nutrition-full');
+        function setOpen(open) {
+            more.setAttribute('aria-expanded', String(open));
+            full.hidden = !open;
+            save(OPEN, open ? '1' : '');
+        }
+        more.addEventListener('click', function () { setOpen(more.getAttribute('aria-expanded') !== 'true'); });
+        if (load(OPEN) === '1') setOpen(true);
+
+        var active = null;
+        function paint() {
+            root.querySelectorAll('[data-macro]').forEach(function (el) {
+                var group = el.getAttribute('data-macro');
+                el.classList.toggle('nutri-hl', !!active && group === active);
+                el.classList.toggle('nutri-dim', !!active && group !== active && group !== 'all');
+            });
+            root.querySelectorAll('[data-pick]').forEach(function (el) {
+                el.setAttribute('aria-pressed', String(el.getAttribute('data-pick') === active));
+            });
+        }
+        function pick(kind) { active = active === kind ? null : kind; save(ACTIVE, active); paint(); }
+        root.querySelectorAll('[data-pick]').forEach(function (el) {
+            el.addEventListener('click', function () { pick(el.getAttribute('data-pick')); });
+            el.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(el.getAttribute('data-pick')); }
+            });
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && active) pick(active); });
+        var saved = load(ACTIVE);
+        if (saved && root.querySelector('[data-pick="' + saved + '"]')) { active = saved; paint(); }
+    })();
+    </script>
+</fieldset>

@@ -154,6 +154,33 @@ test.describe('Accessibility', () => {
     }
   });
 
+  // An inline <svg> that is not aria-hidden is exposed as an unlabelled
+  // graphic (Firefox's checker reports each one). Icons here are decorative:
+  // the text beside them or the control's aria-label names the control.
+  for (const path of [
+    '/',
+    '/recipe/Neapolitan Pizza',
+    '/recipe/Weekly Plan',
+    '/shopping-list',
+    '/pantry',
+    '/aisles',
+    '/preferences',
+    '/new',
+    '/edit/Neapolitan Pizza.cook',
+  ]) {
+    test(`should hide decorative icons from screen readers on ${path}`, async ({ page }) => {
+      await helpers.navigateTo(path);
+
+      const exposed = await page.evaluate(() =>
+        [...document.querySelectorAll('svg')]
+          .filter(svg => !svg.closest('[aria-hidden="true"]'))
+          .filter(svg => !svg.hasAttribute('aria-label') && !svg.hasAttribute('aria-labelledby'))
+          .map(svg => svg.parentElement?.outerHTML.slice(0, 160)));
+
+      expect(exposed).toEqual([]);
+    });
+  }
+
   test('should have proper form labels', async ({ page }) => {
     await helpers.navigateTo('/');
 
