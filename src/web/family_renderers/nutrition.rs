@@ -124,9 +124,15 @@ impl FamilyRenderer for NutritionRenderer {
         value: &serde_yaml::Value,
         ctx: &PanelContext<'_>,
     ) -> Option<FamilyPanel> {
-        super::panel::build_nutrition_panel(Some(value), ctx.weight, ctx.servings, ctx.lang)
-            .map(|panel| FamilyPanel::Nutrition(Box::new(panel)))
-            .or_else(|| list_family(self, family, value, ctx.lang).map(FamilyPanel::Generic))
+        super::panel::build_nutrition_panel(
+            Some(value),
+            ctx.weight,
+            ctx.servings,
+            ctx.lang,
+            ctx.standard,
+        )
+        .map(|panel| FamilyPanel::Nutrition(Box::new(panel)))
+        .or_else(|| list_family(self, family, value, ctx.lang).map(FamilyPanel::Generic))
     }
 }
 
@@ -143,22 +149,82 @@ fn default_nutrition_unit(field: &str) -> Option<&'static str> {
 /// translation), so the caller can fall back to the raw field name as
 /// authored.
 pub(super) fn translated_nutrient_label(field: &str, lang: &LanguageIdentifier) -> Option<String> {
-    let key = match find(field)?.name {
-        "proteinContent" => "nutrition-proteins",
-        "fatContent" => "nutrition-lipids",
-        "saturatedFatContent" => "nutrition-saturated-fat",
-        "unsaturatedFatContent" => "nutrition-unsaturated-fat",
-        "monounsaturatedFatContent" => "nutrition-monounsaturated-fat",
-        "polyunsaturatedFatContent" => "nutrition-polyunsaturated-fat",
-        "transFatContent" => "nutrition-trans-fat",
-        "starchContent" => "nutrition-starch",
-        "carbohydrateContent" => "nutrition-carbohydrates",
-        "sugarContent" => "nutrition-sugars",
-        "fiberContent" => "nutrition-fibers",
-        "salt" => "nutrition-salt",
-        _ => return None,
-    };
+    let key = nutrient_label_key(find(field)?.name)?;
     Some(crate::web::i18n::LOCALES.lookup(lang, key))
+}
+
+/// The message that names a nutrient, by its canonical name.
+pub(super) fn nutrient_label_key(name: &str) -> Option<&'static str> {
+    NUTRIENT_LABELS
+        .iter()
+        .find(|(canon, _)| *canon == name)
+        .map(|(_, key)| *key)
+}
+
+/// The message that names each nutrient (`calories` needs none: it is "energy"/`kcal`).
+const NUTRIENT_LABELS: &[(&str, &str)] = &[
+    ("proteinContent", "nutrition-proteins"),
+    ("fatContent", "nutrition-lipids"),
+    ("saturatedFatContent", "nutrition-saturated-fat"),
+    ("unsaturatedFatContent", "nutrition-unsaturated-fat"),
+    ("monounsaturatedFatContent", "nutrition-monounsaturated-fat"),
+    ("polyunsaturatedFatContent", "nutrition-polyunsaturated-fat"),
+    ("transFatContent", "nutrition-trans-fat"),
+    ("starchContent", "nutrition-starch"),
+    ("carbohydrateContent", "nutrition-carbohydrates"),
+    ("sugarContent", "nutrition-sugars"),
+    ("fiberContent", "nutrition-fibers"),
+    ("salt", "nutrition-salt"),
+    ("cholesterolContent", "nutrition-cholesterol"),
+    ("sodiumContent", "nutrition-sodium"),
+    ("addedSugars", "nutrition-added-sugars"),
+    ("polyols", "nutrition-polyols"),
+    ("omega3", "nutrition-omega-3"),
+    ("omega6", "nutrition-omega-6"),
+    ("calcium", "nutrition-calcium"),
+    ("phosphorus", "nutrition-phosphorus"),
+    ("magnesium", "nutrition-magnesium"),
+    ("potassium", "nutrition-potassium"),
+    ("chloride", "nutrition-chloride"),
+    ("iron", "nutrition-iron"),
+    ("zinc", "nutrition-zinc"),
+    ("copper", "nutrition-copper"),
+    ("manganese", "nutrition-manganese"),
+    ("fluoride", "nutrition-fluoride"),
+    ("selenium", "nutrition-selenium"),
+    ("chromium", "nutrition-chromium"),
+    ("molybdenum", "nutrition-molybdenum"),
+    ("iodine", "nutrition-iodine"),
+    ("vitaminA", "nutrition-vitamin-a"),
+    ("vitaminD", "nutrition-vitamin-d"),
+    ("vitaminE", "nutrition-vitamin-e"),
+    ("vitaminK", "nutrition-vitamin-k"),
+    ("vitaminC", "nutrition-vitamin-c"),
+    ("thiamin", "nutrition-vitamin-b1"),
+    ("riboflavin", "nutrition-vitamin-b2"),
+    ("niacin", "nutrition-vitamin-b3"),
+    ("pantothenicAcid", "nutrition-vitamin-b5"),
+    ("vitaminB6", "nutrition-vitamin-b6"),
+    ("biotin", "nutrition-vitamin-b8"),
+    ("folate", "nutrition-vitamin-b9"),
+    ("vitaminB12", "nutrition-vitamin-b12"),
+    ("choline", "nutrition-choline"),
+];
+
+/// The name of a family of a standard's tree (`minerals`, `fatSolubleVitamins`...), translated.
+pub(super) fn translated_group_label(group: &str, lang: &LanguageIdentifier) -> String {
+    let key = match group {
+        "macronutrients" => "nutrition-group-macronutrients",
+        "other" => "nutrition-group-other",
+        "minerals" => "nutrition-group-minerals",
+        "macroMinerals" => "nutrition-group-macro-minerals",
+        "traceElements" => "nutrition-group-trace-elements",
+        "vitamins" => "nutrition-group-vitamins",
+        "fatSolubleVitamins" => "nutrition-group-fat-soluble",
+        "waterSolubleVitamins" => "nutrition-group-water-soluble",
+        other => return other.to_string(),
+    };
+    crate::web::i18n::LOCALES.lookup(lang, key)
 }
 
 /// Composes `"{amount} {unit} {label}"`, e.g. `"73.3 g fat"` / `"73,3 g

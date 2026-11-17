@@ -1,0 +1,29 @@
+# United Kingdom: the reference intakes and the tree of the EU, with the traffic
+# lights of the Food Standards Agency.
+# See eu.yaml for what each part means.
+
+id: uk
+extends: eu
+name: United Kingdom
+source: "FSA traffic-light labelling; reference intakes as retained from Annex XIII of Regulation (EU) 1169/2011"
+url: https://www.legislation.gov.uk/eur/2011/1169/annex/XIII
+status:
+  intakes: verified          # read on this retained copy
+  tree: partly-verified      # same as eu
+  rating: partly-verified    # see `unverified`
+
+# Per 100 g, from the NHS pages "Fat: the facts" and "Sugar: the facts": high is
+# over `high`, low is `low` or less, medium is between. The reference intake for
+# total sugars is 90 g a day, which the NHS page gives too.
+rating:
+  kind: traffic-light
+  basis: per-100g
+  nutrients:
+    fatContent: { low: 3, high: 17.5, unit: g }
+    saturatedFatContent: { low: 1.5, high: 5, unit: g }
+    sugarContent: { low: 5, high: 22.5, unit: g }
+    # The NHS salt page gives no per-100 g values. The low end agrees with the EU
+    # claim "low sodium" (0,12 g sodium = 0,30 g salt); the 1,5 g is not confirmed
+    # by a source read yet.
+    salt: { low: 0.3, high: 1.5, unit: g }
+  unverified: [salt]

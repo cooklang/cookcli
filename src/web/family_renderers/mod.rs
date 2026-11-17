@@ -156,6 +156,8 @@ pub struct PanelContext<'a> {
     pub servings: Option<(f64, f64)>,
     /// The recipe's `weight:` metadata, when it has one.
     pub weight: Option<&'a serde_yaml::Value>,
+    /// The standard that decides how nutrition is laid out and rated.
+    pub standard: &'a crate::util::format::reference::Standard,
 }
 
 /// The host of `raw` when it is an absolute http(s) URL, so a chip shows

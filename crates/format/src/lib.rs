@@ -23,6 +23,7 @@ pub mod markdown;
 pub mod number;
 pub mod nutrition;
 pub mod quantity;
+pub mod reference;
 pub mod schema;
 pub mod typst;
 

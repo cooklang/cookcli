@@ -139,7 +139,11 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                 (
                     recipe.tags(),
                     crate::web::family_renderers::extract_nutrition_kcal(recipe.metadata()),
-                    crate::web::family_renderers::build_list_nutrition(recipe.metadata(), &lang),
+                    crate::web::family_renderers::build_list_nutrition(
+                        recipe.metadata(),
+                        &lang,
+                        features.standard(),
+                    ),
                     img_path,
                     recipe.is_menu(),
                     modified_at,
@@ -1003,6 +1007,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 lang: &lang,
                 servings: nutrition_servings,
                 weight: recipe.metadata.get("weight"),
+                standard: features.standard(),
             },
         );
 

@@ -34,7 +34,13 @@ pub struct FeatureFlags {
     /// advertise them for feed-reader autodiscovery. Always on for `cook server`; `cook build
     /// web` writes the feeds only with `--feed`.
     pub feeds: bool,
+    /// The id of the nutrition standard that lays out and rates a recipe's nutrition
+    /// (`eu`, `us`, `uk`), from the `cook_standard` cookie. See [`FeatureFlags::standard`].
+    pub nutrition_standard: &'static str,
 }
+
+/// The standard in use when nothing was chosen.
+pub const DEFAULT_STANDARD: &str = "eu";
 
 impl Default for FeatureFlags {
     fn default() -> Self {
@@ -42,8 +48,24 @@ impl Default for FeatureFlags {
             show_shopping_list: true,
             show_pantry: true,
             feeds: true,
+            nutrition_standard: DEFAULT_STANDARD,
         }
     }
+}
+
+impl FeatureFlags {
+    /// The nutrition standard in use: the visitor's choice, or the default one.
+    pub fn standard(&self) -> &'static crate::util::format::reference::Standard {
+        use crate::util::format::reference::standard;
+        standard(self.nutrition_standard)
+            .or_else(|| standard(DEFAULT_STANDARD))
+            .expect("the default standard exists, a test checks it")
+    }
+}
+
+/// The id of the standard a `cook_standard` cookie names, when it is one that exists.
+pub fn parse_standard(value: &str) -> Option<&'static str> {
+    crate::util::format::reference::standard(value.trim()).map(|s| s.id.as_str())
 }
 
 /// Parse feature flag cookies from request headers.
@@ -61,6 +83,11 @@ pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
                     match parts[0] {
                         "show_shopping_list" => flags.show_shopping_list = parts[1] != "0",
                         "show_pantry" => flags.show_pantry = parts[1] != "0",
+                        "cook_standard" => {
+                            if let Some(id) = parse_standard(parts[1]) {
+                                flags.nutrition_standard = id;
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -220,6 +247,7 @@ pub async fn features_middleware(
             },
         ),
         ("show_pantry", if features.show_pantry { "1" } else { "0" }),
+        ("cook_standard", features.nutrition_standard),
     ] {
         let cookie = format!("{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax");
         if let Ok(header_val) = cookie.parse() {

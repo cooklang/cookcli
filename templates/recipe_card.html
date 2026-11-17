@@ -65,7 +65,7 @@
             </div>
             <ul class="nutri-macros">
                 {% for m in n.macros %}
-                <li><span><i class="nutri-dot nutri-dot-{{ m.kind }}"></i>{{ m.label }}</span><b>{{ m.amount }}</b></li>
+                <li><span><i class="nutri-dot nutri-dot-{{ m.kind }}"></i>{{ m.label }}</span><b><span class="nutri-amt">{{ m.amount }}</span>{% match m.pct %}{% when Some with (pct) %}<span class="nutri-sep">&middot;</span><span class="nutri-pct">{{ pct }} %</span>{% when None %}{% endmatch %}</b></li>
                 {% endfor %}
             </ul>
         </div>

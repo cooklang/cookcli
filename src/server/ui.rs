@@ -1191,6 +1191,17 @@ async fn preferences_page(
         String::new()
     };
 
+    // One button per standard file: a new file shows up here without touching this code.
+    let standards = crate::util::format::reference::standards()
+        .values()
+        .map(|s| crate::web::templates::StandardChoice {
+            id: s.id.clone(),
+            name: tr.t(&format!("standard-{}", s.id)),
+            description: tr.t(&format!("standard-{}-desc", s.id)),
+            selected: s.id == features.nutrition_standard,
+        })
+        .collect();
+
     PreferencesTemplate {
         active: "preferences".to_string(),
         aisle_path,
@@ -1207,6 +1218,7 @@ async fn preferences_page(
         repo_url: None,
         features,
         viewer,
+        standards,
     }
 }
 

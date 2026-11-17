@@ -744,6 +744,18 @@ pub struct PreferencesTemplate {
     pub features: FeatureFlags,
     /// Who the page is for; decides whether editing controls are shown.
     pub viewer: Viewer,
+    /// The nutrition standards to choose from: one per file of the standards folder.
+    pub standards: Vec<StandardChoice>,
+}
+
+/// A nutrition standard in the picker of the preferences page.
+#[cfg(feature = "server")]
+#[derive(Debug, Clone)]
+pub struct StandardChoice {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub selected: bool,
 }
 
 #[cfg(feature = "server")]
@@ -987,8 +999,26 @@ pub struct NutritionPanel {
     pub of_which: String,
     /// "for", as in "for 4 servings".
     pub for_label: String,
-    /// The label of the button that opens the full table.
+    /// The label of the button that opens the table and the tiles behind it.
     pub full_table_label: String,
+    /// The same button once it is open.
+    pub less_label: String,
+    /// The buttons above the table: fold every row, unfold every row, draw the tree lines.
+    pub collapse_all_label: String,
+    pub expand_all_label: String,
+    pub tree_lines_label: String,
+    /// What the fold button of a row says to a screen reader.
+    pub fold_label: String,
+    /// Which standard laid the table out ("Standard: European Union (eu.yaml)").
+    pub standard_note: String,
+    /// Said under the table when the carbohydrates are shown without their fibre.
+    pub carbs_note: Option<String>,
+    /// The vitamins and minerals the standard's rule calls well present.
+    pub well_present: Option<WellPresent>,
+    /// What the explanation bubbles say, as JSON for the page's script: the labels of their
+    /// sections, then for each nutrient what it is, what it is for, where it is found, the source of
+    /// that text, the reference intake and the rating of the standard in use, and the recipe's figure.
+    pub tips_json: String,
     /// The servings the amounts are for.
     pub servings: String,
     /// Whether the recipe gave a `weight:`, which the per-100 g column needs.
@@ -1011,8 +1041,17 @@ pub struct NutritionPanel {
     /// What each colour of the cards means; empty without a `weight:`, when
     /// every card is neutral.
     pub legend: Vec<LegendItem>,
-    /// Every nutrient, for the full table.
+    /// The rows of the full table, laid out by the tree of the standard.
     pub rows: Vec<NutritionRow>,
+}
+
+/// The tiles of the vitamins and minerals that are well present, with the rule that picked them.
+#[derive(Debug, Clone, Serialize)]
+pub struct WellPresent {
+    pub title: String,
+    /// "at least 15 % of the reference intake per 100 g ...", for the standard in use.
+    pub rule: String,
+    pub tiles: Vec<NutrientCard>,
 }
 
 /// One arc of the donut. `kind` is `carb`, `fat` or `prot`, and picks the
@@ -1046,6 +1085,10 @@ pub struct NutrientCard {
     /// Which macro it belongs to (`fat`, `carb`, `prot`), `other` for none, so
     /// a click on a slice of the donut can highlight it.
     pub group: String,
+    /// "rich in" or "source of", on the tiles of the nutrients that are well present.
+    pub claim: Option<String>,
+    /// The canonical name of the nutrient, which the row of the table shares.
+    pub key: String,
 }
 
 /// One colour of the cards and its meaning, translated.
@@ -1054,6 +1097,9 @@ pub struct LegendItem {
     /// The colour: `low` (green), `mid` (amber), `high` (red) or `neutral` (blue).
     pub level: String,
     pub word: String,
+    /// Whether a card of this page has that rating. A rating the standard can give but no card
+    /// has stays in the legend, greyed, so the legend is always there to explain the colours.
+    pub used: bool,
 }
 
 /// What a recipe card shows of the nutrition: the donut and the macros, per
@@ -1067,19 +1113,38 @@ pub struct ListNutrition {
     pub per_serving: String,
 }
 
-/// One nutrient of a [`NutritionPanel`], values already formatted with unit.
+/// One row of a [`NutritionPanel`]'s table, values already formatted with unit: a nutrient the
+/// recipe gave, or a family of the standard's tree that holds some.
 #[derive(Debug, Clone, Serialize)]
 pub struct NutritionRow {
     pub icon: Option<String>,
     pub label: String,
-    /// A nutrient that is "of which" another (saturated fat, sugars).
+    /// A row that is read in a lighter style: a nutrient under another one.
     pub sub: bool,
-    /// `fat`, `carb` or `prot` for a macro and its sub-nutrients, `all` for
+    /// Read as "of which ...": a part of the nutrient above it (saturated fat, sugars),
+    /// not merely listed with it (cholesterol with the fats, fibre where the norm keeps it apart).
+    pub part: bool,
+    /// A family (macronutrients, minerals, vitamins...), not a nutrient.
+    pub fam: bool,
+    /// The top-level family it sits in: `macro`, `other`, `min`, `vit`, or empty for the energy.
+    pub family: String,
+    /// The slice of the donut it belongs to (`fat`, `carb`, `prot`), or empty.
+    pub mac: String,
+    /// How deep it sits in the tree: 0 for the energy and the families, 1 for a macro.
+    /// Drives the indentation and the folding.
+    pub depth: u8,
+    /// `fat`, `carb` or `prot` for a slice and what belongs to it, `all` for
     /// the energy, `other` for the rest.
     pub group: String,
+    /// The canonical name of the nutrient or family (`saturatedFatContent`, `minerals`).
+    pub key: String,
     pub per_serving: String,
     pub per_100g: Option<String>,
     pub total: String,
+    /// The share of the standard's reference intake that one serving covers, in percent.
+    pub pct: Option<u32>,
+    /// Whether rows sit below it, so a fold button goes on it.
+    pub foldable: bool,
 }
 
 /// One family line of list-valued custom metadata (e.g. `nutrition`).

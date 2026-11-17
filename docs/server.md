@@ -439,7 +439,22 @@ nutrition:          # values per serving
 - **Per 100 g** needs `weight:`, the weight of the whole recipe at its own `servings` (`900g`, `"0.9 kg"` or a bare number of grams). It is the per-serving value times `servings`, divided by the weight, so it does not change with the stepper either. Without `weight:` the column is left out.
 - The list form (`- "258%kcal"`) keeps the plain line of icons.
 
-What the page shows, for the servings chosen: a donut with the energy in the middle and, when carbohydrates, fat and proteins are all given, their share of the energy; the three macros with their weight and share; and a small card for each of saturated, unsaturated, monounsaturated, polyunsaturated and trans fat, sugars, starch, fibre and salt (those the recipe gives). With `weight:`, each card is coloured by how good its amount per 100 g is for health: green for good, amber for medium, red for not good (the UK traffic-light thresholds for fat, saturated fat, sugars and salt; fibre is good from 3 g per 100 g). A nutrient with no threshold is blue. A word beside the value says the rating too, so the colour is never alone, and a legend under the cards explains the ratings in use. Every label of the panel, the legend included, is translated. Clicking a slice of the donut, or its line in the legend, highlights what belongs to it (saturated fat under fat, sugars under carbohydrates) in the cards and in the table, and dims the rest; a second click or Escape clears it. The **Full table** button opens the table above. On the recipe list, a card shows the donut with the three macros per serving when the recipe gives all three, and the plain kcal badge otherwise.
+What the page shows, for the servings chosen: a donut with the energy in the middle and, when carbohydrates, fat and proteins are all given, their share of the energy; the three macros with their weight and share; and a small card for the nutrients the standard singles out (saturated, mono and polyunsaturated fat, omega-3, trans fat, cholesterol, sugars, starch, fibre and salt, or sodium where the label gives it), those the recipe gives. Every label of the panel, the legend included, is translated. Clicking a slice of the donut highlights what belongs to it (saturated fat under fat, sugars under carbohydrates) in the cards and in the table, and dims the rest; clicking a colour of the legend does the same for the cards and rows with that rating. A plain click picks only that one; **Ctrl, Cmd or Shift** (on a touch screen, every tap) adds or removes one, and slices and ratings combine: a row stays lit when it passes both. A second click on the only one picked, or Escape, clears it.
+
+**Explanation bubbles**: hovering, focusing or tapping a card or a row opens a bubble with what the nutrient is, what it is for and where it is found, then, by the standard in use, its reference intake and how it rates it, and the recipe's figure with its share of the intake. Each text names its source (WHO, NHS, the regulations) in a `nutrition-help-<nutrient>-source` message, and a nutrient whose text has not been sourced yet shows no explanation and says "Source: to be documented". The texts are Fluent messages like the rest (`nutrition-help-<nutrient>-what`, `-use`, `-where`).
+
+**The standard decides how it is laid out and rated** (see [Standards](#standards-tree-reference-intakes-and-ratings)). Nothing about the layout is written in the page code:
+
+- **The tree of the table** comes from the standard. Energy first, then the families Macronutrients, Other components, Minerals and Vitamins, each holding what the recipe gives, nested as the norm nests them. The fibre sits next to the carbohydrates under the EU and the UK, inside them under the US; the carbohydrates are shown without the fibre where the norm gives them so (the page then says so under the table, since the recipe's own figure counts it in). What the standard's tree does not know stays visible, in a family called "Other data".
+- **The percentages** next to a per-serving value are the share of the standard's reference intake (the EU's 800 mg of calcium, the US's 1300 mg). A nutrient the standard has no reference for shows none.
+- **The cards are coloured by the standard's rating**: the UK's traffic lights per 100 g (green, amber, red), the EU's claims (a food that earns "low in sugars" or "source of fibre" is green, nothing is ever red), the US's share of the daily value per serving (5 % or less is low, 20 % or more is high; what is to limit is red when high, what is to get more of is green when high). Per-100 g ratings need `weight:`; without it those cards are blue (no rating). The legend under the cards says which colours are in use and how the standard rates.
+- **Vitamins and minerals well present** get tiles of their own ("rich in", "source of") by the standard's rule: from 15 % and 30 % of the reference intake per 100 g under the EU and the UK, from 20 % of the daily value per serving under the US. What the norm says to limit (sodium) is never well present.
+- **Salt and sodium** are one quantity: the label of the norm gives one (the EU salt, the US sodium), so the card, the row and the percentage follow it, whichever the recipe wrote, using the standard's factor (salt = sodium × 2.5).
+- **Subtotals**: a family shows the sum of what is directly under it, in grams; minerals and vitamins add up to nothing worth saying, so they show none.
+
+The **More info** button opens the vitamin and mineral tiles and the table above (**Less info** closes them). Rows with rows below them fold, with **Collapse all** and **Expand all** above the table; the folded rows and the tree lines (a line under each parent, with an elbow at the last child, as in a folder tree, which can be switched off) are remembered for the tab. On a phone the table shows one column of values at a time, picked with buttons above it (per 100 g, per serving, whole recipe), so it never scrolls sideways; wider screens show the columns side by side. On the recipe list, a card shows the donut with the three macros per serving, each with its share of the energy, when the recipe gives all three, and the plain kcal badge otherwise.
+
+**Choosing the standard** is done on the preferences page, next to the language: one button per file of the standards folder. The choice is kept in the `cook_standard` cookie (`eu` by default), like the language in `cook_lang`, so it belongs to the browser.
 
 ### File information
 
@@ -480,7 +495,11 @@ A key that is absent leaves its chip out (a recipe with only `modified-at` and `
 | `proteinContent` | Protein | g | 1 decimal | `proteins` |
 | `salt` | Salt (from sodium: mg × 2.5 / 1000) | g | 2 decimals | |
 
+The nutrients form a tree, but **the tree belongs to the standard**, not to the nutrient: fat has saturated, unsaturated and trans fat below it, monounsaturated and polyunsaturated fat sit below the unsaturated fat, carbohydrates have sugars and starch, and the fibre sits next to the carbohydrates or inside them as the norm says. The table indents each part under its parent with "of which"; clicking a slice of the donut highlights the whole branch.
+
 `salt` is the one key schema.org has no property for, so it keeps its own name. `monounsaturatedFatContent`, `polyunsaturatedFatContent` and `starchContent` are CookCLI's own: shown on the page, left out of the JSON-LD.
+
+The page reads more keys than that: `cholesterolContent` and `sodiumContent` (schema.org's, in mg, exported to JSON-LD), `addedSugars`, `polyols`, `omega3`, `omega6`, the minerals `calcium`, `phosphorus`, `magnesium`, `potassium`, `chloride`, `iron`, `zinc`, `copper`, `manganese`, `fluoride`, `selenium`, `chromium`, `molybdenum`, `iodine` and the vitamins `vitaminA`, `vitaminD`, `vitaminE`, `vitaminK`, `vitaminC`, `thiamin` (B1), `riboflavin` (B2), `niacin` (B3), `pantothenicAcid` (B5), `vitaminB6`, `biotin` (B8), `folate` (B9), `vitaminB12` and `choline`. A bare number gets the unit of its row (mg for most minerals, µg for selenium, iodine, vitamin A, D, K, biotin, folate and B12). They are not exported to JSON-LD, which has no property for them. Where they nest, and which ones a norm lists at all, is the standard's tree (see below).
 
 ### JSON-LD export
 
@@ -489,3 +508,31 @@ A key that is absent leaves its chip out (a recipe with only `modified-at` and `
 ### Recipe list page
 
 Only the calorie entry from `nutrition` (`kcal`) is shown, as a compact badge next to the tags — the other custom families are only shown on the recipe detail page, to keep list cards compact.
+
+### Standards: tree, reference intakes and ratings
+
+`crates/format/data/standards/` holds one file per standard (`eu`, `us`, `uk`).
+A file says how a label is read under that norm:
+
+- `tree`: which nutrients exist and how they nest. The EU leaves fibre next to
+  carbohydrate, the US puts it inside (`conventions.fibre_in_carbohydrate`, and a
+  test keeps that flag and the tree in agreement); the EU label gives salt, the
+  US one sodium.
+- `intakes`: the daily amount a "% of reference" is computed against.
+- `rating`: how a nutrient is rated. The UK has traffic-light thresholds per
+  100 g, the US the 5 % / 20 % rule of the daily value. The EU has no traffic
+  light: its file lists the conditions of the nutrition claims of Regulation (EC)
+  No 1924/2006 ("low fat" up to 3 g per 100 g, "high fibre" from 6 g, "source of
+  protein" from 12 % of the energy, a "source of" vitamin or mineral from 15 % of
+  the reference value per 100 g). It also holds the energy per gram of Annex XIV
+  (fibre 2 kcal, polyols 2,4).
+
+Each file carries its source and a `status` saying what was checked against the
+printed text (`verified`, `to-verify`, `partly-verified`); `unverified` lists the
+thresholds that are not confirmed. The EU texts were read on the UK-retained
+copies on legislation.gov.uk, which keep the EU wording. `uk` extends `eu` and reuses its tree and
+intakes. `cooklang_format::reference` loads them (`standard("eu")`,
+`depth("fiberContent")`, `percent(...)`). To add a standard, add a file and list
+it in `reference.rs`: the preferences page and the nutrition panel pick it up without any other change (its name and description are two messages, `standard-<id>` and `standard-<id>-desc`, in each locale).
+
+Beyond the tree, the intakes and the rating, a file holds what a display needs: `conventions` (fibre inside the carbohydrates or not, which of salt and sodium the label gives, the salt-per-sodium factor), `energy_sources` (the substances the donut is made of), `direction` (what to get less of and more of, with its source), `significant_amount` (what counts as a vitamin or mineral well present), `cards` (the nutrients singled out as small cards) and, where the norm has them, `claims` and `energy_factors`. A test of the loader checks that each nutrient these lists name is in the tree.

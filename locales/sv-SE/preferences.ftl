@@ -26,3 +26,13 @@ pref-upload-error = Fel vid uppladdning av konfiguration
 # Features
 pref-features = Funktioner
 pref-features-desc = Välj vilka funktioner som visas i navigeringsfältet.
+
+# Standards: the layout, intakes and ratings come from the standard in use.
+pref-standard = Näringsstandard
+pref-standard-desc = Standarden avgör hur ett receptets näringsvärden ordnas, vilka referensintag procenten bygger på och hur ett näringsämne bedöms.
+standard-eu = Europeiska unionen
+standard-us = USA
+standard-uk = Storbritannien
+standard-eu-desc = Referensintag enligt förordning (EU) 1169/2011 och näringspåståenden enligt förordning (EG) 1924/2006. Fibrer anges vid sidan av kolhydrater, som inte omfattar dem; etiketten anger salt.
+standard-us-desc = FDA:s dagsvärden och bedömning efter andel av dagsvärdet. Fibrer ingår i kolhydraterna; etiketten anger natrium.
+standard-uk-desc = EU:s referensintag med trafikljussystemet från Food Standards Agency.
