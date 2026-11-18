@@ -97,10 +97,19 @@
         {% for item in items %}
         {% if item.is_directory %}
         <a href="{{ prefix }}/directory/{{ item.path }}{% if static_mode %}.html{% endif %}" data-type="directory" data-name="{{ item.name }}" class="recipe-card">
+            {#- `folder.jpg` in the folder, as a recipe card shows its title picture. -#}
+            {% match item.image_path %}
+            {% when Some with (img) %}
+            <div class="h-48 bg-sunk overflow-hidden">
+                <img src="{{ img }}" alt="{{ item.name }}" class="w-full h-full object-cover">
+            </div>
+            <div class="p-6 flex-1">
+            {% when None %}
             <div class="p-6 flex-1">
                 <div class="recipe-card-icon">
                     <span>📁</span>
                 </div>
+            {% endmatch %}
                 <h2 class="recipe-card-title">{{ item.name }}</h2>
                 {% match item.count %}
                 {% when Some with (count) %}

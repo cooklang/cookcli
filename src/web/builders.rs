@@ -143,6 +143,13 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                     modified_at,
                     created_at,
                 )
+            } else if is_dir {
+                let picture = folder_picture(&child.path)
+                    // A linked picture pointing out of the collection is not
+                    // served (#698), so do not show a broken card for it.
+                    .filter(|pic| static_mode || crate::util::inside_collection(base_path, pic))
+                    .and_then(|pic| get_image_path(base_path, url_prefix, pic.into_string()));
+                (Vec::new(), picture, false, None, None)
             } else {
                 (Vec::new(), None, false, None, None)
             };
@@ -1322,6 +1329,21 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
 /// end an attribute; `#` and `?`, which cut the URL short; `%`, which the
 /// server would decode. Encoded, it is inert wherever it lands, and those
 /// pictures load at all (#548).
+/// File names, tried in order, of the picture shown on a folder's card.
+///
+/// `folder.jpg` is the name Windows Explorer, Kodi and Plex already use for a
+/// folder's cover, so a collection may have one already. The extensions are the
+/// ones browsers show and `cook build` copies to a static site.
+const FOLDER_PICTURES: [&str; 4] = ["folder.jpg", "folder.jpeg", "folder.png", "folder.webp"];
+
+/// The picture to show on the card of the folder at `dir`, if it has one.
+fn folder_picture(dir: &Utf8Path) -> Option<camino::Utf8PathBuf> {
+    FOLDER_PICTURES
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+}
+
 pub(crate) fn get_image_path(
     base_path: &Utf8Path,
     prefix: &str,
@@ -1378,6 +1400,48 @@ fn static_url(prefix: &str, relative: &Utf8Path) -> String {
         .map(|component| urlencoding::encode(component.as_str()))
         .collect();
     format!("{prefix}/api/static/{}", segments.join("/"))
+}
+
+#[cfg(test)]
+mod folder_picture_tests {
+    use super::folder_picture;
+    use camino::Utf8PathBuf;
+
+    fn dir() -> (tempfile::TempDir, Utf8PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+        (tmp, path)
+    }
+
+    #[test]
+    fn a_folder_without_a_picture_has_none() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("Soup.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), None);
+    }
+
+    #[test]
+    fn folder_jpg_is_the_folders_picture() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.jpg")));
+    }
+
+    #[test]
+    fn jpg_wins_over_the_other_extensions() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("folder.png"), b"").unwrap();
+        std::fs::write(dir.join("folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.jpg")));
+    }
+
+    #[test]
+    fn a_directory_named_like_a_picture_is_not_one() {
+        let (_tmp, dir) = dir();
+        std::fs::create_dir(dir.join("folder.jpg")).unwrap();
+        std::fs::write(dir.join("folder.webp"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.webp")));
+    }
 }
 
 #[cfg(test)]
