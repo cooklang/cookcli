@@ -30,11 +30,17 @@
     return indexPromise;
   }
 
+  // Lowercase and drop accents, as the server's search does
+  // (cooklang_find::normalize_for_search), so "crepes" finds "Crêpes".
+  function fold(s) {
+    return s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  }
+
   function score(entry, q) {
-    var ql = q.toLowerCase();
-    if (entry.title.toLowerCase().indexOf(ql) !== -1) return 3;
-    if (entry.tags.some(function (t) { return t.toLowerCase().indexOf(ql) !== -1; })) return 2;
-    if (entry.ingredients.some(function (i) { return i.toLowerCase().indexOf(ql) !== -1; })) return 1;
+    var ql = fold(q);
+    if (fold(entry.title).indexOf(ql) !== -1) return 3;
+    if (entry.tags.some(function (t) { return fold(t).indexOf(ql) !== -1; })) return 2;
+    if (entry.ingredients.some(function (i) { return fold(i).indexOf(ql) !== -1; })) return 1;
     return 0;
   }
 
