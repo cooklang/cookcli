@@ -193,7 +193,8 @@ Configuration search order:
 - Nutrition is laid out and rated by the **standard in use** (`eu`, `us`, `uk`;
   files in `crates/format/data/standards/`, loaded by `cooklang_format::reference`,
   chosen in the `cook_standard` cookie, `eu` by default, on the preferences page next
-  to the language). The tree of the table, where the fibre sits, salt or sodium,
+  to the language; `essential` is not a standard file but a flat table of eight rows,
+  `SIMPLE_VIEW` in `panel.rs`, cards still rated by `eu`). The tree of the table, where the fibre sits, salt or sodium,
   the reference intakes and the percentages, how a card is rated, what counts as
   well present and the donut's substances are all read from that file. **Never
   write such a rule in the Rust, a template or a script**: add it to the standard

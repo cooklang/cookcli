@@ -209,6 +209,7 @@ mod tests {
             servings: None,
             weight: None,
             standard: crate::util::format::reference::standard("eu").unwrap(),
+            essential: false,
         };
         match FileRender.panel("file", &value, &ctx)? {
             FamilyPanel::File(family) => Some(family),

@@ -1003,16 +1003,17 @@ pub struct NutritionPanel {
     pub full_table_label: String,
     /// The same button once it is open.
     pub less_label: String,
-    /// The buttons above the table: fold every row, unfold every row, draw the tree lines.
+    /// The buttons above the table: fold every row, unfold every row.
     pub collapse_all_label: String,
     pub expand_all_label: String,
-    pub tree_lines_label: String,
     /// What the fold button of a row says to a screen reader.
     pub fold_label: String,
-    /// Which standard laid the table out ("Standard: European Union (eu.yaml)").
-    pub standard_note: String,
-    /// Said under the table when the carbohydrates are shown without their fibre.
-    pub carbs_note: Option<String>,
+    /// What the list above the table offers: one entry per standard file, then the essential table.
+    pub picks: Vec<NutritionPick>,
+    /// Whether the table is the essential one: the basic rows, flat.
+    pub essential: bool,
+    /// What the list says to a screen reader.
+    pub pick_label: String,
     /// The vitamins and minerals the standard's rule calls well present.
     pub well_present: Option<WellPresent>,
     /// What the explanation bubbles say, as JSON for the page's script: the labels of their
@@ -1145,6 +1146,17 @@ pub struct NutritionRow {
     pub pct: Option<u32>,
     /// Whether rows sit below it, so a fold button goes on it.
     pub foldable: bool,
+    /// Its place in the simple view (the table as it was before the standards): `0` not shown,
+    /// `1` a line of its own, `2` an "of which" line under the nutrient above.
+    pub simple: u8,
+}
+
+/// A standard in the list above the nutrition table.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionPick {
+    pub id: String,
+    pub name: String,
+    pub selected: bool,
 }
 
 /// One family line of list-valued custom metadata (e.g. `nutrition`).

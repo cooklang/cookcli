@@ -43,8 +43,8 @@ use super::FamilyRenderer;
 use crate::util::format::nutrition::{amount_and_unit, find, to_micrograms, Nutrient};
 use crate::util::format::reference::{Node, Rating, Standard};
 use crate::web::templates::{
-    LegendItem, ListNutrition, MacroLine, NutrientCard, NutritionPanel, NutritionRow, RingArc,
-    WellPresent,
+    LegendItem, ListNutrition, MacroLine, NutrientCard, NutritionPanel, NutritionPick,
+    NutritionRow, RingArc, WellPresent,
 };
 use fluent_templates::Loader;
 use std::collections::{BTreeMap, HashMap};
@@ -205,8 +205,6 @@ fn entries(mapping: &serde_yaml::Mapping) -> Vec<Entry<'_>> {
 /// What a recipe gives once the standard has read it.
 struct Prepared<'a> {
     entries: Vec<Entry<'a>>,
-    /// The page shows carbohydrates without the fibre the recipe counts in them.
-    carbs_without_fibre: bool,
 }
 
 /// The entries of `mapping`, read the way the standard reads a label: salt and sodium are one
@@ -242,7 +240,6 @@ fn prepare<'a>(mapping: &'a serde_yaml::Mapping, standard: &Standard) -> Prepare
             });
         }
     }
-    let mut carbs_without_fibre = false;
     if !standard.conventions.fibre_in_carbohydrate {
         if let (Some(c), Some(f)) = (
             position(&entries, "carbohydrateContent"),
@@ -250,14 +247,10 @@ fn prepare<'a>(mapping: &'a serde_yaml::Mapping, standard: &Standard) -> Prepare
         ) {
             if entries[c].unit == "g" && entries[f].unit == "g" {
                 entries[c].per_serving = (entries[c].per_serving - entries[f].per_serving).max(0.0);
-                carbs_without_fibre = true;
             }
         }
     }
-    Prepared {
-        entries,
-        carbs_without_fibre,
-    }
+    Prepared { entries }
 }
 
 /// The per-serving amount of the nutrient called `name`.
@@ -514,6 +507,7 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
             total: String::new(),
             pct: None,
             foldable: false,
+            simple: 0,
         };
         let mut mass = [None; 3];
         let mut unit = String::new();
@@ -524,6 +518,10 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
             let label = layout.label_of(entry);
             row.label = if part { label } else { capitalize(&label) };
             row.icon = renderer.mapping_icon(entry.field).map(str::to_string);
+            row.simple = SIMPLE_VIEW
+                .iter()
+                .find(|(name, _)| *name == node.name)
+                .map_or(0, |(_, of_which)| if *of_which { 2 } else { 1 });
             row.per_serving = entry.text(entry.per_serving);
             row.per_100g = layout.per_100g(entry.per_serving).map(|v| entry.text(v));
             row.total = entry.text(entry.per_serving * layout.chosen);
@@ -574,6 +572,7 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
             total: String::new(),
             pct: None,
             foldable: false,
+            simple: 0,
         };
         built.push(Built {
             row: new_row(layout.l("nutrition-group-other-data"), 0, true),
@@ -654,6 +653,20 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
     let _ = layout.per_serving_only;
     built.into_iter().map(|b| b.row).collect()
 }
+
+/// The essential table, the one that came before the standards: these rows, flat, in the
+/// order of the tree, with an "of which" line for the saturated fat and the sugars. It is a way of
+/// looking that belongs to no standard, so it is the one place that names nutrients for a layout.
+const SIMPLE_VIEW: &[(&str, bool)] = &[
+    ("calories", false),
+    ("fatContent", false),
+    ("saturatedFatContent", true),
+    ("carbohydrateContent", false),
+    ("sugarContent", true),
+    ("fiberContent", false),
+    ("proteinContent", false),
+    ("salt", false),
+];
 
 /// The small cards: the nutrients the standard singles out, coloured by its own rating.
 fn cards_of(layout: &Layout<'_>, renderer: &NutritionRenderer) -> Vec<NutrientCard> {
@@ -1080,19 +1093,6 @@ pub fn build_nutrition_panel(
         _ => l("nutrition-legend"),
     };
 
-    let name_args = HashMap::from([
-        (
-            std::borrow::Cow::Borrowed("name"),
-            fluent::FluentValue::from(l(&format!("standard-{}", standard.id))),
-        ),
-        (
-            std::borrow::Cow::Borrowed("id"),
-            fluent::FluentValue::from(standard.id.clone()),
-        ),
-    ]);
-    let standard_note =
-        crate::web::i18n::LOCALES.lookup_with_args(lang, "nutrition-standard-note", &name_args);
-
     let energy = energy_per_serving(&prepared.entries, standard);
     Some(NutritionPanel {
         title: l("nutrition-title"),
@@ -1107,12 +1107,22 @@ pub fn build_nutrition_panel(
         less_label: l("nutrition-less-info"),
         collapse_all_label: l("nutrition-collapse-all"),
         expand_all_label: l("nutrition-expand-all"),
-        tree_lines_label: l("nutrition-tree-lines"),
         fold_label: l("nutrition-fold"),
-        standard_note,
-        carbs_note: prepared
-            .carbs_without_fibre
-            .then(|| l("nutrition-carbs-without-fibre")),
+        picks: crate::util::format::reference::standards()
+            .values()
+            .map(|s| NutritionPick {
+                id: s.id.clone(),
+                name: l(&format!("standard-{}", s.id)),
+                selected: s.id == standard.id,
+            })
+            .chain(std::iter::once(NutritionPick {
+                id: crate::web::language::ESSENTIAL.to_string(),
+                name: l("standard-essential"),
+                selected: false,
+            }))
+            .collect(),
+        essential: false,
+        pick_label: l("nutrition-pick-label"),
         well_present: well_present(&layout, &renderer),
         tips_json: tips_json(&layout),
         servings: fmt_unknown(chosen),
@@ -1295,9 +1305,7 @@ mod tests {
         let eu = panel(recipe, None, Some((1.0, 1.0)), "eu");
         let us = panel(recipe, None, Some((1.0, 1.0)), "us");
         assert_eq!(row(&eu, "carbohydrateContent").per_serving, "43.5 g");
-        assert!(eu.carbs_note.is_some());
         assert_eq!(row(&us, "carbohydrateContent").per_serving, "58.0 g");
-        assert!(us.carbs_note.is_none());
     }
 
     #[test]
@@ -1544,6 +1552,7 @@ mod tests {
     fn a_bubble_says_what_a_nutrient_is_and_where_the_text_comes_from() {
         let recipe = "saturatedFatContent: 6.2
 vitaminD: 12.5
+choline: 300
 salt: 1.4
 sodiumContent: 560";
         let tips = |which: &str| -> serde_json::Value {
@@ -1557,9 +1566,17 @@ sodiumContent: 560";
         // 6,2 g of 20 g is 31 % of the EU's reference intake
         assert!(sat["recipe"].as_str().unwrap().contains("31 %"), "{sat}");
         // a nutrient whose text has not been sourced yet says so and invents nothing
+        let choline = &eu["tips"]["choline"];
+        assert!(choline["what"].is_null());
+        assert!(choline["source"]
+            .as_str()
+            .unwrap()
+            .contains("to be documented"));
+        // a vitamin whose text comes from the NHS says what it is for, where to find it, and from which page
         let d = &eu["tips"]["vitaminD"];
-        assert!(d["what"].is_null());
-        assert!(d["source"].as_str().unwrap().contains("to be documented"));
+        assert!(d["use"].as_str().unwrap().contains("calcium"), "{d}");
+        assert!(d["where"].as_str().unwrap().contains("Sunlight"), "{d}");
+        assert!(d["source"].as_str().unwrap().contains("NHS, Vitamin D"));
         // the EU rates by claims: "low in salt" is 0,3 g of salt, written for the salt card from the sodium claim
         assert!(
             eu["tips"]["salt"]["rating"]

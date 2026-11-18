@@ -158,6 +158,8 @@ pub struct PanelContext<'a> {
     pub weight: Option<&'a serde_yaml::Value>,
     /// The standard that decides how nutrition is laid out and rated.
     pub standard: &'a crate::util::format::reference::Standard,
+    /// Whether the table is the essential one: the basic rows, flat.
+    pub essential: bool,
 }
 
 /// The host of `raw` when it is an absolute http(s) URL, so a chip shows

@@ -37,6 +37,48 @@ const ICON_CANDY: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const ICON_WHEAT: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4c4 0 4 4 8 4s4-4 8-4M4 4v16M20 4v16M4 12c4 0 4 4 8 4s4-4 8-4M4 20h16"/></svg>"##;
 const ICON_BREAD: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12c0-4.5 3.5-8 8-8s8 3.5 8 8v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Z"/><path d="M9 12h6"/></svg>"##;
 const ICON_SALT: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 4H8l1-4Z"/><path d="M8 7h8l1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L8 7Z"/><circle cx="10.5" cy="12.5" r=".6" fill="currentColor" stroke="none"/><circle cx="13.5" cy="12.5" r=".6" fill="currentColor" stroke="none"/><circle cx="12" cy="15.5" r=".6" fill="currentColor" stroke="none"/></svg>"##;
+/// A 24x24 stroked Tabler-style icon around `$body`.
+macro_rules! tabler {
+    ($body:expr) => {
+        concat!(
+            r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">"##,
+            $body,
+            "</svg>"
+        )
+    };
+}
+
+const ICON_HEART: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12.572 12 20l-7.5-7.428a5 5 0 1 1 7.5-6.566 5 5 0 1 1 7.5 6.572"/></svg>"##;
+const ICON_BONE: &str = tabler!(r##"<path d="M7.5 16.5 16.5 7.5"/><circle cx="5.5" cy="15" r="2"/><circle cx="9" cy="18.5" r="2"/><circle cx="15" cy="5.5" r="2"/><circle cx="18.5" cy="9" r="2"/>"##);
+const ICON_BOLT: &str = tabler!(r##"<path d="M13 3 5 13h6l-1 8 8-10h-6Z"/>"##);
+const ICON_PULSE: &str = tabler!(r##"<path d="M3 12h4l3-8 4 16 3-8h4"/>"##);
+const ICON_BANANA: &str = tabler!(r##"<path d="M5 6c0 8 5 13 15 13-3-3-4-4-6-7-2-2-3-4-3-8Z"/>"##);
+const ICON_CUBE: &str = tabler!(r##"<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>"##);
+const ICON_WAVES: &str = tabler!(r##"<path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/>"##);
+const ICON_MAGNET: &str = tabler!(r##"<path d="M4 4h4v9a4 4 0 0 0 8 0V4h4v9a8 8 0 0 1-16 0Z"/><path d="M4 8h4M16 8h4"/>"##);
+const ICON_SHIELD: &str = tabler!(r##"<path d="m12 3 7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6Z"/>"##);
+const ICON_POT: &str = tabler!(r##"<path d="M4 10h16v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z"/><path d="M2 12h2M20 12h2M8 7h8"/>"##);
+const ICON_COG: &str = tabler!(r##"<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="3.3 2.2"/>"##);
+const ICON_STAR: &str = tabler!(r##"<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>"##);
+const ICON_TOOTH: &str = tabler!(r##"<path d="M12 6c-2-2-7-2-7 2 0 3 1.5 5 2 8 .3 2 1.5 4 2.5 4s1-3 2.5-3 1.5 3 2.5 3 2.2-2 2.5-4c.5-3 2-5 2-8 0-4-5-4-7-2Z"/>"##);
+const ICON_GLOSS: &str = tabler!(r##"<circle cx="12" cy="12" r="9"/><path d="M7.5 12A4.5 4.5 0 0 1 12 7.5"/>"##);
+const ICON_NUT: &str = tabler!(r##"<path d="m12 3 7.8 4.5v9L12 21l-7.8-4.5v-9Z"/><circle cx="12" cy="12" r="3"/>"##);
+const ICON_BUTTERFLY: &str = tabler!(r##"<path d="M12 8C10 4 5 4 4.5 8.5S7 17 9 17s3-3 3-9Zm0 0c2-4 7-4 7.5.5S17 17 15 17s-3-3-3-9Z"/>"##);
+const ICON_EYE: &str = tabler!(r##"<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>"##);
+const ICON_SUN: &str = tabler!(r##"<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>"##);
+const ICON_LEAF: &str = tabler!(r##"<path d="M5 19C5 10 10 5 20 4c0 10-5 15-14 15Z"/><path d="M5 19 14 10"/>"##);
+const ICON_BROCCOLI: &str = tabler!(r##"<path d="M12 21v-6"/><path d="M9 15a4 4 0 1 1 1-7.7 3.5 3.5 0 0 1 4 0A4 4 0 1 1 15 15Z"/>"##);
+const ICON_CITRUS: &str = tabler!(r##"<circle cx="12" cy="12" r="9"/><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/>"##);
+const ICON_GRAIN: &str = tabler!(r##"<path d="M12 21V8"/><path d="M12 8c-3 0-4-2-4-4 3 0 4 2 4 4Zm0 0c3 0 4-2 4-4-3 0-4 2-4 4Zm0 6c-3 0-4-2-4-4m4 4c3 0 4-2 4-4"/>"##);
+const ICON_EGG: &str = tabler!(r##"<path d="M12 3c4 0 7 6 7 10a7 7 0 0 1-14 0c0-4 3-10 7-10Z"/>"##);
+const ICON_FISH: &str = tabler!(r##"<path d="M3 12c3-5 8-6 13-3l5-3v12l-5-3c-5 3-10 2-13-3Z"/><circle cx="8" cy="11.5" r=".6" fill="currentColor" stroke="none"/>"##);
+const ICON_AVOCADO: &str = tabler!(r##"<path d="M12 3c2 0 3 2 3 4 3 1 5 4 5 7a8 8 0 0 1-16 0c0-3 2-6 5-7 0-2 1-4 3-4Z"/><circle cx="12" cy="15" r="2.5"/>"##);
+const ICON_SMILE: &str = tabler!(r##"<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/>"##);
+const ICON_HAIR: &str = tabler!(r##"<path d="M8 3c-2 4 2 6 0 9s2 6 0 9M12 3c-2 4 2 6 0 9s2 6 0 9M16 3c-2 4 2 6 0 9s2 6 0 9"/>"##);
+const ICON_SPROUT: &str = tabler!(r##"<path d="M12 21v-8"/><path d="M12 13c-4 0-6-2-6-6 4 0 6 2 6 6Zm0 0c0-3 2-5 6-5 0 4-2 6-6 6Z"/>"##);
+const ICON_MOLECULE: &str = tabler!(r##"<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="m8 7.5 8 .5M7.2 8.2l3.5 7.6M16.8 10.2l-3.5 5.6"/>"##);
+const ICON_BULB: &str = tabler!(r##"<path d="M3 12h1M12 3v1M20 12h1M5.6 5.6l.7.7M18.4 5.6l-.7.7M9 16a5 5 0 1 1 6 0 3.5 3.5 0 0 0-1 3 2 2 0 0 1-4 0 3.5 3.5 0 0 0-1-3M9.7 17h4.6"/>"##);
+const ICON_FLASK: &str = r##"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 9h4"/><path d="M10 3v6l-4 11a.7.7 0 0 0 .5 1h11a.7.7 0 0 0 .5-1l-4-11V3"/></svg>"##;
 
 /// Specific renderer for the `nutrition` family. Used both for the recipe
 /// page's family line ([`super::build_family_panels`]) and, directly,
@@ -80,6 +122,39 @@ impl FamilyRenderer for NutritionRenderer {
             "fiberContent" => Some(ICON_WHEAT),
             "carbohydrateContent" => Some(ICON_BREAD),
             "salt" => Some(ICON_SALT),
+            "sodiumContent" => Some(ICON_CUBE),
+            "cholesterolContent" => Some(ICON_HEART),
+            "addedSugars" => Some(ICON_CANDY),
+            "omega3" | "omega6" => Some(ICON_DROPLET),
+            "polyols" => Some(ICON_FLASK),
+            "calcium" => Some(ICON_BONE),
+            "phosphorus" => Some(ICON_BOLT),
+            "magnesium" => Some(ICON_PULSE),
+            "potassium" => Some(ICON_BANANA),
+            "chloride" => Some(ICON_WAVES),
+            "iron" => Some(ICON_MAGNET),
+            "zinc" => Some(ICON_SHIELD),
+            "copper" => Some(ICON_POT),
+            "manganese" => Some(ICON_COG),
+            "selenium" => Some(ICON_STAR),
+            "fluoride" => Some(ICON_TOOTH),
+            "chromium" => Some(ICON_GLOSS),
+            "molybdenum" => Some(ICON_NUT),
+            "iodine" => Some(ICON_BUTTERFLY),
+            "vitaminA" => Some(ICON_EYE),
+            "vitaminD" => Some(ICON_SUN),
+            "vitaminE" => Some(ICON_LEAF),
+            "vitaminK" => Some(ICON_BROCCOLI),
+            "vitaminC" => Some(ICON_CITRUS),
+            "thiamin" => Some(ICON_GRAIN),
+            "riboflavin" => Some(ICON_EGG),
+            "niacin" => Some(ICON_FISH),
+            "pantothenicAcid" => Some(ICON_AVOCADO),
+            "vitaminB6" => Some(ICON_SMILE),
+            "biotin" => Some(ICON_HAIR),
+            "folate" => Some(ICON_SPROUT),
+            "vitaminB12" => Some(ICON_MOLECULE),
+            "choline" => Some(ICON_BULB),
             _ => None,
         }
     }
@@ -131,7 +206,17 @@ impl FamilyRenderer for NutritionRenderer {
             ctx.lang,
             ctx.standard,
         )
-        .map(|panel| FamilyPanel::Nutrition(Box::new(panel)))
+        .map(|mut panel| {
+            panel.essential = ctx.essential;
+            if ctx.essential {
+                // the choice is the essential table, not the standard that still rates the cards
+                panel
+                    .picks
+                    .iter_mut()
+                    .for_each(|p| p.selected = p.id == "essential");
+            }
+            FamilyPanel::Nutrition(Box::new(panel))
+        })
         .or_else(|| list_family(self, family, value, ctx.lang).map(FamilyPanel::Generic))
     }
 }

@@ -36,3 +36,5 @@ standard-uk = United Kingdom
 standard-eu-desc = Reference intakes of Regulation (EU) 1169/2011 and the nutrition claims of Regulation (EC) 1924/2006. Fibre is listed next to carbohydrates, which exclude it; the label gives salt.
 standard-us-desc = FDA Daily Values and rating by the share of the daily value. Fibre is part of the carbohydrates; the label gives sodium.
 standard-uk-desc = The EU's reference intakes with the traffic-light scheme of the Food Standards Agency.
+standard-essential = Essentials
+standard-essential-desc = The eight basic rows in a flat list, with no tree and no reference intakes. Cards and legend follow the EU standard.

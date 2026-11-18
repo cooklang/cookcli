@@ -1008,6 +1008,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 servings: nutrition_servings,
                 weight: recipe.metadata.get("weight"),
                 standard: features.standard(),
+                essential: features.nutrition_essential,
             },
         );
 

@@ -36,3 +36,5 @@ standard-uk = Reino Unido
 standard-eu-desc = Ingestas de referencia del Reglamento (UE) 1169/2011 y declaraciones nutricionales del Reglamento (CE) 1924/2006. La fibra figura junto a los hidratos de carbono, que no la incluyen; la etiqueta indica la sal.
 standard-us-desc = Valores diarios de la FDA y valoración por porcentaje del valor diario. La fibra forma parte de los hidratos de carbono; la etiqueta indica el sodio.
 standard-uk-desc = Las ingestas de referencia de la UE con el sistema de semáforo de la Food Standards Agency.
+standard-essential = Lo esencial
+standard-essential-desc = Las ocho filas básicas en una lista plana, sin árbol ni ingestas de referencia. Las tarjetas y la leyenda siguen la norma de la UE.

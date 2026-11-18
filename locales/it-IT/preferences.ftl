@@ -36,3 +36,5 @@ standard-uk = Regno Unito
 standard-eu-desc = Assunzioni di riferimento del regolamento (UE) 1169/2011 e indicazioni nutrizionali del regolamento (CE) 1924/2006. Le fibre sono accanto ai carboidrati, che non le includono; l'etichetta indica il sale.
 standard-us-desc = Valori giornalieri della FDA e valutazione in base alla percentuale del valore giornaliero. Le fibre fanno parte dei carboidrati; l'etichetta indica il sodio.
 standard-uk-desc = Le assunzioni di riferimento dell'UE con il sistema a semaforo della Food Standards Agency.
+standard-essential = L'essenziale
+standard-essential-desc = Le otto righe di base in un elenco piatto, senza albero né assunzioni di riferimento. Le schede e la legenda seguono lo standard UE.

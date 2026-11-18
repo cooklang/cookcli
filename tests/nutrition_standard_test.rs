@@ -141,10 +141,10 @@ async fn the_fibre_sits_where_the_standard_in_the_cookie_puts_it() {
         depth_of(&eu, "carbohydrateContent")
     );
     assert!(
-        eu.contains("eu.yaml"),
-        "the table names the standard it follows"
+        eu.contains(r#"<option value="eu" selected>"#),
+        "the list above the table names the standard it follows"
     );
-    // under the EU the carbohydrates are shown without the fibre, and the page says so
+    // under the EU the carbohydrates are shown without the fibre
     assert!(
         eu.contains("43.5 g"),
         "58 g of carbohydrates less 14.5 g of fibre"
@@ -156,7 +156,7 @@ async fn the_fibre_sits_where_the_standard_in_the_cookie_puts_it() {
         depth_of(&us, "fiberContent"),
         depth_of(&us, "carbohydrateContent") + 1
     );
-    assert!(us.contains("us.yaml"));
+    assert!(us.contains(r#"<option value="us" selected>"#));
     assert!(us.contains("58.0 g"));
     // and the US label gives sodium: the recipe's salt shows as sodium too (1,4 g is 560 mg)
     assert!(us.contains(r#"data-key="sodiumContent""#) && us.contains("560 mg"));
@@ -185,7 +185,7 @@ async fn a_cookie_that_names_no_standard_falls_back_to_the_default_one() {
     let (status, cookies, html) =
         get(&server, "/recipe/Bowl.cook", Some("cook_standard=nowhere")).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(html.contains("eu.yaml"));
+    assert!(html.contains(r#"<option value="eu" selected>"#));
     // the answer keeps the cookie alive with a standard that exists
     assert!(
         cookies.iter().any(|c| c.starts_with("cook_standard=eu")),
@@ -213,4 +213,74 @@ async fn the_preferences_page_offers_one_button_per_standard_file() {
         html.contains(r#"setStandard('eu')" aria-pressed="false""#),
         "{html}"
     );
+}
+
+#[tokio::test]
+async fn the_table_offers_every_standard_and_the_essential_table() {
+    let server = start_server().await;
+    let (status, _, html) = get(
+        &server,
+        "/recipe/Bowl.cook?servings=2",
+        Some("cook_standard=uk"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    for id in ["eu", "us", "uk"] {
+        assert!(
+            html.contains(&format!(r#"<option value="{id}""#)),
+            "no entry for {id}"
+        );
+    }
+    assert!(html.contains(r#"<option value="uk" selected>"#));
+    assert!(html.contains(r#"<option value="essential">"#));
+    // the essential table keeps eight rows, and the saturated fat and the sugars read as "of which"
+    let simple = |key: &str| -> char {
+        let at = html
+            .match_indices(&format!(r#"data-key="{key}""#))
+            .map(|(at, _)| at)
+            .find(|at| html[html[..*at].rfind('<').unwrap()..].starts_with("<tr"))
+            .unwrap_or_else(|| panic!("no row {key}"));
+        let attr = html[..at].rfind(r#"data-simple=""#).expect("data-simple");
+        html[attr + 13..].chars().next().unwrap()
+    };
+    assert_eq!(simple("calories"), '1');
+    assert_eq!(simple("saturatedFatContent"), '2');
+    assert_eq!(simple("sugarContent"), '2');
+    assert_eq!(simple("fiberContent"), '1');
+    assert_eq!(simple("calcium"), '0');
+}
+
+#[tokio::test]
+async fn the_essential_table_is_chosen_in_the_same_list_and_keeps_the_default_standard() {
+    let server = start_server().await;
+    let (status, cookies, html) = get(
+        &server,
+        "/recipe/Bowl.cook?servings=2",
+        Some("cook_standard=essential"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        html.contains(r#"<option value="essential" selected>"#),
+        "{html}"
+    );
+    assert!(!html.contains(r#"<option value="eu" selected>"#));
+    assert!(html.contains("nutri-full is-simple"));
+    // the cookie stays what the visitor chose
+    assert!(
+        cookies
+            .iter()
+            .any(|c| c.starts_with("cook_standard=essential")),
+        "{cookies:?}"
+    );
+    // the preferences page lists it with the standards, as the one pressed
+    let (_, _, prefs) = get(&server, "/preferences", Some("cook_standard=essential")).await;
+    assert!(
+        prefs.contains(r#"setStandard('essential')" aria-pressed="true""#),
+        "{prefs}"
+    );
+    assert!(prefs.contains(r#"setStandard('eu')" aria-pressed="false""#));
+    // and a visitor who chose nothing gets the usual table
+    let (_, _, plain) = get(&server, "/recipe/Bowl.cook?servings=2", None).await;
+    assert!(!plain.contains("nutri-full is-simple"));
 }

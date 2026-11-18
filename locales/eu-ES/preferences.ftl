@@ -36,3 +36,5 @@ standard-uk = Erresuma Batua
 standard-eu-desc = EB 1169/2011 Erregelamenduaren erreferentziazko hartzeak eta EE 1924/2006 Erregelamenduaren elikadura-aldarrikapenak. Zuntzak karbohidratoen ondoan doaz, hauek kanpoan uzten dituzte; etiketak gatza ematen du.
 standard-us-desc = FDAren eguneroko balioak eta eguneroko balioaren zatiaren araberako balorazioa. Zuntzak karbohidratoen parte dira; etiketak sodioa ematen du.
 standard-uk-desc = EBren erreferentziazko hartzeak, Food Standards Agency-ren semaforo-sistemarekin.
+standard-essential = Funtsezkoa
+standard-essential-desc = Zortzi oinarrizko errenkadak zerrenda lau batean, zuhaitzik eta erreferentziako hartzerik gabe. Txartelek eta legendak EBren araua jarraitzen dute.

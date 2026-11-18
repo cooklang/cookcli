@@ -36,3 +36,5 @@ standard-uk = Royaume-Uni
 standard-eu-desc = Apports de référence du règlement (UE) 1169/2011 et allégations nutritionnelles du règlement (CE) 1924/2006. Les fibres sont à côté des glucides, qui les excluent ; l'étiquette donne le sel.
 standard-us-desc = Valeurs quotidiennes de la FDA et notation par part de la valeur quotidienne. Les fibres font partie des glucides ; l'étiquette donne le sodium.
 standard-uk-desc = Les apports de référence de l'UE avec les feux tricolores de la Food Standards Agency.
+standard-essential = Essentiel
+standard-essential-desc = Les huit lignes de base à plat, sans arbre ni apports de référence. Les cartes et la légende suivent la norme UE.

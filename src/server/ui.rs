@@ -1198,8 +1198,15 @@ async fn preferences_page(
             id: s.id.clone(),
             name: tr.t(&format!("standard-{}", s.id)),
             description: tr.t(&format!("standard-{}-desc", s.id)),
-            selected: s.id == features.nutrition_standard,
+            selected: s.id == features.nutrition_standard && !features.nutrition_essential,
         })
+        // the essential table is no standard file, but it is chosen in the same list
+        .chain(std::iter::once(crate::web::templates::StandardChoice {
+            id: crate::web::language::ESSENTIAL.to_string(),
+            name: tr.t("standard-essential"),
+            description: tr.t("standard-essential-desc"),
+            selected: features.nutrition_essential,
+        }))
         .collect();
 
     PreferencesTemplate {

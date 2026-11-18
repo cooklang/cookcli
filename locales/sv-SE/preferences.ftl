@@ -36,3 +36,5 @@ standard-uk = Storbritannien
 standard-eu-desc = Referensintag enligt förordning (EU) 1169/2011 och näringspåståenden enligt förordning (EG) 1924/2006. Fibrer anges vid sidan av kolhydrater, som inte omfattar dem; etiketten anger salt.
 standard-us-desc = FDA:s dagsvärden och bedömning efter andel av dagsvärdet. Fibrer ingår i kolhydraterna; etiketten anger natrium.
 standard-uk-desc = EU:s referensintag med trafikljussystemet från Food Standards Agency.
+standard-essential = Det väsentliga
+standard-essential-desc = De åtta grundraderna i en platt lista, utan träd och utan referensintag. Korten och teckenförklaringen följer EU-standarden.

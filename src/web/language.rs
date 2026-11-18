@@ -37,10 +37,17 @@ pub struct FeatureFlags {
     /// The id of the nutrition standard that lays out and rates a recipe's nutrition
     /// (`eu`, `us`, `uk`), from the `cook_standard` cookie. See [`FeatureFlags::standard`].
     pub nutrition_standard: &'static str,
+    /// Whether the table is the essential one (the `cook_standard` cookie says `essential`): a
+    /// flat list of the basic rows. It is a way of showing the table, not a standard, so the
+    /// standard stays the default one and still rates the cards and the legend.
+    pub nutrition_essential: bool,
 }
 
 /// The standard in use when nothing was chosen.
 pub const DEFAULT_STANDARD: &str = "eu";
+
+/// What the `cook_standard` cookie holds for the essential table, which is no standard file.
+pub const ESSENTIAL: &str = "essential";
 
 impl Default for FeatureFlags {
     fn default() -> Self {
@@ -49,6 +56,7 @@ impl Default for FeatureFlags {
             show_pantry: true,
             feeds: true,
             nutrition_standard: DEFAULT_STANDARD,
+            nutrition_essential: false,
         }
     }
 }
@@ -83,6 +91,9 @@ pub fn parse_feature_flags(headers: &HeaderMap) -> FeatureFlags {
                     match parts[0] {
                         "show_shopping_list" => flags.show_shopping_list = parts[1] != "0",
                         "show_pantry" => flags.show_pantry = parts[1] != "0",
+                        "cook_standard" if parts[1].trim() == ESSENTIAL => {
+                            flags.nutrition_essential = true;
+                        }
                         "cook_standard" => {
                             if let Some(id) = parse_standard(parts[1]) {
                                 flags.nutrition_standard = id;
@@ -247,7 +258,14 @@ pub async fn features_middleware(
             },
         ),
         ("show_pantry", if features.show_pantry { "1" } else { "0" }),
-        ("cook_standard", features.nutrition_standard),
+        (
+            "cook_standard",
+            if features.nutrition_essential {
+                ESSENTIAL
+            } else {
+                features.nutrition_standard
+            },
+        ),
     ] {
         let cookie = format!("{name}={val}; path={cookie_path}; max-age={max_age}; SameSite=Lax");
         if let Ok(header_val) = cookie.parse() {
