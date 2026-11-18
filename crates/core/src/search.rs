@@ -7,7 +7,8 @@
 //!
 //! **Every term must match.** A recipe is a hit when each whitespace-separated
 //! term of the query appears somewhere in its text or in its file name, matched
-//! case-insensitively as a substring. Adding a term narrows the results.
+//! as a substring ignoring case and accents, so `crepes` finds `Crêpes`. Adding
+//! a term narrows the results.
 //!
 //! Ranking is `cooklang-find`'s, and is a separate question from matching:
 //!
@@ -114,7 +115,7 @@ pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit
     let terms: Vec<String> = req
         .query
         .split_whitespace()
-        .map(str::to_lowercase)
+        .map(cooklang_find::normalize_for_search)
         .collect();
 
     let mut hits = Vec::new();
@@ -139,10 +140,12 @@ pub fn search(ctx: &Context, req: SearchRequest) -> Result<Outcome<Vec<SearchHit
 
 /// Whether every term appears in `path`'s text or in its file name.
 ///
-/// Terms are expected already lowercased. Matching is a case-insensitive
-/// substring test against the two surfaces `cooklang-find` scores — the file
-/// stem and the contents — so that intersecting cannot drop a recipe the
-/// library matched on a term it would have counted.
+/// Terms are expected already folded by
+/// [`cooklang_find::normalize_for_search`]. Matching is a substring test,
+/// ignoring case and accents, against the two surfaces `cooklang-find` scores
+/// — the file stem and the contents — folded by that same function, so that
+/// intersecting cannot drop a recipe the library matched on a term it would
+/// have counted.
 ///
 /// An empty term list matches everything, which is what an all-whitespace query
 /// should do: `cooklang-find` returns nothing for it anyway.
@@ -163,8 +166,8 @@ fn matches_every_term(path: &Utf8Path, terms: &[String]) -> Result<bool, CoreErr
         path: path.to_owned(),
         source,
     })?;
-    let contents = String::from_utf8_lossy(&bytes).to_lowercase();
-    let stem = path.file_stem().unwrap_or_default().to_lowercase();
+    let contents = cooklang_find::normalize_for_search(&String::from_utf8_lossy(&bytes));
+    let stem = cooklang_find::normalize_for_search(path.file_stem().unwrap_or_default());
 
     Ok(terms
         .iter()
@@ -360,6 +363,30 @@ mod tests {
             relative_paths(&run(&base(&dir), "CHICKEN Oil")),
             ["curry.cook"]
         );
+    }
+
+    /// Matching ignores accents on both sides, so a query typed without them
+    /// finds a recipe written with them, and the reverse. The library has to
+    /// fold the same way, or it never offers the recipe to be intersected.
+    #[test]
+    fn terms_match_regardless_of_accents() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = base(&dir);
+        write(&base.join("Crêpes.cook"), "Mix @farine{250%g}.\n");
+        write(
+            &base.join("gratin.cook"),
+            "Bake with @crème fraîche{20%cl}.\n",
+        );
+
+        // Unaccented term, accented file name.
+        assert_eq!(relative_paths(&run(&base, "crepes")), ["Crêpes.cook"]);
+        // Unaccented terms, accented contents, ANDed.
+        assert_eq!(
+            relative_paths(&run(&base, "creme fraiche")),
+            ["gratin.cook"]
+        );
+        // Accented term, unaccented contents.
+        assert_eq!(relative_paths(&run(&base, "fàrine")), ["Crêpes.cook"]);
     }
 
     #[test]
