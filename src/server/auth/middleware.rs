@@ -155,9 +155,20 @@ pub async fn middleware(
         }
         // Leaves the visitor's own choice in its cookie alone, for when they
         // sign in.
+        // The nutrition standard is a way of reading a recipe, not a feature: it stays.
+        let (nutrition_standard, nutrition_essential) =
+            request.extensions().get::<FeatureFlags>().map_or_else(
+                || {
+                    let default = FeatureFlags::default();
+                    (default.nutrition_standard, default.nutrition_essential)
+                },
+                |f| (f.nutrition_standard, f.nutrition_essential),
+            );
         request.extensions_mut().insert(FeatureFlags {
             show_shopping_list: false,
             show_pantry: false,
+            nutrition_standard,
+            nutrition_essential,
             ..FeatureFlags::default()
         });
     }

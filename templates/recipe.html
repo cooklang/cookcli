@@ -246,6 +246,9 @@
                 {% endfor %}
             </div>
 
+            <!-- Metadata families (nutrition, file, ...): one panel each -->
+            {% include "panels/families.html" %}
+
             {% when None %}
             {% if scale != 1.0 %}
             <div id="metadata-container" class="flex flex-wrap gap-3">
@@ -620,6 +623,10 @@ function goToScale(value) {
     if (sep === -1 || stashed.slice(0, sep) !== window.location.pathname) return;
     const y = parseInt(stashed.slice(sep + 1), 10);
     if (!Number.isFinite(y) || y <= 0) return;
+    // At once, before the first paint, so the page never shows its top for a
+    // frame and then jumps; and again after the load, since images can change
+    // the height above the reader.
+    window.scrollTo(0, y);
     window.addEventListener('load', function () { window.scrollTo(0, y); });
 })();
 </script>

@@ -858,8 +858,7 @@ dependencies = [
 [[package]]
 name = "cooklang-find"
 version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdccb77666a616fc5c0fc5629894496a4ade7c93b1e04c33cd9beb44d7ee8554"
+source = "git+https://github.com/Tloxipeuhca/cooklang-find?branch=fix%2Ffront-matter-line-limit#cd885d0fb0f208c3423476da11f7030ea83670f3"
 dependencies = [
  "camino",
  "glob",

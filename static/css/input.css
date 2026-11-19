@@ -51,6 +51,25 @@
     --info:          #8a3d14;
     --disabled:      #d3cdcb;   /* DS Controls/Disabled */
     --inactive:      #8a8075;   /* DS Controls/Inactive, darkened for AA */
+    /* The one cool hue: a nutrient with no threshold to judge it by. */
+    --cool:          #0b6b63;   /* "no threshold": turquoise, 5.6:1 on --cool-soft */
+    --cool-soft:     #d9f0ee;
+    /* The donut and the macros take the colours of the food families: fats blue,
+       carbohydrates orange, proteins violet. */
+    --macro-fat:     #3b6fc4;
+    --macro-carb:    #d9730d;
+    --macro-prot:    #7c4dcc;
+    /* "Medium" on the nutrition cards: amber, as in the traffic-light scheme, so it
+       is never mistaken for the red of "high". */
+    --warn:          #c98a00;
+    --warn-text:     #7a4f00;   /* 6.2:1 on --warn-soft */
+    --warn-soft:     #fbefd0;
+    /* One colour per family of the nutrition table: macronutrients, other
+       components, minerals, vitamins. */
+    --fam-macro:     #5b6b8c;
+    --fam-other:     #8a8478;
+    --fam-min:       #a0612a;
+    --fam-vit:       #b0408a;
 
     --radius-control: 6px;
     --radius-card:    6px;
@@ -90,6 +109,18 @@
     --info:          #e59a6d;
     --disabled:      #4a4a55;
     --inactive:      #8f8880;
+    --cool:          #4fd1c5;
+    --cool-soft:     #0f2a29;
+    --macro-fat:     #7aa2ff;
+    --macro-carb:    #f08a24;
+    --macro-prot:    #b794f6;
+    --warn:          #f2c14e;
+    --warn-text:     #f2c14e;
+    --warn-soft:     #2f2610;
+    --fam-macro:     #a3b4d6;
+    --fam-other:     #b5b0a3;
+    --fam-min:       #e0a36b;
+    --fam-vit:       #f08cc6;
 
     --shadow-card:    none;
     --shadow-overlay: 0 8px 24px rgba(0, 0, 0, .5);

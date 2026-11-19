@@ -195,3 +195,7 @@ codegen-units = 1
 inherits = "release"
 lto = "thin"
 codegen-units = 16
+
+# Temporary: front matter over 30 lines (cooklang/cooklang-find PR 42). Remove once released.
+[patch.crates-io]
+cooklang-find = { git = "https://github.com/Tloxipeuhca/cooklang-find", branch = "fix/front-matter-line-limit" }

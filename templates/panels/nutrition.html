@@ -1,0 +1,499 @@
+{#- The nutrition panel: a donut and the macros, a few small cards, and the
+    table behind a button, laid out by the tree of the standard in use. Needs
+    `panel` (a NutritionPanel) and `tr`. -#}
+<fieldset class="panel-frame">
+    <legend>{{ panel.title }}</legend>
+
+    <div class="nutri">
+        <div class="nutri-top">
+            {% match panel.ring %}
+            {% when Some with (arcs) %}
+            <div class="nutri-ring" role="img" aria-label="{% match panel.kcal_total %}{% when Some with (kcal) %}{{ kcal }}{% when None %}{% endmatch %} kcal, {% if panel.per_serving_only %}{{ panel.per_serving_label }}{% else %}{{ panel.servings }} {{ tr.t("recipe-servings-label") }}{% endif %}">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    {% for arc in arcs %}
+                    <circle class="nutri-arc nutri-arc-{{ arc.kind }}" data-macro="{{ arc.kind }}" data-pick="{{ arc.kind }}" cx="18" cy="18" r="15.9155" fill="none" stroke-width="4.5"
+                            stroke-dasharray="{{ arc.dasharray }}" stroke-dashoffset="{{ arc.dashoffset }}"/>
+                    {% endfor %}
+                </svg>
+                <div class="nutri-ring-mid">
+                    <b>{% match panel.kcal_total %}{% when Some with (kcal) %}{{ kcal }}{% when None %}{% endmatch %}</b>
+                    <span>kcal</span>
+                </div>
+            </div>
+            {% when None %}
+            {% match panel.kcal_total %}
+            {% when Some with (kcal) %}
+            <div class="nutri-kcal"><b>{{ kcal }}</b> <span>kcal{% if panel.per_serving_only %} {{ panel.per_serving_label }}{% else %} &middot; {{ panel.servings }} {{ tr.t("recipe-servings-label") }}{% endif %}</span></div>
+            {% when None %}
+            {% endmatch %}
+            {% endmatch %}
+
+            <div class="nutri-side">
+                <div class="nutri-cols">
+                {% if !panel.macros.is_empty() %}
+                <ul class="nutri-macros">
+                    {% for m in panel.macros %}
+                    <li data-macro="{{ m.kind }}" data-pick="{{ m.kind }}" role="button" tabindex="0" aria-pressed="false">
+                        <span><i class="nutri-dot nutri-dot-{{ m.kind }}"></i>{{ m.label }}</span>
+                        <b><span class="nutri-amt">{{ m.amount }}</span>{% match m.pct %}{% when Some with (pct) %}<span class="nutri-sep">&middot;</span><span class="nutri-pct">{{ pct }} %</span>{% when None %}{% endmatch %}</b>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if !panel.cards.is_empty() %}
+                <ul class="nutri-cards">
+                    {% for c in panel.cards %}
+                    <li class="nutri-card nutri-card-{{ c.level }}" data-macro="{{ c.group }}" data-key="{{ c.key }}"{% match c.word %}{% when Some with (word) %} title="{{ word }}"{% when None %}{% endmatch %}>
+                        <span class="nutri-card-head">
+                            {% match c.icon %}
+                            {% when Some with (icon) %}
+                            <span class="nutri-card-icon">{{ icon|safe }}</span>
+                            {% when None %}
+                            {% endmatch %}
+                            {{ c.label }}
+                        </span>
+                        <span class="nutri-card-value">{{ c.value }}{% match c.word %}{% when Some with (word) %}<span class="sr-only"> ({{ word }})</span>{% when None %}{% endmatch %}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                </div>
+
+                {% if !panel.legend.is_empty() %}
+                <div class="nutri-legend" role="note">
+                    <span>{{ panel.legend_label }}</span>
+                    {% for item in panel.legend %}
+                    <button type="button" class="nutri-legend-item{% if !item.used %} nutri-legend-off{% endif %}" data-rating="{% if item.level == "low" %}good{% else %}{{ item.level }}{% endif %}" aria-pressed="false"{% if !item.used %} disabled{% endif %}><i class="nutri-swatch nutri-card-{{ item.level }}"></i>{{ item.word }}</button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="nutri-foot">
+                    <span>{% if panel.per_serving_only %}{{ panel.per_serving_label }}{% else %}{{ panel.for_label }} <b>{{ panel.servings }}</b> {{ tr.t("recipe-servings-label") }}{% match panel.kcal_per_serving %}{% when Some with (kcal) %} &middot; {{ kcal }} kcal {{ panel.per_serving_label }}{% when None %}{% endmatch %}{% endif %}</span>
+                    <button type="button" class="nutri-more" aria-expanded="false" aria-controls="nutrition-full" data-label-open="{{ panel.less_label }}" data-label-closed="{{ panel.full_table_label }}">{{ panel.full_table_label }}</button>
+                </div>
+            </div>
+        </div>
+
+        {#- The vitamins and minerals the standard's rule calls well present: behind the same button as the table. -#}
+        {% match panel.well_present %}
+        {% when Some with (wp) %}
+        <div class="nutri-well" id="nutrition-well" hidden>
+            <p class="nutri-well-title"><b>{{ wp.title }}</b> <span>{{ wp.rule }}</span></p>
+            <ul class="nutri-cards nutri-well-tiles">
+                {% for t in wp.tiles %}
+                <li class="nutri-card nutri-card-good" data-key="{{ t.key }}">
+                    <span class="nutri-card-head">{{ t.label }}</span>
+                    <span class="nutri-card-value">{{ t.value }}</span>
+                    {% match t.claim %}{% when Some with (claim) %}<span class="nutri-claim">{{ claim }}</span>{% when None %}{% endmatch %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% when None %}
+        {% endmatch %}
+
+        <div id="nutrition-full" class="nutri-full{% if panel.essential %} is-simple{% endif %}" data-col="tot" hidden>
+            {#- On a phone one column of values at a time, chosen here; wider screens show them all side by side. -#}
+            {% if !panel.per_serving_only %}
+            <div class="nutri-seg" role="radiogroup" aria-label="{{ panel.full_table_label }}">
+                {% if panel.has_100g %}
+                <button type="button" role="radio" aria-checked="false" data-col="p100">{{ panel.per_100g_label }}</button>
+                {% endif %}
+                <button type="button" role="radio" aria-checked="false" data-col="ps">{{ panel.per_serving_label }}</button>
+                <button type="button" role="radio" aria-checked="true" data-col="tot">{{ panel.whole_recipe_label }} ({{ panel.servings }} {{ tr.t("recipe-servings-label") }})</button>
+            </div>
+            {% endif %}
+            <div class="nutri-tools">
+                <button type="button" data-fold="all">{{ panel.collapse_all_label }}</button>
+                <button type="button" data-fold="none">{{ panel.expand_all_label }}</button>
+                {#- The standard that lays the table out, or the simple view that follows none. -#}
+                <select class="nutri-pick" aria-label="{{ panel.pick_label }}">
+                    {% for p in panel.picks %}
+                    <option value="{{ p.id }}"{% if p.selected %} selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <table id="nutrition-table">
+                <thead>
+                    <tr>
+                        <th scope="col"></th>
+                        {% if panel.has_100g %}
+                        <th scope="col" class="nutri-c-p100">{{ panel.per_100g_label }}</th>
+                        {% endif %}
+                        <th scope="col" class="nutri-c-ps">{{ panel.per_serving_label }}</th>
+                        {% if !panel.per_serving_only %}
+                        <th scope="col" class="nutri-c-tot">{{ panel.whole_recipe_label }} ({{ panel.servings }} {{ tr.t("recipe-servings-label") }})</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in panel.rows %}
+                    <tr class="{% if row.fam %}nutri-fam{% endif %}{% if row.sub %} nutri-sub{% endif %}" data-d="{{ row.depth }}" data-simple="{{ row.simple }}" data-macro="{{ row.group }}" data-key="{{ row.key }}"{% if !row.family.is_empty() %} data-fam="{{ row.family }}"{% endif %}{% if !row.mac.is_empty() %} data-mac="{{ row.mac }}"{% endif %}>
+                        <th scope="row">
+                            {% if row.foldable %}<button type="button" class="nutri-fold" aria-expanded="true" data-name="{{ row.key }}" aria-label="{{ panel.fold_label }}: {{ row.label }}"></button>{% else if row.depth > 0 %}<span class="nutri-fold-gap" aria-hidden="true"></span>{% endif %}
+                            {% match row.icon %}{% when Some with (icon) %}<span class="nutri-row-icon" aria-hidden="true">{{ icon|safe }}</span>{% when None %}{% endmatch %}
+                            {% if row.part %}<span class="nutri-of-t">{{ panel.of_which }} </span>{% endif %}{% if row.simple == 2 %}<span class="nutri-of-s">{{ panel.of_which }} </span>{% endif %}<span class="nutri-label">{{ row.label }}</span>
+                        </th>
+                        {% if panel.has_100g %}
+                        <td class="nutri-c-p100">{% match row.per_100g %}{% when Some with (value) %}{{ value }}{% when None %}{% endmatch %}</td>
+                        {% endif %}
+                        <td class="nutri-c-ps">{{ row.per_serving }}{% match row.pct %}{% when Some with (pct) %} <span class="nutri-share">{{ pct }} %</span>{% when None %}{% endmatch %}</td>
+                        {% if !panel.per_serving_only %}
+                        <td class="nutri-total nutri-c-tot">{{ row.total }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script type="application/json" id="nutrition-tips">{{ panel.tips_json|safe }}</script>
+    <div id="nutrition-tip" class="nutri-tip" role="tooltip" hidden></div>
+    <script>
+    (function () {
+        var root = document.querySelector('.nutri');
+        if (!root) return;
+        // What the reader chose survives the reload that follows a change of servings.
+        var OPEN = 'cook-nutrition-open', ACTIVE = 'cook-nutrition-active', FOLDED = 'cook-nutrition-folded';
+        function save(key, value) {
+            try { if (value) sessionStorage.setItem(key, value); else sessionStorage.removeItem(key); } catch (e) {}
+        }
+        function load(key) {
+            try { return sessionStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        var more = root.querySelector('.nutri-more');
+        var full = document.getElementById('nutrition-full');
+        var well = document.getElementById('nutrition-well');
+        var table = document.getElementById('nutrition-table');
+        var tbody = table.tBodies[0];
+
+
+        // ---- the explanation bubbles: on a card or a row of the table, hovered, focused or tapped
+        var tipData = { labels: {}, tips: {} };
+        try { tipData = JSON.parse(document.getElementById('nutrition-tips').textContent); } catch (e) {}
+        var tipBox = document.getElementById('nutrition-tip');
+        var tipSelector = '.nutri-card[data-key], #nutrition-table tbody tr[data-key]';
+        // only the text of a card or of a row shows it (and gets the "?" pointer), not the figures or the rest of the row
+        var tipText = '.nutri-label, .nutri-card-head';
+        function textTarget(e) {
+            var t = e.target.closest && e.target.closest(tipText);
+            return t ? t.closest(tipSelector) : null;
+        }
+        var tipFor = null;
+        function line(parent, className, text) {
+            var p = document.createElement('p');
+            if (className) p.className = className;
+            p.textContent = text;
+            parent.appendChild(p);
+            return p;
+        }
+        function section(parent, label, text) {
+            if (!text) return;
+            var p = document.createElement('p');
+            var k = document.createElement('span');
+            k.className = 'nutri-tip-k';
+            k.textContent = label;
+            p.appendChild(k);
+            p.appendChild(document.createTextNode(text));
+            parent.appendChild(p);
+        }
+        function showTip(el) {
+            var data = tipData.tips[el.getAttribute('data-key')];
+            if (!data) return;
+            tipFor = el;
+            tipBox.textContent = '';
+            var title = document.createElement('strong');
+            title.className = 'nutri-tip-title';
+            title.textContent = data.title;
+            tipBox.appendChild(title);
+            section(tipBox, tipData.labels.what, data.what);
+            section(tipBox, tipData.labels.use, data.use);
+            section(tipBox, tipData.labels.where, data.where);
+            line(tipBox, 'nutri-tip-ref', data.reference);
+            if (data.rating) line(tipBox, 'nutri-tip-ref', data.rating);
+            line(tipBox, 'nutri-tip-now', data.recipe);
+            line(tipBox, 'nutri-tip-src', data.source);
+            tipBox.hidden = false;
+            el.setAttribute('aria-describedby', 'nutrition-tip');
+            var r = el.getBoundingClientRect(), w = tipBox.offsetWidth, h = tipBox.offsetHeight, vw = document.documentElement.clientWidth;
+            var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), vw - w - 8);
+            var top = r.top - h - 8;
+            if (top < 8) top = r.bottom + 8;
+            tipBox.style.left = left + 'px';
+            tipBox.style.top = top + 'px';
+        }
+        function hideTip() {
+            if (tipFor) tipFor.removeAttribute('aria-describedby');
+            tipFor = null;
+            tipBox.hidden = true;
+            tipBox.classList.remove('nutri-tip-mini');
+        }
+
+        // ---- a slice of the donut: its macro, its weight and its share of the energy, in a small bubble by the pointer
+        function showSlice(arc, x, y) {
+            var li = root.querySelector('.nutri-macros li[data-pick="' + arc.getAttribute('data-pick') + '"]');
+            if (!li) return;
+            var amount = li.querySelector('.nutri-amt'), pct = li.querySelector('.nutri-pct');
+            tipFor = null;
+            tipBox.textContent = '';
+            tipBox.classList.add('nutri-tip-mini');
+            var title = document.createElement('strong');
+            title.className = 'nutri-tip-title';
+            title.textContent = li.querySelector('span').textContent.trim();
+            tipBox.appendChild(title);
+            line(tipBox, 'nutri-tip-now', (amount ? amount.textContent.trim() : '') + (pct ? ' \u00b7 ' + pct.textContent.trim() : ''));
+            tipBox.hidden = false;
+            var w = tipBox.offsetWidth, h = tipBox.offsetHeight, vw = document.documentElement.clientWidth;
+            tipBox.style.left = Math.min(Math.max(8, x + 14), vw - w - 8) + 'px';
+            tipBox.style.top = (y - h - 10 < 8 ? y + 18 : y - h - 10) + 'px';
+        }
+        root.querySelectorAll('.nutri-arc').forEach(function (arc) {
+            arc.addEventListener('mouseenter', function (e) { showSlice(arc, e.clientX, e.clientY); });
+            arc.addEventListener('mousemove', function (e) { showSlice(arc, e.clientX, e.clientY); });
+            arc.addEventListener('mouseleave', hideTip);
+            // on a touch screen the tap that picks the slice shows it as well, at the slice itself
+            arc.addEventListener('click', function (e) {
+                if (window.matchMedia('(pointer: coarse)').matches) showSlice(arc, e.clientX, e.clientY);
+            });
+        });
+        root.querySelectorAll(tipSelector).forEach(function (el) {
+            if (tipData.tips[el.getAttribute('data-key')]) el.setAttribute('tabindex', '0');
+        });
+        root.addEventListener('mouseover', function (e) {
+            var el = textTarget(e);
+            if (el) { if (el !== tipFor) showTip(el); } else if (tipFor) hideTip();
+        });
+        root.addEventListener('mouseout', function (e) { var el = e.target.closest(tipSelector); if (el && !el.contains(e.relatedTarget)) hideTip(); });
+        root.addEventListener('focusin', function (e) { var el = e.target.closest(tipSelector); if (el) showTip(el); });
+        root.addEventListener('focusout', function (e) { if (e.target.closest(tipSelector)) hideTip(); });
+        // on a touch screen a tap shows it and a tap elsewhere hides it
+        document.addEventListener('click', function (e) {
+            var el = e.target.closest && textTarget(e);
+            if (!el || !root.contains(el)) { hideTip(); return; }
+            if (window.matchMedia('(pointer: coarse)').matches) { if (tipFor === el) hideTip(); else showTip(el); }
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideTip(); });
+        window.addEventListener('scroll', function () { if (tipFor) hideTip(); }, true);
+
+        // ---- folding the rows of the tree
+        var folded = new Set();
+        var savedFold = load(FOLDED);
+        if (savedFold === null) {
+            // nothing chosen yet: the table opens on the essential rows, the minerals and the vitamins folded
+            Array.prototype.forEach.call(tbody.rows, function (tr) {
+                var f = tr.getAttribute('data-fam');
+                if (tr.classList.contains('nutri-fam') && tr.getAttribute('data-d') === '0' && (f === 'min' || f === 'vit')) {
+                    var b = tr.querySelector('.nutri-fold');
+                    if (b) folded.add(b.getAttribute('data-name'));
+                }
+            });
+        } else {
+            try { JSON.parse(savedFold).forEach(function (name) { folded.add(name); }); } catch (e) {}
+        }
+        function applyFold() {
+            // the simple view is flat: nothing in it is folded away
+            if (full.classList.contains('is-simple')) {
+                Array.prototype.forEach.call(tbody.rows, function (tr) { tr.hidden = false; });
+                return;
+            }
+            var hideFrom = Infinity;
+            Array.prototype.forEach.call(tbody.rows, function (tr) {
+                var d = +tr.getAttribute('data-d');
+                if (d > hideFrom) { tr.hidden = true; return; }
+                hideFrom = Infinity;
+                tr.hidden = false;
+                var button = tr.querySelector('.nutri-fold');
+                if (button && folded.has(button.getAttribute('data-name'))) hideFrom = d;
+            });
+            tbody.querySelectorAll('.nutri-fold').forEach(function (button) {
+                button.setAttribute('aria-expanded', String(!folded.has(button.getAttribute('data-name'))));
+            });
+            save(FOLDED, JSON.stringify(Array.from(folded)));
+        }
+
+        // ---- the tree lines, as in a folder tree: a vertical line under the fold button of each
+        // ancestor, a tick to the right that leads to the row, and an elbow for the last child
+        function centreOf(level) {
+            var el = tbody.querySelector('tr[data-d="' + level + '"]:not([hidden]) .nutri-fold, tr[data-d="' + level + '"]:not([hidden]) .nutri-fold-gap');
+            if (!el) return null;
+            var th = el.closest('th');
+            var left = el.getBoundingClientRect().left - th.getBoundingClientRect().left - (el.classList.contains('nutri-fold-gap') ? 4 : 0);
+            return Math.round(left + 11);
+        }
+        function drawLines() {
+            if (!table.offsetParent) return;
+            var rows = Array.prototype.filter.call(tbody.rows, function (tr) { return !tr.hidden; });
+            var on = false;
+            var x = [null, null, null, null, null];
+            if (on) for (var k = 1; k <= 4; k++) x[k] = centreOf(k);
+            var depth = rows.map(function (tr) { return +tr.getAttribute('data-d'); });
+            var stack = [];
+            function isLast(j) {
+                for (var n = j + 1; n < rows.length; n++) { if (depth[n] < depth[j]) return true; if (depth[n] === depth[j]) return false; }
+                return true;
+            }
+            rows.forEach(function (tr, i) {
+                var th = tr.querySelector('th'), d = depth[i];
+                stack[d] = i; stack.length = d + 1;
+                th.style.backgroundImage = th.style.backgroundSize = th.style.backgroundPosition = th.style.backgroundRepeat = '';
+                if (!on || d < 2) return;
+                var img = [], size = [], pos = [], line = 'linear-gradient(var(--gl), var(--gl))';
+                for (var level = 1; level <= d - 1; level++) {
+                    if (x[level] == null) continue;
+                    if (level === d - 1) {
+                        img.push(line); size.push('1px ' + (isLast(i) ? '50%' : '100%')); pos.push(x[level] + 'px 0');
+                        if (x[d] != null) { img.push(line); size.push(Math.max(5, x[d] - 11 - x[level] - 1) + 'px 1px'); pos.push(x[level] + 'px 50%'); }
+                    } else if (!isLast(stack[level + 1])) {
+                        img.push(line); size.push('1px 100%'); pos.push(x[level] + 'px 0');
+                    }
+                }
+                if (!img.length) return;
+                th.style.backgroundImage = img.join(', ');
+                th.style.backgroundSize = size.join(', ');
+                th.style.backgroundPosition = pos.join(', ');
+                th.style.backgroundRepeat = 'no-repeat';
+            });
+        }
+        tbody.addEventListener('click', function (e) {
+            var button = e.target.closest('.nutri-fold');
+            if (!button) return;
+            var name = button.getAttribute('data-name');
+            if (folded.has(name)) folded.delete(name); else folded.add(name);
+            applyFold(); drawLines();
+        });
+        // a double click anywhere on a row that has rows below it folds or unfolds it, like its button
+        tbody.addEventListener('dblclick', function (e) {
+            if (e.target.closest('.nutri-fold')) return;
+            var tr = e.target.closest('tr'), button = tr && tr.querySelector('.nutri-fold');
+            if (!button) return;
+            var name = button.getAttribute('data-name');
+            if (folded.has(name)) folded.delete(name); else folded.add(name);
+            applyFold(); drawLines();
+            if (window.getSelection) window.getSelection().removeAllRanges();
+        });
+        root.querySelector('.nutri-tools').addEventListener('click', function (e) {
+            var button = e.target.closest('button');
+            if (!button) return;
+            folded.clear();
+            if (button.getAttribute('data-fold') === 'all') {
+                tbody.querySelectorAll('.nutri-fold').forEach(function (f) { folded.add(f.getAttribute('data-name')); });
+            }
+            applyFold(); drawLines();
+        });
+        // ---- the list of standards, and the essential table as its last entry: the choice is the
+        // `cook_standard` cookie, the same as on the preferences page, and the server lays the table out
+        var pick = root.querySelector('.nutri-pick');
+        pick.addEventListener('change', function () {
+            document.cookie = 'cook_standard=' + pick.value + '; path={{ prefix }}/; max-age=' + (365 * 24 * 60 * 60) + '; SameSite=Lax';
+            window.location.reload();
+        });
+        window.addEventListener('resize', drawLines);
+
+        // ---- the button that opens the table and the tiles behind it
+        function setOpen(open) {
+            more.setAttribute('aria-expanded', String(open));
+            more.textContent = more.getAttribute(open ? 'data-label-open' : 'data-label-closed');
+            full.hidden = !open;
+            if (well) well.hidden = !open;
+            save(OPEN, open ? '1' : '');
+            if (open) { applyFold(); drawLines(); }
+        }
+        more.addEventListener('click', function () { setOpen(more.getAttribute('aria-expanded') !== 'true'); });
+        applyFold();
+        if (load(OPEN) === '1') setOpen(true);
+
+        // Which column of values a phone shows: 100 g, per serving or the whole recipe.
+        var seg = full.querySelector('.nutri-seg');
+        if (seg) {
+            var COL = 'cook-nutrition-col';
+            var setCol = function (col) {
+                full.setAttribute('data-col', col);
+                seg.querySelectorAll('button').forEach(function (b) {
+                    b.setAttribute('aria-checked', String(b.getAttribute('data-col') === col));
+                });
+                save(COL, col);
+            };
+            seg.addEventListener('click', function (e) {
+                var button = e.target.closest('button');
+                if (button) setCol(button.getAttribute('data-col'));
+            });
+            var savedCol = load(COL);
+            if (savedCol && seg.querySelector('[data-col="' + savedCol + '"]')) setCol(savedCol);
+        }
+
+        // ---- picking what to look at: slices of the donut (what belongs to them lights up) and ratings of
+        // the legend (the cards and rows with that rating light up). One click picks only that one; Ctrl,
+        // Cmd or Shift adds or removes one, and on a touch screen, where there is no such key, every tap does.
+        // Slices and ratings combine: a row stays lit when it passes both.
+        var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        var macros = new Set(), ratings = new Set();
+        function ratingOf(el) {
+            var cls = el.className || '';
+            if (/\bnutri-card-(low|good)\b/.test(cls)) return 'good';
+            if (/\bnutri-card-mid\b/.test(cls)) return 'mid';
+            if (/\bnutri-card-high\b/.test(cls)) return 'high';
+            if (/\bnutri-card-neutral\b/.test(cls)) return 'neutral';
+            return null;
+        }
+        function levelOf(el) {
+            if (el.classList.contains('nutri-card')) return ratingOf(el);
+            if (el.tagName === 'TR') {
+                // a row takes the rating of the card that has the same nutrient
+                var key = el.getAttribute('data-key');
+                var card = key && root.querySelector('.nutri-card[data-key="' + key + '"]');
+                return card ? ratingOf(card) : null;
+            }
+            return null;
+        }
+        function paint() {
+            var anyMacro = macros.size > 0, anyRating = ratings.size > 0;
+            root.querySelectorAll('[data-macro], .nutri-card, #nutrition-table tbody tr').forEach(function (el) {
+                var group = el.getAttribute('data-macro');
+                var hasMacro = !!group && group !== 'all';
+                var level = levelOf(el);
+                var pass = (!anyMacro || !hasMacro || macros.has(group)) && (!anyRating || !level || ratings.has(level));
+                var applicable = (anyMacro && hasMacro) || (anyRating && !!level);
+                el.classList.toggle('nutri-hl', applicable && pass);
+                el.classList.toggle('nutri-dim', (anyMacro || anyRating) && !pass);
+            });
+            root.querySelectorAll('[data-pick]').forEach(function (el) {
+                el.setAttribute('aria-pressed', String(macros.has(el.getAttribute('data-pick'))));
+            });
+            root.querySelectorAll('[data-rating]').forEach(function (el) {
+                el.setAttribute('aria-pressed', String(ratings.has(el.getAttribute('data-rating'))));
+            });
+            save(ACTIVE, (anyMacro || anyRating) ? JSON.stringify({ m: Array.from(macros), r: Array.from(ratings) }) : '');
+        }
+        function choose(set, key, multi) {
+            if (multi) { if (set.has(key)) set.delete(key); else set.add(key); }
+            else if (set.size === 1 && set.has(key)) set.clear();
+            else { set.clear(); set.add(key); }
+            paint();
+        }
+        function isMulti(e) { return e.ctrlKey || e.metaKey || e.shiftKey || coarse; }
+        root.querySelectorAll('[data-pick]').forEach(function (el) {
+            el.addEventListener('click', function (e) { choose(macros, el.getAttribute('data-pick'), isMulti(e)); });
+            el.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(macros, el.getAttribute('data-pick'), isMulti(e)); }
+            });
+        });
+        root.querySelectorAll('[data-rating]').forEach(function (el) {
+            el.addEventListener('click', function (e) { choose(ratings, el.getAttribute('data-rating'), isMulti(e)); });
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && (macros.size || ratings.size)) { macros.clear(); ratings.clear(); paint(); }
+        });
+        try {
+            var saved = JSON.parse(load(ACTIVE) || 'null');
+            if (saved) {
+                (saved.m || []).forEach(function (k) { if (root.querySelector('[data-pick="' + k + '"]')) macros.add(k); });
+                (saved.r || []).forEach(function (k) { if (root.querySelector('[data-rating="' + k + '"]')) ratings.add(k); });
+                paint();
+            }
+        } catch (e) {}
+    })();
+    </script>
+</fieldset>
