@@ -321,7 +321,10 @@ async fn recipe_page(
         lang: lang.clone(),
         static_mode: false,
         repo_url: None,
-        features,
+        features: FeatureFlags {
+            inline_quantities: state.inline_quantities,
+            ..features
+        },
         viewer: viewer.clone(),
     };
 
