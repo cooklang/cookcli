@@ -412,10 +412,10 @@ impl RecipeTemplate {
                     })
                     .collect();
 
-                let steps: Vec<serde_json::Value> = section
+                let items: Vec<serde_json::Value> = section
                     .items
                     .iter()
-                    .filter_map(|item| match item {
+                    .map(|item| match item {
                         RecipeSectionItem::Step(step) => {
                             let step_ingredients: Vec<serde_json::Value> = step
                                 .ingredients
@@ -430,23 +430,30 @@ impl RecipeTemplate {
                                 })
                                 .collect();
 
-                            Some(serde_json::json!({
+                            serde_json::json!({
                                 "type": "step",
                                 "number": step.number,
                                 "globalNumber": section.step_offset + step.number,
                                 "image": step.image_path,
                                 "ingredients": step_ingredients,
-                            }))
+                            })
                         }
-                        RecipeSectionItem::Note(_) => None,
+                        RecipeSectionItem::Note(text) => serde_json::json!({
+                            "type": "note",
+                            "text": text,
+                        }),
                     })
                     .collect();
+
+                // Retain the step-only view for consumers that do not display notes.
+                let steps: Vec<_> = items.iter().filter(|item| item["type"] == "step").collect();
 
                 serde_json::json!({
                     "name": section.name,
                     "stepOffset": section.step_offset,
                     "ingredients": ingredients,
                     "steps": steps,
+                    "items": items,
                 })
             })
             .collect();
@@ -457,6 +464,7 @@ impl RecipeTemplate {
             "image": self.image_path,
             "sections": sections,
             "optionalLabel": self.tr.t("recipe-optional"),
+            "noteLabel": self.tr.t("recipe-cooking-note"),
         });
 
         // Escape </script> sequences to prevent premature script tag closing

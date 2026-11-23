@@ -388,7 +388,8 @@ test.describe('Cooking Mode step pictures', () => {
           (_match, open: string, json: string, close: string) => {
             const data = JSON.parse(json);
             for (const section of data.sections) {
-              for (const step of section.steps) {
+              // Both the legacy step list and the ordered items describe the same picture.
+              for (const step of [...section.steps, ...(section.items || [])]) {
                 if (step.image) step.image = hostile;
               }
             }

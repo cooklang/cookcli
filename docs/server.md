@@ -377,3 +377,16 @@ The recipe editor's **Picture** button adds, replaces or removes a recipe's pict
 - A recipe whose metadata names a picture (`image:` in its frontmatter) shows that one as its title picture instead. The dialog says so; remove the line to use an uploaded picture.
 
 The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
+
+## Notes in cooking mode
+
+Select **Cook** on a recipe to read it one page at a time. Recipe notes (`>` lines)
+appear between the steps, in the same order as in the recipe. Adjacent notes share
+a page, with a paragraph for each note. A section containing only notes also gets
+its own note page.
+
+Notes have no step number and do not change the numbers on the steps. Progress
+includes note pages, and the section buttons, arrow keys and swipes navigate
+through them. Long notes scroll within their card. HTTP and HTTPS links in a note
+open in a separate tab; the rest of the note stays plain text. A timer started on
+a step keeps running while you read a note.
