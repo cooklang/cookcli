@@ -64,8 +64,9 @@
 
         data.sections.forEach(function(section, sectionIndex) {
             const sectionName = section.name || (data.sections.length > 1 ? 'Main' : null);
+            const stepCount = section.items.filter(function(item) { return item.type === 'step'; }).length;
 
-            if (section.ingredients.length > 0 || sectionName) {
+            if (section.ingredients.length > 0 || (sectionName && stepCount > 0)) {
                 cards.push({
                     type: 'section',
                     sectionIndex: sectionIndex,
@@ -74,13 +75,27 @@
                 });
             }
 
-            section.steps.forEach(function(step) {
+            section.items.forEach(function(step) {
+                if (step.type === 'note') {
+                    const previous = cards[cards.length - 1];
+                    if (previous && previous.type === 'note' && previous.sectionIndex === sectionIndex) {
+                        previous.notes.push(step.text);
+                    } else {
+                        cards.push({
+                            type: 'note',
+                            sectionIndex: sectionIndex,
+                            sectionName: sectionName,
+                            notes: [step.text]
+                        });
+                    }
+                    return;
+                }
                 cards.push({
                     type: 'step',
                     sectionIndex: sectionIndex,
                     sectionName: sectionName,
                     number: step.number,
-                    totalInSection: section.steps.length,
+                    totalInSection: stepCount,
                     image: step.image,
                     html: stepHTMLs[stepHTMLIndex] || '',
                     ingredients: step.ingredients
@@ -109,6 +124,28 @@
         return String(str).replace(/[&<>"']/g, function(ch) {
             return HTML_ESCAPES[ch];
         });
+    }
+
+    // Keep notes plain text, with only explicit HTTP(S) URLs turned into links.
+    function noteHTML(text) {
+        const pattern = /https?:\/\/[^\s<>"']+/g;
+        let html = '';
+        let offset = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const url = match[0].replace(/[.,;:!?]+$/, '');
+            html += escapeHTML(text.slice(offset, match.index));
+            let valid = false;
+            try {
+                const parsed = new URL(url);
+                valid = (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.hostname;
+            } catch (_) { /* Malformed URLs remain text. */ }
+            html += valid
+                ? '<a href="' + escapeHTML(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(url) + '</a>'
+                : escapeHTML(url);
+            offset = match.index + url.length;
+        }
+        return html + escapeHTML(text.slice(offset));
     }
 
     function renderCard(card) {
@@ -161,6 +198,14 @@
                 img.setAttribute('alt', 'Step ' + card.number);
                 div.insertBefore(img, div.firstChild);
             }
+        }
+        else if (card.type === 'note') {
+            div.classList.add('cooking-card-note');
+            div.innerHTML = '<h2 class="cooking-note-heading">' + escapeHTML(state.noteLabel) + '</h2>' +
+                (card.sectionName ? '<p class="cooking-note-section">' + escapeHTML(card.sectionName) + '</p>' : '') +
+                '<div class="cooking-note-text">' + card.notes.map(function(text) {
+                    return '<p>' + noteHTML(text) + '</p>';
+                }).join('') + '</div>';
         }
         else if (card.type === 'done') {
             div.classList.add('cooking-card-done');
@@ -336,6 +381,8 @@
             message = 'Ingredients for ' + currentCard.name;
         } else if (currentCard.type === 'step') {
             message = 'Step ' + currentCard.number + ' of ' + currentCard.totalInSection;
+        } else if (currentCard.type === 'note') {
+            message = state.noteLabel + (currentCard.sectionName ? ': ' + currentCard.sectionName : '');
         } else if (currentCard.type === 'done') {
             message = 'Recipe complete. Bon Appetit!';
         }
@@ -549,6 +596,7 @@
 
         const stepHTMLs = captureStepHTML();
         state.optionalLabel = data.optionalLabel || '(optional)';
+        state.noteLabel = data.noteLabel || 'Note';
         state.cards = buildCards(data, stepHTMLs);
         if (state.cards.length === 0) return;
 

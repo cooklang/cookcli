@@ -80,3 +80,6 @@ sort-modified = Aldatua
 sort-created = Sortua
 sort-direction-toggle = Ordena aldatu
 random-recipe = Ausazko errezeta
+
+# Cooking mode note card
+recipe-cooking-note = Oharra

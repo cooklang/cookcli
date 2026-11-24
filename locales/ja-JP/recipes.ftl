@@ -76,3 +76,6 @@ sort-modified = 更新日
 sort-created = 作成日
 sort-direction-toggle = 昇順・降順を切り替え
 random-recipe = ランダムなレシピ
+
+# Cooking mode note card
+recipe-cooking-note = メモ

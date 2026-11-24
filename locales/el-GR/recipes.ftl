@@ -84,3 +84,6 @@ sort-modified = Τροποποίηση
 sort-created = Δημιουργία
 sort-direction-toggle = Εναλλαγή σειράς ταξινόμησης
 random-recipe = Τυχαία συνταγή
+
+# Cooking mode note card
+recipe-cooking-note = Σημείωση
