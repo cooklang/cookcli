@@ -25,7 +25,8 @@ pub const SUPPORTED_LANGUAGES: &[LanguageIdentifier] = &[
     EN_US, DE_DE, NL_NL, FR_FR, ES_ES, EU_ES, SV_SE, IT_IT, JA_JP, EL_GR,
 ];
 
-/// Per-request feature visibility flags, read from cookies.
+/// What a page may show. The visitor's cookies set the first two; the
+/// server or `cook build web` sets the rest for everyone.
 #[derive(Clone, Copy, Debug)]
 pub struct FeatureFlags {
     pub show_shopping_list: bool,
@@ -34,6 +35,8 @@ pub struct FeatureFlags {
     /// advertise them for feed-reader autodiscovery. Always on for `cook server`; `cook build
     /// web` writes the feeds only with `--feed`.
     pub feeds: bool,
+    /// `--inline-quantities`: a step's ingredient badges carry the quantity.
+    pub inline_quantities: bool,
 }
 
 impl Default for FeatureFlags {
@@ -42,6 +45,7 @@ impl Default for FeatureFlags {
             show_shopping_list: true,
             show_pantry: true,
             feeds: true,
+            inline_quantities: false,
         }
     }
 }

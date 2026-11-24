@@ -1019,6 +1019,9 @@ pub enum StepItem {
     Text(String),
     Ingredient {
         name: String,
+        /// The badge text: the name, after the quantity and unit with
+        /// `FeatureFlags::inline_quantities`.
+        label: String,
         reference_path: Option<String>,
         /// As on [`IngredientData::reference_query`].
         reference_query: String,
