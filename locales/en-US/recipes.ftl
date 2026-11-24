@@ -84,3 +84,6 @@ sort-modified = Modified
 sort-created = Created
 sort-direction-toggle = Toggle sort direction
 random-recipe = Random recipe
+
+# Cooking mode note card
+recipe-cooking-note = Note

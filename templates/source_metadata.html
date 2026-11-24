@@ -1,0 +1,10 @@
+{% match metadata.source_url %}
+{% when Some with (source_url) %}
+<span class="metadata-pill metadata-source">📖 {% if source_url|is_web_url %}<a href="{{ source_url.trim() }}" class="text-info hover:underline ml-1" target="_blank" rel="noopener noreferrer">{% match metadata.source %}{% when Some with (source) %}{{ source }}{% when None %}{{ source_url.trim()|hostname }}{% endmatch %}</a>{% else %}{% match metadata.source %}{% when Some with (source) %}{{ source }} {% when None %}{% endmatch %}{{ source_url }}{% endif %}</span>
+{% when None %}
+{% match metadata.source %}
+{% when Some with (source) %}
+<span class="metadata-pill metadata-source">📖 {{ source }}</span>
+{% when None %}
+{% endmatch %}
+{% endmatch %}

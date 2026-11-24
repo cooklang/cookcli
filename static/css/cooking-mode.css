@@ -296,6 +296,44 @@
     margin-right: 12px;
 }
 
+/* Notes keep the recipe view's plain, muted text and accent edge. */
+.cooking-card-note {
+    background: var(--surface-sunk);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+}
+
+.cooking-note-heading {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.cooking-note-section {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.cooking-note-text {
+    font-size: 24px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    font-style: italic;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.cooking-note-text p + p {
+    margin-top: 16px;
+}
+
+.cooking-note-text a {
+    color: var(--accent-text);
+    text-decoration: underline;
+}
+
 /* Done card */
 .cooking-card-done {
     background: var(--surface);

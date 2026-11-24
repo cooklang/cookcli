@@ -13,9 +13,29 @@ use crate::web::templates::*;
 use crate::web::viewer::Viewer;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang::metadata::CooklangValueExt;
 use cooklang_find::MenuItem;
 use fluent_templates::Loader;
 use unic_langid::LanguageIdentifier;
+
+/// Read the canonical source value and its flat dotted-key form consistently
+/// for recipes and menus. Keep the name separate so templates can link it.
+fn source_metadata<'a>(
+    get: impl Fn(&str) -> Option<&'a serde_yaml::Value>,
+) -> (Option<String>, Option<String>) {
+    let source = get("source").and_then(CooklangValueExt::as_name_and_url);
+    let name = source
+        .as_ref()
+        .and_then(|value| value.name())
+        .or_else(|| get("source.name").and_then(|value| value.as_str()))
+        .map(str::to_owned);
+    let url = source
+        .as_ref()
+        .and_then(|value| value.url())
+        .or_else(|| get("source.url").and_then(|value| value.as_str()))
+        .map(str::to_owned);
+    (name, url)
+}
 
 /// Inputs for [`build_recipes_template`].
 pub struct RecipesBuildInput<'a> {
@@ -988,6 +1008,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             }
         }
 
+        let (source, source_url) = source_metadata(|key| recipe.metadata.get(key));
         Some(RecipeMetadata {
             // The stepper's value rather than the metadata: `scale` rounds
             // `servings` to a whole number, so half of a 4-serving recipe
@@ -1011,8 +1032,8 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             diet: get_field("diet"),
             author: get_field("author").or_else(|| get_field("source.author")),
             description: get_field("description"),
-            source: get_field("source").or_else(|| get_field("source.name")),
-            source_url: get_field("source.url"),
+            source,
+            source_url,
             custom: custom_metadata,
         })
     };
@@ -1230,6 +1251,7 @@ fn build_menu_template_inner(
             .into_iter()
             .flatten()
             .filter(|(key, _)| key.parse::<cooklang::metadata::StdKey>().is_err())
+            .filter(|(key, _)| !key.starts_with("source."))
             .filter_map(|(key, value)| {
                 let text = if let Some(s) = value.as_str() {
                     s.to_string()
@@ -1247,6 +1269,7 @@ fn build_menu_template_inner(
             .collect();
         custom_metadata.sort();
 
+        let (source, source_url) = source_metadata(|key| menu.metadata.get(key));
         Some(RecipeMetadata {
             // As on the recipe page: `scale` rounds `servings` to a whole number.
             servings: servings
@@ -1266,8 +1289,8 @@ fn build_menu_template_inner(
             diet: get_field("diet"),
             author: get_field("author").or_else(|| get_field("source.author")),
             description: get_field("description"),
-            source: get_field("source").or_else(|| get_field("source.name")),
-            source_url: get_field("source.url"),
+            source,
+            source_url,
             custom: custom_metadata,
         })
     };

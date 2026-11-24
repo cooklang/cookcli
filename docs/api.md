@@ -507,6 +507,7 @@ Stateless — nothing is stored. Ingredients with the same name are combined, le
 | `scale` | body | `number` | no | Scaling factor for this recipe. Defaults to 1. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit to include all of them. |
 | `optional_ingredients` | body | `{ name: string, quantity?: string }[]` | no | Optional ingredients to include, each with the amount to buy in Cooklang quantity syntax (`2%pinch`). The amount is used as given, not scaled — this is what `GET /api/shopping_list/items` returns for the entry. |
+| `menu` | body | `string` | no | The menu this recipe is listed under on the stored list (the `path` of its `add_menu` entry). The recipe is expanded as part of it, so a menu used as a meal whose references lead back to this menu does not count it a second time. Omit for a recipe added on its own. |
 
 Request body:
 
