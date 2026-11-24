@@ -388,5 +388,6 @@ its own note page.
 Notes have no step number and do not change the numbers on the steps. Progress
 includes note pages, and the section buttons, arrow keys and swipes navigate
 through them. Long notes scroll within their card. HTTP and HTTPS links in a note
-open in a separate tab; the rest of the note stays plain text. A timer started on
-a step keeps running while you read a note.
+open in a separate tab, in cooking mode and on the recipe page alike; the rest of
+the note stays plain text. A timer started on a step keeps running while you read
+a note.

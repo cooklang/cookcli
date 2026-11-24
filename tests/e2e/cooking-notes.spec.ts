@@ -62,18 +62,12 @@ test('notes follow file order, group adjacent paragraphs and preserve step HTML'
   await expect(current(page)).toHaveClass(/cooking-card-done/);
 });
 
-test('section navigation and starting at a step skip the right number of note cards', async ({ page }) => {
+test('section navigation skips the right number of note cards', async ({ page }) => {
   await openRecipe(page);
   await page.locator('.cooking-section-pill', { hasText: 'Rest' }).click();
   await expect(current(page).locator('.cooking-note-text p')).toHaveText(['E']);
   await page.locator('.cooking-section-pill', { hasText: 'Sear' }).click();
   await expect(current(page)).toHaveClass(/cooking-card-section/);
-  await page.keyboard.press('Escape');
-  await page.evaluate(() => (window as unknown as { startCookingMode: (step: number) => void }).startCookingMode(2));
-  await expect(current(page).locator('.cooking-step-number')).toHaveText('2');
-  await expect(current(page).locator('.cooking-step-text')).toContainText(/Fry in a\s+pan/);
-  await page.keyboard.press('ArrowLeft');
-  await expect(current(page).locator('.cooking-note-text p')).toHaveText(['B', 'C']);
 });
 
 test('swipes cross note cards and a running timer survives navigation onto notes', async ({ page }) => {
@@ -115,28 +109,4 @@ test('note text is escaped, safe links open separately, and long notes scroll', 
   await current(page).evaluate(el => { el.scrollTop = 50; });
   await swipe(page, 400, 300);
   await expect(current(page)).toHaveClass(/cooking-card-note/);
-});
-
-// Older static sites provide only the step list, with no ordered items.
-test('legacy step-only data still starts at the ingredient card', async ({ page }) => {
-  await page.route(url => decodeURIComponent(url.pathname) === `/recipe/${name}.cook`, async route => {
-    const response = await route.fetch();
-    const html = (await response.text()).replace(
-      /(<script id="cooking-mode-data" type="application\/json">)([\s\S]*?)(<\/script>)/,
-      (_match, open: string, json: string, close: string) => {
-        const data = JSON.parse(json);
-        for (const section of data.sections) {
-          delete section.items;
-          for (const step of section.steps) delete step.globalNumber;
-        }
-        return open + JSON.stringify(data) + close;
-      },
-    );
-    await route.fulfill({ response, body: html });
-  });
-  await openRecipe(page);
-  await expect(current(page)).toHaveClass(/cooking-card-section/);
-  await expect(page.locator('.cooking-card-note')).toHaveCount(0);
-  await next(page);
-  await expect(current(page).locator('.cooking-step-text')).toContainText(/Salt\s+chicken thighs/);
 });

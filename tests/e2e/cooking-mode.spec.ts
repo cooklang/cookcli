@@ -329,7 +329,7 @@ test.describe('Cooking Mode', () => {
     expect(data.sections).toBeDefined();
     expect(data.sections.length).toBeGreaterThan(0);
     expect(data.sections[0].ingredients.length).toBeGreaterThan(0);
-    expect(data.sections[0].steps.length).toBeGreaterThan(0);
+    expect(data.sections[0].items.filter((item: { type: string }) => item.type === 'step').length).toBeGreaterThan(0);
   });
 
   test('should open with keyboard shortcut c', async ({ page }) => {
@@ -388,8 +388,7 @@ test.describe('Cooking Mode step pictures', () => {
           (_match, open: string, json: string, close: string) => {
             const data = JSON.parse(json);
             for (const section of data.sections) {
-              // Both the legacy step list and the ordered items describe the same picture.
-              for (const step of [...section.steps, ...(section.items || [])]) {
+              for (const step of section.items) {
                 if (step.image) step.image = hostile;
               }
             }

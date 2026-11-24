@@ -64,8 +64,9 @@
 
         data.sections.forEach(function(section, sectionIndex) {
             const sectionName = section.name || (data.sections.length > 1 ? 'Main' : null);
+            const stepCount = section.items.filter(function(item) { return item.type === 'step'; }).length;
 
-            if (section.ingredients.length > 0 || (sectionName && section.steps.length > 0)) {
+            if (section.ingredients.length > 0 || (sectionName && stepCount > 0)) {
                 cards.push({
                     type: 'section',
                     sectionIndex: sectionIndex,
@@ -74,7 +75,7 @@
                 });
             }
 
-            (section.items || section.steps).forEach(function(step) {
+            section.items.forEach(function(step) {
                 if (step.type === 'note') {
                     const previous = cards[cards.length - 1];
                     if (previous && previous.type === 'note' && previous.sectionIndex === sectionIndex) {
@@ -94,8 +95,7 @@
                     sectionIndex: sectionIndex,
                     sectionName: sectionName,
                     number: step.number,
-                    globalNumber: step.globalNumber,
-                    totalInSection: section.steps.length,
+                    totalInSection: stepCount,
                     image: step.image,
                     html: stepHTMLs[stepHTMLIndex] || '',
                     ingredients: step.ingredients
@@ -587,7 +587,7 @@
 
     // ─── Open / Close ─────────────────────────────────────────────
 
-    function startCookingMode(globalStepNumber) {
+    function startCookingMode() {
         const data = loadRecipeData();
         if (!data) return;
 
@@ -600,10 +600,7 @@
         state.cards = buildCards(data, stepHTMLs);
         if (state.cards.length === 0) return;
 
-        const startIndex = Number.isInteger(globalStepNumber) ? state.cards.findIndex(function(card) {
-            return card.type === 'step' && card.globalNumber === globalStepNumber;
-        }) : -1;
-        state.currentIndex = startIndex >= 0 ? startIndex : 0;
+        state.currentIndex = 0;
 
         state.overlay = renderOverlay(data, state.cards);
         document.body.appendChild(state.overlay);

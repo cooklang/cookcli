@@ -33,7 +33,7 @@ fn recipe(text: &str, static_mode: bool) -> Box<RecipeTemplate> {
 }
 
 #[test]
-fn cooking_data_preserves_notes_and_legacy_steps_in_file_order() {
+fn cooking_data_keeps_notes_and_steps_in_one_ordered_list() {
     for static_mode in [false, true] {
         let data: Value =
             serde_json::from_str(&recipe(ACCEPTANCE, static_mode).cooking_mode_json()).unwrap();
@@ -55,17 +55,12 @@ fn cooking_data_preserves_notes_and_legacy_steps_in_file_order() {
         assert_eq!(items[5]["text"], "D");
         assert_eq!(items[1]["globalNumber"], 1);
         assert_eq!(items[4]["globalNumber"], 2);
-        let steps: Vec<_> = items
-            .iter()
-            .filter(|v| v["type"] == "step")
-            .cloned()
-            .collect();
-        assert_eq!(sections[0]["steps"], serde_json::json!(steps));
+        // `items` is the only list: steps are not sent a second time.
+        assert!(sections.iter().all(|s| s.get("steps").is_none()));
         assert_eq!(
             sections[1]["items"],
             serde_json::json!([{"type":"note", "text":"E"}])
         );
-        assert!(sections[1]["steps"].as_array().unwrap().is_empty());
         assert_eq!(data["noteLabel"], "Note");
     }
 }
@@ -98,5 +93,21 @@ fn steps_after_note_only_sections_keep_global_numbers() {
     assert_eq!(steps[0]["number"], 1);
     assert_eq!(steps[0]["globalNumber"], 1);
     assert_eq!(steps[1]["globalNumber"], 2);
-    assert_eq!(data["sections"][1]["steps"], serde_json::json!(steps));
+}
+
+#[test]
+fn recipe_page_links_note_urls_like_cooking_mode() {
+    use askama::Template;
+    let html = recipe(
+        "> <b>Tip</b>: see https://example.com/technique?q=1&lang=en, or javascript:alert(1).\n",
+        false,
+    )
+    .render()
+    .unwrap();
+    assert!(html.contains(
+        "<a href=\"https://example.com/technique?q=1&amp;lang=en\" class=\"text-info hover:underline\" \
+         target=\"_blank\" rel=\"noopener noreferrer\">https://example.com/technique?q=1&amp;lang=en</a>,"
+    ));
+    assert!(html.contains("&lt;b&gt;Tip&lt;/b&gt;"));
+    assert!(!html.contains("href=\"javascript:"));
 }

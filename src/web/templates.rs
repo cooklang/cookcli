@@ -183,6 +183,33 @@ mod reference_link_tests {
     }
 }
 
+#[cfg(test)]
+mod link_urls_tests {
+    use super::filters::link_urls;
+
+    #[test]
+    fn links_web_urls_and_keeps_trailing_punctuation_outside() {
+        assert_eq!(
+            link_urls("See https://example.com/guide?q=1&lang=en.").unwrap(),
+            "See <a href=\"https://example.com/guide?q=1&amp;lang=en\" class=\"text-info hover:underline\" \
+             target=\"_blank\" rel=\"noopener noreferrer\">https://example.com/guide?q=1&amp;lang=en</a>."
+        );
+    }
+
+    #[test]
+    fn escapes_the_rest_of_the_note() {
+        assert_eq!(
+            link_urls("<img src=x onerror=\"x()\"> & javascript:alert(1)").unwrap(),
+            "&lt;img src=x onerror=&quot;x()&quot;&gt; &amp; javascript:alert(1)"
+        );
+    }
+
+    #[test]
+    fn leaves_text_without_a_host_as_text() {
+        assert_eq!(link_urls("try http://").unwrap(), "try http://");
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod inline_code_tests {
     use super::filters::inline_code;
@@ -221,6 +248,8 @@ mod inline_code_tests {
 
 mod filters {
     use askama::Result;
+    use regex::Regex;
+    use std::sync::LazyLock;
     use url::Url;
 
     pub fn hostname(url: &str) -> Result<String> {
@@ -241,6 +270,42 @@ mod filters {
         Ok(Url::parse(value)
             .map(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some())
             .unwrap_or(false))
+    }
+
+    /// Escape a recipe note and turn its http(s) URLs into links that open in
+    /// a new tab, the way cooking mode shows the same note (`noteHTML` in
+    /// `static/js/cooking-mode.js`). Trailing `.,;:!?` stay outside the link,
+    /// and anything that is not an absolute http(s) URL stays plain text.
+    ///
+    /// Escapes every segment itself, so callers MUST use `|safe`.
+    pub fn link_urls(text: &str) -> Result<String> {
+        static URL_RE: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"https?://[^\s<>"']+"#).unwrap());
+        let mut out = String::with_capacity(text.len());
+        let mut offset = 0;
+        for found in URL_RE.find_iter(text) {
+            let url = found
+                .as_str()
+                .trim_end_matches(['.', ',', ';', ':', '!', '?']);
+            out.push_str(&escape(&text[offset..found.start()])?);
+            let link = Url::parse(url)
+                .is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some());
+            let url_html = escape(url)?;
+            if link {
+                out.push_str(&format!(
+                    r#"<a href="{url_html}" class="text-info hover:underline" target="_blank" rel="noopener noreferrer">{url_html}</a>"#
+                ));
+            } else {
+                out.push_str(&url_html);
+            }
+            offset = found.start() + url.len();
+        }
+        out.push_str(&escape(&text[offset..])?);
+        Ok(out)
+    }
+
+    fn escape(text: &str) -> Result<String> {
+        Ok(askama::filters::escape(askama::Html, text)?.to_string())
     }
 
     /// A scale factor as short decimal text, for a menu's badges and recipe
@@ -445,14 +510,10 @@ impl RecipeTemplate {
                     })
                     .collect();
 
-                // Retain the step-only view for consumers that do not display notes.
-                let steps: Vec<_> = items.iter().filter(|item| item["type"] == "step").collect();
-
                 serde_json::json!({
                     "name": section.name,
                     "stepOffset": section.step_offset,
                     "ingredients": ingredients,
-                    "steps": steps,
                     "items": items,
                 })
             })
