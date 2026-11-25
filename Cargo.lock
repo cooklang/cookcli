@@ -617,6 +617,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2205f7f6d3de68ecf4c291c789b3edf07b6569268abd0188819086f71ae42225"
 
 [[package]]
+name = "codesnake"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56a42f52649afc3d3378670ccaaab507e48edd165c29a1591fa027745fffd743"
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -704,7 +710,7 @@ dependencies = [
  "clap_complete",
  "console",
  "cookcli-core",
- "cooklang",
+ "cooklang 0.20.0",
  "cooklang-find 0.12.1",
  "cooklang-import",
  "cooklang-language-server",
@@ -769,7 +775,7 @@ dependencies = [
  "anstream",
  "camino",
  "chrono",
- "cooklang",
+ "cooklang 0.20.0",
  "cooklang-find 0.12.1",
  "cooklang-format",
  "cooklang-reports",
@@ -823,17 +829,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d3381b8082bb6043b1ab8032d37ccfd040e742fe7b792288a3aa2e2d6bc5be"
 dependencies = [
  "bitflags 2.13.0",
- "codesnake",
- "enum-map",
+ "codesnake 0.2.1",
+ "enum-map 2.7.3",
  "finl_unicode",
  "indexmap",
  "serde",
  "serde_yaml",
  "smallvec",
- "strum",
+ "strum 0.26.3",
  "thiserror",
  "toml 0.8.23",
  "toml_edit 0.22.27",
+ "tracing",
+ "unicase",
+ "unicode-width 0.2.2",
+ "yansi",
+]
+
+[[package]]
+name = "cooklang"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c8e7b8e6c53babc8be832ff5920724f948db562ce9ecd464b8a36dca2ab6e0b"
+dependencies = [
+ "bitflags 2.13.0",
+ "codesnake 0.3.0",
+ "enum-map 3.1.0",
+ "finl_unicode",
+ "indexmap",
+ "serde",
+ "serde_yaml",
+ "smallvec",
+ "strum 0.28.0",
+ "thiserror",
+ "toml 1.1.6+spec-1.1.0",
+ "toml_edit 0.25.15+spec-1.1.0",
  "tracing",
  "unicase",
  "unicode-width 0.2.2",
@@ -877,7 +907,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "anstyle-yansi",
- "cooklang",
+ "cooklang 0.20.0",
  "humantime",
  "regex",
  "serde",
@@ -917,7 +947,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e43f87d1992a4cdb7a1666bf509efabde9b6963b97d8f7529e5a0ccde63b91e"
 dependencies = [
  "anyhow",
- "cooklang",
+ "cooklang 0.19.0",
  "dashmap 6.2.1",
  "nohash-hasher",
  "ropey",
@@ -938,7 +968,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8c769664170e37bc12b9a83505589a9b23c5818666e2958aee37499608dbd0e"
 dependencies = [
  "anyhow",
- "cooklang",
+ "cooklang 0.19.0",
  "cooklang-find 0.10.0",
  "minijinja",
  "serde",
@@ -1476,7 +1506,17 @@ version = "2.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
 dependencies = [
- "enum-map-derive",
+ "enum-map-derive 0.17.0",
+ "serde",
+]
+
+[[package]]
+name = "enum-map"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4532960034c15ba2f55e9eee631040ecc473c32e6c4b200828c759840f13a06"
+dependencies = [
+ "enum-map-derive 1.0.1",
  "serde",
 ]
 
@@ -1489,6 +1529,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7127272f64b3e098f7d81f350d672081b879bff896d219c42370dc858b1af9ff"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -3140,9 +3191,9 @@ checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.106"
+version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
+checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
@@ -3236,9 +3287,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.46"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368"
+checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]
@@ -4149,7 +4200,16 @@ version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros 0.28.0",
 ]
 
 [[package]]
@@ -4162,6 +4222,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
+ "syn 2.0.118",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
  "syn 2.0.118",
 ]
 
