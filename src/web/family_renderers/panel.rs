@@ -37,7 +37,8 @@
 //! `crates/format/data/standards/`. This module lays out what that file says.
 
 use super::nutrition::{
-    nutrient_label_key, translated_group_label, translated_nutrient_label, NutritionRenderer,
+    decimal_separator, localized_number, nutrient_label_key, translated_group_label,
+    translated_nutrient_label, NutritionRenderer,
 };
 use super::FamilyRenderer;
 use crate::util::format::nutrition::{amount_and_unit, find, to_micrograms, Nutrient};
@@ -157,7 +158,8 @@ fn ring_arcs(shares: [f64; 3]) -> Vec<RingArc> {
         .collect()
 }
 
-/// One nutrient the recipe gives, as written.
+/// One nutrient the recipe gives, in the unit of the nutrient (as written for a key the table
+/// does not know).
 struct Entry<'a> {
     field: &'a str,
     nutrient: Option<&'static Nutrient>,
@@ -166,8 +168,10 @@ struct Entry<'a> {
 }
 
 impl Entry<'_> {
-    fn text(&self, value: f64) -> String {
-        format!("{} {}", fmt_amount(self.nutrient, value), self.unit)
+    /// `value` as shown, with `separator` between the units and the decimals.
+    fn text(&self, value: f64, separator: &str) -> String {
+        let number = fmt_amount(self.nutrient, value).replace('.', separator);
+        format!("{number} {}", unit_label(&self.unit))
             .trim()
             .to_string()
     }
@@ -185,12 +189,10 @@ fn entries(mapping: &serde_yaml::Mapping) -> Vec<Entry<'_>> {
         .iter()
         .filter_map(|(key, value)| {
             let field = key.as_str().filter(|f| !f.starts_with('.'))?;
-            let (per_serving, written_unit) = amount_and_unit(value)?;
             let nutrient = find(field);
-            let unit = if written_unit.is_empty() {
-                nutrient.map_or("", |n| n.default_unit).to_string()
-            } else {
-                written_unit
+            let (per_serving, unit) = match nutrient {
+                Some(n) => (n.amount(value)?, n.default_unit.to_string()),
+                None => amount_and_unit(value)?,
             };
             Some(Entry {
                 field,
@@ -343,7 +345,7 @@ fn unit_label(unit: &str) -> &str {
 }
 
 /// A sum of masses, in the unit the terms share, or in the one that reads best.
-fn format_mass(micrograms: f64, unit: Option<&str>) -> String {
+fn format_mass(micrograms: f64, unit: Option<&str>, separator: &str) -> String {
     let unit = unit
         .filter(|u| to_micrograms(1.0, u).is_some())
         .unwrap_or(if micrograms >= 1e6 {
@@ -365,13 +367,16 @@ fn format_mass(micrograms: f64, unit: Option<&str>) -> String {
         "mg" => usize::from(value < 100.0),
         _ => 0,
     };
-    format!("{value:.decimals$} {}", unit_label(unit))
+    let number = format!("{value:.decimals$}").replace('.', separator);
+    format!("{number} {}", unit_label(unit))
 }
 
 /// What the table and the cards are made from.
 struct Layout<'a> {
     standard: &'a Standard,
     entries: &'a [Entry<'a>],
+    /// What stands before the decimals in the language of the page.
+    separator: String,
     weight: Option<f64>,
     base: f64,
     chosen: f64,
@@ -391,6 +396,11 @@ impl Layout<'_> {
             translated_nutrient_label(entry.field, self.lang)
                 .unwrap_or_else(|| entry.field.to_string())
         }
+    }
+
+    /// An amount of what `entry` gives, as shown.
+    fn text(&self, entry: &Entry<'_>, value: f64) -> String {
+        entry.text(value, &self.separator)
     }
 
     /// The amount per 100 g of what one serving holds.
@@ -522,9 +532,11 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
                 .iter()
                 .find(|(name, _)| *name == node.name)
                 .map_or(0, |(_, of_which)| if *of_which { 2 } else { 1 });
-            row.per_serving = entry.text(entry.per_serving);
-            row.per_100g = layout.per_100g(entry.per_serving).map(|v| entry.text(v));
-            row.total = entry.text(entry.per_serving * layout.chosen);
+            row.per_serving = layout.text(entry, entry.per_serving);
+            row.per_100g = layout
+                .per_100g(entry.per_serving)
+                .map(|v| layout.text(entry, v));
+            row.total = layout.text(entry, entry.per_serving * layout.chosen);
             row.pct = if node.name == "calories" {
                 (entry.unit == "kcal")
                     .then(|| (entry.per_serving / standard.energy_kcal * 100.0).round() as u32)
@@ -580,11 +592,19 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
             unit: String::new(),
         });
         for entry in loose {
-            let mut row = new_row(layout.label_of(entry), 1, false);
+            // a nutrient is named like any other row, an unknown key stays as written
+            let label = layout.label_of(entry);
+            let label = match entry.nutrient {
+                Some(_) => capitalize(&label),
+                None => label,
+            };
+            let mut row = new_row(label, 1, false);
             row.icon = renderer.mapping_icon(entry.field).map(str::to_string);
-            row.per_serving = entry.text(entry.per_serving);
-            row.per_100g = layout.per_100g(entry.per_serving).map(|v| entry.text(v));
-            row.total = entry.text(entry.per_serving * layout.chosen);
+            row.per_serving = layout.text(entry, entry.per_serving);
+            row.per_100g = layout
+                .per_100g(entry.per_serving)
+                .map(|v| layout.text(entry, v));
+            row.total = layout.text(entry, entry.per_serving * layout.chosen);
             built.push(Built {
                 row,
                 mass: [None; 3],
@@ -636,7 +656,7 @@ fn table_rows(layout: &Layout<'_>) -> Vec<NutritionRow> {
             let text = |value: Option<f64>| {
                 value
                     .filter(|v| *v > 0.0)
-                    .map(|v| format_mass(v, unit.as_deref()))
+                    .map(|v| format_mass(v, unit.as_deref(), &layout.separator))
                     .unwrap_or_default()
             };
             item.row.per_serving = text(mass[0]);
@@ -699,7 +719,7 @@ fn cards_of(layout: &Layout<'_>, renderer: &NutritionRenderer) -> Vec<NutrientCa
             Some(NutrientCard {
                 icon: renderer.mapping_icon(entry.field).map(str::to_string),
                 label: capitalize(&layout.label_of(entry)),
-                value: entry.text(entry.per_serving * layout.chosen),
+                value: layout.text(entry, entry.per_serving * layout.chosen),
                 level: level.to_string(),
                 word,
                 group: slice_of(standard, canon).unwrap_or("other").to_string(),
@@ -730,7 +750,7 @@ fn well_present(layout: &Layout<'_>, renderer: &NutritionRenderer) -> Option<Wel
                 NutrientCard {
                     icon: renderer.mapping_icon(entry.field).map(str::to_string),
                     label: capitalize(&layout.label_of(entry)),
-                    value: entry.text(entry.per_serving * layout.chosen),
+                    value: layout.text(entry, entry.per_serving * layout.chosen),
                     level: "good".to_string(),
                     word: None,
                     group: "other".to_string(),
@@ -806,8 +826,9 @@ fn try_say(lang: &LanguageIdentifier, key: &str) -> Option<String> {
 }
 
 /// An amount of a nutrient the way a person reads it: `800 mg`, `2.5 µg`.
-fn amount_text(amount: f64, unit: &str) -> String {
-    format!("{} {}", fmt_unknown(amount), unit_label(unit))
+fn amount_text(amount: f64, unit: &str, separator: &str) -> String {
+    let number = fmt_unknown(amount).replace('.', separator);
+    format!("{number} {}", unit_label(unit))
 }
 
 /// How the standard in use rates a nutrient, in a sentence; `None` when it does not.
@@ -822,14 +843,15 @@ fn rating_line(layout: &Layout<'_>, canon: &str) -> Option<String> {
         _ => None,
     };
     let names = [Some(canon), twin];
+    let threshold = |v: f64| V::from(localized_number(v, &layout.separator));
     if let Rating::TrafficLight { nutrients, .. } = &standard.rating {
         if let Some(t) = nutrients.get(canon) {
             return Some(say(
                 lang,
                 "nutrition-help-rating-traffic",
                 &[
-                    ("low", V::from(t.low)),
-                    ("high", V::from(t.high)),
+                    ("low", threshold(t.low)),
+                    ("high", threshold(t.high)),
                     ("unit", V::from(t.unit.clone())),
                 ],
             ));
@@ -863,7 +885,7 @@ fn rating_line(layout: &Layout<'_>, canon: &str) -> Option<String> {
                     "nutrition-help-rating-claim-max",
                     &[
                         ("name", V::from(name)),
-                        ("amount", V::from(convert(max))),
+                        ("amount", threshold(convert(max))),
                         ("unit", V::from(unit.to_string())),
                     ],
                 ));
@@ -873,7 +895,7 @@ fn rating_line(layout: &Layout<'_>, canon: &str) -> Option<String> {
                     "nutrition-help-rating-claim-min",
                     &[
                         ("name", V::from(name)),
-                        ("amount", V::from(convert(min))),
+                        ("amount", threshold(convert(min))),
                         ("unit", V::from(unit.to_string())),
                     ],
                 ));
@@ -923,6 +945,8 @@ fn tips_json(layout: &Layout<'_>) -> String {
     use fluent::FluentValue as V;
     let (standard, lang) = (layout.standard, layout.lang);
     let standard_name = layout.l(&format!("standard-{}", standard.id));
+    let reference_amount =
+        |amount: f64, unit: &str| V::from(amount_text(amount, unit, &layout.separator));
     let mut tips: BTreeMap<String, Tip> = BTreeMap::new();
     for entry in layout.entries {
         let Some(canon) = entry.canon() else { continue };
@@ -947,7 +971,7 @@ fn tips_json(layout: &Layout<'_>) -> String {
                 "nutrition-help-reference",
                 &[
                     ("standard", V::from(standard_name.clone())),
-                    ("amount", V::from(amount_text(standard.energy_kcal, "kcal"))),
+                    ("amount", reference_amount(standard.energy_kcal, "kcal")),
                 ],
             ),
             (_, Some(intake)) => say(
@@ -955,7 +979,7 @@ fn tips_json(layout: &Layout<'_>) -> String {
                 "nutrition-help-reference",
                 &[
                     ("standard", V::from(standard_name.clone())),
-                    ("amount", V::from(amount_text(intake.amount, &intake.unit))),
+                    ("amount", reference_amount(intake.amount, &intake.unit)),
                 ],
             ),
             _ => say(
@@ -971,7 +995,7 @@ fn tips_json(layout: &Layout<'_>) -> String {
                 .share_of(canon, entry.per_serving, &entry.unit)
                 .map(|s| s * 100.0)
         };
-        let amount = entry.text(entry.per_serving);
+        let amount = layout.text(entry, entry.per_serving);
         let recipe = match pct {
             Some(p) => say(
                 lang,
@@ -1035,6 +1059,7 @@ pub fn build_nutrition_panel(
     let layout = Layout {
         standard,
         entries: &prepared.entries,
+        separator: decimal_separator(lang),
         weight,
         base,
         chosen,
@@ -1054,7 +1079,7 @@ pub fn build_nutrition_panel(
             Some(MacroLine {
                 kind: kind.to_string(),
                 label: capitalize(&layout.label_of(entry)),
-                amount: entry.text(entry.per_serving * chosen),
+                amount: layout.text(entry, entry.per_serving * chosen),
                 pct: ring.as_ref().map(|(_, p)| macro_percent(p, kind)),
             })
         })
@@ -1125,7 +1150,7 @@ pub fn build_nutrition_panel(
         pick_label: l("nutrition-pick-label"),
         well_present: well_present(&layout, &renderer),
         tips_json: tips_json(&layout),
-        servings: fmt_unknown(chosen),
+        servings: fmt_unknown(chosen).replace('.', &layout.separator),
         has_100g: weight.is_some(),
         per_serving_only,
         kcal_total: energy.map(|e| format!("{:.0}", e * chosen)),
@@ -1149,6 +1174,7 @@ pub fn build_list_nutrition(
     let prepared = prepare(mapping, standard);
     let (arcs, shares) = ring_of(&prepared.entries, standard)?;
     let energy = energy_per_serving(&prepared.entries, standard)?;
+    let separator = decimal_separator(lang);
     let macros = slices(standard)
         .into_iter()
         .filter_map(|(kind, name)| {
@@ -1158,7 +1184,7 @@ pub fn build_list_nutrition(
             Some(MacroLine {
                 kind: kind.to_string(),
                 label: capitalize(&label),
-                amount: entry.text(entry.per_serving),
+                amount: entry.text(entry.per_serving, &separator),
                 pct: Some(macro_percent(&shares, kind)),
             })
         })
@@ -1360,6 +1386,53 @@ mod tests {
         assert_eq!(last.label, "mystery");
         assert!(last.sub && last.depth == 1);
         assert!(p.rows[p.rows.len() - 2].fam);
+    }
+
+    #[test]
+    fn bare_numbers_are_in_the_unit_of_their_key() {
+        let recipe = "calories: 185\nfatContent: 1.54\nsaturatedFatContent: 0.205\nunsaturatedFatContent: 0.722\nmonounsaturatedFatContent: 0.269\npolyunsaturatedFatContent: 0.453";
+        let p = panel(recipe, None, Some((1.0, 1.0)), "eu");
+        assert_eq!(row(&p, "calories").per_serving, "185 kcal");
+        assert_eq!(row(&p, "fatContent").per_serving, "1.5 g");
+        assert_eq!(row(&p, "saturatedFatContent").per_serving, "0.2 g");
+        assert_eq!(row(&p, "polyunsaturatedFatContent").per_serving, "0.5 g");
+    }
+
+    #[test]
+    fn values_written_with_a_unit_are_converted_before_any_figure() {
+        // as an importer writes them, and sodium given in grams
+        let recipe =
+            "calories: 1255 kJ\nfat: 20000 mg\ncarbohydrates: 30 g\nprotein: 10 g\nsodium: 0.4 g";
+        let p = panel(recipe, Some("200g"), Some((2.0, 2.0)), "eu");
+        assert_eq!(row(&p, "calories").per_serving, "300 kcal");
+        assert_eq!(row(&p, "fatContent").per_serving, "20.0 g");
+        assert_eq!(row(&p, "fatContent").total, "40.0 g");
+        assert_eq!(row(&p, "fatContent").per_100g.as_deref(), Some("20.0 g"));
+        assert_eq!(row(&p, "sodiumContent").per_serving, "400 mg");
+        // the salt the EU declares follows from the converted sodium
+        assert_eq!(row(&p, "salt").per_serving, "1.00 g");
+        assert!(p.ring.is_some());
+    }
+
+    #[test]
+    fn a_nutrient_outside_the_tree_is_named_like_the_others() {
+        // the US tree has no fluoride
+        let p = panel("fluoride: 0.1", None, Some((1.0, 1.0)), "us");
+        assert_eq!(p.rows.last().unwrap().label, "Fluoride");
+    }
+
+    #[test]
+    fn decimals_follow_the_language() {
+        let nutrition = yaml("fat: 12.5\ncarbs: 30\nproteins: 4.2\nsalt: 1.4");
+        let lang: LanguageIdentifier = "fr-FR".parse().unwrap();
+        let p =
+            build_nutrition_panel(Some(&nutrition), None, Some((1.0, 1.0)), &lang, eu()).unwrap();
+        assert_eq!(row(&p, "fatContent").per_serving, "12,5 g");
+        assert_eq!(row(&p, "macronutrients").per_serving, "46,7 g");
+        assert!(p.macros.iter().any(|m| m.amount == "12,5 g"));
+        assert!(p.tips_json.contains("1,40 g"), "{}", p.tips_json);
+        // the donut is drawn with numbers a browser reads
+        assert!(p.ring.unwrap().iter().all(|a| !a.dasharray.contains(',')));
     }
 
     #[test]

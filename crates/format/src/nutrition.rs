@@ -39,16 +39,30 @@ pub struct Nutrient {
     pub parent: Option<&'static str>,
 }
 
-/// An amount in micrograms, from its unit: `g`, `mg`, `µg` (also `ug`, `mcg`, `μg`).
-/// `None` for any other unit (kcal, kJ, a percentage...).
+/// An amount in micrograms, from its unit: `g`, `mg`, `µg` (also `ug`, `mcg`, `μg`)
+/// or their names (`grams`, `milligrams`...). `None` for any other unit (kcal,
+/// kJ, a percentage...).
 pub fn to_micrograms(value: f64, unit: &str) -> Option<f64> {
     let factor = match unit.trim().to_lowercase().as_str() {
-        "g" => 1e6,
-        "mg" => 1e3,
-        "µg" | "ug" | "mcg" | "μg" => 1.0,
+        "g" | "gr" | "gram" | "grams" => 1e6,
+        "mg" | "milligram" | "milligrams" => 1e3,
+        "µg" | "ug" | "mcg" | "μg" | "microgram" | "micrograms" => 1.0,
         _ => return None,
     };
     Some(value * factor)
+}
+
+/// Kilojoules in one kilocalorie.
+const KJ_PER_KCAL: f64 = 4.184;
+
+/// An energy in kcal, from its unit: `kcal`, `kJ` or their names. On a food
+/// label "calories" (and `cal`) mean kilocalories. `None` for any other unit.
+pub fn to_kilocalories(value: f64, unit: &str) -> Option<f64> {
+    match unit.trim().to_lowercase().as_str() {
+        "kcal" | "cal" | "calorie" | "calories" | "kilocalorie" | "kilocalories" => Some(value),
+        "kj" | "kilojoule" | "kilojoules" => Some(value / KJ_PER_KCAL),
+        _ => None,
+    }
 }
 
 /// Salt in grams per gram of sodium. Importers that read sodium (USDA gives
@@ -496,6 +510,21 @@ fn normalize(name: &str) -> String {
 }
 
 impl Nutrient {
+    /// The amount a recipe's value gives, in this nutrient's own unit: a bare
+    /// number is already in it, a value written with another unit of the same
+    /// kind is converted (`0.4 g` of sodium is 400 mg). `None` when the value
+    /// is not an amount of this nutrient.
+    pub fn amount(&self, value: &Value) -> Option<f64> {
+        let (amount, unit) = amount_and_unit(value)?;
+        if unit.is_empty() || unit == self.default_unit {
+            Some(amount)
+        } else if self.energy {
+            to_kilocalories(amount, &unit)
+        } else {
+            Some(to_micrograms(amount, &unit)? / to_micrograms(1.0, self.default_unit)?)
+        }
+    }
+
     /// Whether a recipe's key `field` names this nutrient, by its canonical
     /// key or any alias.
     pub fn matches(&self, field: &str) -> bool {
@@ -556,18 +585,48 @@ pub fn find(field: &str) -> Option<&'static Nutrient> {
     NUTRIENTS.iter().find(|n| n.matches(field))
 }
 
-/// A numeric YAML value or text such as `"4.2"` / `"45.3%g"`, as an amount and
-/// the unit written after `%` (empty when none). A `,` decimal separator is
-/// accepted.
+/// A finite number written with a `.` or a `,` as decimal separator.
+fn number(text: &str) -> Option<f64> {
+    let value: f64 = text.trim().replace(',', ".").parse().ok()?;
+    value.is_finite().then_some(value)
+}
+
+/// Whether the comma of `text` may group thousands (`1,200`) as well as give
+/// decimals.
+fn ambiguous_comma(text: &str) -> bool {
+    text.split_once(',').is_some_and(|(before, after)| {
+        !before.starts_with('0') && before.len() <= 3 && after.len() == 3
+    })
+}
+
+/// A numeric YAML value, or text such as `"4.2"`, `"20 g"`, `"400mg"` or
+/// `"45.3%g"`, as an amount and the unit written with it (empty when none). A
+/// `,` decimal separator is accepted.
+///
+/// After a `%` any unit is taken. Without it only a unit of mass or of energy
+/// is, so that `1 bowl` is no amount, and one such as `1,200 mg`, which may mean
+/// twelve hundred, is not guessed.
 pub fn amount_and_unit(value: &Value) -> Option<(f64, String)> {
     match value {
         Value::Number(n) => Some((n.as_f64()?, String::new())),
         Value::String(s) => {
-            let (amount, unit) = match s.split_once('%') {
-                Some((a, u)) => (a.trim(), u.trim()),
-                None => (s.trim(), ""),
-            };
-            Some((amount.replace(',', ".").parse().ok()?, unit.to_string()))
+            if let Some((amount, unit)) = s.split_once('%') {
+                // nothing after the sign: a percentage, not an amount
+                let unit = Some(unit.trim()).filter(|u| !u.is_empty())?;
+                return Some((number(amount)?, unit.to_string()));
+            }
+            let s = s.trim();
+            if let Some(amount) = number(s) {
+                return Some((amount, String::new()));
+            }
+            let split = s.find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | ',')))?;
+            let (amount, unit) = s.split_at(split);
+            let unit = unit.trim();
+            to_micrograms(1.0, unit).or_else(|| to_kilocalories(1.0, unit))?;
+            if ambiguous_comma(amount) {
+                return None;
+            }
+            Some((number(amount)?, unit.to_string()))
         }
         _ => None,
     }
@@ -690,6 +749,51 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_value_written_with_its_unit_is_read() {
+        let y = |s: &str| serde_yaml::from_str::<Value>(s).unwrap();
+        for (text, amount, unit) in [
+            ("20 g", 20.0, "g"),
+            ("400mg", 400.0, "mg"),
+            ("\"1,5 g\"", 1.5, "g"),
+            ("\"0,125 g\"", 0.125, "g"),
+            ("300 calories", 300.0, "calories"),
+            ("1255 kJ", 1255.0, "kJ"),
+            ("12.5 µg", 12.5, "µg"),
+        ] {
+            assert_eq!(
+                amount_and_unit(&y(text)),
+                Some((amount, unit.to_string())),
+                "{text}"
+            );
+        }
+        // not amounts: another unit, a bound, a number that may group thousands
+        for text in ["1 bowl", "<1 g", "10 %", "\"1,200 mg\"", "g", "inf", "nan"] {
+            assert_eq!(amount_and_unit(&y(text)), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn an_amount_comes_out_in_the_unit_of_its_nutrient() {
+        let y = |s: &str| serde_yaml::from_str::<Value>(s).unwrap();
+        let amount = |key: &str, value: &str| find(key).unwrap().amount(&y(value));
+        // a bare number is in the unit of its key
+        assert_eq!(amount("fat", "1.54"), Some(1.54));
+        assert_eq!(amount("sodium", "400"), Some(400.0));
+        assert_eq!(amount("fat", "20 g"), Some(20.0));
+        assert_eq!(amount("fat", "20000 mg"), Some(20.0));
+        assert_eq!(amount("sodium", "400 mg"), Some(400.0));
+        assert_eq!(amount("sodium", "0.4 g"), Some(400.0));
+        assert_eq!(amount("sodium", "\"0.4%g\""), Some(400.0));
+        assert_eq!(amount("vitamin-d", "0.012 mg"), Some(12.0));
+        assert_eq!(amount("calories", "300 calories"), Some(300.0));
+        assert_eq!(amount("calories", "418.4 kJ").map(f64::round), Some(100.0));
+        // a unit of another kind says nothing about the nutrient
+        assert_eq!(amount("fat", "20 kcal"), None);
+        assert_eq!(amount("calories", "20 g"), None);
+        assert_eq!(amount("vitaminA", "\"500%IU\""), None);
     }
 
     #[test]

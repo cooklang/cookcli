@@ -284,9 +284,17 @@ pub fn extract_nutrition_kcal(metadata: &cooklang_find::Metadata) -> Option<Stri
 
     if let Some(mapping) = nutrition_value.as_mapping() {
         for (k, v) in mapping {
-            if k.as_str()
-                .is_some_and(|f| crate::util::format::nutrition::find(f).is_some_and(|n| n.energy))
+            if let Some(energy) = k
+                .as_str()
+                .and_then(crate::util::format::nutrition::find)
+                .filter(|n| n.energy)
             {
+                // an energy written with its unit (kJ, calories) is shown in kcal
+                let written = crate::util::format::nutrition::amount_and_unit(v)
+                    .is_some_and(|(_, unit)| !unit.is_empty());
+                if let Some(kcal) = energy.amount(v).filter(|_| written) {
+                    return Some(format!("{} kcal", energy.format_amount(kcal)));
+                }
                 if let Some(raw) = scalar_to_string(v) {
                     // "kcal" needs no translation, so any locale works here.
                     return Some(nutrition::NutritionRenderer.format_mapping_entry(

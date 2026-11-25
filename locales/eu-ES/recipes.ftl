@@ -64,6 +64,7 @@ nutrition-fibers = zuntza
 nutrition-salt = gatza
 nutrition-title = Nutrizioa
 nutrition-per-100g = 100 g-ko
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = errezeta osoa
 nutrition-energy = energia
 nutrition-of-which = horietatik

@@ -282,6 +282,20 @@ pub(super) fn translated_nutrient_label(field: &str, lang: &LanguageIdentifier) 
     Some(crate::web::i18n::LOCALES.lookup(lang, key))
 }
 
+/// What stands between the units and the decimals of a number in `lang`.
+pub(super) fn decimal_separator(lang: &LanguageIdentifier) -> String {
+    crate::web::i18n::LOCALES.lookup(lang, "nutrition-decimal-separator")
+}
+
+/// A number of a standard (a threshold, a claim) as a sentence writes it: at most four
+/// decimals, none trailing.
+pub(super) fn localized_number(value: f64, separator: &str) -> String {
+    let text = format!("{value:.4}");
+    text.trim_end_matches('0')
+        .trim_end_matches('.')
+        .replace('.', separator)
+}
+
 /// The message that names a nutrient, by its canonical name.
 pub(super) fn nutrient_label_key(name: &str) -> Option<&'static str> {
     NUTRIENT_LABELS

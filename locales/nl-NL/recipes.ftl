@@ -68,6 +68,7 @@ nutrition-fibers = vezels
 nutrition-salt = zout
 nutrition-title = Voedingswaarde
 nutrition-per-100g = per 100 g
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = heel recept
 nutrition-energy = energie
 nutrition-of-which = waarvan

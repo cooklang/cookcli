@@ -107,6 +107,7 @@ nutrition-fibers = φυτικές ίνες
 nutrition-salt = αλάτι
 nutrition-title = Διατροφικές αξίες
 nutrition-per-100g = ανά 100 g
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = ολόκληρη συνταγή
 nutrition-energy = ενέργεια
 nutrition-of-which = εκ των οποίων

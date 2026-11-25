@@ -68,6 +68,7 @@ nutrition-fibers = Ballaststoffe
 nutrition-salt = Salz
 nutrition-title = Nährwerte
 nutrition-per-100g = pro 100 g
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = ganzes Rezept
 nutrition-energy = Energie
 nutrition-of-which = davon

@@ -68,6 +68,7 @@ nutrition-fibers = fibrer
 nutrition-salt = salt
 nutrition-title = Näringsvärde
 nutrition-per-100g = per 100 g
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = hela receptet
 nutrition-energy = energi
 nutrition-of-which = varav

@@ -406,7 +406,7 @@ allergens:
 
 ### Two forms
 
-- **Mapping** (recommended, shown above): `field: value`. A bare number gets its unit inferred from the field name for `nutrition` (`kcal` → `kcal`, everything else → `g`); `field: "45.3%g"` also works if you want to spell out a different unit.
+- **Mapping** (recommended, shown above): `field: value`. A bare number is in the unit of its key for `nutrition` (see [Nutrients](#nutrients): kcal, g, mg or µg). A value may also be written with a unit (`20 g`, `0.4 g`, `1255 kJ`, or `"45.3%g"`): it is converted to the unit of its key.
 - **List** (legacy, still supported): `- "258%kcal"`. The `%` is replaced with a space when displayed (`258 kcal`); entries without a `%` are shown as-is. Because list entries are free text, they aren't translated — write them in whichever language you want displayed.
 
 ### Hiding a family or a single entry
@@ -445,14 +445,14 @@ What the page shows, for the servings chosen: a donut with the energy in the mid
 
 **The standard decides how it is laid out and rated** (see [Standards](#standards-tree-reference-intakes-and-ratings)). Nothing about the layout is written in the page code:
 
-- **The tree of the table** comes from the standard. Energy first, then the families Macronutrients, Other components, Minerals and Vitamins, each holding what the recipe gives, nested as the norm nests them. The fibre sits next to the carbohydrates under the EU and the UK, inside them under the US; the carbohydrates are shown without the fibre where the norm gives them so (the page then says so under the table, since the recipe's own figure counts it in). What the standard's tree does not know stays visible, in a family called "Other data".
+- **The tree of the table** comes from the standard. Energy first, then the families Macronutrients, Other components, Minerals and Vitamins, each holding what the recipe gives, nested as the norm nests them. The fibre sits next to the carbohydrates under the EU and the UK, inside them under the US; the carbohydrates are shown without the fibre where the norm gives them so, since the recipe's own figure [counts it in](#nutrients). What the standard's tree does not know stays visible, in a family called "Other data".
 - **The percentages** next to a per-serving value are the share of the standard's reference intake (the EU's 800 mg of calcium, the US's 1300 mg). A nutrient the standard has no reference for shows none.
 - **The cards are coloured by the standard's rating**: the UK's traffic lights per 100 g (green, amber, red), the EU's claims (a food that earns "low in sugars" or "source of fibre" is green, nothing is ever red), the US's share of the daily value per serving (5 % or less is low, 20 % or more is high; what is to limit is red when high, what is to get more of is green when high). Per-100 g ratings need `weight:`; without it those cards are blue (no rating). The legend under the cards says which colours are in use and how the standard rates.
 - **Vitamins and minerals well present** get tiles of their own ("rich in", "source of") by the standard's rule: from 15 % and 30 % of the reference intake per 100 g under the EU and the UK, from 20 % of the daily value per serving under the US. What the norm says to limit (sodium) is never well present.
 - **Salt and sodium** are one quantity: the label of the norm gives one (the EU salt, the US sodium), so the card, the row and the percentage follow it, whichever the recipe wrote, using the standard's factor (salt = sodium × 2.5).
 - **Subtotals**: a family shows the sum of what is directly under it, in grams; minerals and vitamins add up to nothing worth saying, so they show none.
 
-The **More info** button opens the vitamin and mineral tiles and the table above (**Less info** closes them). Rows with rows below them fold, with **Collapse all** and **Expand all** above the table; the folded rows and the tree lines (a line under each parent, with an elbow at the last child, as in a folder tree, which can be switched off) are remembered for the tab. On a phone the table shows one column of values at a time, picked with buttons above it (per 100 g, per serving, whole recipe), so it never scrolls sideways; wider screens show the columns side by side. On the recipe list, a card shows the donut with the three macros per serving, each with its share of the energy, when the recipe gives all three, and the plain kcal badge otherwise.
+The **More info** button opens the vitamin and mineral tiles and the table above (**Less info** closes them). Rows with rows below them fold, with **Collapse all** and **Expand all** above the table; the folded rows are remembered for the tab. On a phone the table shows one column of values at a time, picked with buttons above it (per 100 g, per serving, whole recipe), so it never scrolls sideways; wider screens show the columns side by side. On the recipe list, a card shows the donut with the three macros per serving, each with its share of the energy, when the recipe gives all three, and the plain kcal badge otherwise.
 
 **Choosing the standard** is done on the preferences page, next to the language: one button per file of the standards folder. The choice is kept in the `cook_standard` cookie (`eu` by default), like the language in `cook_lang`, so it belongs to the browser. The list also offers **Essentials** (`cook_standard=essential`), which is no standard: the table becomes a flat list of the eight basic rows with their icons, with no families, no tree and no reference intakes, while the cards and the legend keep following the default standard (`eu`). The same list sits above the full table of a recipe, at the right of the buttons that fold it; choosing there sets the same cookie.
 
@@ -477,7 +477,11 @@ A key that is absent leaves its chip out (a recipe with only `modified-at` and `
 
 ### Nutrients
 
-`nutrition:` takes these keys, shown in this order. They are the [schema.org `NutritionInformation`](https://schema.org/NutritionInformation) properties, the same names the JSON-LD output uses. A bare number gets the unit and the rounding of its row; the short spellings of the last column are accepted too.
+`nutrition:` takes these keys, shown in this order. They are the [schema.org `NutritionInformation`](https://schema.org/NutritionInformation) properties, the same names the JSON-LD output uses. The short spellings of the last column are accepted too.
+
+**Units.** Each key has one unit, the one of its row. A bare number is in that unit. A value written with another unit of the same kind is converted to it before anything is computed, shown or exported: `g`, `mg` and `µg` (or `mcg`, `ug`, `grams`...) between themselves, `kJ` to `kcal` (1 kcal = 4.184 kJ; "calories" means kcal). A value that cannot be read as an amount of its key (`<1 g`, `10 %`, or `1,200 mg`, whose comma may group thousands) is left out of the table.
+
+**Carbohydrates include the fibre**, as on a US label. The standards that give them without it (EU, UK) subtract `fiberContent`: a figure copied from an EU label, which already leaves the fibre out, needs the fibre added back.
 
 | Key | Content | Unit | Rounding | Also accepted |
 |-----|---------|------|----------|---------------|
@@ -488,7 +492,7 @@ A key that is absent leaves its chip out (a recipe with only `modified-at` and `
 | `monounsaturatedFatContent` | of which monounsaturated fat (not exported to JSON-LD) | g | 1 decimal | `monounsaturated-fat` |
 | `polyunsaturatedFatContent` | of which polyunsaturated fat (not exported to JSON-LD) | g | 1 decimal | `polyunsaturated-fat` |
 | `transFatContent` | of which trans fat | g | 1 decimal | `trans-fat` |
-| `carbohydrateContent` | Carbohydrates | g | 1 decimal | `carbohydrates` |
+| `carbohydrateContent` | Carbohydrates, fibre included | g | 1 decimal | `carbohydrates` |
 | `sugarContent` | of which sugars | g | 1 decimal | `sugars` |
 | `starchContent` | of which starch (not exported to JSON-LD) | g | 1 decimal | `starch` |
 | `fiberContent` | Fibre | g | 1 decimal | `fibers` |

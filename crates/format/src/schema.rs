@@ -4,7 +4,7 @@
 //! vocabulary rather than chosen here.
 
 use crate::number::format_quantity_with_unit;
-use crate::nutrition::{amount_and_unit, NUTRIENTS, SALT_PER_SODIUM};
+use crate::nutrition::{NUTRIENTS, SALT_PER_SODIUM};
 use crate::quantity::grouped_quantity_fmt;
 use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
@@ -231,25 +231,18 @@ fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) {
                     .find(|(k, _)| k.as_str().is_some_and(|k| nutrient.matches(k)))
                     .map(|(_, v)| v)
             });
-        let Some((amount, written_unit)) = found.and_then(amount_and_unit) else {
+        let Some(amount) = found.and_then(|v| nutrient.amount(v)) else {
             continue;
-        };
-        let unit = if written_unit.is_empty() {
-            nutrient.default_unit.to_string()
-        } else {
-            written_unit
         };
 
         let text = if nutrient.name == "salt" {
             // schema.org knows sodium, not salt: grams of salt back to mg of sodium.
-            if unit != "g" {
-                continue;
-            }
             format!("{} mg", (amount / SALT_PER_SODIUM * 1000.0).round())
-        } else if nutrient.energy && unit == "kcal" {
+        } else if nutrient.energy {
             format!("{} calories", nutrient.format_amount(amount))
         } else {
-            format!("{} {unit}", nutrient.format_amount(amount))
+            let value = nutrient.format_amount(amount);
+            format!("{value} {}", nutrient.default_unit)
         };
         nutrition[nutrient.schema] = json!(text);
         has_nutrition = true;

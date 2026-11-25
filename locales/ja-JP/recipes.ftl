@@ -99,6 +99,7 @@ nutrition-fibers = 食物繊維
 nutrition-salt = 食塩相当量
 nutrition-title = 栄養成分
 nutrition-per-100g = 100gあたり
+nutrition-decimal-separator = {"."}
 nutrition-whole-recipe = レシピ全体
 nutrition-energy = エネルギー
 nutrition-of-which = うち

@@ -68,6 +68,7 @@ nutrition-fibers = fibres
 nutrition-salt = sel
 nutrition-title = Nutrition
 nutrition-per-100g = pour 100 g
+nutrition-decimal-separator = {","}
 nutrition-whole-recipe = recette entière
 nutrition-energy = énergie
 nutrition-of-which = dont
