@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = En grupp vitaminer.
 nutrition-help-vitamin-k-use = Behövs för blodets koagulering, som hjälper sår att läka; det finns också tecken på att det hjälper till att hålla skelettet friskt.
 nutrition-help-vitamin-k-where = Gröna bladgrönsaker som broccoli och spenat, vegetabiliska oljor och spannmål; små mängder i kött och mejeriprodukter.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Anteckning

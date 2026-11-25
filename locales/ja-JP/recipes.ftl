@@ -370,3 +370,6 @@ nutrition-help-vitamin-k-what = ビタミンのグループ。
 nutrition-help-vitamin-k-use = 傷の治りを助ける血液の凝固に必要です。骨を健康に保つのを助けるという証拠もあります。
 nutrition-help-vitamin-k-where = ブロッコリーやほうれん草などの葉物野菜、植物油、穀物。肉や乳製品にも少量含まれます。
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = メモ

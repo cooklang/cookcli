@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = A group of vitamins.
 nutrition-help-vitamin-k-use = Needed for blood clotting, which helps wounds heal; there is also some evidence it helps keep bones healthy.
 nutrition-help-vitamin-k-where = Green leafy vegetables such as broccoli and spinach, vegetable oils and cereal grains; small amounts in meat and dairy foods.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Note

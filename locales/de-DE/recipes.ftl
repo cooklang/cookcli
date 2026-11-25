@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = Eine Gruppe von Vitaminen.
 nutrition-help-vitamin-k-use = Wird für die Blutgerinnung gebraucht, die Wunden heilen hilft; es gibt auch Hinweise, dass es die Knochen gesund hält.
 nutrition-help-vitamin-k-where = Grünes Blattgemüse wie Brokkoli und Spinat, Pflanzenöle und Getreide; kleine Mengen in Fleisch und Milchprodukten.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Hinweis

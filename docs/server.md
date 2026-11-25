@@ -378,6 +378,20 @@ The recipe editor's **Picture** button adds, replaces or removes a recipe's pict
 
 The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
 
+## Notes in cooking mode
+
+Select **Cook** on a recipe to read it one page at a time. Recipe notes (`>` lines)
+appear between the steps, in the same order as in the recipe. Adjacent notes share
+a page, with a paragraph for each note. A section containing only notes also gets
+its own note page.
+
+Notes have no step number and do not change the numbers on the steps. Progress
+includes note pages, and the section buttons, arrow keys and swipes navigate
+through them. Long notes scroll within their card. HTTP and HTTPS links in a note
+open in a separate tab, in cooking mode and on the recipe page alike; the rest of
+the note stays plain text. A timer started on a step keeps running while you read
+a note.
+
 ## Custom Metadata Families (e.g. Nutrition)
 
 Beyond the [standard Cooklang metadata keys](https://cooklang.org/docs/spec/#canonical-metadata) (`servings`, `time`, `course`, `author`, ...), any YAML frontmatter key whose value is a **list** or a **mapping** is shown on the recipe page as its own line below the tags, grouped by key — one line per family. This works for any such key, not just `nutrition` — e.g. `allergens:` below renders as its own "Allergens" line automatically, with no code changes required.

@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = Μια ομάδα βιταμινών.
 nutrition-help-vitamin-k-use = Χρειάζεται για την πήξη του αίματος, που βοηθά στην επούλωση των πληγών· υπάρχουν και ενδείξεις ότι βοηθά να διατηρούνται υγιή τα οστά.
 nutrition-help-vitamin-k-where = Πράσινα φυλλώδη λαχανικά όπως το μπρόκολο και το σπανάκι, φυτικά έλαια και δημητριακά· μικρές ποσότητες σε κρέας και γαλακτοκομικά.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Σημείωση

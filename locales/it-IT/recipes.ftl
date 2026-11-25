@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = Un gruppo di vitamine.
 nutrition-help-vitamin-k-use = Necessaria per la coagulazione del sangue, che aiuta le ferite a guarire; ci sono anche indizi che aiuti a mantenere sane le ossa.
 nutrition-help-vitamin-k-where = Verdure a foglia verde come broccoli e spinaci, oli vegetali e cereali; piccole quantità in carne e latticini.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Nota

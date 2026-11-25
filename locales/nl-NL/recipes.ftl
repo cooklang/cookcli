@@ -378,3 +378,6 @@ nutrition-help-vitamin-k-what = Een groep vitaminen.
 nutrition-help-vitamin-k-use = Nodig voor de bloedstolling, die wonden helpt genezen; er zijn ook aanwijzingen dat het de botten gezond helpt houden.
 nutrition-help-vitamin-k-where = Groene bladgroenten zoals broccoli en spinazie, plantaardige oliën en graanproducten; kleine hoeveelheden in vlees en zuivel.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Opmerking

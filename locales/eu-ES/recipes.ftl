@@ -374,3 +374,6 @@ nutrition-help-vitamin-k-what = Bitamina-talde bat.
 nutrition-help-vitamin-k-use = Odolaren koagulaziorako behar da, zauriak sendatzen laguntzen duena; hezurrak osasuntsu mantentzen laguntzen duela adierazten duten zantzuak ere badaude.
 nutrition-help-vitamin-k-where = Hosto berdeko barazkiak, brokolia eta espinakak bezala, landare-olioak eta aleak; kantitate txikiak haragian eta esnekietan.
 nutrition-help-vitamin-k-source = NHS, Vitamin K (2020)
+
+# Cooking mode note card
+recipe-cooking-note = Oharra
