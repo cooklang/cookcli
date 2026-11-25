@@ -85,7 +85,7 @@ base64 = { version = "0.23", optional = true }
 # and quantities stay as authored. If it ever comes back, some dep is leaking it
 # through feature unification (`cargo tree -e features -i cooklang`).
 cooklang = { version = "0.19.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
-cooklang-find = { version = "0.12.0", default-features = false }
+cooklang-find = { version = "0.12.2", default-features = false }
 cooklang-import = { version = "0.12.0", optional = true }
 cooklang-sync-client = { version = "0.6.0", optional = true }
 libsqlite3-sys = { version = "0.35", features = ["bundled"], optional = true }
@@ -195,7 +195,3 @@ codegen-units = 1
 inherits = "release"
 lto = "thin"
 codegen-units = 16
-
-# Temporary: front matter over 30 lines (cooklang/cooklang-find PR 42). Remove once released.
-[patch.crates-io]
-cooklang-find = { git = "https://github.com/Tloxipeuhca/cooklang-find", branch = "fix/front-matter-line-limit" }
