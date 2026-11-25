@@ -26,3 +26,15 @@ pref-upload-error = 設定をアップロードできませんでした
 # Features
 pref-features = 機能
 pref-features-desc = ナビゲーションバーに表示する機能を選んでください。
+
+# Standards: the layout, intakes and ratings come from the standard in use.
+pref-standard = 栄養基準
+pref-standard-desc = 栄養基準は、レシピの栄養の並べ方、割合に使う基準摂取量、栄養素の評価方法を決めます。
+standard-eu = 欧州連合
+standard-us = アメリカ合衆国
+standard-uk = イギリス
+standard-eu-desc = 規則(EU)1169/2011の基準摂取量と規則(EC)1924/2006の栄養表示。食物繊維は炭水化物とは別に表示され、ラベルは食塩相当量を示します。
+standard-us-desc = FDAの1日摂取量と、その割合による評価。食物繊維は炭水化物に含まれ、ラベルはナトリウムを示します。
+standard-uk-desc = EUの基準摂取量と、英国食品基準庁の信号方式。
+standard-essential = 要点
+standard-essential-desc = 基本の8行をフラットな一覧で表示します。ツリーも基準摂取量もありません。カードと凡例はEU基準に従います。

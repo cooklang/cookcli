@@ -267,6 +267,10 @@ fn search_card(
         .name
         .unwrap_or_else(|| hit.path.file_stem().unwrap_or_default().to_string());
 
+    let nutrition_kcal = entry
+        .as_ref()
+        .and_then(|entry| crate::web::family_renderers::extract_nutrition_kcal(entry.metadata()));
+
     RecipeItem {
         name,
         path,
@@ -274,6 +278,8 @@ fn search_card(
         count: None,
         description: None,
         tags: entry.map(|entry| entry.tags()).unwrap_or_default(),
+        nutrition_kcal,
+        nutrition_ring: None,
         image_path,
         is_menu,
         modified_at: None,
@@ -1185,6 +1191,24 @@ async fn preferences_page(
         String::new()
     };
 
+    // One button per standard file: a new file shows up here without touching this code.
+    let standards = crate::util::format::reference::standards()
+        .values()
+        .map(|s| crate::web::templates::StandardChoice {
+            id: s.id.clone(),
+            name: tr.t(&format!("standard-{}", s.id)),
+            description: tr.t(&format!("standard-{}-desc", s.id)),
+            selected: s.id == features.nutrition_standard && !features.nutrition_essential,
+        })
+        // the essential table is no standard file, but it is chosen in the same list
+        .chain(std::iter::once(crate::web::templates::StandardChoice {
+            id: crate::web::language::ESSENTIAL.to_string(),
+            name: tr.t("standard-essential"),
+            description: tr.t("standard-essential-desc"),
+            selected: features.nutrition_essential,
+        }))
+        .collect();
+
     PreferencesTemplate {
         active: "preferences".to_string(),
         aisle_path,
@@ -1201,6 +1225,7 @@ async fn preferences_page(
         repo_url: None,
         features,
         viewer,
+        standards,
     }
 }
 

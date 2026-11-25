@@ -4,6 +4,7 @@
 //! vocabulary rather than chosen here.
 
 use crate::number::format_quantity_with_unit;
+use crate::nutrition::{NUTRIENTS, SALT_PER_SODIUM};
 use crate::quantity::grouped_quantity_fmt;
 use cooklang::{convert::Converter, model::Item, Recipe};
 use serde_json::{json, Value};
@@ -195,63 +196,70 @@ fn minutes_iso(minutes: u32) -> String {
     out
 }
 
+/// Add a `nutrition` block built from the recipe's metadata, from the
+/// nutrients of [`crate::nutrition`].
+///
+/// Values are read from a `nutrition:` mapping (`kcal: 111`, `proteins: 4.2`,
+/// ...), from the older `nutrition:` list (`- "111%kcal"`, energy only), and
+/// from flat top-level keys (`calories: 111`, `proteinContent: 4.2g`). The
+/// mapping wins over flat keys when both name the same nutrient. Salt, which
+/// schema.org has no property for, goes out as `sodiumContent` in mg.
 fn add_nutrition_info(schema: &mut Value, recipe: &Recipe) {
     let mut nutrition = json!({
         "@type": "NutritionInformation"
     });
-
     let mut has_nutrition = false;
 
-    // Check for various nutrition fields in metadata
-    if let Some(calories) = recipe.metadata.map.get("calories") {
-        if let Some(cal_str) = calories.as_str() {
-            nutrition["calories"] = json!(format!("{} calories", cal_str));
-            has_nutrition = true;
-        } else if let Some(cal_num) = calories.as_u64() {
-            nutrition["calories"] = json!(format!("{} calories", cal_num));
-            has_nutrition = true;
+    let family = recipe.metadata.map.get("nutrition");
+    let mapping = family.and_then(|v| v.as_mapping());
+
+    for nutrient in NUTRIENTS {
+        if nutrient.schema.is_empty() {
+            continue; // shown on the page, no schema.org property
         }
+        let found = mapping
+            .and_then(|m| {
+                m.iter()
+                    .find(|(k, _)| k.as_str().is_some_and(|k| nutrient.matches(k)))
+                    .map(|(_, v)| v)
+            })
+            .or_else(|| {
+                recipe
+                    .metadata
+                    .map
+                    .iter()
+                    .find(|(k, _)| k.as_str().is_some_and(|k| nutrient.matches(k)))
+                    .map(|(_, v)| v)
+            });
+        let Some(amount) = found.and_then(|v| nutrient.amount(v)) else {
+            continue;
+        };
+
+        let text = if nutrient.name == "salt" {
+            // schema.org knows sodium, not salt: grams of salt back to mg of sodium.
+            format!("{} mg", (amount / SALT_PER_SODIUM * 1000.0).round())
+        } else if nutrient.energy {
+            format!("{} calories", nutrient.format_amount(amount))
+        } else {
+            let value = nutrient.format_amount(amount);
+            format!("{value} {}", nutrient.default_unit)
+        };
+        nutrition[nutrient.schema] = json!(text);
+        has_nutrition = true;
     }
 
-    if let Some(protein) = recipe.metadata.map.get("protein") {
-        if let Some(prot_str) = protein.as_str() {
-            nutrition["proteinContent"] = json!(prot_str);
-            has_nutrition = true;
-        }
-    }
-
-    if let Some(fat) = recipe.metadata.map.get("fat") {
-        if let Some(fat_str) = fat.as_str() {
-            nutrition["fatContent"] = json!(fat_str);
-            has_nutrition = true;
-        }
-    }
-
-    if let Some(carbs) = recipe.metadata.map.get("carbohydrates") {
-        if let Some(carbs_str) = carbs.as_str() {
-            nutrition["carbohydrateContent"] = json!(carbs_str);
-            has_nutrition = true;
-        }
-    }
-
-    if let Some(fiber) = recipe.metadata.map.get("fiber") {
-        if let Some(fiber_str) = fiber.as_str() {
-            nutrition["fiberContent"] = json!(fiber_str);
-            has_nutrition = true;
-        }
-    }
-
-    if let Some(sugar) = recipe.metadata.map.get("sugar") {
-        if let Some(sugar_str) = sugar.as_str() {
-            nutrition["sugarContent"] = json!(sugar_str);
-            has_nutrition = true;
-        }
-    }
-
-    if let Some(sodium) = recipe.metadata.map.get("sodium") {
-        if let Some(sodium_str) = sodium.as_str() {
-            nutrition["sodiumContent"] = json!(sodium_str);
-            has_nutrition = true;
+    // Legacy list form: `- "111%kcal"` gives the energy and nothing else,
+    // since free text names no reliable property.
+    if nutrition.get("calories").is_none() {
+        if let Some(items) = family.and_then(|v| v.as_sequence()) {
+            for item in items.iter().filter_map(|i| i.as_str()) {
+                if let Some((amount, unit)) = item.split_once('%') {
+                    if unit.trim().to_lowercase().starts_with("kcal") {
+                        nutrition["calories"] = json!(format!("{} calories", amount.trim()));
+                        has_nutrition = true;
+                    }
+                }
+            }
         }
     }
 

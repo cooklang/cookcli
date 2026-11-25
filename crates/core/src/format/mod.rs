@@ -19,5 +19,5 @@ pub mod shopping_list;
 // in `cooklang-format`'s documentation can reach it here by the same spelling.
 pub use cooklang_format::{
     cooklang_source, cooklang_source as cooklang, human, human_to_string, latex, markdown,
-    markdown_to_string, number, quantity, schema, typst, PaperSize, Style,
+    markdown_to_string, number, nutrition, quantity, reference, schema, typst, PaperSize, Style,
 };

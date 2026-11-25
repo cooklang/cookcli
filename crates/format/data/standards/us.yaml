@@ -1,0 +1,142 @@
+# United States (FDA Nutrition Facts label).
+# See eu.yaml for what each part means.
+
+id: us
+name: United States
+source: "FDA, Daily Values on the Nutrition and Supplement Facts Labels (adults and children 4 years and older)"
+url: https://www.fda.gov/food/nutrition-facts-label/daily-value-nutrition-and-supplement-facts-labels
+status:
+  intakes: verified          # FDA page, current as of 2024-03-05
+  tree: to-verify            # the pages read list the nutrients but lost their indentation: the nesting is not confirmed
+  rating: verified           # FDA, "How to understand and use the Nutrition Facts label"
+# The page gives no energy value; 2000 kcal is the figure the label's footnote uses.
+energy_kcal: 2000
+
+conventions:
+  # Total carbohydrate on the US label includes dietary fiber.
+  fibre_in_carbohydrate: true
+  # The US label gives sodium, not salt. The factor is the chemistry of table salt
+  # (the FDA pages read do not state it; the WHO page gives 1 g of salt = 400 mg of sodium).
+  declares: sodium
+  salt_per_sodium: 2.5
+
+# `relation: listed` marks a nutrient the label lists next to another without
+# it being a part of it (cholesterol sits with the fats, but is not a fat).
+tree:
+  - { name: calories }
+  - { name: macronutrients, group: true }
+  - { name: fatContent, parent: macronutrients }
+  - { name: saturatedFatContent, parent: fatContent }
+  - { name: unsaturatedFatContent, parent: fatContent, declared: derived }
+  - { name: monounsaturatedFatContent, parent: unsaturatedFatContent }
+  - { name: polyunsaturatedFatContent, parent: unsaturatedFatContent }
+  - { name: omega3, parent: polyunsaturatedFatContent, declared: extra }
+  - { name: omega6, parent: polyunsaturatedFatContent, declared: extra }
+  - { name: transFatContent, parent: fatContent }
+  - { name: cholesterolContent, parent: fatContent, relation: listed }
+  - { name: carbohydrateContent, parent: macronutrients }
+  - { name: fiberContent, parent: carbohydrateContent }
+  - { name: sugarContent, parent: carbohydrateContent }
+  - { name: addedSugars, parent: sugarContent }
+  - { name: starchContent, parent: carbohydrateContent, declared: extra }
+  - { name: proteinContent, parent: macronutrients }
+  - { name: other, group: true }
+  - { name: salt, parent: other, declared: extra }
+  - { name: minerals, group: true }
+  - { name: macroMinerals, group: true, parent: minerals }
+  - { name: calcium, parent: macroMinerals }
+  - { name: phosphorus, parent: macroMinerals }
+  - { name: magnesium, parent: macroMinerals }
+  - { name: sodiumContent, parent: macroMinerals }
+  - { name: potassium, parent: macroMinerals }
+  - { name: chloride, parent: macroMinerals }
+  - { name: traceElements, group: true, parent: minerals }
+  - { name: iron, parent: traceElements }
+  - { name: zinc, parent: traceElements }
+  - { name: copper, parent: traceElements }
+  - { name: manganese, parent: traceElements }
+  - { name: selenium, parent: traceElements }
+  - { name: chromium, parent: traceElements }
+  - { name: molybdenum, parent: traceElements }
+  - { name: iodine, parent: traceElements }
+  - { name: vitamins, group: true }
+  - { name: fatSolubleVitamins, group: true, parent: vitamins }
+  - { name: vitaminA, parent: fatSolubleVitamins }
+  - { name: vitaminD, parent: fatSolubleVitamins }
+  - { name: vitaminE, parent: fatSolubleVitamins }
+  - { name: vitaminK, parent: fatSolubleVitamins }
+  - { name: waterSolubleVitamins, group: true, parent: vitamins }
+  - { name: vitaminC, parent: waterSolubleVitamins }
+  - { name: thiamin, parent: waterSolubleVitamins }
+  - { name: riboflavin, parent: waterSolubleVitamins }
+  - { name: niacin, parent: waterSolubleVitamins }
+  - { name: pantothenicAcid, parent: waterSolubleVitamins }
+  - { name: vitaminB6, parent: waterSolubleVitamins }
+  - { name: biotin, parent: waterSolubleVitamins }
+  - { name: folate, parent: waterSolubleVitamins }
+  - { name: vitaminB12, parent: waterSolubleVitamins }
+  - { name: choline, parent: vitamins }
+
+intakes:
+  fatContent: { amount: 78, unit: g }
+  saturatedFatContent: { amount: 20, unit: g }
+  cholesterolContent: { amount: 300, unit: mg }
+  sodiumContent: { amount: 2300, unit: mg }
+  carbohydrateContent: { amount: 275, unit: g }
+  fiberContent: { amount: 28, unit: g }
+  addedSugars: { amount: 50, unit: g }
+  proteinContent: { amount: 50, unit: g }
+  vitaminA: { amount: 900, unit: ug }
+  vitaminD: { amount: 20, unit: ug }
+  vitaminE: { amount: 15, unit: mg }
+  vitaminK: { amount: 120, unit: ug }
+  vitaminC: { amount: 90, unit: mg }
+  thiamin: { amount: 1.2, unit: mg }
+  riboflavin: { amount: 1.3, unit: mg }
+  niacin: { amount: 16, unit: mg }
+  vitaminB6: { amount: 1.7, unit: mg }
+  folate: { amount: 400, unit: ug }
+  vitaminB12: { amount: 2.4, unit: ug }
+  biotin: { amount: 30, unit: ug }
+  pantothenicAcid: { amount: 5, unit: mg }
+  choline: { amount: 550, unit: mg }
+  potassium: { amount: 4700, unit: mg }
+  chloride: { amount: 2300, unit: mg }
+  calcium: { amount: 1300, unit: mg }
+  phosphorus: { amount: 1250, unit: mg }
+  magnesium: { amount: 420, unit: mg }
+  iron: { amount: 18, unit: mg }
+  zinc: { amount: 11, unit: mg }
+  copper: { amount: 0.9, unit: mg }
+  manganese: { amount: 2.3, unit: mg }
+  selenium: { amount: 55, unit: ug }
+  chromium: { amount: 35, unit: ug }
+  molybdenum: { amount: 45, unit: ug }
+  iodine: { amount: 150, unit: ug }
+
+# "5% DV or less of a nutrient per serving is considered low", "20% DV or more
+# ... is considered high" (FDA). Total sugars and trans fat have no %DV.
+rating:
+  kind: percent-dv
+  low_percent: 5
+  high_percent: 20
+
+energy_sources: [fatContent, carbohydrateContent, proteinContent]
+
+# FDA, "How to understand and use the Nutrition Facts label": get less of saturated
+# fat, sodium and added sugars; get more of dietary fiber, vitamin D, calcium, iron
+# and potassium.
+direction:
+  source: "FDA, How to understand and use the Nutrition Facts label"
+  limit: [saturatedFatContent, sodiumContent, addedSugars]
+  encourage: [fiberContent, vitaminD, calcium, iron, potassium]
+
+# "20% DV or more of a nutrient per serving is considered high" (FDA): there is no
+# "source of" step in what was read.
+significant_amount:
+  basis: per-serving
+  high_percent: 20
+
+# The nutrients the page singles out as small cards, in order: what this norm's
+# label puts forward (the US gives sodium, the EU salt).
+cards: [saturatedFatContent, monounsaturatedFatContent, polyunsaturatedFatContent, omega3, transFatContent, cholesterolContent, sugarContent, starchContent, fiberContent, sodiumContent]

@@ -813,6 +813,18 @@ pub struct PreferencesTemplate {
     pub features: FeatureFlags,
     /// Who the page is for; decides whether editing controls are shown.
     pub viewer: Viewer,
+    /// The nutrition standards to choose from: one per file of the standards folder.
+    pub standards: Vec<StandardChoice>,
+}
+
+/// A nutrition standard in the picker of the preferences page.
+#[cfg(feature = "server")]
+#[derive(Debug, Clone)]
+pub struct StandardChoice {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub selected: bool,
 }
 
 #[cfg(feature = "server")]
@@ -990,6 +1002,12 @@ pub struct RecipeItem {
     pub count: Option<usize>,
     pub description: Option<String>,
     pub tags: Vec<String>,
+    /// Calorie entry from a `nutrition:` metadata list (e.g. `"258 kcal"`),
+    /// shown as a compact badge next to the tags.
+    pub nutrition_kcal: Option<String>,
+    /// The donut and macros of a recipe that gives all three, shown instead
+    /// of the kcal badge.
+    pub nutrition_ring: Option<ListNutrition>,
     pub image_path: Option<String>,
     pub is_menu: bool,
     pub modified_at: Option<u64>,
@@ -1017,6 +1035,218 @@ pub struct RecipeMetadata {
     pub source: Option<String>,
     pub source_url: Option<String>,
     pub custom: Vec<(String, String)>,
+    /// One panel per non-standard metadata family (`nutrition:`, `file:`, ...),
+    /// each built by that family's renderer and drawn by its own template
+    /// under `templates/panels/`.
+    pub panels: Vec<FamilyPanel>,
+}
+
+/// The panel of one metadata family. Each variant is drawn by its own
+/// template (`templates/panels/<variant>.html`); `panels/families.html`
+/// picks the template.
+#[derive(Debug, Clone, Serialize)]
+pub enum FamilyPanel {
+    /// `nutrition:` as a mapping of numbers: a table of values.
+    /// Boxed: the table is far larger than the other variants.
+    Nutrition(Box<NutritionPanel>),
+    /// `file:` / `meta:`: dated and attributed entries with icons.
+    File(MetaListFamily),
+    /// Any other list or mapping: one line of chips.
+    Generic(MetaListFamily),
+}
+
+/// The nutrition panel of a recipe page, with every label already translated:
+/// a donut and the macros and a few small cards for the servings chosen, and
+/// the full table behind a button.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionPanel {
+    pub title: String,
+    pub per_serving_label: String,
+    pub per_100g_label: String,
+    pub whole_recipe_label: String,
+    /// "of which", in front of the label of a sub-nutrient row.
+    pub of_which: String,
+    /// "for", as in "for 4 servings".
+    pub for_label: String,
+    /// The label of the button that opens the table and the tiles behind it.
+    pub full_table_label: String,
+    /// The same button once it is open.
+    pub less_label: String,
+    /// The buttons above the table: fold every row, unfold every row.
+    pub collapse_all_label: String,
+    pub expand_all_label: String,
+    /// What the fold button of a row says to a screen reader.
+    pub fold_label: String,
+    /// What the list above the table offers: one entry per standard file, then the essential table.
+    pub picks: Vec<NutritionPick>,
+    /// Whether the table is the essential one: the basic rows, flat.
+    pub essential: bool,
+    /// What the list says to a screen reader.
+    pub pick_label: String,
+    /// The vitamins and minerals the standard's rule calls well present.
+    pub well_present: Option<WellPresent>,
+    /// What the explanation bubbles say, as JSON for the page's script: the labels of their
+    /// sections, then for each nutrient what it is, what it is for, where it is found, the source of
+    /// that text, the reference intake and the rating of the standard in use, and the recipe's figure.
+    pub tips_json: String,
+    /// The servings the amounts are for.
+    pub servings: String,
+    /// Whether the recipe gave a `weight:`, which the per-100 g column needs.
+    pub has_100g: bool,
+    /// True when the recipe has no whole number of servings: everything is
+    /// per serving, with no per-100 g and no whole-recipe column.
+    pub per_serving_only: bool,
+    /// The energy for the servings chosen, in kcal.
+    pub kcal_total: Option<String>,
+    /// The energy of one serving, in kcal.
+    pub kcal_per_serving: Option<String>,
+    /// The donut, when carbohydrates, fat and proteins are all given.
+    pub ring: Option<Vec<RingArc>>,
+    /// Fat, carbohydrates and proteins for the servings chosen.
+    pub macros: Vec<MacroLine>,
+    /// Saturated fat, sugars, fibre and salt as small cards.
+    pub cards: Vec<NutrientCard>,
+    /// "Health rating, per 100 g:", in front of the legend.
+    pub legend_label: String,
+    /// What each colour of the cards means; empty without a `weight:`, when
+    /// every card is neutral.
+    pub legend: Vec<LegendItem>,
+    /// The rows of the full table, laid out by the tree of the standard.
+    pub rows: Vec<NutritionRow>,
+}
+
+/// The tiles of the vitamins and minerals that are well present, with the rule that picked them.
+#[derive(Debug, Clone, Serialize)]
+pub struct WellPresent {
+    pub title: String,
+    /// "at least 15 % of the reference intake per 100 g ...", for the standard in use.
+    pub rule: String,
+    pub tiles: Vec<NutrientCard>,
+}
+
+/// One arc of the donut. `kind` is `carb`, `fat` or `prot`, and picks the
+/// colour in `components.css`; the dash values are on a circle of
+/// circumference 100.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RingArc {
+    pub kind: String,
+    pub dasharray: String,
+    pub dashoffset: String,
+}
+
+/// One macro beside the donut: its amount and its share of the energy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacroLine {
+    pub kind: String,
+    pub label: String,
+    pub amount: String,
+    pub pct: Option<u32>,
+}
+
+/// A small card for one nutrient, coloured by `level` (`low`, `mid`, `high`,
+/// `good` or `neutral`); `word` says the level in words.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutrientCard {
+    pub icon: Option<String>,
+    pub label: String,
+    pub value: String,
+    pub level: String,
+    pub word: Option<String>,
+    /// Which macro it belongs to (`fat`, `carb`, `prot`), `other` for none, so
+    /// a click on a slice of the donut can highlight it.
+    pub group: String,
+    /// "rich in" or "source of", on the tiles of the nutrients that are well present.
+    pub claim: Option<String>,
+    /// The canonical name of the nutrient, which the row of the table shares.
+    pub key: String,
+}
+
+/// One colour of the cards and its meaning, translated.
+#[derive(Debug, Clone, Serialize)]
+pub struct LegendItem {
+    /// The colour: `low` (green), `mid` (amber), `high` (red) or `neutral` (blue).
+    pub level: String,
+    pub word: String,
+    /// Whether a card of this page has that rating. A rating the standard can give but no card
+    /// has stays in the legend, greyed, so the legend is always there to explain the colours.
+    pub used: bool,
+}
+
+/// What a recipe card shows of the nutrition: the donut and the macros, per
+/// serving.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListNutrition {
+    pub kcal: String,
+    pub arcs: Vec<RingArc>,
+    pub macros: Vec<MacroLine>,
+    /// "per serving", translated.
+    pub per_serving: String,
+}
+
+/// One row of a [`NutritionPanel`]'s table, values already formatted with unit: a nutrient the
+/// recipe gave, or a family of the standard's tree that holds some.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionRow {
+    pub icon: Option<String>,
+    pub label: String,
+    /// A row that is read in a lighter style: a nutrient under another one.
+    pub sub: bool,
+    /// Read as "of which ...": a part of the nutrient above it (saturated fat, sugars),
+    /// not merely listed with it (cholesterol with the fats, fibre where the norm keeps it apart).
+    pub part: bool,
+    /// A family (macronutrients, minerals, vitamins...), not a nutrient.
+    pub fam: bool,
+    /// The top-level family it sits in: `macro`, `other`, `min`, `vit`, or empty for the energy.
+    pub family: String,
+    /// The slice of the donut it belongs to (`fat`, `carb`, `prot`), or empty.
+    pub mac: String,
+    /// How deep it sits in the tree: 0 for the energy and the families, 1 for a macro.
+    /// Drives the indentation and the folding.
+    pub depth: u8,
+    /// `fat`, `carb` or `prot` for a slice and what belongs to it, `all` for
+    /// the energy, `other` for the rest.
+    pub group: String,
+    /// The canonical name of the nutrient or family (`saturatedFatContent`, `minerals`).
+    pub key: String,
+    pub per_serving: String,
+    pub per_100g: Option<String>,
+    pub total: String,
+    /// The share of the standard's reference intake that one serving covers, in percent.
+    pub pct: Option<u32>,
+    /// Whether rows sit below it, so a fold button goes on it.
+    pub foldable: bool,
+    /// Its place in the simple view (the table as it was before the standards): `0` not shown,
+    /// `1` a line of its own, `2` an "of which" line under the nutrient above.
+    pub simple: u8,
+}
+
+/// A standard in the list above the nutrition table.
+#[derive(Debug, Clone, Serialize)]
+pub struct NutritionPick {
+    pub id: String,
+    pub name: String,
+    pub selected: bool,
+}
+
+/// One family line of list-valued custom metadata (e.g. `nutrition`).
+#[derive(Debug, Clone, Serialize)]
+pub struct MetaListFamily {
+    pub label: String,
+    /// Small translated qualifier shown under the label (e.g. `nutrition`'s
+    /// "per serving"), or `None` for families without one.
+    pub note: Option<String>,
+    pub items: Vec<MetaListItem>,
+}
+
+/// One entry within a [`MetaListFamily`] (e.g. `"258 kcal"`).
+#[derive(Debug, Clone, Serialize)]
+pub struct MetaListItem {
+    /// The address, when the value is a web link: `text` then shows only its
+    /// host, so a long URL cannot push the page wider than the screen.
+    pub url: Option<String>,
+    /// Inline SVG markup (Tabler Icons, MIT), or `None` for a plain bullet.
+    pub icon: Option<String>,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -223,6 +223,9 @@
                 {% endfor %}
             </div>
 
+            <!-- Metadata families (nutrition, file, ...): one panel each -->
+            {% include "panels/families.html" %}
+
             {% when None %}
             {% if scale != 1.0 %}
             <div id="metadata-container" class="flex flex-wrap gap-3">

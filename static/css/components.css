@@ -510,11 +510,16 @@
     .metadata-pill {
         display: inline-flex;
         align-items: center;
+        max-width: 100%;
+        min-width: 0;
         padding: .25rem .75rem;
-        border-radius: 9999px;
+        border-radius: 1rem;
         font-size: var(--text-body);
         font-weight: 500;
-        white-space: nowrap;
+        /* A long value (a URL, a source) wraps inside the pill rather than
+           pushing the page wider than a phone. */
+        white-space: normal;
+        overflow-wrap: anywhere;
         background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text-muted);
@@ -910,5 +915,278 @@
         .pantry-actions { opacity: 1; }
         .plan-add,
         .plan-line-button { width: 36px; height: 36px; }
+    }
+
+    /* ---------- Metadata panels (file, nutrition, ...) ---------- */
+    /* A frame like the Ingredients card, as wide as the page, with the title
+       on its top border so no column is spent on a label. */
+    .panel-frame {
+        margin: 0; min-width: 0; width: 100%; max-width: 100%;
+        padding: .375rem .875rem .75rem;
+        border: 1px solid var(--border); border-radius: var(--radius-card);
+        background: var(--surface); box-shadow: var(--shadow-card);
+    }
+    .panel-frame > legend {
+        padding: 0 .375rem; margin-left: -.25rem;
+        font-size: var(--text-meta); line-height: 1.2; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+
+    /* ---------- Nutrition panel and card ---------- */
+    /* The block is as wide as its content, and the open table fills exactly that width:
+       its right edge is the right edge of the button above it. */
+    .nutri { min-width: 0; width: 100%; }
+    .nutri-top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; }
+    /* The side takes the width the donut leaves: the macros keep their size, the
+       cards share the rest in one row (two by two when it gets narrow). */
+    .nutri-side { flex: 1 1 22rem; min-width: 0; display: flex; flex-direction: column; gap: .625rem; }
+    .nutri-cols { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem 1.75rem; }
+    .nutri-macros { flex: 0 0 auto; }
+
+    /* The donut: arcs on a circle of circumference 100, from the top. */
+    .nutri-ring { position: relative; width: 6.5rem; height: 6.5rem; flex: none; }
+    .nutri-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .nutri-ring-mid {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; line-height: 1.05; text-align: center;
+        pointer-events: none; /* the slices under the text stay clickable */
+    }
+    .nutri-ring-mid b { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .nutri-ring-mid span { font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-ring-small { width: 4.5rem; height: 4.5rem; }
+    .nutri-ring-small .nutri-ring-mid b { font-size: 1.05rem; }
+    .nutri-ring-small .nutri-ring-mid span { font-size: .625rem; }
+    .nutri-arc { stroke-linecap: butt; }
+
+    /* A click on a slice of the donut (or on its legend line) highlights what
+       belongs to it: the sub-nutrients, in the cards and in the table. */
+    .nutri [data-pick] { cursor: pointer; }
+    .nutri-arc.nutri-hl { stroke-width: 5.75; }
+    .nutri-dim { opacity: .3; }
+    .nutri-macros li.nutri-hl, .nutri-card.nutri-hl { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-control); }
+    .nutri-full tr.nutri-hl > th, .nutri-full tr.nutri-hl > td { background: var(--accent-soft); }
+    /* The donut takes the colours of the food families, apart from the ratings of the cards. */
+    .nutri-arc-fat { stroke: var(--macro-fat); }
+    .nutri-arc-carb { stroke: var(--macro-carb); }
+    .nutri-arc-prot { stroke: var(--macro-prot); }
+    .nutri-kcal { font-size: var(--text-body); color: var(--text-muted); }
+    .nutri-kcal b { font-size: 1.5rem; color: var(--text); }
+
+    .nutri-macros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; font-size: var(--text-ui); }
+    .nutri-macros li { display: flex; gap: 1rem; align-items: baseline; justify-content: space-between; }
+    .nutri-macros li > span { min-width: 5.75rem; white-space: nowrap; }
+    /* The values end flush right, the weight and the share each in a column of their own. */
+    .nutri-macros b { display: inline-flex; margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .nutri-amt { min-width: 4.25rem; text-align: right; }
+    .nutri-pct { min-width: 2.25rem; text-align: right; color: var(--text-muted); font-weight: 500; }
+    .nutri-sep { padding: 0 .375rem; color: var(--text-muted); font-weight: 500; }
+    .nutri-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; margin-right: .375rem; }
+    .nutri-dot-fat { background: var(--macro-fat); }
+    .nutri-dot-carb { background: var(--macro-carb); }
+    .nutri-dot-prot { background: var(--macro-prot); }
+
+    /* Small cards, two by two: the colour is the level per 100 g, and a word
+       says it too. */
+    .nutri-cards { flex: 1 1 17rem; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .375rem; }
+    .nutri-card {
+        display: flex; flex-direction: column; gap: 0; min-width: 0;
+        padding: .25rem .625rem .3125rem; border-radius: var(--radius-card);
+        border: 1px solid var(--border-strong); background: var(--surface-sunk); color: var(--text-muted);
+    }
+    .nutri-card-head { display: flex; align-items: center; gap: .3125rem; font-size: var(--text-meta); line-height: 1.3; overflow-wrap: anywhere; }
+    .nutri-card-icon { width: .8125rem; height: .8125rem; flex: none; }
+    .nutri-card-icon svg { width: 100%; height: 100%; }
+    .nutri-card-value { font-size: var(--text-body); line-height: 1.35; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: .375rem; color: var(--text); }
+    .nutri-card-low, .nutri-card-good { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+    .nutri-card-mid { background: var(--warn-soft); border-color: var(--warn); color: var(--warn-text); }
+    .nutri-card-high { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+    /* No threshold to judge it by: blue, so it is never mistaken for a level. */
+    .nutri-card-neutral { background: var(--cool-soft); border-color: var(--cool); color: var(--cool); }
+    .nutri-card-low .nutri-card-value, .nutri-card-good .nutri-card-value,
+    .nutri-card-mid .nutri-card-value, .nutri-card-high .nutri-card-value,
+    .nutri-card-neutral .nutri-card-value { color: inherit; }
+
+    /* What the colours of the cards mean. */
+    .nutri-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .875rem; font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-legend-item { display: inline-flex; align-items: center; gap: .3125rem; }
+    /* A legend item picks the rating it names: the cards and rows with it light up. */
+    button.nutri-legend-item { font: inherit; color: inherit; background: none; border: 1px solid transparent; border-radius: 999px; padding: .0625rem .375rem; cursor: pointer; }
+    button.nutri-legend-item:hover { border-color: var(--border-strong); }
+    button.nutri-legend-item:disabled { opacity: .45; cursor: default; }
+    button.nutri-legend-item:disabled:hover { border-color: transparent; }
+    button.nutri-legend-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    button.nutri-legend-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .nutri-card.nutri-hl { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .nutri-swatch { display: inline-block; width: .75rem; height: .75rem; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--surface-sunk); }
+    .nutri-swatch.nutri-card-low, .nutri-swatch.nutri-card-good { background: var(--ok-soft); border-color: var(--ok); }
+    .nutri-swatch.nutri-card-mid { background: var(--warn-soft); border-color: var(--warn); }
+    .nutri-swatch.nutri-card-high { background: var(--danger-soft); border-color: var(--danger); }
+    .nutri-swatch.nutri-card-neutral { background: var(--cool-soft); border-color: var(--cool); }
+
+    /* Spread over the width of the macros and the cards: the button ends under the last card (Salt). */
+    .nutri-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem .75rem; font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-more {
+        margin-left: auto; /* always the right end of the row, under the last card */
+        display: inline-flex; align-items: center; gap: .375rem; cursor: pointer;
+        padding: .125rem .625rem; border-radius: var(--radius-control);
+        border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: var(--text-meta);
+    }
+    .nutri-more::after {
+        content: ""; width: .375rem; height: .375rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+        transform: translateY(-2px) rotate(45deg);
+    }
+    .nutri-more[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+
+    /* The full table keeps to its content instead of stretching across the page. */
+    .nutri-full { margin-top: .625rem; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+    .nutri-full table { width: 100%; border-collapse: collapse; font-size: var(--text-ui); font-variant-numeric: tabular-nums; }
+    .nutri-full th, .nutri-full td { padding: .3125rem .875rem; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
+    .nutri-full thead th { border-top: 0; color: var(--text-muted); font-size: var(--text-meta); font-weight: 600; vertical-align: bottom; }
+    .nutri-full tbody th { text-align: left; font-weight: 500; min-width: 11rem; }
+    .nutri-full tr.nutri-sub th { padding-left: 2.125rem; font-weight: 400; color: var(--text-muted); }
+    .nutri-full tr.nutri-sub td { color: var(--text-muted); }
+    /* One more step of indentation for each level of the tree. */
+    .nutri-full tr.nutri-depth-2 th { padding-left: 3.375rem; }
+    .nutri-full tr.nutri-depth-3 th { padding-left: 4.625rem; }
+    .nutri-full thead th:last-child { color: var(--accent-text); }
+    .nutri-total { background: var(--surface-sunk); font-weight: 700; }
+
+    /* The buttons that choose the column of values on a phone. */
+
+    /* ---- The table as a tree, by the standard in use ---- */
+    /* The bar above the table is set apart from it: a band, and a line of accent under it. */
+    .nutri-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; padding: .5rem .75rem; background: var(--surface-sunk); border-bottom: 1px solid var(--border); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+    .nutri-tools button, .nutri-pick, .nutri-more { transition: background-color .15s, border-color .15s, color .15s, transform .15s, box-shadow .15s; }
+    .nutri-tools button, .nutri-pick { font: inherit; font-size: var(--text-meta); padding: .1875rem .625rem; border-radius: 999px; border: 1px solid var(--border); background-color: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
+    .nutri-pick { padding-right: 1.5rem; }
+    .nutri-tools button:hover:not([aria-pressed="true"]), .nutri-pick:hover, .nutri-more:hover { background-color: var(--accent-soft); border-color: var(--accent); box-shadow: 0 1px 0 var(--accent); transform: translateY(-1px); }
+    .nutri-tools button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+    .nutri-tools button[aria-pressed="true"]:hover { border-color: var(--text); transform: translateY(-1px); }
+    .nutri-tools button:active, .nutri-more:active { transform: translateY(0); box-shadow: none; }
+    .nutri-tools button:focus-visible, .nutri-pick:focus-visible, .nutri-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .nutri-full tr[hidden] { display: none; }
+    .nutri-share { margin-left: .25rem; font-size: var(--text-meta); color: var(--text-muted); }
+
+    /* Indentation by level, one step for each */
+    .nutri-full tbody tr[data-d="1"] th { padding-left: 1.75rem; }
+    .nutri-full tbody tr[data-d="2"] th { padding-left: 3rem; }
+    .nutri-full tbody tr[data-d="3"] th { padding-left: 4.25rem; }
+    .nutri-full tbody tr[data-d="4"] th { padding-left: 5.5rem; }
+    .nutri-fold { width: 1.375rem; height: 1.375rem; border: 0; background: none; color: var(--text-muted); cursor: pointer; padding: 0; margin: 0 .25rem 0 -.25rem; vertical-align: middle; border-radius: .25rem; }
+    .nutri-fold::before { content: "\25BE"; display: inline-block; font-size: .8125rem; }
+    .nutri-fold[aria-expanded="false"]::before { transform: rotate(-90deg); }
+    .nutri-fold:hover { color: var(--text); background: var(--surface-sunk); }
+    .nutri-fold-gap { display: inline-block; width: 1.375rem; }
+    .nutri-full th, .nutri-full td { vertical-align: middle; }
+
+    /* A calm table: one neutral surface and a hairline between rows. The hierarchy is in the weight of
+       the text and its indentation, not in colour: a family is a quiet heading, a main nutrient is bold,
+       what is part of it is lighter. */
+    .nutri-full tr.nutri-fam[data-d="0"] > th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 600; padding-top: .75rem; }
+    .nutri-full tr.nutri-fam[data-d="0"] > td { color: var(--text-muted); font-weight: 500; }
+    .nutri-full tr.nutri-fam[data-d="1"] > th, .nutri-full tr[data-mac][data-d="1"] > th { font-weight: 600; color: var(--text); }
+    .nutri-full tr.nutri-fam[data-d="1"] > td { color: var(--text-muted); font-weight: 500; }
+    .nutri-full tr.nutri-hl > th, .nutri-full tr.nutri-hl > td { background: var(--accent-soft) !important; }
+    .nutri-full tbody tr:has(.nutri-fold) { user-select: none; }
+
+    /* The tiles of what is well present, behind the same button as the table */
+    .nutri-well { margin-top: .75rem; }
+    .nutri-well[hidden] { display: none; }
+    .nutri-well-title { margin: 0 0 .375rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .125rem .625rem; }
+    .nutri-well-title b { font-size: var(--text-ui); }
+    .nutri-well-title span { font-size: var(--text-meta); color: var(--text-muted); }
+    .nutri-well-tiles { grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); flex: none; width: 100%; }
+    .nutri-claim { font-size: var(--text-meta); opacity: .9; }
+
+
+    /* The explanation bubble of a card or a row */
+    .nutri-tip { position: fixed; z-index: 60; width: min(22rem, calc(100vw - 1rem)); background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-card); padding: .625rem .75rem; box-shadow: var(--shadow-overlay); font-size: var(--text-meta); line-height: 1.45; pointer-events: none; text-align: left; }
+    .nutri-tip[hidden] { display: none; }
+    .nutri-tip.nutri-tip-mini { width: auto; max-width: 16rem; white-space: nowrap; }
+    .nutri-tip-mini .nutri-tip-now { border-top: 0; padding-top: 0; }
+    .nutri-tip p { margin: 0 0 .375rem; }
+    .nutri-tip p:last-child { margin-bottom: 0; }
+    .nutri-tip-title { display: block; font-size: var(--text-ui); margin-bottom: .25rem; }
+    .nutri-tip-k { display: block; font-size: .6875rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+    .nutri-tip-ref { color: var(--text-muted); }
+    .nutri-tip-now { padding-top: .375rem; border-top: 1px solid var(--border); font-weight: 600; }
+    .nutri-tip-src { color: var(--text-muted); font-size: .6875rem; padding-top: .375rem; border-top: 1px dashed var(--border); }
+    /* The "?" pointer is on the text that shows the bubble, not on the whole card or row. */
+    .nutri-card[tabindex] .nutri-card-head, #nutrition-table tbody tr[tabindex] .nutri-label { cursor: help; }
+
+    .nutri-seg { display: none; }
+    .nutri-seg button {
+        font: inherit; font-size: var(--text-meta); line-height: 1.25; text-align: left; cursor: pointer;
+        padding: .3125rem .6875rem; border-radius: 9999px;
+        border: 1px solid var(--border); background: var(--surface-sunk); color: var(--text-muted);
+    }
+    .nutri-seg button:hover { border-color: var(--border-strong); }
+    .nutri-seg button[aria-checked="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+    .nutri-row-icon { display: inline-block; width: 1rem; height: 1rem; margin-right: .625rem; vertical-align: -3px; color: var(--accent); }
+    .nutri-row-icon svg { width: 100%; height: 100%; }
+    .nutri-label { display: inline-block; }
+    .nutri-full tr.nutri-sub .nutri-row-icon { color: var(--text-muted); opacity: .8; margin-right: .5rem; }
+    .nutri-of-s { display: none; }
+
+    /* The simple view: the table as it was before the standards. A flat list of the same eight rows,
+       with their icons, no families, no tint, no tree and no shares of the intakes. */
+    .nutri-full.is-simple .nutri-tools button { display: none; }
+    .nutri-full.is-simple tr[data-simple="0"] { display: none; }
+    .nutri-full.is-simple .nutri-of-t { display: none; }
+    .nutri-full.is-simple .nutri-of-s { display: inline; }
+    .nutri-full.is-simple .nutri-share, .nutri-full.is-simple .nutri-fold, .nutri-full.is-simple .nutri-fold-gap { display: none; }
+    .nutri-full.is-simple tbody tr[data-simple][data-d] > th, .nutri-full.is-simple tbody tr[data-simple][data-d] > td { background: transparent; border-top: 1px solid var(--border); }
+    .nutri-full.is-simple tbody tr[data-simple][data-d] > th[scope="row"] { padding-left: .875rem; font-weight: 600; color: var(--text); background-image: none !important; }
+    .nutri-full.is-simple tbody tr[data-simple][data-d] > td { color: var(--text); }
+    .nutri-full.is-simple tbody tr[data-simple="2"][data-d] > th[scope="row"] { padding-left: 2rem; font-weight: 400; color: var(--text-muted); }
+    .nutri-full.is-simple tbody tr[data-simple="2"][data-d] > td { color: var(--text-muted); }
+    .nutri-full.is-simple tbody tr[data-simple="2"] .nutri-row-icon { color: var(--text-faint); margin-right: .75rem; }
+    .nutri-full.is-simple tbody tr[data-simple="1"] .nutri-label::first-letter { text-transform: uppercase; }
+    .nutri-full.is-simple tbody tr.nutri-hl[data-simple][data-d] > th, .nutri-full.is-simple tbody tr.nutri-hl[data-simple][data-d] > td { background: var(--accent-soft); }
+
+    /* On a recipe card: the donut with the three macros, per serving. */
+    .nutri-list { display: flex; align-items: center; gap: .875rem; }
+    .nutri-list .nutri-macros { flex: 1; min-width: 0; }
+    .nutri-list .nutri-macros li { justify-content: space-between; }
+    .nutri-list .nutri-macros li > span { min-width: 0; }
+    .nutri-list-note { margin-top: .25rem; font-size: var(--text-meta); color: var(--text-faint); }
+
+    /* On a phone the macros sit to the right of the donut, and the cards, the
+       legend and the button take the full width below. `display: contents`
+       lets those pieces join the grid of `.nutri-top` instead of wrapping
+       under the donut. */
+    @media (max-width: 40rem) {
+        .nutri-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .75rem 1rem; align-items: center; }
+        .nutri-side, .nutri-cols { display: contents; }
+        .nutri-cards, .nutri-legend, .nutri-foot { grid-column: 1 / -1; }
+        .nutri-ring { width: 5.75rem; height: 5.75rem; }
+        .nutri-ring-mid b { font-size: 1.3rem; }
+        .nutri-macros li { gap: .625rem; }
+        .nutri-macros li > span { min-width: 4.25rem; }
+        .nutri-amt { min-width: 3.5rem; }
+        .nutri-pct { min-width: 1.75rem; }
+    }
+    /* A very narrow phone: a smaller donut and a label that takes only the room it needs,
+       so "48,4 g · 96 %" still fits on one line. */
+    @media (max-width: 23rem) {
+        .nutri-ring { width: 4.75rem; height: 4.75rem; }
+        .nutri-ring-mid b { font-size: 1.1rem; }
+        .nutri-top { gap: .75rem .75rem; }
+        .nutri-macros li { gap: .5rem; }
+        .nutri-macros li > span { min-width: 0; }
+        .nutri-amt, .nutri-pct { min-width: 0; }
+        .nutri-sep { padding: 0 .25rem; }
+    }
+
+    /* On a phone the table keeps one column of values, the one the buttons
+       picked, so it never has to scroll sideways. */
+    @media (max-width: 40rem) {
+        .nutri-seg { display: flex; flex-wrap: wrap; gap: .375rem; padding: .5rem; border-bottom: 1px solid var(--border); }
+        .nutri-full thead { display: none; }
+        .nutri-full tbody th { min-width: 0; white-space: normal; }
+        .nutri-full tbody tr:first-child th, .nutri-full tbody tr:first-child td { border-top: 0; }
+        .nutri-full[data-col="p100"] .nutri-c-ps, .nutri-full[data-col="p100"] .nutri-c-tot,
+        .nutri-full[data-col="ps"] .nutri-c-p100, .nutri-full[data-col="ps"] .nutri-c-tot,
+        .nutri-full[data-col="tot"] .nutri-c-p100, .nutri-full[data-col="tot"] .nutri-c-ps { display: none; }
     }
 }

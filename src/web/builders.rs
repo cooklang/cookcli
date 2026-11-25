@@ -131,7 +131,7 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
         };
 
         // Extract tags, image, is_menu, and file timestamps if this is a recipe
-        let (tags, image_path, is_menu, modified_at, created_at) =
+        let (tags, nutrition_kcal, nutrition_ring, image_path, is_menu, modified_at, created_at) =
             if let Some(ref recipe) = child.recipe {
                 let img_path = recipe
                     .title_image()
@@ -158,13 +158,19 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
 
                 (
                     recipe.tags(),
+                    crate::web::family_renderers::extract_nutrition_kcal(recipe.metadata()),
+                    crate::web::family_renderers::build_list_nutrition(
+                        recipe.metadata(),
+                        &lang,
+                        features.standard(),
+                    ),
                     img_path,
                     recipe.is_menu(),
                     modified_at,
                     created_at,
                 )
             } else {
-                (Vec::new(), None, false, None, None)
+                (Vec::new(), None, None, None, false, None, None)
             };
 
         items.push(RecipeItem {
@@ -178,6 +184,8 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
             },
             description: None,
             tags,
+            nutrition_kcal,
+            nutrition_ring,
             image_path,
             is_menu,
             modified_at,
@@ -996,12 +1004,35 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
+                // The weight feeds the nutrition panel's per-100 g column; as a
+                // pill of its own it only adds noise.
+                if key_str == "weight" && recipe.metadata.get("nutrition").is_some() {
+                    continue;
+                }
+                // A key prefixed with "." is hidden from the recipe page.
+                if key_str.starts_with('.') {
+                    continue;
+                }
 
                 custom_metadata.push((key_str.to_string(), val_str.to_string()));
             }
         }
 
         let (source, source_url) = source_metadata(|key| recipe.metadata.get(key));
+        // The servings the nutrition was written for and the ones shown, when
+        // the recipe declares a whole number of servings.
+        let nutrition_servings = servings.as_ref().map(|s| (f64::from(s.base), s.chosen));
+        let panels = crate::web::family_renderers::build_family_panels(
+            recipe.metadata.map_filtered(),
+            &crate::web::family_renderers::PanelContext {
+                lang: &lang,
+                servings: nutrition_servings,
+                weight: recipe.metadata.get("weight"),
+                standard: features.standard(),
+                essential: features.nutrition_essential,
+            },
+        );
+
         Some(RecipeMetadata {
             // The stepper's value rather than the metadata: `scale` rounds
             // `servings` to a whole number, so half of a 4-serving recipe
@@ -1028,6 +1059,7 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
             source,
             source_url,
             custom: custom_metadata,
+            panels,
         })
     };
 
@@ -1250,6 +1282,10 @@ fn build_menu_template_inner(
         custom_metadata.sort();
 
         let (source, source_url) = source_metadata(|key| menu.metadata.get(key));
+        // Menus expose their metadata as a plain map without YAML values, so
+        // the family panels (e.g. nutrition) are recipe-only for now.
+        let panels = Vec::new();
+
         Some(RecipeMetadata {
             // As on the recipe page: `scale` rounds `servings` to a whole number.
             servings: servings
@@ -1272,6 +1308,7 @@ fn build_menu_template_inner(
             source,
             source_url,
             custom: custom_metadata,
+            panels,
         })
     };
 
