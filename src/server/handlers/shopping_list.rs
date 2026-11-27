@@ -731,10 +731,7 @@ pub async fn get_extra_items(
         items
             .into_iter()
             .map(|item| ExtraItem {
-                edit_text: cookcli_core::cooklang_ingredient_parser::edit_text(
-                    &item.name,
-                    item.quantity.as_deref(),
-                ),
+                edit_text: item.edit_text(),
                 item,
             })
             .collect(),

@@ -4,8 +4,10 @@
 //! apps, so a line typed here is stored exactly as the iOS app would store it.
 //! No model is passed: CookCLI ships as one binary without ONNX Runtime.
 
+use super::store::quantity_from_text;
 use super::FreeHandItem;
 use cooklang::aisle::AisleConf;
+use cooklang::Quantity;
 use cooklang_ingredient_parser::{
     edit_text, parse_ingredient, parse_ingredient_list, ParsedIngredient,
 };
@@ -50,18 +52,29 @@ fn typed_item(parsed: ParsedIngredient) -> Option<TypedItem> {
         .as_ref()
         .map_or_else(|| parsed.name.clone(), |m| m.common_name.clone());
     let category = parsed.aisle_match.map(|m| m.category);
+    let edit_text = edit_text(&parsed.name, quantity.as_ref());
     let item = FreeHandItem {
         name: parsed.name,
-        quantity,
+        quantity: quantity.as_ref().map(Quantity::to_cooklang),
     };
     Some(TypedItem {
-        edit_text: edit_text(&item.name, item.quantity.as_deref()),
+        edit_text,
         item,
         row,
         chip,
         category,
         keeps_quantity: false,
     })
+}
+
+impl FreeHandItem {
+    /// The line an edit field shows for this item, which reads back as the
+    /// same item: `Milk 2 l`, or the name alone when the field cannot show
+    /// the quantity (`2%bunches`, `a pinch`).
+    pub fn edit_text(&self) -> String {
+        let quantity = self.quantity.as_deref().and_then(quantity_from_text);
+        edit_text(&self.name, quantity.as_ref())
+    }
 }
 
 /// One typed line; `None` when it has no name (blank, or only braces).
@@ -84,10 +97,10 @@ pub fn read_typed_text(text: &str, aisle: Option<&AisleConf>) -> Vec<TypedItem> 
 /// result then has `keeps_quantity` set.
 pub fn edited_item(old: &FreeHandItem, line: &str, aisle: Option<&AisleConf>) -> Option<TypedItem> {
     let mut typed = read_typed_line(line, aisle)?;
-    let shown_without_quantity = edit_text(&old.name, old.quantity.as_deref()) == old.name;
+    let shown_without_quantity = old.edit_text() == old.name;
     if typed.item.quantity.is_none() && shown_without_quantity {
         typed.item.quantity = old.quantity.clone();
-        typed.edit_text = edit_text(&typed.item.name, typed.item.quantity.as_deref());
+        typed.edit_text = typed.item.edit_text();
         typed.keeps_quantity = old.quantity.is_some();
     }
     Some(typed)

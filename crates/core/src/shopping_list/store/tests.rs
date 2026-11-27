@@ -725,6 +725,44 @@ fn a_free_hand_item_spec_is_an_ingredient_without_its_at() {
     assert_eq!(free_hand("paper towels", None).spec(), "paper towels{}");
 }
 
+/// A quantity is matched by what it reads as, so a client holding another
+/// spelling of the stored amount still finds the line; a rewrite then stores
+/// the amount in the format's own spelling.
+#[test]
+fn a_free_hand_quantity_is_matched_by_value_and_normalised_on_rewrite() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "sugar{0.50%kg}\nsalt{2}\n",
+    );
+    let store = store(&dir);
+
+    assert_eq!(
+        store.load_free_hand().unwrap()[0],
+        free_hand("sugar", Some("0.5%kg"))
+    );
+    store
+        .remove_free_hand(&free_hand("sugar", Some("0.50%kg")))
+        .unwrap();
+    assert_eq!(list_file(&dir), "salt{2}\n");
+}
+
+/// Text that is no quantity — or that the format could not hold between
+/// braces — never matches a line without one.
+#[test]
+fn an_unreadable_quantity_does_not_match_a_bare_line() {
+    let dir = temp();
+    write(&base(&dir).join(".shopping-list"), "salt\n");
+    let store = store(&dir);
+
+    for text in ["%", "[- open", "a -- b"] {
+        store
+            .remove_free_hand(&free_hand("salt", Some(text)))
+            .unwrap();
+        assert_eq!(list_file(&dir), "salt\n", "{text:?}");
+    }
+}
+
 // -- Typed items ---------------------------------------------------------------
 
 fn free(name: &str, quantity: Option<&str>) -> FreeHandItem {

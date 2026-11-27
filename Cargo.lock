@@ -820,9 +820,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2da8780cc1af2f738e8e35f39b06d55b2b7d7f6213bf272f8a49a1123a2386ce"
+checksum = "7094606b41b3384a672826cfe7d63b442a92e06ce6f9d92b593fe654e591a115"
 dependencies = [
  "bitflags 2.13.0",
  "codesnake",
@@ -899,9 +899,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-ingredient-parser"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6044731173bde39f5e74a55d93eeffabdd84a52f361b0b4f2309338c23953b3"
+checksum = "3d931fd83045f76f457af474ed053de2a9214ebadfdbb997f279679aebe9bc42"
 dependencies = [
  "cooklang",
  "serde",
@@ -911,9 +911,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-language-server"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cca0f1b55ef31d00de4c21fe82df88c0af7757c9b796c5fcbad6aa7a0611a2c2"
+checksum = "ef7f60423f7cbfd58b03f882ed80240524415cb90ee3221df6900c892d12def1"
 dependencies = [
  "anyhow",
  "cooklang",
@@ -932,9 +932,9 @@ dependencies = [
 
 [[package]]
 name = "cooklang-reports"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5561521cf2be1c5d011216307ca2c282b5584255b5ac0d225c985ec63690d4ef"
+checksum = "03210ea64cd49b5d524a520bae27c32a4b107238e4898193463d19690955d9b4"
 dependencies = [
  "anyhow",
  "cooklang",
