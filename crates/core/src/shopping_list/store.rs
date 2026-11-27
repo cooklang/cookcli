@@ -117,10 +117,9 @@ pub struct FreeHandItem {
 }
 
 impl FreeHandItem {
-    /// The item as a Cooklang ingredient without its `@`: `almonds{50%g}`, or
-    /// `paper towels{}` when it has no amount. What
-    /// [`GenerateRequest::extra_items`](super::GenerateRequest::extra_items)
-    /// and [`add_extra_item`](super::add_extra_item) take.
+    /// The item as a shopping list line: `almonds{50%g}`, or `paper towels{}`
+    /// when it has no amount. For messages and logs; the list itself is
+    /// built from the item with [`add_free_hand_item`](super::add_free_hand_item).
     pub fn spec(&self) -> String {
         format!(
             "{}{{{}}}",

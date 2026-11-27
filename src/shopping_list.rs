@@ -138,9 +138,9 @@ pub struct ShoppingListArgs {
     /// Add an extra item that no recipe calls for
     ///
     /// For the paper towels and bin bags you want on the same shopping trip.
-    /// Repeat the flag for each item. Each value is a Cooklang ingredient
-    /// written without the leading `@`: a bare name for something with no
-    /// amount, or the brace form to give one.
+    /// Repeat the flag for each item. Each value is a shopping list line: a
+    /// bare name for something with no amount, or the brace form to give one.
+    /// The name is taken as written; one leading `@` is dropped.
     ///
     /// Examples:
     ///   --extra "paper towels"        # no amount

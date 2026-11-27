@@ -17,10 +17,11 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    add_extra_item, add_optional_selections, edited_item, extract_ingredients, merge_case_variants,
-    optional_selections, read_typed_line, read_typed_text, recipe_display_name,
-    subtract_pantry_from_optional, ExtractOptions, FreeHandItem, OptionalSelection, ScaledRecipe,
-    ShoppingIngredients, ShoppingListStore, StoredEntry, TypedItem,
+    add_free_hand_item, add_optional_selections, edited_item, extract_ingredients,
+    merge_case_variants, optional_selections, read_typed_line, read_typed_text,
+    recipe_display_name, subtract_pantry_from_optional, ExtractOptions, FreeHandItem,
+    OptionalSelection, ScaledRecipe, ShoppingIngredients, ShoppingListStore, StoredEntry,
+    TypedItem,
 };
 use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
 use cooklang::ingredient_list::IngredientList;
@@ -79,8 +80,13 @@ pub async fn shopping_list(
             ListRequest::Item(item) => {
                 // Merged into the list like the CLI's `--extra` items: same
                 // name, same aisle, same pantry subtraction.
-                add_extra_item(&item.spec(), &mut ingredients.required)
-                    .map_err(|e| (StatusCode::BAD_REQUEST, json_error(e)))?;
+                if item.name.trim().is_empty() {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        json_error(cookcli_core::CoreError::EmptyItemName),
+                    ));
+                }
+                add_free_hand_item(&item, &mut ingredients.required);
                 continue;
             }
         };
@@ -1196,8 +1202,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     // Free-hand items are ticked like any other ingredient, so a tick on
     // them survives the compaction too.
     for item in store.load_free_hand()? {
-        add_extra_item(&item.spec(), &mut list.required)
-            .with_context(|| format!("aggregating free-hand item {}", item.spec()))?;
+        add_free_hand_item(&item, &mut list.required);
     }
 
     // The page lists, and so ticks, each ingredient under the name the aisle

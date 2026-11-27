@@ -720,9 +720,39 @@ fn removing_a_recipe_leaves_free_hand_items_alone() {
 }
 
 #[test]
-fn a_free_hand_item_spec_is_an_ingredient_without_its_at() {
+fn a_free_hand_item_spec_is_its_shopping_list_line() {
     assert_eq!(free_hand("almonds", Some("50%g")).spec(), "almonds{50%g}");
     assert_eq!(free_hand("paper towels", None).spec(), "paper towels{}");
+}
+
+/// Names that would be Cooklang markup in a recipe — a tag, a timer, an
+/// ingredient sigil — are only names on the list, and are ticked as such.
+#[test]
+fn free_hand_names_that_look_like_markup_round_trip_and_tick() {
+    let dir = temp();
+    let store = store(&dir);
+    let items = vec![
+        free_hand("#1 flour", Some("2")),
+        free_hand("~ramen", None),
+        free_hand("@milk", Some("1%l")),
+    ];
+    store.add_all(Vec::new(), items.clone()).unwrap();
+
+    assert_eq!(list_file(&dir), "#1 flour{2}\n~ramen\n@milk{1%l}\n");
+    assert_eq!(store.load_free_hand().unwrap(), items);
+
+    for item in &items {
+        store.check(&item.name).unwrap();
+    }
+    store.compact(items.iter().map(|i| i.name.clone())).unwrap();
+    let checked = store.checked_set().unwrap();
+    for name in ["#1 flour", "~ramen", "@milk"] {
+        assert!(checked.contains(name), "{name} ticked: {checked:?}");
+    }
+    for item in &items {
+        store.uncheck(&item.name).unwrap();
+    }
+    assert!(store.checked_set().unwrap().is_empty());
 }
 
 /// A quantity is matched by what it reads as, so a client holding another

@@ -587,3 +587,40 @@ fn test_shopping_list_from_today_is_accepted() {
         .assert()
         .success();
 }
+
+// -- --extra ----------------------------------------------------------------
+
+/// An extra item's name is taken as written, so `#1 flour` is no tag and
+/// `~ramen` no timer; one leading `@` is dropped.
+#[test]
+fn test_shopping_list_extra_keeps_names_that_look_like_markup() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args([
+            "stew.cook",
+            "--extra",
+            "#1 flour{2}",
+            "--extra",
+            "~ramen",
+            "--extra",
+            "@milk{1%l}",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_match(r"(?m)^#1 flour\s+2$").unwrap())
+        .stdout(predicate::str::is_match(r"(?m)^~ramen\s*$").unwrap())
+        .stdout(predicate::str::is_match(r"(?m)^milk\s+1 l$").unwrap());
+}
+
+/// An extra item with no name is refused, naming what was given.
+#[test]
+fn test_shopping_list_extra_without_a_name_fails() {
+    let dir = week_dir();
+
+    shopping_list_in(dir.path())
+        .args(["stew.cook", "--extra", "{2}"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("{2}"));
+}
