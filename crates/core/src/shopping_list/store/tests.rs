@@ -724,3 +724,73 @@ fn a_free_hand_item_spec_is_an_ingredient_without_its_at() {
     assert_eq!(free_hand("almonds", Some("50%g")).spec(), "almonds{50%g}");
     assert_eq!(free_hand("paper towels", None).spec(), "paper towels{}");
 }
+
+// -- Typed items ---------------------------------------------------------------
+
+fn free(name: &str, quantity: Option<&str>) -> FreeHandItem {
+    FreeHandItem {
+        name: name.to_string(),
+        quantity: quantity.map(str::to_string),
+    }
+}
+
+#[test]
+fn typed_items_are_written_as_free_hand_lines() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add(entry("Soup.cook", 1.0)).unwrap();
+    let written = store
+        .add_typed(vec![free("sugar", Some("1.5%kg")), free("bread", None)])
+        .unwrap();
+    assert_eq!(
+        written,
+        [free("sugar", Some("1.5%kg")), free("bread", None)]
+    );
+    assert_eq!(list_file(&dir), "./Soup.cook\nsugar{1.5%kg}\nbread\n");
+}
+
+#[test]
+fn the_same_name_and_unit_add_up_ignoring_case() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![free("Sugar", Some("1.5%kg"))])
+        .unwrap();
+    let written = store.add_typed(vec![free("sugar", Some("1%kg"))]).unwrap();
+    assert_eq!(written, [free("Sugar", Some("2.5%kg"))]);
+    assert_eq!(list_file(&dir), "Sugar{2.5%kg}\n");
+}
+
+#[test]
+fn a_different_unit_is_a_second_line() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add_typed(vec![free("milk", Some("2%l"))]).unwrap();
+    store
+        .add_typed(vec![free("milk", Some("500%ml")), free("milk", Some("2"))])
+        .unwrap();
+    assert_eq!(list_file(&dir), "milk{2%l}\nmilk{500%ml}\nmilk{2}\n");
+}
+
+#[test]
+fn two_lines_without_an_amount_are_one() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![free("bread", None), free("Bread", None)])
+        .unwrap();
+    assert_eq!(list_file(&dir), "bread\n");
+}
+
+#[test]
+fn a_typed_item_merges_into_a_menu_day_line_too() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_all(Vec::new(), vec![free("almonds", Some("50%g"))])
+        .unwrap();
+    store
+        .add_typed(vec![free("almonds", Some("100%g"))])
+        .unwrap();
+    assert_eq!(list_file(&dir), "almonds{150%g}\n");
+}

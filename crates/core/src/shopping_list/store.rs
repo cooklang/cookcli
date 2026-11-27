@@ -23,6 +23,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::shopping_list::{
     self, CheckEntry, IngredientItem, RecipeItem, ShoppingList, ShoppingListItem,
 };
+use cooklang_ingredient_parser::add_quantities;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -347,6 +348,51 @@ impl ShoppingListStore {
             })
         }));
         self.save_list(&list)
+    }
+
+    /// Add typed items: each joins a top-level free-hand line with the same
+    /// name (ignoring case) whose quantity it can be added to — the same
+    /// unit, or both without one — and otherwise becomes a new line at the
+    /// end. One read and one write for the batch. Returns each item as the
+    /// line it ended up in, in the order given.
+    ///
+    /// The merging is what the iOS app does, so the two agree on the file.
+    pub fn add_typed(&self, items: Vec<FreeHandItem>) -> Result<Vec<FreeHandItem>, CoreError> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let mut written = Vec::with_capacity(items.len());
+        for item in items {
+            let merged = list.items.iter_mut().find_map(|line| match line {
+                ShoppingListItem::Ingredient(line)
+                    if line.name.to_lowercase() == item.name.to_lowercase() =>
+                {
+                    add_quantities(line.quantity.as_deref(), item.quantity.as_deref())
+                        .ok()
+                        .map(|sum| {
+                            line.quantity = sum;
+                            FreeHandItem {
+                                name: line.name.clone(),
+                                quantity: line.quantity.clone(),
+                            }
+                        })
+                }
+                _ => None,
+            });
+            match merged {
+                Some(line) => written.push(line),
+                None => {
+                    list.items
+                        .push(ShoppingListItem::Ingredient(IngredientItem {
+                            name: item.name.clone(),
+                            quantity: item.quantity.clone(),
+                            optional: false,
+                        }));
+                    written.push(item);
+                }
+            }
+        }
+        self.save_list(&list)?;
+        Ok(written)
     }
 
     /// Remove the first free-hand item with this name and amount, and do
