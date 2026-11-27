@@ -172,6 +172,13 @@ pub enum CoreError {
         message: String,
     },
 
+    /// A shopping list item was given an empty name.
+    ///
+    /// Such a line would be written as `{2}`, which no reader of the file
+    /// takes as an item.
+    #[error("a shopping list item needs a name")]
+    EmptyItemName,
+
     /// A file could not be read or written.
     ///
     /// There is deliberately no `From<std::io::Error>`: every call site must
@@ -214,6 +221,7 @@ mod tests {
             | CoreError::Render { .. }
             | CoreError::Search { .. }
             | CoreError::InvalidShoppingList { .. }
+            | CoreError::EmptyItemName
             | CoreError::Io { .. } => {}
         }
     }
@@ -255,6 +263,7 @@ mod tests {
                 path: Utf8PathBuf::from("/recipes/.shopping-list"),
                 message: "Invalid multiplier: expected a number".to_string(),
             },
+            CoreError::EmptyItemName,
             CoreError::Io {
                 path: Utf8PathBuf::from("config/aisle.conf"),
                 source: std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),

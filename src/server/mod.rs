@@ -777,6 +777,15 @@ fn api(_state: &AppState) -> Result<Router<Arc<AppState>>> {
             "/shopping_list/remove_extra_item",
             post(handlers::remove_extra_item),
         )
+        .route(
+            "/shopping_list/recognize",
+            post(handlers::recognize_typed_lines),
+        )
+        .route("/shopping_list/add_items", post(handlers::add_typed_items))
+        .route(
+            "/shopping_list/edit_extra_item",
+            post(handlers::edit_extra_item),
+        )
         .route("/shopping_list/check", post(handlers::check_shopping_item))
         .route(
             "/shopping_list/uncheck",

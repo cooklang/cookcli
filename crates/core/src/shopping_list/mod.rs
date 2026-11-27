@@ -45,11 +45,13 @@
 
 mod days;
 mod store;
+mod typed;
 
 pub use days::{section_date, DayRange};
 pub use store::{
     recipe_display_name, FreeHandItem, OptionalSelection, ShoppingListStore, StoredEntry,
 };
+pub use typed::{edited_item, read_typed_line, read_typed_text, TypedItem};
 
 use crate::{
     find,

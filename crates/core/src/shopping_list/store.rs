@@ -23,9 +23,11 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cooklang::shopping_list::{
     self, CheckEntry, IngredientItem, RecipeItem, ShoppingList, ShoppingListItem,
 };
+use cooklang_ingredient_parser::add_quantities;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
+use unicode_normalization::UnicodeNormalization;
 
 /// One entry of a saved shopping list: a recipe, or a menu with recipes
 /// nested inside it.
@@ -349,6 +351,60 @@ impl ShoppingListStore {
         self.save_list(&list)
     }
 
+    /// Add typed items: each joins a top-level free-hand line with the same
+    /// name (ignoring case) whose quantity it can be added to — the same
+    /// unit, or both without one — and otherwise becomes a new line at the
+    /// end. One read and one write for the batch. Returns each item as the
+    /// line it ended up in, in the order given.
+    ///
+    /// The merging is what the iOS app does, so the two agree on the file.
+    ///
+    /// Items whose name is empty are skipped (and so are missing from the
+    /// result); the callers read typed lines, which never have one. Nothing
+    /// is written when no item is left.
+    pub fn add_typed(&self, items: Vec<FreeHandItem>) -> Result<Vec<FreeHandItem>, CoreError> {
+        let items: Vec<FreeHandItem> = items
+            .into_iter()
+            .filter(|item| !item.name.trim().is_empty())
+            .collect();
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let mut written = Vec::with_capacity(items.len());
+        for item in items {
+            let merged = list.items.iter_mut().find_map(|line| match line {
+                ShoppingListItem::Ingredient(line) if same_name(&line.name, &item.name) => {
+                    add_quantities(line.quantity.as_deref(), item.quantity.as_deref())
+                        .ok()
+                        .map(|sum| {
+                            line.quantity = sum;
+                            FreeHandItem {
+                                name: line.name.clone(),
+                                quantity: line.quantity.clone(),
+                            }
+                        })
+                }
+                _ => None,
+            });
+            match merged {
+                Some(line) => written.push(line),
+                None => {
+                    list.items
+                        .push(ShoppingListItem::Ingredient(IngredientItem {
+                            name: item.name.clone(),
+                            quantity: item.quantity.clone(),
+                            optional: false,
+                        }));
+                    written.push(item);
+                }
+            }
+        }
+        self.save_list(&list)?;
+        Ok(written)
+    }
+
     /// Remove the first free-hand item with this name and amount, and do
     /// nothing if there is none. Compaction is the caller's, as for
     /// [`remove`](Self::remove).
@@ -364,6 +420,80 @@ impl ShoppingListStore {
             list.items.remove(pos);
         }
         self.save_list(&list)
+    }
+
+    /// Replace the first free-hand line equal to `old` with `new`, in place.
+    /// With `fold`, `new` instead joins another top-level free-hand line with
+    /// the same name whose quantity it can be added to (the first such line),
+    /// and the old line goes; an edit that kept a quantity the field could
+    /// not show passes `fold = false`, as the iOS app never folds it.
+    ///
+    /// Returns the line as it now stands: `None` when `old` is no longer on
+    /// the list (changed elsewhere); `old` itself, with nothing written, when
+    /// `new` equals it; after a fold, the target line with the sum.
+    ///
+    /// `new.name` must not be empty: that is [`CoreError::EmptyItemName`].
+    pub fn replace_free_hand(
+        &self,
+        old: &FreeHandItem,
+        new: FreeHandItem,
+        fold: bool,
+    ) -> Result<Option<FreeHandItem>, CoreError> {
+        if new.name.trim().is_empty() {
+            return Err(CoreError::EmptyItemName);
+        }
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let Some(pos) = list.items.iter().position(|line| {
+            matches!(line, ShoppingListItem::Ingredient(line)
+                if line.name == old.name && line.quantity == old.quantity)
+        }) else {
+            return Ok(None);
+        };
+        if &new == old {
+            return Ok(Some(old.clone()));
+        }
+        let target = if fold {
+            list.items
+                .iter()
+                .enumerate()
+                .find_map(|(i, line)| match line {
+                    ShoppingListItem::Ingredient(line)
+                        if i != pos && same_name(&line.name, &new.name) =>
+                    {
+                        add_quantities(line.quantity.as_deref(), new.quantity.as_deref())
+                            .ok()
+                            .map(|sum| (i, sum))
+                    }
+                    _ => None,
+                })
+        } else {
+            None
+        };
+        let written = match target {
+            Some((target, sum)) => {
+                let ShoppingListItem::Ingredient(line) = &mut list.items[target] else {
+                    unreachable!("the target was found as an ingredient");
+                };
+                line.quantity = sum;
+                let written = FreeHandItem {
+                    name: line.name.clone(),
+                    quantity: line.quantity.clone(),
+                };
+                list.items.remove(pos);
+                written
+            }
+            None => {
+                list.items[pos] = ShoppingListItem::Ingredient(IngredientItem {
+                    name: new.name.clone(),
+                    quantity: new.quantity.clone(),
+                    optional: false,
+                });
+                new
+            }
+        };
+        self.save_list(&list)?;
+        Ok(Some(written))
     }
 
     /// Add a menu to the shopping list as a single entry with nested recipes.
@@ -692,3 +822,10 @@ pub fn recipe_display_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// Whether two item names are the same one: ignoring case and Unicode
+/// composition, as Swift's `==` does for the iOS app.
+fn same_name(a: &str, b: &str) -> bool {
+    let key = |s: &str| s.nfc().collect::<String>().to_lowercase();
+    key(a) == key(b)
+}

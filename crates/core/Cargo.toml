@@ -28,6 +28,10 @@ chrono = "0.4"
 # it down a reference chain, and falls back to 1 where it cannot — safe only
 # while every such case is one this crate refuses outright.
 cooklang = { version = "0.21.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+# Reads typed shopping list lines, shared with the Cooklang apps.
+cooklang-ingredient-parser = "0.21.0"
+# Names compare the way Swift compares strings: ignoring Unicode composition.
+unicode-normalization = "0.1"
 # Recipe lookup by path or bare name. Keep this declaration in step with the
 # root manifest's, so both crates resolve the same version.
 cooklang-find = { version = "0.12.0", default-features = false }
