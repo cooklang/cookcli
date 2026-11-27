@@ -101,12 +101,35 @@
             </div>
         </div>
 
+        {% if viewer.can_edit_lists() %}
+        <div id="manual-add" class="mb-6">
+            <form id="manual-add-form" class="flex flex-wrap items-center gap-2" autocomplete="off">
+                <label for="manual-add-input" class="sr-only">{{ tr.t("shopping-add-label") }}</label>
+                <input id="manual-add-input" name="item" type="text" maxlength="500" enterkeyhint="done"
+                       class="flex-1 min-w-[10rem] h-10 pointer-coarse:h-11 px-3 rounded-[var(--radius-control)] border border-line-strong bg-surface text-text focus:outline-none focus:border-accent"
+                       placeholder="{{ tr.t("shopping-add-placeholder") }}">
+                <span id="manual-add-chip" class="tag hidden order-last basis-full max-sm:bg-transparent max-sm:border-transparent max-sm:px-1 sm:order-none sm:basis-auto sm:max-w-[40%] truncate" aria-live="polite"></span>
+                <button id="manual-add-cancel" type="button" class="btn hidden">{{ tr.t("action-cancel") }}</button>
+                <button id="manual-add-submit" type="submit" class="btn btn-primary" disabled>{{ tr.t("action-add") }}</button>
+            </form>
+            <div id="manual-paste" class="hidden card p-4 mt-3">
+                <h2 class="font-semibold text-title mb-3 text-text">{{ tr.t("shopping-paste-title") }}</h2>
+                <ul id="manual-paste-rows" class="space-y-2"></ul>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button id="manual-paste-cancel" type="button" class="btn">{{ tr.t("action-cancel") }}</button>
+                    <button id="manual-paste-add" type="button" class="btn btn-primary">{{ tr.t("shopping-paste-add") }}</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div id="shopping-list-results">
             <div id="list-content"></div>
         </div>
     </div>
 </div>
 
+<script src="{{ prefix }}/static/js/shopping-manual-items.js"></script>
 <script>
 let shoppingList = [];
 // Shown after optional ingredients.
@@ -300,10 +323,14 @@ function extraItemsHtml() {
     if (extraItems.length === 0) return '';
     const rows = extraItems.map(item => {
         const amount = item.quantity ? ' ' + escHtml(String(item.quantity).replace('%', ' ')) : '';
-        const remove = window.__CAN_EDIT_LISTS__
-            ? `<button type="button" data-action="remove-extra" data-name="${escHtml(item.name)}" data-quantity="${escHtml(item.quantity == null ? '' : item.quantity)}" data-has-quantity="${item.quantity == null ? '' : '1'}" class="text-danger hover:underline font-medium text-sm">{{ tr.t("shopping-remove") }}</button>`
+        const data = `data-name="${escHtml(item.name)}" data-quantity="${escHtml(item.quantity == null ? '' : item.quantity)}" data-has-quantity="${item.quantity == null ? '' : '1'}"`;
+        const actions = window.__CAN_EDIT_LISTS__
+            ? `<span class="flex items-center gap-3 shrink-0">
+                   <button type="button" data-action="edit-extra" ${data} data-edit-text="${escHtml(item.edit_text || item.name)}" class="text-accent-text hover:underline font-medium text-sm">{{ tr.t("action-edit") }}</button>
+                   <button type="button" data-action="remove-extra" ${data} class="text-danger hover:underline font-medium text-sm">{{ tr.t("shopping-remove") }}</button>
+               </span>`
             : '';
-        return `<li class="flex items-center justify-between gap-2 text-sm text-text"><span>${escHtml(item.name)}<span class="text-muted">${amount}</span></span>${remove}</li>`;
+        return `<li class="flex items-center justify-between gap-2 text-sm text-text"><span class="min-w-0">${escHtml(item.name)}<span class="text-muted">${amount}</span></span>${actions}</li>`;
     }).join('');
     return `
     <div class="bg-sunk p-3 rounded-[var(--radius-control)] border border-line">
@@ -424,6 +451,16 @@ document.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-action="remove-recipe"]');
     if (!btn) return;
     removeRecipe(btn.dataset.path, Number(btn.dataset.index));
+});
+
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action="edit-extra"]');
+    if (!btn || !manualItems) return;
+    manualItems.edit({
+        name: btn.dataset.name,
+        quantity: btn.dataset.hasQuantity ? btn.dataset.quantity : null,
+        editText: btn.dataset.editText,
+    });
 });
 
 document.addEventListener('click', (event) => {
@@ -872,6 +909,7 @@ function displayShoppingList(data) {
         setHtml(contentDiv, html);
     }
     applyCheckedStates();
+    if (manualItems) manualItems.afterRender();
 }
 
 // Helper function to format quantities
@@ -1156,6 +1194,24 @@ function toggleItem(box) {
         }
     });
 }
+
+// The add field (static/js/shopping-manual-items.js); absent for someone who
+// may not edit lists. Set up before the first refresh, whose render calls it.
+const manualItems = window.CookManualItems
+    ? window.CookManualItems.init({
+        prefix: '{{ prefix }}',
+        strings: {
+            add: {{ tr.t("action-add")|json|safe }},
+            save: {{ tr.t("action-save")|json|safe }},
+            remove: {{ tr.t("shopping-paste-remove")|json|safe }},
+            restore: {{ tr.t("shopping-paste-restore")|json|safe }},
+            itemChanged: {{ tr.t("shopping-item-changed")|json|safe }},
+        },
+        refresh: () => requestRefresh('list'),
+        showError,
+        hideError,
+    })
+    : null;
 
 loadCopyOptions();
 requestRefresh('list');
