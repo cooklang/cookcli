@@ -27,6 +27,9 @@
     const highlights = new Map();
     // Lowercase row name to scroll to on the next render.
     let pendingScroll = null;
+    // True while an add or save is on its way: the field is read-only and
+    // Send stays disabled, so nothing typed meanwhile is lost or sent twice.
+    let busy = false;
 
     function el(id) {
         return document.getElementById(id);
@@ -78,7 +81,7 @@
     }
 
     function updateSubmit() {
-        el('manual-add-submit').disabled = el('manual-add-input').value.trim() === '';
+        el('manual-add-submit').disabled = busy || el('manual-add-input').value.trim() === '';
     }
 
     function flash(rows) {
@@ -148,8 +151,19 @@
         clearField();
     }
 
+    function pasteOpen() {
+        return !el('manual-paste').classList.contains('hidden');
+    }
+
     function startEditing(item) {
-        closePaste();
+        if (busy) return;
+        // The paste preview holds lines not added yet: finish with it first.
+        if (pasteOpen()) {
+            const first = el('manual-paste-rows').querySelector('input:not(:disabled)')
+                || el('manual-paste-add');
+            first.focus();
+            return;
+        }
         const text = item.editText || item.name;
         editing = { name: item.name, quantity: item.quantity, text };
         const input = el('manual-add-input');
@@ -166,16 +180,25 @@
         event.preventDefault();
         const input = el('manual-add-input');
         const line = input.value.trim();
-        if (line === '') return;
-        el('manual-add-submit').disabled = true;
-        const ok = editing ? await saveEdit(line) : await addLines([line]);
+        if (line === '' || busy) return;
+        setBusy(true);
+        let ok = false;
+        try {
+            ok = editing ? await saveEdit(line) : await addLines([line]);
+        } finally {
+            setBusy(false);
+        }
         if (ok) {
             if (editing) stopEditing();
             else clearField();
-        } else {
-            updateSubmit();
         }
         input.focus();
+    }
+
+    function setBusy(value) {
+        busy = value;
+        el('manual-add-input').readOnly = value;
+        updateSubmit();
     }
 
     // Whether leaving the page would lose something typed: text in the field
@@ -183,7 +206,7 @@
     function holdsUnsaved() {
         const text = el('manual-add-input').value.trim();
         if (editing) return text !== editing.text.trim();
-        return text !== '' || !el('manual-paste').classList.contains('hidden');
+        return text !== '' || pasteOpen();
     }
 
     // -- Paste preview ------------------------------------------------------
@@ -212,13 +235,19 @@
         input.className = INPUT_CLASS;
         input.value = entry.edit_text;
         input.maxLength = 500;
-        input.setAttribute('aria-label', entry.edit_text);
+        // Each line reads as one of the card's "Pasted items".
+        input.setAttribute('aria-labelledby', 'manual-paste-title');
 
         const chip = document.createElement('span');
         chip.className = 'tag shrink-0 max-w-[40%] truncate';
         setChip(chip, entry);
 
         input.addEventListener('input', () => recognizeInto(input, chip));
+        input.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            closePaste();
+            el('manual-add-input').focus();
+        });
         toggle.addEventListener('click', () => {
             const removed = li.toggleAttribute('data-removed');
             input.disabled = removed;
@@ -238,22 +267,33 @@
         el('manual-paste-rows').replaceChildren();
     }
 
+    // Show the pasted lines in the preview card. The field keeps what was
+    // typed in it: a failed read says so and changes nothing, and text the
+    // server finds no lines in goes into the field where it was pasted.
     async function openPaste(text) {
-        let entries = [];
+        let result;
         try {
-            const { response, data } = await post('recognize', { text });
-            if (response.ok && Array.isArray(data)) entries = data;
+            result = await post('recognize', { text });
         } catch (_) {
-            // Fall through to the field below.
+            config.showError('Failed to read the pasted text');
+            return;
         }
-        if (entries.length === 0) {
+        const { response, data } = result;
+        if (!response.ok || !Array.isArray(data)) {
+            config.showError(data.error || 'Failed to read the pasted text');
+            return;
+        }
+        config.hideError();
+        if (data.length === 0) {
             const input = el('manual-add-input');
-            input.value = text.replace(/\s+/g, ' ').trim();
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            input.setRangeText(text.replace(/\s+/g, ' ').trim(), start, end, 'end');
             recognizeInto(input, el('manual-add-chip'));
             updateSubmit();
             return;
         }
-        el('manual-paste-rows').replaceChildren(...entries.map(pasteRow));
+        el('manual-paste-rows').replaceChildren(...data.map(pasteRow));
         el('manual-paste').classList.remove('hidden');
         updatePasteAdd();
     }
@@ -262,18 +302,26 @@
         const lines = Array.from(el('manual-paste-rows').querySelectorAll('li:not([data-removed]) input'))
             .map(input => input.value.trim())
             .filter(line => line !== '');
-        if (lines.length === 0) return;
+        if (lines.length === 0 || busy) return;
         el('manual-paste-add').disabled = true;
-        if (await addLines(lines)) {
+        setBusy(true);
+        let ok = false;
+        try {
+            ok = await addLines(lines);
+        } finally {
+            setBusy(false);
+        }
+        if (ok) {
+            // What was typed in the field before the paste stays there.
             closePaste();
-            clearField();
+            el('manual-add-input').focus();
         } else {
             updatePasteAdd();
         }
     }
 
     function onPaste(event) {
-        if (editing) return;
+        if (editing || busy) return;
         const data = event.clipboardData || window.clipboardData;
         const text = data ? data.getData('text') : '';
         if (pastedLines(text).length < 2) return;
@@ -317,11 +365,12 @@
         });
         input.addEventListener('paste', onPaste);
         input.addEventListener('keydown', event => {
-            if (event.key !== 'Escape') return;
+            if (event.key !== 'Escape' || busy) return;
             if (editing) stopEditing();
-            else if (!el('manual-paste').classList.contains('hidden')) closePaste();
+            else if (pasteOpen()) closePaste();
         });
         el('manual-add-cancel').addEventListener('click', () => {
+            if (busy) return;
             stopEditing();
             input.focus();
         });

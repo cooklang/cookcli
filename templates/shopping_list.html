@@ -113,8 +113,8 @@
                 <button id="manual-add-submit" type="submit" class="btn btn-primary" disabled>{{ tr.t("action-add") }}</button>
             </form>
             <div id="manual-paste" class="hidden card p-4 mt-3">
-                <h2 class="font-semibold text-title mb-3 text-text">{{ tr.t("shopping-paste-title") }}</h2>
-                <ul id="manual-paste-rows" class="space-y-2"></ul>
+                <h2 id="manual-paste-title" class="font-semibold text-title mb-3 text-text">{{ tr.t("shopping-paste-title") }}</h2>
+                <ul id="manual-paste-rows" class="space-y-2" aria-labelledby="manual-paste-title"></ul>
                 <div class="flex justify-end gap-2 mt-4">
                     <button id="manual-paste-cancel" type="button" class="btn">{{ tr.t("action-cancel") }}</button>
                     <button id="manual-paste-add" type="button" class="btn btn-primary">{{ tr.t("shopping-paste-add") }}</button>

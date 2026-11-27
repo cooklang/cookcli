@@ -927,6 +927,9 @@ pub async fn add_typed_items(
         &viewer,
         format_args!("added {} to the shopping list", names.join(", ")),
     );
+    // `add_typed` writes back one item for every item it was given: like
+    // `read_typed_line`, it drops only empty names, and none reach it here.
+    debug_assert_eq!(written.len(), rows.len());
     let added: Vec<WrittenItem> = written
         .into_iter()
         .zip(rows)
