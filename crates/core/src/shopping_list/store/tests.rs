@@ -803,9 +803,13 @@ fn an_edit_replaces_the_line_in_place() {
         .add_typed(vec![free("milk", Some("2%l")), free("bread", None)])
         .unwrap();
     let found = store
-        .replace_free_hand(&free("milk", Some("2%l")), free("oat milk", Some("1%l")))
+        .replace_free_hand(
+            &free("milk", Some("2%l")),
+            free("oat milk", Some("1%l")),
+            true,
+        )
         .unwrap();
-    assert!(found);
+    assert_eq!(found, Some(free("oat milk", Some("1%l"))));
     assert_eq!(list_file(&dir), "oat milk{1%l}\nbread\n");
 }
 
@@ -820,7 +824,11 @@ fn an_edit_that_matches_another_line_folds_into_it() {
         ])
         .unwrap();
     store
-        .replace_free_hand(&free("flour", Some("2%kg")), free("Sugar", Some("2%kg")))
+        .replace_free_hand(
+            &free("flour", Some("2%kg")),
+            free("Sugar", Some("2%kg")),
+            true,
+        )
         .unwrap();
     assert_eq!(list_file(&dir), "sugar{3%kg}\n");
 }
@@ -831,9 +839,9 @@ fn an_edit_of_a_line_that_is_gone_changes_nothing() {
     let store = store(&dir);
     store.add_typed(vec![free("bread", None)]).unwrap();
     let found = store
-        .replace_free_hand(&free("milk", Some("2%l")), free("milk", Some("3%l")))
+        .replace_free_hand(&free("milk", Some("2%l")), free("milk", Some("3%l")), true)
         .unwrap();
-    assert!(!found);
+    assert_eq!(found, None);
     assert_eq!(list_file(&dir), "bread\n");
 }
 
@@ -848,12 +856,175 @@ fn an_unchanged_edit_writes_nothing() {
         .modified()
         .unwrap();
     std::thread::sleep(std::time::Duration::from_millis(20));
-    assert!(store
-        .replace_free_hand(&free("bread", None), free("bread", None))
-        .unwrap());
+    assert_eq!(
+        store
+            .replace_free_hand(&free("bread", None), free("bread", None), true)
+            .unwrap(),
+        Some(free("bread", None))
+    );
     let after = std::fs::metadata(path.as_std_path())
         .unwrap()
         .modified()
         .unwrap();
     assert_eq!(before, after);
+}
+
+fn mtime(dir: &tempfile::TempDir) -> std::time::SystemTime {
+    std::fs::metadata(base(dir).join(".shopping-list").as_std_path())
+        .unwrap()
+        .modified()
+        .unwrap()
+}
+
+#[test]
+fn a_batch_is_written_once_and_an_empty_one_not_at_all() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![
+            free("a", None),
+            free("b", Some("1")),
+            free("c", Some("2%g")),
+        ])
+        .unwrap();
+    assert_eq!(list_file(&dir), "a\nb{1}\nc{2%g}\n");
+    let before = mtime(&dir);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert!(store.add_typed(vec![]).unwrap().is_empty());
+    assert_eq!(mtime(&dir), before);
+}
+
+#[test]
+fn an_item_without_a_name_is_skipped() {
+    let dir = temp();
+    let store = store(&dir);
+    let written = store
+        .add_typed(vec![
+            free("", Some("2")),
+            free("  ", None),
+            free("tea", None),
+        ])
+        .unwrap();
+    assert_eq!(written, [free("tea", None)]);
+    assert_eq!(list_file(&dir), "tea\n");
+
+    let dir = temp();
+    let store = self::store(&dir);
+    assert!(store
+        .add_typed(vec![free("", Some("2"))])
+        .unwrap()
+        .is_empty());
+    assert!(!base(&dir).join(".shopping-list").exists());
+}
+
+#[test]
+fn an_edit_to_no_name_is_refused() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add_typed(vec![free("milk", Some("2"))]).unwrap();
+    let err = store
+        .replace_free_hand(&free("milk", Some("2")), free(" ", Some("2")), true)
+        .unwrap_err();
+    assert!(matches!(err, CoreError::EmptyItemName), "{err:?}");
+    assert_eq!(list_file(&dir), "milk{2}\n");
+}
+
+#[test]
+fn names_compare_ignoring_unicode_composition() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add_typed(vec![free("caf\u{e9}", Some("1"))]).unwrap();
+    store
+        .add_typed(vec![free("cafe\u{301}", Some("1"))])
+        .unwrap();
+    assert_eq!(list_file(&dir), "caf\u{e9}{2}\n");
+}
+
+#[test]
+fn a_recipes_nested_ingredient_is_left_alone() {
+    let dir = temp();
+    write(
+        &base(&dir).join(".shopping-list"),
+        "./Soup.cook\n  milk{1%l}\n",
+    );
+    let store = store(&dir);
+    store.add_typed(vec![free("milk", Some("1%l"))]).unwrap();
+    assert_eq!(list_file(&dir), "./Soup.cook\n  milk{1%l}\nmilk{1%l}\n");
+}
+
+#[test]
+fn an_edit_keeping_a_text_quantity_does_not_fold() {
+    let dir = temp();
+    let store = store(&dir);
+    write(
+        &base(&dir).join(".shopping-list"),
+        "salt{a pinch}\nsea salt{1%tbsp}\n",
+    );
+    let old = free("salt", Some("a pinch"));
+    let typed = crate::shopping_list::edited_item(&old, "sea salt", None).unwrap();
+    assert_eq!(typed.item, free("sea salt", Some("a pinch")));
+    assert!(typed.keeps_quantity);
+    let written = store
+        .replace_free_hand(&old, typed.item, !typed.keeps_quantity)
+        .unwrap();
+    assert_eq!(written, Some(free("sea salt", Some("a pinch"))));
+    assert_eq!(list_file(&dir), "sea salt{a pinch}\nsea salt{1%tbsp}\n");
+}
+
+#[test]
+fn a_kept_quantity_is_not_folded_into_a_same_name_line() {
+    let dir = temp();
+    let store = store(&dir);
+    write(
+        &base(&dir).join(".shopping-list"),
+        "parsley{2%bunches}\nflat parsley{1%bunches}\n",
+    );
+    let old = free("parsley", Some("2%bunches"));
+    let typed = crate::shopping_list::edited_item(&old, "flat parsley", None).unwrap();
+    store
+        .replace_free_hand(&old, typed.item, !typed.keeps_quantity)
+        .unwrap();
+    assert_eq!(
+        list_file(&dir),
+        "flat parsley{2%bunches}\nflat parsley{1%bunches}\n"
+    );
+}
+
+#[test]
+fn a_fold_target_after_the_edited_line_takes_the_sum() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![
+            free("flour", Some("2%kg")),
+            free("Sugar", Some("1%kg")),
+        ])
+        .unwrap();
+    let written = store
+        .replace_free_hand(
+            &free("flour", Some("2%kg")),
+            free("sugar", Some("2%kg")),
+            true,
+        )
+        .unwrap();
+    assert_eq!(written, Some(free("Sugar", Some("3%kg"))));
+    assert_eq!(list_file(&dir), "Sugar{3%kg}\n");
+}
+
+#[test]
+fn a_fold_skips_a_first_line_with_another_unit() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![
+            free("milk", Some("2%l")),
+            free("bread", None),
+            free("milk", Some("1%ml")),
+        ])
+        .unwrap();
+    let written = store
+        .replace_free_hand(&free("bread", None), free("Milk", Some("500%ml")), true)
+        .unwrap();
+    assert_eq!(written, Some(free("milk", Some("501%ml"))));
+    assert_eq!(list_file(&dir), "milk{2%l}\nmilk{501%ml}\n");
 }

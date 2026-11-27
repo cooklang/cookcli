@@ -965,18 +965,18 @@ pub async fn edit_extra_item(
     let typed = edited_item(&old, &payload.line, aisle.as_ref())
         .ok_or_else(|| bad_request("the item needs a name"))?;
     let store = ShoppingListStore::new(&state.base_path);
-    let found = store
-        .replace_free_hand(&old, typed.item.clone())
+    let written = store
+        .replace_free_hand(&old, typed.item.clone(), !typed.keeps_quantity)
         .map_err(|e| {
             tracing::error!("Failed to edit shopping list item: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
         })?;
-    if !found {
+    let Some(written) = written else {
         return Err((
             StatusCode::NOT_FOUND,
             json_error("the item is no longer on the list"),
         ));
-    }
+    };
     untick_rows(&state, &store, std::slice::from_ref(&typed.row)).await;
     activity::record(
         &viewer,
@@ -988,8 +988,8 @@ pub async fn edit_extra_item(
     );
     compact_after_remove(&state, &store).await;
     Ok(Json(WrittenItem {
-        name: typed.item.name,
-        quantity: typed.item.quantity,
+        name: written.name,
+        quantity: written.quantity,
         row: typed.row,
     }))
 }

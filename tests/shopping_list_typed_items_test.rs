@@ -319,3 +319,26 @@ async fn edit_replaces_keeps_an_unshown_quantity_and_reports_a_gone_item() {
         .await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn an_edit_folded_into_another_line_answers_that_line() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join(".shopping-list"),
+        "sugar{1%kg}\nflour{2%kg}\n",
+    )
+    .unwrap();
+    let resp = server
+        .post(
+            "/api/shopping_list/edit_extra_item",
+            json!({ "name": "flour", "quantity": "2%kg", "line": "Sugar 2 kg" }),
+        )
+        .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({ "name": "sugar", "quantity": "3%kg", "row": "sugar" })
+    );
+    assert_eq!(server.list_file(), "sugar{3%kg}\n");
+}

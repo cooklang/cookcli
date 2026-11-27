@@ -785,6 +785,7 @@ dependencies = [
  "thiserror",
  "toml_edit",
  "tracing",
+ "unicode-normalization",
  "yansi",
 ]
 

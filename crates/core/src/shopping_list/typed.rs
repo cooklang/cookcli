@@ -26,6 +26,11 @@ pub struct TypedItem {
     pub category: Option<String>,
     /// The line that reads back as this item ("Sugar 1.5 kg").
     pub edit_text: String,
+    /// Set by [`edited_item`] when the old item's quantity was kept because
+    /// the edit field could not show it. Such an edit is never folded into
+    /// another line.
+    #[serde(skip)]
+    pub keeps_quantity: bool,
 }
 
 fn typed_item(parsed: ParsedIngredient) -> Option<TypedItem> {
@@ -55,6 +60,7 @@ fn typed_item(parsed: ParsedIngredient) -> Option<TypedItem> {
         row,
         chip,
         category,
+        keeps_quantity: false,
     })
 }
 
@@ -74,13 +80,15 @@ pub fn read_typed_text(text: &str, aisle: Option<&AisleConf>) -> Vec<TypedItem> 
 
 /// The item an edit of `old` makes from `line`. An item whose quantity the
 /// field could not show (`2%bunches`, `a pinch`: its edit text is the name
-/// alone) keeps that quantity unless the edited line has an amount.
+/// alone) keeps that quantity unless the edited line has an amount; the
+/// result then has `keeps_quantity` set.
 pub fn edited_item(old: &FreeHandItem, line: &str, aisle: Option<&AisleConf>) -> Option<TypedItem> {
     let mut typed = read_typed_line(line, aisle)?;
     let shown_without_quantity = edit_text(&old.name, old.quantity.as_deref()) == old.name;
     if typed.item.quantity.is_none() && shown_without_quantity {
         typed.item.quantity = old.quantity.clone();
         typed.edit_text = edit_text(&typed.item.name, typed.item.quantity.as_deref());
+        typed.keeps_quantity = old.quantity.is_some();
     }
     Some(typed)
 }
@@ -168,6 +176,33 @@ mod tests {
         assert_eq!(
             edited_item(&old, "Milk", None).unwrap().item,
             item("Milk", None)
+        );
+    }
+
+    #[test]
+    fn a_line_is_cleaned() {
+        let typed = read_typed_line("Tomatoes {ripe} 2", None).unwrap();
+        assert_eq!(typed.item, item("Tomatoes ripe", Some("2")));
+    }
+
+    #[test]
+    fn an_edit_reports_a_kept_quantity() {
+        let old = item("parsley", Some("2%bunches"));
+        assert!(
+            edited_item(&old, "flat parsley", None)
+                .unwrap()
+                .keeps_quantity
+        );
+        assert!(
+            !edited_item(&old, "flat parsley 3", None)
+                .unwrap()
+                .keeps_quantity
+        );
+        let plain = item("bread", None);
+        assert!(
+            !edited_item(&plain, "rye bread", None)
+                .unwrap()
+                .keeps_quantity
         );
     }
 }
