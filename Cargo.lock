@@ -772,6 +772,7 @@ dependencies = [
  "cooklang",
  "cooklang-find",
  "cooklang-format",
+ "cooklang-ingredient-parser",
  "cooklang-reports",
  "directories",
  "libc",
@@ -893,6 +894,18 @@ dependencies = [
  "thiserror",
  "tokio",
  "whatlang",
+]
+
+[[package]]
+name = "cooklang-ingredient-parser"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6044731173bde39f5e74a55d93eeffabdd84a52f361b0b4f2309338c23953b3"
+dependencies = [
+ "cooklang",
+ "serde",
+ "thiserror",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -4828,6 +4841,15 @@ name = "unicode-linebreak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
+
+[[package]]
+name = "unicode-normalization"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "unicode-width"
