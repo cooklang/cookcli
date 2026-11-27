@@ -794,3 +794,66 @@ fn a_typed_item_merges_into_a_menu_day_line_too() {
         .unwrap();
     assert_eq!(list_file(&dir), "almonds{150%g}\n");
 }
+
+#[test]
+fn an_edit_replaces_the_line_in_place() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![free("milk", Some("2%l")), free("bread", None)])
+        .unwrap();
+    let found = store
+        .replace_free_hand(&free("milk", Some("2%l")), free("oat milk", Some("1%l")))
+        .unwrap();
+    assert!(found);
+    assert_eq!(list_file(&dir), "oat milk{1%l}\nbread\n");
+}
+
+#[test]
+fn an_edit_that_matches_another_line_folds_into_it() {
+    let dir = temp();
+    let store = store(&dir);
+    store
+        .add_typed(vec![
+            free("sugar", Some("1%kg")),
+            free("flour", Some("2%kg")),
+        ])
+        .unwrap();
+    store
+        .replace_free_hand(&free("flour", Some("2%kg")), free("Sugar", Some("2%kg")))
+        .unwrap();
+    assert_eq!(list_file(&dir), "sugar{3%kg}\n");
+}
+
+#[test]
+fn an_edit_of_a_line_that_is_gone_changes_nothing() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add_typed(vec![free("bread", None)]).unwrap();
+    let found = store
+        .replace_free_hand(&free("milk", Some("2%l")), free("milk", Some("3%l")))
+        .unwrap();
+    assert!(!found);
+    assert_eq!(list_file(&dir), "bread\n");
+}
+
+#[test]
+fn an_unchanged_edit_writes_nothing() {
+    let dir = temp();
+    let store = store(&dir);
+    store.add_typed(vec![free("bread", None)]).unwrap();
+    let path = base(&dir).join(".shopping-list");
+    let before = std::fs::metadata(path.as_std_path())
+        .unwrap()
+        .modified()
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert!(store
+        .replace_free_hand(&free("bread", None), free("bread", None))
+        .unwrap());
+    let after = std::fs::metadata(path.as_std_path())
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(before, after);
+}

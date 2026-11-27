@@ -412,6 +412,54 @@ impl ShoppingListStore {
         self.save_list(&list)
     }
 
+    /// Replace the first free-hand line equal to `old` with `new`, in place,
+    /// then fold it into another top-level free-hand line with the same name
+    /// (ignoring case) if their quantities add up. `Ok(false)` when `old` is
+    /// no longer on the list (changed elsewhere). Writes nothing when `new`
+    /// equals `old`.
+    pub fn replace_free_hand(
+        &self,
+        old: &FreeHandItem,
+        new: FreeHandItem,
+    ) -> Result<bool, CoreError> {
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let Some(pos) = list.items.iter().position(|line| {
+            matches!(line, ShoppingListItem::Ingredient(line)
+                if line.name == old.name && line.quantity == old.quantity)
+        }) else {
+            return Ok(false);
+        };
+        if &new == old {
+            return Ok(true);
+        }
+        let other = list.items.iter().enumerate().position(|(i, line)| {
+            i != pos
+                && matches!(line, ShoppingListItem::Ingredient(line)
+                    if line.name.to_lowercase() == new.name.to_lowercase()
+                        && add_quantities(line.quantity.as_deref(), new.quantity.as_deref()).is_ok())
+        });
+        match other {
+            Some(other) => {
+                if let ShoppingListItem::Ingredient(line) = &mut list.items[other] {
+                    line.quantity =
+                        add_quantities(line.quantity.as_deref(), new.quantity.as_deref())
+                            .unwrap_or_else(|_| line.quantity.clone());
+                }
+                list.items.remove(pos);
+            }
+            None => {
+                list.items[pos] = ShoppingListItem::Ingredient(IngredientItem {
+                    name: new.name,
+                    quantity: new.quantity,
+                    optional: false,
+                });
+            }
+        }
+        self.save_list(&list)?;
+        Ok(true)
+    }
+
     /// Add a menu to the shopping list as a single entry with nested recipes.
     ///
     /// Each recipe in `recipes` becomes a child of the menu entry. Each recipe's
