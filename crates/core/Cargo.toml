@@ -27,7 +27,7 @@ chrono = "0.4"
 # list re-derives `scale_to_target`'s factor locally (`target_factor`) to pass
 # it down a reference chain, and falls back to 1 where it cannot — safe only
 # while every such case is one this crate refuses outright.
-cooklang = { version = "0.20.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
+cooklang = { version = "0.21.0", default-features = false, features = ["aisle", "pantry", "shopping_list"] }
 # Recipe lookup by path or bare name. Keep this declaration in step with the
 # root manifest's, so both crates resolve the same version.
 cooklang-find = { version = "0.12.0", default-features = false }
@@ -37,7 +37,7 @@ cooklang-find = { version = "0.12.0", default-features = false }
 cooklang-format = { version = "0.41.1", path = "../format" }
 # Jinja2 report rendering. Keep this declaration in step with the root
 # manifest's, so both crates resolve the same version.
-cooklang-reports = "0.8.0"
+cooklang-reports = "0.9.0"
 directories = "6"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
