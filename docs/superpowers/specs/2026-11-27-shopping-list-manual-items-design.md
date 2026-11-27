@@ -30,7 +30,7 @@ Missing: adding by typing, the amount chip, pasting a list, editing.
 
 ### Pasting a list
 
-- Pasting text with more than one non-blank line into the field opens a preview card directly below it instead of filling the field. Each line becomes a row, parsed by the same rules (`parse_ingredient_list`: bullets, checkboxes and blank lines dropped).
+- Pasting text with more than one non-blank line into the field opens a preview card directly below it instead of filling the field. Each line becomes a row, parsed by the same rules (`parse_ingredient_list`: bullets, checkboxes, Markdown headings and blank lines dropped).
 - Each row has a remove button, the line's text in an editable input, and its chip. Editing a row's text updates its chip (one `recognize` call for the row, same debounce). Removing a row strikes it through and turns its button into restore.
 - "Add items" adds every row not removed, in one request, closes the card, scrolls to the first new row and highlights all new rows at once with the same timing. It is disabled when every row is removed. "Cancel" closes the card and drops the pasted lines; the field keeps what it had before the paste.
 - The card carries `data-unsaved` while open.
@@ -54,7 +54,7 @@ Adding to or editing an item unticks the row it lands on: there is more to buy. 
 
 ### `cookcli-core`
 
-- Depends on `cooklang-ingredient-parser` (a path dependency on `../cooklang-rs/ingredient-parser` during development; the published version before merge).
+- Depends on `cooklang-ingredient-parser` 0.20.0 from crates.io (cooklang-rs#164).
 - `ShoppingListStore` gains:
   - `add_typed(&self, items: Vec<FreeHandItem>) -> Result<Vec<FreeHandItem>, CoreError>`: for each item, if a top-level free-hand line has the same name (ignoring case) and `add_quantities` can add the two quantities, the line's quantity becomes the sum; otherwise the item becomes a new line at the end. One read and one write for the whole batch. Returns the lines as written. `add_all` is unchanged (adding a menu's days uses it).
   - `replace_free_hand(&self, old: &FreeHandItem, new: FreeHandItem) -> Result<bool, CoreError>`: replaces the first line equal to `old` in place, then folds it into an earlier or later line with the same name if `add_quantities` allows it. `false` if `old` is no longer there. Writes nothing when `new == old`.
@@ -65,7 +65,7 @@ Adding to or editing an item unticks the row it lands on: there is more to buy. 
 
 All three are under `/api/shopping_list`, which `auth::middleware::WRITES` already gives `Capability::EditLists`.
 
-- `POST /api/shopping_list/recognize`, body `{ "lines": ["Sugar 1.5kg", ...] }` (at most 200 lines, each at most 500 characters), returns one entry per line: `{ "name", "quantity", "chip", "category" }`, the last three nullable. It changes nothing, so it is added to `OPEN_WRITES` next to `/api/shopping_list`, and needs no `Viewer`. It reads the aisle configuration the way `read_aisle_file` does.
+- `POST /api/shopping_list/recognize`, body `{ "lines": ["Sugar 1.5kg", ...] }` (at most 200 lines, each at most 500 characters), returns one entry per line: `{ "name", "quantity", "chip", "category" }`, the last three nullable. It changes nothing, but stays under the `/api/shopping_list` prefix's `EditLists`: only someone who may edit lists sees the field, so it is not added to `OPEN_WRITES`. It needs no `Viewer`. It reads the aisle configuration the way `read_aisle_file` does.
 - `POST /api/shopping_list/add_items`, body `{ "lines": [...] }` (same limits). Returns `{ "added": [{ "name", "quantity", "row" }] }`, `row` being the name the aisle list shows (for highlighting). `400` when no line has a name.
 - `POST /api/shopping_list/edit_extra_item`, body `{ "name", "quantity", "line" }`: the item as `extra_items` returned it and the new text. `404` when the item is gone (changed elsewhere), `400` when the new line has no name. Returns the item as written, with `row`.
 - The two writes take `Extension<Viewer>`, call `activity::record` once the write succeeded, quoting the items with `activity::quoted`, and report errors through `handlers::common::json_error`. `get_extra_items` and `remove_extra_item` move to `json_error` too, as they put `e.to_string()` in the body by hand today.
@@ -76,9 +76,10 @@ All three are under `/api/shopping_list`, which `auth::middleware::WRITES` alrea
 
 - The add field, chip, send/save and Cancel buttons, and the paste card are rendered only when `viewer.can_edit_lists()`; with `--recipes-only` they are never shown.
 - The paste is caught in the field's `paste` event: when the clipboard text has more than one non-blank line, the default is prevented and the card opens.
-- Highlights are kept as a set of row names with an expiry time and re-applied after each render of the list, since a refresh can redraw the rows during the 2.5 seconds. Rows are found by `data-ingredient-name`, compared ignoring case. The highlight uses existing tokens (`bg-accent-soft` or equivalent) with a CSS transition; `prefers-reduced-motion` drops the fade.
+- Highlights are kept as a set of row names with an expiry time and re-applied after each render of the list, since a refresh can redraw the rows during the 2.5 seconds. Rows are found by `data-ingredient-name`, compared ignoring case. The highlight is a `.row-flash` class on the row's `li` (accent-soft background) in `static/css/components.css`, removed after 2 seconds; a 0.5 s `background-color` transition on `.row-flashable` makes the fade, and `prefers-reduced-motion` drops it.
+- The add field, paste card and highlight live in `static/js/shopping-manual-items.js`, loaded by `shopping_list.html`, which passes it the prefix and its strings and calls its `afterRender()` at the end of `displayShoppingList`. It calls the page's own `requestRefresh`, `showError` and `hideError`.
 - DOM building follows the page's existing helpers (`escHtml`, `setHtml`); no `cond && node` in `append`.
-- New strings in every locale under `locales/*/shopping.ftl`: the placeholder, send, save, cancel, "Add items", remove and restore labels for paste rows, "Other items" (replacing `shopping-extra-items`), "Edit", and their accessibility labels.
+- New strings in every locale under `locales/*/shopping.ftl`: the placeholder, the field's label, the paste card's title, "Add items", remove and restore labels for paste rows, and the "changed elsewhere" message. `shopping-extra-items` keeps its key and now reads "Other items". Add, Edit, Save and Cancel reuse `action-add`, `action-edit`, `action-save` and `action-cancel`.
 
 ## Error handling
 
@@ -89,7 +90,7 @@ All three are under `/api/shopping_list`, which `auth::middleware::WRITES` alrea
 ## Testing
 
 - **Core:** `typed_items` (cleaning, aisle spelling, empty names skipped); `add_typed` (new line, same name and unit sums, different unit is a second line, case-insensitive name, one write for a batch, existing recipe lines and menu-day lines untouched); `replace_free_hand` (in place, fold into a matching line, missing `old`, unchanged text writes nothing, text quantity kept). A hostile name written by `add_typed` loads back through `load_free_hand` and through `add_extra_item`, so neither the list load nor the generate request fails.
-- **Server:** the three routes in an integration test through `common::with_isolated_config`; the auth tests list `add_items` and `edit_extra_item` as `EditLists` writes and `recognize` as an open write; activity lines for add and edit.
+- **Server:** the three routes in an integration test through `common::with_isolated_config`; the auth tests list `add_items`, `edit_extra_item` and `recognize` as `EditLists` writes; activity lines for add and edit.
 - **Playwright** `tests/e2e/shopping-list-manual-items.spec.ts`: type "Sugar 1.5kg" and see the chip, add it and find a highlighted "Sugar" row with 1.5 kg; paste three lines, remove one, add two; edit an item from "Other items"; remove it. Restores `seed/.shopping-list` and `seed/.shopping-checked` afterwards. Run the whole Playwright project, as the box rename touches selectors other specs may use.
 - `tests/locales_test.rs` covers the new keys.
 
