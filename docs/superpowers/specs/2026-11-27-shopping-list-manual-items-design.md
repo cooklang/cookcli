@@ -39,7 +39,7 @@ Missing: adding by typing, the amount chip, pasting a list, editing.
 
 - The sidebar's "Extra items" box is renamed "Other items", the iOS title. It lists every top-level free-hand line, whoever wrote it (typed here, typed on iOS, or the ingredients of a menu's days).
 - Each row shows the name and its amount, and, to someone who may edit lists, Edit and Remove.
-- **Edit** puts `edit_text(name, quantity)` into the add field ("Milk 2 l", "Parsley, 2 bunches", or the name alone for a text quantity) and turns the field into edit mode: the send button becomes a check mark, a Cancel button appears, Esc cancels. Saving sends `POST /api/shopping_list/edit_extra_item` and returns the field to adding. The edited row is highlighted like a new one.
+- **Edit** puts `edit_text(name, quantity)` into the add field ("Milk 2 l", "Lemons 3", or the name alone when the quantity has a unit outside the table, such as `2%bunches`, or is text, such as `a pinch`) and turns the field into edit mode: the send button becomes a check mark, a Cancel button appears, Esc cancels. Saving sends `POST /api/shopping_list/edit_extra_item` and returns the field to adding. The edited row is highlighted like a new one.
 - **Remove** stays as it is.
 
 ### Where items appear
@@ -58,8 +58,8 @@ Adding to or editing an item unticks the row it lands on: there is more to buy. 
 - `ShoppingListStore` gains:
   - `add_typed(&self, items: Vec<FreeHandItem>) -> Result<Vec<FreeHandItem>, CoreError>`: for each item, if a top-level free-hand line has the same name (ignoring case) and `add_quantities` can add the two quantities, the line's quantity becomes the sum; otherwise the item becomes a new line at the end. One read and one write for the whole batch. Returns the lines as written. `add_all` is unchanged (adding a menu's days uses it).
   - `replace_free_hand(&self, old: &FreeHandItem, new: FreeHandItem) -> Result<bool, CoreError>`: replaces the first line equal to `old` in place, then folds it into an earlier or later line with the same name if `add_quantities` allows it. `false` if `old` is no longer there. Writes nothing when `new == old`.
-- Turning raw lines into `FreeHandItem`s lives in a small core function, `typed_items(lines, aisle) -> Vec<FreeHandItem>`: `parse_ingredient` per line, the name already cleaned, a line whose name is empty skipped, quantity from `Amount::to_quantity`.
-- **Edit of a quantity the field cannot show.** When `edit_text` gives the name alone (a text quantity such as `a pinch`), and the edited line has no amount, the old quantity is kept.
+- Turning raw lines into `FreeHandItem`s lives in a small core function, `typed_items(lines, aisle) -> Vec<FreeHandItem>`: `parse_ingredient(line, aisle, None)` per line (no model in this release: CookCLI keeps shipping as one binary without ONNX Runtime), the name already cleaned, a line whose name is empty skipped, quantity from `Amount::to_quantity`.
+- **Edit of a quantity the field cannot show.** When `edit_text` gives the name alone (a quantity such as `2%bunches` or `a pinch`), and the edited line has no amount, the old quantity is kept.
 
 ### API
 
@@ -97,10 +97,11 @@ All three are under `/api/shopping_list`, which `auth::middleware::WRITES` alrea
 
 - **Older iOS builds rewrite a list holding a free-hand line.** iOS 0.14.1 and earlier treat any top-level line that is not a `./` reference as their old format and rewrite the whole file on launch. CookCLI could already write such lines (adding a menu's days); the add field makes them common. Rollout is a release-notes decision.
 - **The desktop editor drops free-hand lines** when it rewrites `.shopping-list` (`cook-md/editor`, `shopping-list-types.ts`).
-- **iOS parses without the comma rule and plural matching** until it moves to the shared crate. Its written lines stay compatible: stored quantities are formatted identically.
+- **iOS parses without plural matching against the aisle configuration** until it moves to the shared crate. Its written lines stay compatible: stored quantities are formatted identically.
 
 ## Out of scope
 
 - Undo.
+- The ML tagger. The crate takes a model through `IngredientModel`; turning it on in CookCLI (an optional feature or a cook.md endpoint) is a later change.
 - The CLI's `--extra` flag using the parser.
 - Autocomplete, choosing an aisle by hand, editing from the aisle list.
