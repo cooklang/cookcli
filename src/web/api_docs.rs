@@ -927,7 +927,8 @@ fn shopping_list() -> ApiSection {
                  `optional: true`, as separate items from any required amount of the same \
                  ingredient. An element may also be a free-hand item, `{ \"name\": \
                  \"almonds\", \"quantity\": \"50%g\" }` as `GET /api/shopping_list/extra_items` \
-                 returns it, merged with the recipes' required ingredients of the same name.",
+                 returns it, listed under its name as written and merged with the recipes' \
+                 required ingredients of the same name; `400` when its name is blank.",
             )
             .params(vec![
                 param(

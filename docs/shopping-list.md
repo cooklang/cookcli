@@ -26,7 +26,7 @@ cook shopping-list [OPTIONS] [RECIPES]...
 | `-a, --aisle <FILE>` | Path to aisle configuration file |
 | `-i, --ignore-references` | Don't expand referenced recipes |
 | `--ingredients-only` | Display only ingredient names without quantities |
-| `--extra <ITEM>` | Add an extra item no recipe calls for. Repeat for each item. A bare name (`"paper towels"`) has no amount; the brace form (`"eggs{12}"`, `"flour{200%g}"`) gives one. |
+| `--extra <ITEM>` | Add an extra item no recipe calls for. Repeat for each item. A bare name (`"paper towels"`) has no amount; the brace form (`"eggs{12}"`, `"flour{200%g}"`) gives one. The name is taken as written (`"#1 flour"`); one leading `@` is dropped. |
 | `--include-optional` | Include optional ingredients (`@?chives`), marked as optional |
 | `--from <DATE>` | Only a menu's days from this date on (`YYYY-MM-DD` or `today`). See [Some days of a menu](#some-days-of-a-menu) |
 | `--to <DATE>` | Only a menu's days up to this date, included (`YYYY-MM-DD` or `today`) |

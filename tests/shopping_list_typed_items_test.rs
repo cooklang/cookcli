@@ -342,3 +342,113 @@ async fn an_edit_folded_into_another_line_answers_that_line() {
     );
     assert_eq!(server.list_file(), "sugar{3%kg}\n");
 }
+
+/// The names of every row of a generated list.
+fn row_names(list: &Value) -> Vec<String> {
+    list["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|category| category["items"].as_array().unwrap().clone())
+        .map(|item| item["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// A free-hand name is listed as written: `#`, `~` and `@` are no Cooklang
+/// markup on the shopping list.
+#[tokio::test]
+async fn free_hand_names_that_look_like_markup_are_listed_as_written() {
+    let server = start_server().await;
+    let resp = server
+        .post(
+            "/api/shopping_list",
+            json!([
+                { "name": "#1 flour", "quantity": "2" },
+                { "name": "~ramen" },
+                { "name": "@milk", "quantity": "1%l" }
+            ]),
+        )
+        .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let list: Value = resp.json().await.unwrap();
+    let mut names = row_names(&list);
+    names.sort();
+    assert_eq!(names, ["#1 flour", "@milk", "~ramen"], "{list}");
+}
+
+/// Their ticks survive a compaction, as the names are on the list, and
+/// unticking takes them off again.
+#[tokio::test]
+async fn free_hand_names_that_look_like_markup_tick_and_untick() {
+    let server = start_server().await;
+    std::fs::write(
+        server.recipes().join(".shopping-list"),
+        "#1 flour{2}\n~ramen\n@milk{1%l}\n",
+    )
+    .unwrap();
+    let names = ["#1 flour", "~ramen", "@milk"];
+    for name in names {
+        let resp = server
+            .post("/api/shopping_list/check", json!({ "name": name }))
+            .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+    let resp = server.post("/api/shopping_list/compact", json!({})).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let checked = server.get_json("/api/shopping_list/checked").await;
+    for name in names {
+        assert!(
+            checked.as_array().unwrap().iter().any(|n| n == name),
+            "{name} still ticked: {checked}"
+        );
+    }
+
+    for name in names {
+        server
+            .post("/api/shopping_list/uncheck", json!({ "name": name }))
+            .await;
+    }
+    let checked = server.get_json("/api/shopping_list/checked").await;
+    assert_eq!(checked, json!([]));
+}
+
+/// A free-hand item without a name is refused, as no row could show it.
+#[tokio::test]
+async fn a_free_hand_item_without_a_name_is_refused() {
+    let server = start_server().await;
+    for name in ["", "  "] {
+        let resp = server
+            .post(
+                "/api/shopping_list",
+                json!([{ "name": name, "quantity": "2" }]),
+            )
+            .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{name:?}");
+    }
+}
+
+/// Typed in, they land on rows of their own names, and adding one again
+/// unticks its row.
+#[tokio::test]
+async fn adding_unticks_a_row_whose_name_looks_like_markup() {
+    let server = start_server().await;
+    let lines = json!({ "lines": ["#1 flour 2", "~ramen", "@milk 1 l"] });
+    let resp = server
+        .post("/api/shopping_list/add_items", lines.clone())
+        .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(server.list_file(), "#1 flour{2}\n~ramen\n@milk{1%l}\n");
+
+    let names = ["#1 flour", "~ramen", "@milk"];
+    for name in names {
+        server
+            .post("/api/shopping_list/check", json!({ "name": name }))
+            .await;
+    }
+    let checked = server.get_json("/api/shopping_list/checked").await;
+    assert_eq!(checked.as_array().unwrap().len(), 3, "{checked}");
+    server.post("/api/shopping_list/add_items", lines).await;
+    let checked = server.get_json("/api/shopping_list/checked").await;
+    assert_eq!(checked, json!([]));
+    assert_eq!(server.list_file(), "#1 flour{4}\n~ramen\n@milk{2%l}\n");
+}
