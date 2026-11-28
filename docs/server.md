@@ -379,6 +379,10 @@ The recipe editor's **Picture** button adds, replaces or removes a recipe's pict
 
 The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
 
+### Folder pictures
+
+A folder's card in the recipe list shows a picture in place of the folder icon when the folder holds a `folder.jpg`, the name Windows Explorer, Kodi and Plex use for a folder's cover. `folder.jpeg`, `folder.png` and `folder.webp` work too, tried in that order. The name matches in any case, so `Folder.jpg` counts. There is no upload button for it: put the file in the folder. A static site built with `cook build` shows it the same way.
+
 ## Notes in cooking mode
 
 Select **Cook** on a recipe to read it one page at a time. Recipe notes (`>` lines)

@@ -163,6 +163,13 @@ pub fn build_recipes_template(input: RecipesBuildInput<'_>) -> Result<RecipesTem
                     modified_at,
                     created_at,
                 )
+            } else if is_dir {
+                let picture = folder_picture(&child.path)
+                    // A linked picture pointing out of the collection is not
+                    // served (#698), so do not show a broken card for it.
+                    .filter(|pic| static_mode || crate::util::inside_collection(base_path, pic))
+                    .and_then(|pic| get_image_path(base_path, url_prefix, pic.into_string()));
+                (Vec::new(), picture, false, None, None)
             } else {
                 (Vec::new(), None, false, None, None)
             };
@@ -1335,6 +1342,36 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
     Some(count)
 }
 
+/// File names, in order of preference, of the picture shown on a folder's card.
+///
+/// `folder.jpg` is the name Windows Explorer, Kodi and Plex already use for a
+/// folder's cover, so a collection may have one already. The extensions are the
+/// ones browsers show and `cook build` copies to a static site. Names match in
+/// any ASCII case, as Cooklang proposal 0032 has it: Windows Media Player
+/// writes `Folder.jpg`.
+const FOLDER_PICTURES: [&str; 4] = ["folder.jpg", "folder.jpeg", "folder.png", "folder.webp"];
+
+/// The picture to show on the card of the folder at `dir`, if it has one.
+///
+/// The folder is listed once and each name compared without regard to case,
+/// so the path keeps the file's own spelling, which a case-sensitive file
+/// system needs to serve it. Two files that differ only in case are settled
+/// by name, not by the order the listing happens to give.
+fn folder_picture(dir: &Utf8Path) -> Option<Utf8PathBuf> {
+    dir.read_dir_utf8()
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let rank = FOLDER_PICTURES
+                .iter()
+                .position(|name| entry.file_name().eq_ignore_ascii_case(name))?;
+            Some((rank, entry.into_path()))
+        })
+        .filter(|(_, path)| path.is_file())
+        .min()
+        .map(|(_, path)| path)
+}
+
 /// The URL a recipe's title or step picture is served at.
 ///
 /// An `http(s)` address from the metadata is passed through. A file becomes
@@ -1401,6 +1438,70 @@ fn static_url(prefix: &str, relative: &Utf8Path) -> String {
         .map(|component| urlencoding::encode(component.as_str()))
         .collect();
     format!("{prefix}/api/static/{}", segments.join("/"))
+}
+
+#[cfg(test)]
+mod folder_picture_tests {
+    use super::folder_picture;
+    use camino::Utf8PathBuf;
+
+    fn dir() -> (tempfile::TempDir, Utf8PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+        (tmp, path)
+    }
+
+    #[test]
+    fn a_folder_without_a_picture_has_none() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("Soup.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), None);
+    }
+
+    #[test]
+    fn folder_jpg_is_the_folders_picture() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.jpg")));
+    }
+
+    #[test]
+    fn jpg_wins_over_the_other_extensions() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("folder.png"), b"").unwrap();
+        std::fs::write(dir.join("folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.jpg")));
+    }
+
+    #[test]
+    fn the_name_matches_in_any_case() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("Folder.JPG"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("Folder.JPG")));
+    }
+
+    #[test]
+    fn the_order_holds_whatever_the_case() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("FOLDER.PNG"), b"").unwrap();
+        std::fs::write(dir.join("Folder.jpeg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("Folder.jpeg")));
+    }
+
+    #[test]
+    fn a_hidden_file_is_not_a_folder_picture() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join(".folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), None);
+    }
+
+    #[test]
+    fn a_directory_named_like_a_picture_is_not_one() {
+        let (_tmp, dir) = dir();
+        std::fs::create_dir(dir.join("folder.jpg")).unwrap();
+        std::fs::write(dir.join("folder.webp"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("folder.webp")));
+    }
 }
 
 #[cfg(test)]
