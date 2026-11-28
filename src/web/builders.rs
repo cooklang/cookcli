@@ -37,6 +37,22 @@ fn source_metadata<'a>(
     (name, url)
 }
 
+/// #838: one text rendering for metadata values on both the recipe and the
+/// menu page. Numbers are shown plainly (`4.5`), not as the `4 1/2` fraction
+/// `format_number` gives for servings: custom pills such as `rating: 4.5`
+/// read oddly as fractions, and both pages' standard fields agree with them.
+fn value_to_text(value: &serde_yaml::Value) -> Option<String> {
+    if let Some(s) = value.as_str() {
+        Some(s.to_string())
+    } else if let Some(n) = value.as_i64() {
+        Some(n.to_string())
+    } else if let Some(b) = value.as_bool() {
+        Some(b.to_string())
+    } else {
+        value.as_f64().map(|n| n.to_string())
+    }
+}
+
 /// Inputs for [`build_recipes_template`].
 pub struct RecipesBuildInput<'a> {
     pub base_path: &'a Utf8Path,
@@ -977,27 +993,21 @@ pub fn build_recipe_template(input: RecipeBuildInput<'_>) -> Result<RecipeBuildO
     let metadata = if recipe.metadata.map.is_empty() {
         None
     } else {
-        // Get standard metadata fields (handle both string and number types)
-        let get_field = |key: &str| -> Option<String> {
-            recipe.metadata.get(key).and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s.to_string())
-                } else if let Some(n) = v.as_i64() {
-                    Some(n.to_string())
-                } else {
-                    v.as_f64().map(crate::util::format::number::format_number)
-                }
-            })
-        };
+        // Get standard metadata fields (handle string, number and boolean types)
+        let get_field =
+            |key: &str| -> Option<String> { recipe.metadata.get(key).and_then(value_to_text) };
 
         let mut custom_metadata = Vec::new();
         for (key, value) in recipe.metadata.map_filtered() {
-            if let (Some(key_str), Some(val_str)) = (key.as_str(), value.as_str()) {
+            if let Some(key_str) = key.as_str() {
                 if key_str.starts_with("source.") || key_str.starts_with("time.") {
                     continue;
                 }
 
-                custom_metadata.push((key_str.to_string(), val_str.to_string()));
+                // #838: numbers and booleans get the same pill as text
+                if let Some(val_str) = value_to_text(value) {
+                    custom_metadata.push((key_str.to_string(), val_str));
+                }
             }
         }
 
@@ -1223,29 +1233,26 @@ fn build_menu_template_inner(
     let metadata = if menu.metadata == cooklang_find::Metadata::default() {
         None
     } else {
-        let get_field = |key: &str| -> Option<String> {
-            menu.metadata.get(key).and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s.to_string())
-                } else if let Some(n) = v.as_i64() {
-                    Some(n.to_string())
-                } else {
-                    v.as_f64().map(crate::util::format::number::format_number)
-                }
-            })
-        };
+        let get_field =
+            |key: &str| -> Option<String> { menu.metadata.get(key).and_then(value_to_text) };
 
         // `Metadata` keeps its entries in a `HashMap` and offers no iterator,
         // so custom fields come from its serialised form, sorted by key to
         // keep the page stable from one load to the next.
-        let raw = serde_json::to_value(&menu.metadata).unwrap_or_default();
+        let raw = serde_yaml::to_value(&menu.metadata).unwrap_or_default();
         let mut custom_metadata: Vec<(String, String)> = raw
-            .as_object()
+            .as_mapping()
             .into_iter()
             .flatten()
-            .filter(|(key, _)| key.parse::<cooklang::metadata::StdKey>().is_err())
-            .filter(|(key, _)| !key.starts_with("source."))
-            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .filter_map(|(key, value)| {
+                let key = key.as_str()?;
+                if key.parse::<cooklang::metadata::StdKey>().is_ok() || key.starts_with("source.") {
+                    return None;
+                }
+                // #838: numbers and booleans get the same pill as text,
+                // via the same helper as the recipe page.
+                value_to_text(value).map(|text| (key.to_string(), text))
+            })
             .collect();
         custom_metadata.sort();
 
@@ -1607,6 +1614,32 @@ mod servings_tests {
         assert!(html.contains("👥 4 servings"));
     }
 
+    /// #838: custom metadata whose value YAML reads as a number or a boolean
+    /// used to be dropped from the page, while `cook recipe` printed it.
+    #[test]
+    fn custom_metadata_pills_cover_numbers_and_booleans() {
+        let template = page(
+            "---\ntitle: Test\nrating: 4\ntested: true\nprecision: 4.5\nrated: 4/5\n---\n\nMix @flour{200%g}.\n",
+            1.0,
+            None,
+        );
+        let custom = &template.recipe.metadata.as_ref().unwrap().custom;
+        let get = |k: &str| {
+            custom
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(get("rating").as_deref(), Some("4"));
+        assert_eq!(get("tested").as_deref(), Some("true"));
+        assert_eq!(get("precision").as_deref(), Some("4.5")); // plain number, not a fraction
+        assert_eq!(get("rated").as_deref(), Some("4/5"));
+
+        let html = template.render().unwrap();
+        assert!(html.contains("rating: 4"), "{html}");
+        assert!(html.contains("tested: true"), "{html}");
+    }
+
     #[test]
     fn servings_set_the_factor() {
         let template = page(SERVES_FOUR, 1.0, Some(6.0));
@@ -1773,6 +1806,30 @@ mod servings_tests {
             .filter(|href| href.starts_with("Soup") || href.starts_with("Toast"))
             .map(|href| href.split_once('?').map_or("", |(_, query)| query))
             .collect()
+    }
+
+    /// #838: the menu page's custom pills use the same module-level
+    /// `value_to_text` as the recipe page, so numbers and booleans get a
+    /// pill there too, with plain numbers rather than fractions.
+    #[test]
+    fn menu_custom_metadata_pills_cover_numbers_and_booleans() {
+        let (template, html) = menu_html(
+            "title: Week\nrating: 4\ntested: true\nprecision: 4.5\n",
+            1.0,
+            None,
+        );
+        let custom = &template.metadata.as_ref().unwrap().custom;
+        let get = |k: &str| {
+            custom
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(get("rating").as_deref(), Some("4"));
+        assert_eq!(get("tested").as_deref(), Some("true"));
+        assert_eq!(get("precision").as_deref(), Some("4.5"));
+        assert!(html.contains("rating: 4"), "{html}");
+        assert!(html.contains("precision: 4.5"), "{html}");
     }
 
     #[test]
