@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.42.0](https://github.com/cooklang/cookcli/compare/v0.41.1...v0.42.0) (2026-11-28)
+
+
+### Features
+
+* **ui:** show folder.jpg as a folder's picture in the recipe list ([3f31b84](https://github.com/cooklang/cookcli/commit/3f31b84c229a966c2d60a31ecf6455830cce7b2e))
+* **ui:** show folder.jpg as a folder's picture in the recipe list ([d0e5fc2](https://github.com/cooklang/cookcli/commit/d0e5fc2df34835eca95af6d83f9328bd668bd100))
+* **web:** show recipe notes in cooking mode ([#855](https://github.com/cooklang/cookcli/issues/855)) ([cb41bff](https://github.com/cooklang/cookcli/commit/cb41bff75216231b08c032d2540b017bccfc202d))
+* **web:** type, paste and edit items on the shopping list ([#860](https://github.com/cooklang/cookcli/issues/860)) ([b8c68d0](https://github.com/cooklang/cookcli/commit/b8c68d097483691bf4bf5c861653a69a10f860c5))
+
+
+### Bug Fixes
+
+* **import:** cooklang-import 0.12.0, off the models OpenAI removes on 2027-01-14 ([#834](https://github.com/cooklang/cookcli/issues/834)) ([3804be4](https://github.com/cooklang/cookcli/commit/3804be47b0ce25a3e2bade23a43df4cfd8152413))
+* **shopping-list:** count a ring of nested menus once ([#811](https://github.com/cooklang/cookcli/issues/811)) ([c0d798c](https://github.com/cooklang/cookcli/commit/c0d798caa8c6794dc99e9b954fa5fa49c07ec6b0))
+* **ui:** match a folder's picture name in any case ([ad436b3](https://github.com/cooklang/cookcli/commit/ad436b35dbeb685e00f942c35d9e29d0d9115aac))
+* **web:** link the source name for nested and flat source metadata ([#853](https://github.com/cooklang/cookcli/issues/853)) ([1dc5f12](https://github.com/cooklang/cookcli/commit/1dc5f12156e0e859513c964881e60bb22be1fb2e)), closes [#848](https://github.com/cooklang/cookcli/issues/848)
+
 ## [0.41.1](https://github.com/cooklang/cookcli/compare/v0.41.0...v0.41.1) (2026-11-09)
 
 
