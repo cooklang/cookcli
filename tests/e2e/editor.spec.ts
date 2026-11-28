@@ -285,6 +285,8 @@ test.describe('Recipe editor step pictures', () => {
     await expect(target).toHaveValue('');
     await expect(page.locator('#picture-heading')).toHaveText('Title picture');
     await expect(page.locator('#picture-step-note')).toBeHidden();
+    // The dialog loads these options asynchronously.
+    await expect(target.locator('optgroup')).toHaveCount(2);
     expect(
       await target.evaluate((select: HTMLSelectElement) =>
         Array.from(select.children).map(child =>

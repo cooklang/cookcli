@@ -98,6 +98,7 @@ cook server --host
 - `--no-csrf-check` turns that same-origin enforcement off entirely: the `Host` check, the API, the web UI's new-recipe form and the editor's language server. Its former spelling, `--no-cors`, still works.
 - The built-in editor gets its diagnostics and completions from a `cook lsp` subprocess, one per open edit tab, and the endpoint that starts them has no authentication unless [sign-in](#signing-in-to-make-changes) is on. `--max-lsp-sessions` caps how many run at once (8 by default) so that a client which is not that editor cannot spawn them without bound; beyond the cap the websocket handshake is refused with `503` and the editor retries. Under `--host`, consider `--max-lsp-sessions 0`, which serves the recipes but never starts a subprocess for a remote client.
 - The web interface supports recipe browsing, scaling, search, editing, and shopping list management
+- Items no recipe calls for can be typed into the shopping list ("Milk 2 l", "2l milk"), or pasted as a list. The amount is recognised as you type, the name takes the aisle file's spelling, and the item is stored as a free-hand line of `.shopping-list` that the Cooklang apps read too. Edit or remove them under **Other items**
 - The server does not follow links out of the recipe directory. A `Linked` folder pointing elsewhere is left out of listings, search and stats, and a request, recipe reference or stored shopping-list entry that resolves through it reads as missing — a linked collection is still yours to share, but the CLI (`cook shopping-list`, `cook report`, `cook doctor`) follows links normally since it runs as you
 - A recipe or menu that declares a whole number of `servings` is scaled by servings: the stepper starts at its own servings and goes from half a serving up, with no upper limit (`/recipe/Pizza?servings=3`). Any other keeps the multiplier (`?scale=1.5`, from 0.5 to 200). `?scale=` links still work on both and, on a recipe with servings, show as the servings they give. A menu links each recipe it references by servings when that recipe declares them (`?servings=4`), and by its factor otherwise (`?scale=2`)
 - A menu can use another menu as a meal (`- @./Brunches/Sunday.menu{}`): its link opens that menu, marked **Menu**, and **Add All to Shopping List** adds what that menu needs too. The editor's **Add recipe** offers menus as well as recipes
@@ -381,3 +382,17 @@ The dialog uses `/api/recipe_image/{*path}`; see [the API reference](api.md).
 ### Folder pictures
 
 A folder's card in the recipe list shows a picture in place of the folder icon when the folder holds a `folder.jpg`, the name Windows Explorer, Kodi and Plex use for a folder's cover. `folder.jpeg`, `folder.png` and `folder.webp` work too, tried in that order. There is no upload button for it: put the file in the folder. A static site built with `cook build` shows it the same way.
+
+## Notes in cooking mode
+
+Select **Cook** on a recipe to read it one page at a time. Recipe notes (`>` lines)
+appear between the steps, in the same order as in the recipe. Adjacent notes share
+a page, with a paragraph for each note. A section containing only notes also gets
+its own note page.
+
+Notes have no step number and do not change the numbers on the steps. Progress
+includes note pages, and the section buttons, arrow keys and swipes navigate
+through them. Long notes scroll within their card. HTTP and HTTPS links in a note
+open in a separate tab, in cooking mode and on the recipe page alike; the rest of
+the note stays plain text. A timer started on a step keeps running while you read
+a note.

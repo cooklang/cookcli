@@ -499,7 +499,7 @@ Two distinct things live here. `POST /api/shopping_list` is stateless: send reci
 
 Aggregate ingredients across recipes
 
-Stateless — nothing is stored. Ingredients with the same name are combined, letter case ignored and the first spelling kept, and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` says why the list is not what its recipes say, one line each in the language of the request (`lang` cookie, then `Accept-Language`), starting with the path of the recipe concerned: for now, a sub-recipe reference that could not be scaled to the amount it asks for, which is then listed as written rather than as its ingredients. Parse warnings of the recipes are not included. Empty when there is nothing to say. A recipe's optional ingredients are left out unless they are listed in `optional_ingredients`; those come back with `optional: true`, as separate items from any required amount of the same ingredient. An element may also be a free-hand item, `{ "name": "almonds", "quantity": "50%g" }` as `GET /api/shopping_list/extra_items` returns it, merged with the recipes' required ingredients of the same name.
+Stateless — nothing is stored. Ingredients with the same name are combined, letter case ignored and the first spelling kept, and unit-converted, then grouped into aisle categories from `aisle.conf`; a category with no matching entries is omitted from `categories` entirely, and ingredients that match no aisle category land in `other`, sorted alphabetically. Quantities are reduced by anything in `pantry.conf`; `pantry_items` lists the ingredient names that were found there (with a nonzero or `unlim` quantity) and subtracted. `pantry_error` is `null`, or, when there is a pantry file but it could not be read or parsed, why: the list is then made without the pantry, and the error is the one the pantry page shows. `checked` echoes the server's current persistent checked state, unrelated to the recipes in this request. `warnings` says why the list is not what its recipes say, one line each in the language of the request (`lang` cookie, then `Accept-Language`), starting with the path of the recipe concerned: for now, a sub-recipe reference that could not be scaled to the amount it asks for, which is then listed as written rather than as its ingredients. Parse warnings of the recipes are not included. Empty when there is nothing to say. A recipe's optional ingredients are left out unless they are listed in `optional_ingredients`; those come back with `optional: true`, as separate items from any required amount of the same ingredient. An element may also be a free-hand item, `{ "name": "almonds", "quantity": "50%g" }` as `GET /api/shopping_list/extra_items` returns it, listed under its name as written and merged with the recipes' required ingredients of the same name; `400` when its name is blank.
 
 | Name | In | Type | Required | Description |
 |------|----|------|----------|-------------|
@@ -507,6 +507,7 @@ Stateless — nothing is stored. Ingredients with the same name are combined, le
 | `scale` | body | `number` | no | Scaling factor for this recipe. Defaults to 1. |
 | `included_references` | body | `string[]` | no | Which sub-recipe references to expand. Omit to include all of them. |
 | `optional_ingredients` | body | `{ name: string, quantity?: string }[]` | no | Optional ingredients to include, each with the amount to buy in Cooklang quantity syntax (`2%pinch`). The amount is used as given, not scaled — this is what `GET /api/shopping_list/items` returns for the entry. |
+| `menu` | body | `string` | no | The menu this recipe is listed under on the stored list (the `path` of its `add_menu` entry). The recipe is expanded as part of it, so a menu used as a meal whose references lead back to this menu does not count it a second time. Omit for a recipe added on its own. |
 
 Request body:
 
@@ -816,14 +817,14 @@ Request body:
 
 Read the stored free-hand items
 
-The items on the list that no recipe put there: the free-hand lines of `.shopping-list`, such as the ingredients written straight into a menu whose days were added with `dates`, or items another Cooklang app added by hand. `quantity` is written as the file stores it (`50%g`, `2`), and absent for an item with no amount.
+The items on the list that no recipe put there: the free-hand lines of `.shopping-list`, such as the ingredients written straight into a menu whose days were added with `dates`, or items another Cooklang app added by hand. `quantity` is written as the file stores it (`50%g`, `2`), and absent for an item with no amount. `edit_text` is the line the add field shows to edit the item ("almonds 100 g"); it is the name alone when the quantity is not one the field reads back (`2%bunches`, `a pinch`).
 
 Response:
 
 ```json
 [
-  { "name": "almonds", "quantity": "100%g" },
-  { "name": "paper towels" }
+  { "name": "almonds", "quantity": "100%g", "edit_text": "almonds 100 g" },
+  { "name": "paper towels", "edit_text": "paper towels" }
 ]
 ```
 
@@ -842,6 +843,81 @@ Request body:
 
 ```json
 { "name": "almonds", "quantity": "100%g" }
+```
+
+### `POST /api/shopping_list/recognize`
+
+Read typed lines without adding them
+
+Reads each line as the add field would store it, using the aisle file, and changes nothing. Send `lines` (one entry per line, in order; a line with no name answers `name: ""`) or `text` (pasted text, split into lines with bullets, checkboxes, Markdown headings and blank lines dropped; one entry per kept line). At most 200 lines of 500 characters. `quantity` is the stored form, `chip` the amount as the page shows it, `category` the aisle the name matched, `edit_text` the line that reads back as the item. `quantity`, `chip` and `category` are `null` when there is none.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `lines` | body | `string[]` | no | Lines to read. |
+| `text` | body | `string` | no | Pasted text to split and read, instead of `lines`. |
+
+Request body:
+
+```json
+{ "lines": ["Sugar 1.5kg", "Tomato 3"] }
+```
+
+Response:
+
+```json
+[
+  { "name": "sugar", "quantity": "1.5%kg", "chip": "1.5 kg", "category": "baking", "edit_text": "sugar 1.5 kg" },
+  { "name": "tomatoes", "quantity": "3", "chip": "x3", "category": "veg", "edit_text": "tomatoes 3" }
+]
+```
+
+### `POST /api/shopping_list/add_items`
+
+Add typed lines as free-hand items
+
+Reads each line as `recognize` does and adds it as a free-hand line of `.shopping-list`. An item joins a free-hand line with the same name (ignoring case) and unit, adding up the amounts; otherwise it is a new line. A ticked row an item lands on is unticked. `row` is the name of the row the item lands on in the generated list. `400` when no line has a name, or for more than 200 lines or a line over 500 characters.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `lines` | body | `string[]` | yes | Typed lines, such as `Milk 2 l`. |
+
+Request body:
+
+```json
+{ "lines": ["Sugar 1.5kg", "Paper towels"] }
+```
+
+Response:
+
+```json
+{ "added": [
+  { "name": "sugar", "quantity": "1.5%kg", "row": "sugar" },
+  { "name": "Paper towels", "quantity": null, "row": "Paper towels" }
+] }
+```
+
+### `POST /api/shopping_list/edit_extra_item`
+
+Change one free-hand item
+
+Replaces the first free-hand item with this name and quantity by what `line` says, in place, folding it into another line with the same name and unit. An item whose `edit_text` is its name alone keeps its quantity unless `line` has an amount. `404` when the item is no longer on the list, `400` when `line` has no name.
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| `name` | body | `string` | yes | The item's name, as `extra_items` returned it. |
+| `quantity` | body | `string` | no | Its quantity as `extra_items` returned it; omit for none. |
+| `line` | body | `string` | yes | The edited line, such as `oat milk 1 l`. |
+
+Request body:
+
+```json
+{ "name": "milk", "quantity": "2%l", "line": "oat milk 1 l" }
+```
+
+Response:
+
+```json
+{ "name": "oat milk", "quantity": "1%l", "row": "oat milk" }
 ```
 
 ### `POST /api/shopping_list/remove`

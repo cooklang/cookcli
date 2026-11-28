@@ -45,11 +45,13 @@
 
 mod days;
 mod store;
+mod typed;
 
 pub use days::{section_date, DayRange};
 pub use store::{
     recipe_display_name, FreeHandItem, OptionalSelection, ShoppingListStore, StoredEntry,
 };
+pub use typed::{edited_item, read_typed_line, read_typed_text, TypedItem};
 
 use crate::{
     find,
@@ -147,9 +149,10 @@ pub struct GenerateRequest {
     /// Extra items to add to the list that no recipe calls for — the paper
     /// towels and bin bags that belong on the same shopping trip.
     ///
-    /// Each entry is a Cooklang ingredient written without its leading `@`: a
-    /// bare name (`paper towels`) for something with no amount, or the brace
-    /// form (`flour{200%g}`, `eggs{12}`) to give one. They are aggregated with
+    /// Each entry is a shopping list line: a bare name (`paper towels`) for
+    /// something with no amount, or the brace form (`flour{200%g}`,
+    /// `eggs{12}`) to give one. The name is taken as written (`#1 flour`
+    /// stays `#1 flour`), except that one leading `@` is dropped. They are aggregated with
     /// the recipe ingredients rather than kept apart, so an extra item sharing
     /// a name with one a recipe already asks for merges into it, lands in its
     /// aisle category, and is subtracted from by the pantry — exactly as that
@@ -186,6 +189,12 @@ pub struct ExtractOptions<'a> {
     /// built on someone else's behalf — the server sets it; the CLI reads
     /// under the user's own permissions and leaves it off (#698).
     pub confined: bool,
+    /// The menu this recipe is listed under, by path, when it comes from one
+    /// on a stored shopping list. It heads the chain of ancestors (see
+    /// "Cycles" on [`extract_ingredients`]), so a nested menu whose
+    /// references lead back to it — `A` → `B` → `C` → `A` — does not count
+    /// `A` a second time. `None` for a recipe added on its own.
+    pub within: Option<&'a str>,
 }
 
 /// What [`extract_ingredients`] accumulates into: the ingredients the recipes
@@ -425,6 +434,7 @@ pub fn generate(ctx: &Context, req: GenerateRequest) -> Result<Outcome<Aggregate
         included_references: None,
         include_optional: req.include_optional,
         confined: false,
+        within: None,
     };
 
     let mut list = ShoppingIngredients::default();
@@ -501,38 +511,91 @@ pub fn subtract_pantry_from_optional(
     result
 }
 
-/// Add one extra item — a Cooklang ingredient without its `@`, as in
+/// Add one extra item — a shopping list line, as in
 /// [`GenerateRequest::extra_items`] — to `list`, merging it with any
 /// ingredient of the same name already there.
 ///
-/// Errors as [`CoreError::Parse`] when the entry is not a valid ingredient.
+/// Errors as [`CoreError::Parse`] when the entry is not a single item.
 pub fn add_extra_item(spec: &str, list: &mut IngredientList) -> Result<Vec<Diagnostic>, CoreError> {
-    let outcome = parse_extra_item(spec)?;
-    list.add_recipe(&outcome.value, PARSER.converter(), false);
-    Ok(outcome.diagnostics)
+    let item = parse_extra_item(spec)?;
+    list.add_shopping_item(&item, PARSER.converter());
+    Ok(Vec::new())
 }
 
-/// Read one [`GenerateRequest::extra_items`] entry as a single-ingredient
-/// recipe.
+/// Add a free-hand item of the stored list to `list` under its own name,
+/// merging it with any ingredient of the same name already there.
 ///
-/// The text is a Cooklang ingredient with the leading `@` left off, so an `@`
-/// the user typed anyway is tolerated rather than doubled. A name with no
-/// braces is one ingredient however many words long, but only when a `{}`
-/// closes it — otherwise `paper towels` parses as `paper` followed by the loose
-/// word `towels`. So the empty braces are supplied when the entry carries no
-/// amount of its own, and left to the user when it does (`flour{200%g}`).
+/// The name is taken as it is: `#1 flour`, `~ramen` and `@milk` stay what
+/// they say, as no Cooklang markup is read from it.
+pub fn add_free_hand_item(item: &FreeHandItem, list: &mut IngredientList) {
+    list.add_shopping_item(&item.to_ingredient_item(), PARSER.converter());
+}
+
+/// Read one [`GenerateRequest::extra_items`] entry as a one-line shopping
+/// list: `paper towels`, `milk{2%l}`.
+///
+/// One leading `@` — the sigil a Cooklang user reaches for out of habit — is
+/// tolerated rather than kept in the name. Nothing else in the name is read
+/// as markup.
 ///
 /// Errors as [`CoreError::Parse`], naming the entry as the user wrote it, when
-/// the result is not a valid ingredient — an empty entry, or braces that do not
-/// close.
-fn parse_extra_item(spec: &str) -> Result<Outcome<Recipe>, CoreError> {
-    let body = spec.trim().strip_prefix('@').unwrap_or(spec.trim()).trim();
-    let line = if body.contains('{') {
-        format!("@{body}")
-    } else {
-        format!("@{body}{{}}")
+/// the entry is not one item with a name: an empty entry, braces that do not
+/// close, a recipe line (`./Soup`), or more than one line.
+fn parse_extra_item(spec: &str) -> Result<cooklang::shopping_list::IngredientItem, CoreError> {
+    use cooklang::shopping_list::{self, ShoppingListItem};
+
+    let rest = spec.trim_start();
+    let rest = rest.strip_prefix('@').unwrap_or(rest).trim_start();
+    // Where the parsed text starts in the entry, so a span points at it.
+    let offset = spec.len() - rest.len();
+    let body = rest.trim_end();
+
+    let invalid = |message: String, span: Option<std::ops::Range<usize>>, rendered: String| {
+        let mut diagnostic = Diagnostic::error(message);
+        if let Some(span) = span {
+            diagnostic.location = Some(crate::diagnostic::Location {
+                file: None,
+                span: Some((span.start + offset..span.end + offset).into()),
+            });
+        }
+        CoreError::Parse {
+            name: spec.to_string(),
+            diagnostics: vec![diagnostic],
+            rendered,
+        }
     };
-    parse_unscaled(&line, spec, None)
+    let plain = |message: &str| invalid(message.to_string(), None, format!("Error: {message}\n"));
+
+    if body.contains('\n') || body.contains('\r') {
+        return Err(plain("an extra item is a single line"));
+    }
+    let list = shopping_list::parse(body).map_err(|e| {
+        let mut rendered = Vec::new();
+        cooklang::error::write_rich_error(&e, spec, body, false, &mut rendered).ok();
+        let span = cooklang::error::RichError::labels(&e)
+            .first()
+            .map(|(span, _)| span.range());
+        invalid(
+            e.to_string(),
+            span,
+            String::from_utf8_lossy(&rendered).into_owned(),
+        )
+    })?;
+    let mut items = list.items.into_iter();
+    match (items.next(), items.next()) {
+        (None, _) => Err(plain("an extra item needs a name")),
+        (Some(ShoppingListItem::Ingredient(item)), None) => {
+            if item.name.contains(['{', '}']) {
+                Err(plain("the braces of an extra item's amount do not close"))
+            } else {
+                Ok(item)
+            }
+        }
+        (Some(ShoppingListItem::Recipe(_)), None) => {
+            Err(plain("an extra item is an ingredient, not a recipe"))
+        }
+        (Some(_), Some(_)) => Err(plain("an extra item is a single item")),
+    }
 }
 
 /// Parse an aisle configuration, degrading to an empty one rather than failing.
@@ -752,10 +815,22 @@ pub fn extract_ingredients(
     // would lead back up its own chain, so it is refused rather than followed.
     // See "Cycles" above for why this is the ancestor chain and not every
     // recipe seen.
-    let ancestors: Vec<Utf8PathBuf> = starting_entry
-        .as_ref()
-        .and_then(|entry| entry.path().cloned())
-        .into_iter()
+    //
+    // A recipe listed under a menu is expanded as part of it, so the menu
+    // heads the chain. Without it, a menu `B` used as a meal of `A` was
+    // expanded on its own: `B` → `C` → `A` went on into `A`, whose recipes
+    // were already on the list, and counted them twice.
+    let within_entry = options.within.and_then(|menu| {
+        if options.confined {
+            find::get_recipe_inside(base_path, menu).ok()
+        } else {
+            find::get_recipe(base_path, menu).ok()
+        }
+    });
+    let ancestors: Vec<Utf8PathBuf> = within_entry
+        .iter()
+        .chain(starting_entry.iter())
+        .filter_map(|entry| entry.path().cloned())
         .collect();
 
     tracing::debug!(

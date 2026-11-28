@@ -8,9 +8,7 @@ expression: sorted_output
 📄 with_errors.cook
 Warning: The '>>' syntax for metadata is deprecated, use a YAML frontmatter
   ╭─[with_errors.cook]
-  │
 1 │ >> title: Recipe with Errors
-  ┆   ──────────────────────────
 ──╯
 Help: Replace the entries with this at the top of the document:
 ---

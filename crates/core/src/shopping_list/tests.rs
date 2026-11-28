@@ -557,6 +557,7 @@ fn included_references_are_matched_resolved_however_they_were_spelled() {
                 included_references: Some(&[spelling.to_string()]),
                 include_optional: false,
                 confined: false,
+                within: None,
             },
             &mut list,
         )
@@ -1292,6 +1293,7 @@ fn included_references_selects_which_references_to_follow() {
             included_references: Some(&included),
             include_optional: false,
             confined: false,
+            within: None,
         },
         &mut list,
     )
@@ -1330,6 +1332,7 @@ fn included_references_filter_the_top_level_only() {
             included_references: Some(&included),
             include_optional: false,
             confined: false,
+            within: None,
         },
         &mut list,
     )
@@ -2453,6 +2456,74 @@ fn an_empty_extra_item_is_an_error() {
     }
 }
 
+/// An extra item's name is taken as written: a leading `#` or `~` is no tag
+/// or timer here, so `#1 flour` and `~ramen` reach the list whole.
+#[test]
+fn extra_item_names_that_look_like_markup_are_kept() {
+    let dir = dir_with(&[]);
+
+    let list = generate(
+        &ctx(&dir),
+        request_with_extras(&[], &["#1 flour{2}", "~ramen", "@@milk{1%l}"]),
+    )
+    .expect("generates")
+    .value;
+
+    assert_eq!(
+        list.items
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["#1 flour", "~ramen", "@milk"]
+    );
+    assert_eq!(quantities(&list, "#1 flour"), Some(vec!["2".to_string()]));
+    assert_eq!(quantities(&list, "~ramen"), Some(vec![]));
+    assert_eq!(quantities(&list, "@milk"), Some(vec!["1 l".to_string()]));
+}
+
+/// An entry that is not one ingredient line is an error naming it.
+#[test]
+fn an_extra_item_that_is_not_one_ingredient_is_an_error() {
+    let dir = dir_with(&[]);
+    for spec in ["{2}", "milk{2", "./Soup", "milk\neggs", "@", "salt [- open"] {
+        match generate(&ctx(&dir), request_with_extras(&[], &[spec])) {
+            Err(CoreError::Parse {
+                name, diagnostics, ..
+            }) => {
+                assert_eq!(name, spec);
+                assert!(!diagnostics.is_empty(), "{spec:?}");
+            }
+            other => panic!("{spec:?}: expected CoreError::Parse, got {other:?}"),
+        }
+    }
+}
+
+/// A free-hand item of the stored list joins the list under exactly its
+/// name, `@` and all, and adds up with another line of that name.
+#[test]
+fn a_free_hand_item_is_listed_under_its_own_name() {
+    let mut list = IngredientList::new();
+    for (name, quantity) in [
+        ("#1 flour", Some("2")),
+        ("~ramen", None),
+        ("@milk", Some("1%l")),
+        ("@milk", Some("1%l")),
+    ] {
+        add_free_hand_item(
+            &FreeHandItem {
+                name: name.to_string(),
+                quantity: quantity.map(String::from),
+            },
+            &mut list,
+        );
+    }
+
+    let names: Vec<&str> = list.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["#1 flour", "~ramen", "@milk"]);
+    let milk = list.iter().find(|(name, _)| *name == "@milk").unwrap().1;
+    assert_eq!(milk.to_string(), "2 l");
+}
+
 // ---------------------------------------------------------------------------
 // Some days of a menu
 // ---------------------------------------------------------------------------
@@ -2739,5 +2810,83 @@ fn a_menu_with_no_day_in_range_adds_nothing_and_says_so() {
             .any(|d| d.message.contains("(from 2027-01-01)")),
         "{:?}",
         outcome.diagnostics
+    );
+}
+
+/// A stored shopping list keeps a menu's meals as entries of their own, and
+/// a menu used as a meal (`B` in `A`) is expanded from there. With `A` → `B`
+/// → `C` → `A`, that expansion went on through `C` into `A`, whose recipes
+/// were already on the list: the rice was counted twice. Expanded `within`
+/// `A`, the chain starts at `A` and the reference back to it is refused.
+#[test]
+fn a_menu_expanded_within_another_does_not_count_it_again() {
+    let dir = dir_with(&[
+        ("Rice.cook", "Cook @rice{100%g}.\n"),
+        ("Beans.cook", "Cook @beans{100%g}.\n"),
+        ("Corn.cook", "Cook @corn{100%g}.\n"),
+        (
+            "A.menu",
+            "== Day 1 ==\n\nLunch:\n- @./Rice{}\n- @./B.menu{}\n",
+        ),
+        (
+            "B.menu",
+            "== Day 1 ==\n\nLunch:\n- @./Beans{}\n- @./C.menu{}\n",
+        ),
+        (
+            "C.menu",
+            "== Day 1 ==\n\nLunch:\n- @./Corn{}\n- @./A.menu{}\n",
+        ),
+    ]);
+
+    // What the list holds for `A`: its own recipe, and `B` as a meal.
+    let totals = |within: Option<&str>| {
+        let mut list = ShoppingIngredients::default();
+        let mut diagnostics = Vec::new();
+        for entry in ["Rice", "B.menu"] {
+            diagnostics.extend(
+                extract_ingredients(
+                    &ctx(&dir),
+                    &at_path(entry),
+                    &ExtractOptions {
+                        ignore_references: false,
+                        included_references: None,
+                        include_optional: false,
+                        confined: true,
+                        within,
+                    },
+                    &mut list,
+                )
+                .expect("extracts"),
+            );
+        }
+        let items: Vec<(String, String)> = list
+            .required
+            .iter()
+            .map(|(name, q)| {
+                let q = q.iter().map(quantity_fmt).collect::<Vec<_>>().join(", ");
+                (name.clone(), q)
+            })
+            .collect();
+        (items, diagnostics)
+    };
+
+    let (alone, _) = totals(None);
+    assert!(
+        alone.contains(&("rice".to_string(), "200 g".to_string())),
+        "without `within` the cycle counts A's rice twice: {alone:?}"
+    );
+
+    let (within, diagnostics) = totals(Some("A.menu"));
+    for name in ["rice", "beans", "corn"] {
+        assert!(
+            within.contains(&(name.to_string(), "100 g".to_string())),
+            "{name} must be counted once: {within:?}"
+        );
+    }
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.message.contains("A.menu → B.menu → C.menu → A.menu")),
+        "the cycle is named: {diagnostics:?}"
     );
 }

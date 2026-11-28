@@ -927,7 +927,8 @@ fn shopping_list() -> ApiSection {
                  `optional: true`, as separate items from any required amount of the same \
                  ingredient. An element may also be a free-hand item, `{ \"name\": \
                  \"almonds\", \"quantity\": \"50%g\" }` as `GET /api/shopping_list/extra_items` \
-                 returns it, merged with the recipes' required ingredients of the same name.",
+                 returns it, listed under its name as written and merged with the recipes' \
+                 required ingredients of the same name; `400` when its name is blank.",
             )
             .params(vec![
                 param(
@@ -959,6 +960,16 @@ fn shopping_list() -> ApiSection {
                     "Optional ingredients to include, each with the amount to buy in Cooklang \
                      quantity syntax (`2%pinch`). The amount is used as given, not scaled — \
                      this is what `GET /api/shopping_list/items` returns for the entry.",
+                ),
+                param(
+                    "menu",
+                    "body",
+                    "string",
+                    false,
+                    "The menu this recipe is listed under on the stored list (the `path` \
+                     of its `add_menu` entry). The recipe is expanded as part of it, so a \
+                     menu used as a meal whose references lead back to this menu does not \
+                     count it a second time. Omit for a recipe added on its own.",
                 ),
             ])
             .request(
@@ -1353,13 +1364,15 @@ fn shopping_list() -> ApiSection {
                  `.shopping-list`, such as the ingredients written straight into a menu whose \
                  days were added with `dates`, or items another Cooklang app added by hand. \
                  `quantity` is written as the file stores it (`50%g`, `2`), and absent for an \
-                 item with no amount.",
+                 item with no amount. `edit_text` is the line the add field shows to edit the \
+                 item (\"almonds 100 g\"); it is the name alone when the quantity is not one \
+                 the field reads back (`2%bunches`, `a pinch`).",
             )
             .response(
                 r#"
 [
-  { "name": "almonds", "quantity": "100%g" },
-  { "name": "paper towels" }
+  { "name": "almonds", "quantity": "100%g", "edit_text": "almonds 100 g" },
+  { "name": "paper towels", "edit_text": "paper towels" }
 ]
 "#,
             ),
@@ -1384,6 +1397,116 @@ fn shopping_list() -> ApiSection {
             .request(
                 r#"
 { "name": "almonds", "quantity": "100%g" }
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/recognize",
+                "Read typed lines without adding them",
+                "Reads each line as the add field would store it, using the aisle file, and \
+                 changes nothing. Send `lines` (one entry per line, in order; a line with no \
+                 name answers `name: \"\"`) or `text` (pasted text, split into lines with \
+                 bullets, checkboxes, Markdown headings and blank lines dropped; one entry per \
+                 kept line). At most 200 lines of 500 characters. `quantity` is the stored \
+                 form, `chip` the amount as the page shows it, `category` the aisle the name \
+                 matched, `edit_text` the line that reads back as the item. `quantity`, `chip` \
+                 and `category` are `null` when there is none.",
+            )
+            .params(vec![
+                param("lines", "body", "string[]", false, "Lines to read."),
+                param(
+                    "text",
+                    "body",
+                    "string",
+                    false,
+                    "Pasted text to split and read, instead of `lines`.",
+                ),
+            ])
+            .request(
+                r#"
+{ "lines": ["Sugar 1.5kg", "Tomato 3"] }
+"#,
+            )
+            .response(
+                r#"
+[
+  { "name": "sugar", "quantity": "1.5%kg", "chip": "1.5 kg", "category": "baking", "edit_text": "sugar 1.5 kg" },
+  { "name": "tomatoes", "quantity": "3", "chip": "x3", "category": "veg", "edit_text": "tomatoes 3" }
+]
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/add_items",
+                "Add typed lines as free-hand items",
+                "Reads each line as `recognize` does and adds it as a free-hand line of \
+                 `.shopping-list`. An item joins a free-hand line with the same name (ignoring \
+                 case) and unit, adding up the amounts; otherwise it is a new line. A ticked \
+                 row an item lands on is unticked. `row` is the name of the row the item lands \
+                 on in the generated list. `400` when no line has a name, or for more than 200 \
+                 lines or a line over 500 characters.",
+            )
+            .params(vec![param(
+                "lines",
+                "body",
+                "string[]",
+                true,
+                "Typed lines, such as `Milk 2 l`.",
+            )])
+            .request(
+                r#"
+{ "lines": ["Sugar 1.5kg", "Paper towels"] }
+"#,
+            )
+            .response(
+                r#"
+{ "added": [
+  { "name": "sugar", "quantity": "1.5%kg", "row": "sugar" },
+  { "name": "Paper towels", "quantity": null, "row": "Paper towels" }
+] }
+"#,
+            ),
+            ep(
+                "POST",
+                "/api/shopping_list/edit_extra_item",
+                "Change one free-hand item",
+                "Replaces the first free-hand item with this name and quantity by what `line` \
+                 says, in place, folding it into another line with the same name and unit. An \
+                 item whose `edit_text` is its name alone keeps its quantity unless `line` has \
+                 an amount. `404` when the item is no longer on the list, `400` when `line` has \
+                 no name.",
+            )
+            .params(vec![
+                param(
+                    "name",
+                    "body",
+                    "string",
+                    true,
+                    "The item's name, as `extra_items` returned it.",
+                ),
+                param(
+                    "quantity",
+                    "body",
+                    "string",
+                    false,
+                    "Its quantity as `extra_items` returned it; omit for none.",
+                ),
+                param(
+                    "line",
+                    "body",
+                    "string",
+                    true,
+                    "The edited line, such as `oat milk 1 l`.",
+                ),
+            ])
+            .request(
+                r#"
+{ "name": "milk", "quantity": "2%l", "line": "oat milk 1 l" }
+"#,
+            )
+            .response(
+                r#"
+{ "name": "oat milk", "quantity": "1%l", "row": "oat milk" }
 "#,
             ),
             ep(

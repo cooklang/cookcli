@@ -20,12 +20,15 @@
 use crate::fs_atomic::write_atomically;
 use crate::CoreError;
 use camino::{Utf8Path, Utf8PathBuf};
+use cooklang::quantity::{Quantity, Value};
 use cooklang::shopping_list::{
     self, CheckEntry, IngredientItem, RecipeItem, ShoppingList, ShoppingListItem,
 };
+use cooklang_ingredient_parser::add_quantities;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
+use unicode_normalization::UnicodeNormalization;
 
 /// One entry of a saved shopping list: a recipe, or a menu with recipes
 /// nested inside it.
@@ -114,10 +117,9 @@ pub struct FreeHandItem {
 }
 
 impl FreeHandItem {
-    /// The item as a Cooklang ingredient without its `@`: `almonds{50%g}`, or
-    /// `paper towels{}` when it has no amount. What
-    /// [`GenerateRequest::extra_items`](super::GenerateRequest::extra_items)
-    /// and [`add_extra_item`](super::add_extra_item) take.
+    /// The item as a shopping list line: `almonds{50%g}`, or `paper towels{}`
+    /// when it has no amount. For messages and logs; the list itself is
+    /// built from the item with [`add_free_hand_item`](super::add_free_hand_item).
     pub fn spec(&self) -> String {
         format!(
             "{}{{{}}}",
@@ -125,6 +127,50 @@ impl FreeHandItem {
             self.quantity.as_deref().unwrap_or("")
         )
     }
+
+    /// The line the store writes for this item, at the top level of the list.
+    pub(crate) fn to_ingredient_item(&self) -> IngredientItem {
+        IngredientItem {
+            name: self.name.clone(),
+            quantity: self.quantity.as_deref().and_then(quantity_from_text),
+            optional: false,
+        }
+    }
+
+    /// The item a line of the list holds, its quantity in the stored form.
+    pub(crate) fn from_ingredient_item(item: &IngredientItem) -> Self {
+        Self {
+            name: item.name.clone(),
+            quantity: item.quantity.as_ref().map(Quantity::to_cooklang),
+        }
+    }
+}
+
+/// A quantity in the stored form (`2%l`, `1/2%cup`, `a pinch`), read as the
+/// shopping list format reads the text between an item's braces. `None` for
+/// blank text.
+///
+/// Text the format cannot hold between braces — an unclosed `[-`, a `--`
+/// that would start a comment — is kept as a text quantity rather than
+/// dropped, so it never compares equal to "no quantity".
+pub(crate) fn quantity_from_text(text: &str) -> Option<Quantity> {
+    if text.trim().is_empty() {
+        return None;
+    }
+    // A one-item list with a placeholder name: only the quantity is read,
+    // so no real name ever goes through this.
+    let parsed = shopping_list::parse(&format!("x{{{text}}}\n"))
+        .ok()
+        .and_then(|list| match list.items.as_slice() {
+            [ShoppingListItem::Ingredient(item)] if item.name == "x" => item.quantity.clone(),
+            _ => None,
+        });
+    parsed.or_else(|| Some(Quantity::new(Value::Text(text.trim().to_string()), None)))
+}
+
+/// Whether a line's quantity is the one a client holds in the stored form.
+fn same_quantity(line: Option<&Quantity>, stored: Option<&str>) -> bool {
+    line == stored.and_then(quantity_from_text).as_ref()
 }
 
 /// Reads and writes the `.shopping-list` / `.shopping-checked` pair beside a
@@ -319,10 +365,9 @@ impl ShoppingListStore {
             .items
             .iter()
             .filter_map(|item| match item {
-                ShoppingListItem::Ingredient(ingredient) => Some(FreeHandItem {
-                    name: ingredient.name.clone(),
-                    quantity: ingredient.quantity.clone(),
-                }),
+                ShoppingListItem::Ingredient(ingredient) => {
+                    Some(FreeHandItem::from_ingredient_item(ingredient))
+                }
                 ShoppingListItem::Recipe(_) => None,
             })
             .collect())
@@ -339,14 +384,59 @@ impl ShoppingListStore {
         self.migrate_if_needed()?;
         let mut list = self.load_list()?;
         list.items.extend(recipes.into_iter().map(recipe_item));
-        list.items.extend(items.into_iter().map(|item| {
-            ShoppingListItem::Ingredient(IngredientItem {
-                name: item.name,
-                quantity: item.quantity,
-                optional: false,
-            })
-        }));
+        list.items.extend(
+            items
+                .iter()
+                .map(|item| ShoppingListItem::Ingredient(item.to_ingredient_item())),
+        );
         self.save_list(&list)
+    }
+
+    /// Add typed items: each joins a top-level free-hand line with the same
+    /// name (ignoring case) whose quantity it can be added to — the same
+    /// unit, or both without one — and otherwise becomes a new line at the
+    /// end. One read and one write for the batch. Returns each item as the
+    /// line it ended up in, in the order given.
+    ///
+    /// The merging is what the iOS app does, so the two agree on the file.
+    ///
+    /// Items whose name is empty are skipped (and so are missing from the
+    /// result); the callers read typed lines, which never have one. Nothing
+    /// is written when no item is left.
+    pub fn add_typed(&self, items: Vec<FreeHandItem>) -> Result<Vec<FreeHandItem>, CoreError> {
+        let items: Vec<FreeHandItem> = items
+            .into_iter()
+            .filter(|item| !item.name.trim().is_empty())
+            .collect();
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let mut written = Vec::with_capacity(items.len());
+        for item in items {
+            let item = item.to_ingredient_item();
+            let merged = list.items.iter_mut().find_map(|line| match line {
+                ShoppingListItem::Ingredient(line) if same_name(&line.name, &item.name) => {
+                    add_quantities(line.quantity.as_ref(), item.quantity.as_ref())
+                        .ok()
+                        .map(|sum| {
+                            line.quantity = sum;
+                            FreeHandItem::from_ingredient_item(line)
+                        })
+                }
+                _ => None,
+            });
+            match merged {
+                Some(line) => written.push(line),
+                None => {
+                    written.push(FreeHandItem::from_ingredient_item(&item));
+                    list.items.push(ShoppingListItem::Ingredient(item));
+                }
+            }
+        }
+        self.save_list(&list)?;
+        Ok(written)
     }
 
     /// Remove the first free-hand item with this name and amount, and do
@@ -357,13 +447,84 @@ impl ShoppingListStore {
         let mut list = self.load_list()?;
         if let Some(pos) = list.items.iter().position(|i| match i {
             ShoppingListItem::Ingredient(ingredient) => {
-                ingredient.name == item.name && ingredient.quantity == item.quantity
+                ingredient.name == item.name
+                    && same_quantity(ingredient.quantity.as_ref(), item.quantity.as_deref())
             }
             ShoppingListItem::Recipe(_) => false,
         }) {
             list.items.remove(pos);
         }
         self.save_list(&list)
+    }
+
+    /// Replace the first free-hand line equal to `old` with `new`, in place.
+    /// With `fold`, `new` instead joins another top-level free-hand line with
+    /// the same name whose quantity it can be added to (the first such line),
+    /// and the old line goes; an edit that kept a quantity the field could
+    /// not show passes `fold = false`, as the iOS app never folds it.
+    ///
+    /// Returns the line as it now stands: `None` when `old` is no longer on
+    /// the list (changed elsewhere); `old` itself, with nothing written, when
+    /// `new` equals it; after a fold, the target line with the sum.
+    ///
+    /// `new.name` must not be empty: that is [`CoreError::EmptyItemName`].
+    pub fn replace_free_hand(
+        &self,
+        old: &FreeHandItem,
+        new: FreeHandItem,
+        fold: bool,
+    ) -> Result<Option<FreeHandItem>, CoreError> {
+        if new.name.trim().is_empty() {
+            return Err(CoreError::EmptyItemName);
+        }
+        self.migrate_if_needed()?;
+        let mut list = self.load_list()?;
+        let Some(pos) = list.items.iter().position(|line| {
+            matches!(line, ShoppingListItem::Ingredient(line)
+                if line.name == old.name
+                    && same_quantity(line.quantity.as_ref(), old.quantity.as_deref()))
+        }) else {
+            return Ok(None);
+        };
+        if &new == old {
+            return Ok(Some(old.clone()));
+        }
+        let new = new.to_ingredient_item();
+        let target = if fold {
+            list.items
+                .iter()
+                .enumerate()
+                .find_map(|(i, line)| match line {
+                    ShoppingListItem::Ingredient(line)
+                        if i != pos && same_name(&line.name, &new.name) =>
+                    {
+                        add_quantities(line.quantity.as_ref(), new.quantity.as_ref())
+                            .ok()
+                            .map(|sum| (i, sum))
+                    }
+                    _ => None,
+                })
+        } else {
+            None
+        };
+        let written = match target {
+            Some((target, sum)) => {
+                let ShoppingListItem::Ingredient(line) = &mut list.items[target] else {
+                    unreachable!("the target was found as an ingredient");
+                };
+                line.quantity = sum;
+                let written = FreeHandItem::from_ingredient_item(line);
+                list.items.remove(pos);
+                written
+            }
+            None => {
+                let written = FreeHandItem::from_ingredient_item(&new);
+                list.items[pos] = ShoppingListItem::Ingredient(new);
+                written
+            }
+        };
+        self.save_list(&list)?;
+        Ok(Some(written))
     }
 
     /// Add a menu to the shopping list as a single entry with nested recipes.
@@ -593,8 +754,8 @@ fn child_reference(path: String) -> ShoppingListItem {
 /// A `? name{quantity}` selection line.
 fn selection_line(selection: OptionalSelection) -> ShoppingListItem {
     ShoppingListItem::Ingredient(IngredientItem {
+        quantity: selection.quantity.as_deref().and_then(quantity_from_text),
         name: selection.name,
-        quantity: selection.quantity,
         optional: true,
     })
 }
@@ -619,7 +780,7 @@ fn child_selections(item: &RecipeItem) -> Vec<OptionalSelection> {
         .filter_map(|child| match child {
             ShoppingListItem::Ingredient(i) if i.optional => Some(OptionalSelection {
                 name: i.name.clone(),
-                quantity: i.quantity.clone(),
+                quantity: i.quantity.as_ref().map(Quantity::to_cooklang),
             }),
             _ => None,
         })
@@ -692,3 +853,10 @@ pub fn recipe_display_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// Whether two item names are the same one: ignoring case and Unicode
+/// composition, as Swift's `==` does for the iOS app.
+fn same_name(a: &str, b: &str) -> bool {
+    let key = |s: &str| s.nfc().collect::<String>().to_lowercase();
+    key(a) == key(b)
+}

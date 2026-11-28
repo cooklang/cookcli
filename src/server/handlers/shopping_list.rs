@@ -17,10 +17,11 @@ use axum::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cookcli_core::shopping_list::{
-    add_extra_item, add_optional_selections, extract_ingredients, merge_case_variants,
-    optional_selections, recipe_display_name, subtract_pantry_from_optional, ExtractOptions,
-    FreeHandItem, OptionalSelection, ScaledRecipe, ShoppingIngredients, ShoppingListStore,
-    StoredEntry,
+    add_free_hand_item, add_optional_selections, edited_item, extract_ingredients,
+    merge_case_variants, optional_selections, read_typed_line, read_typed_text,
+    recipe_display_name, subtract_pantry_from_optional, ExtractOptions, FreeHandItem,
+    OptionalSelection, ScaledRecipe, ShoppingIngredients, ShoppingListStore, StoredEntry,
+    TypedItem,
 };
 use cookcli_core::{Diagnostic, DiagnosticKind, UnscalableCause};
 use cooklang::ingredient_list::IngredientList;
@@ -28,7 +29,7 @@ use cooklang::model::Ingredient;
 use cooklang::pantry::PantryConf;
 use cooklang::quantity::GroupedQuantity;
 use cooklang::Recipe;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -43,6 +44,9 @@ pub struct RecipeRequest {
     /// buy, as stored in `.shopping-list`.
     #[serde(default)]
     optional_ingredients: Vec<OptionalSelection>,
+    /// The menu this recipe is listed under on the stored list, so a nested
+    /// menu leading back to it does not count it twice.
+    menu: Option<String>,
 }
 
 /// One thing for [`shopping_list`] to put on the list: a recipe, or a
@@ -76,8 +80,13 @@ pub async fn shopping_list(
             ListRequest::Item(item) => {
                 // Merged into the list like the CLI's `--extra` items: same
                 // name, same aisle, same pantry subtraction.
-                add_extra_item(&item.spec(), &mut ingredients.required)
-                    .map_err(|e| (StatusCode::BAD_REQUEST, json_error(e)))?;
+                if item.name.trim().is_empty() {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        json_error(cookcli_core::CoreError::EmptyItemName),
+                    ));
+                }
+                add_free_hand_item(&item, &mut ingredients.required);
                 continue;
             }
         };
@@ -97,6 +106,16 @@ pub async fn shopping_list(
                 json_error(format!("recipe not found: {name}")),
             ));
         }
+        // The menu is looked up too, so it gets the same checks first.
+        if let Some(menu) = &entry.menu {
+            check_path(menu)?;
+            if !inside_collection(&state.base_path, &state.base_path.join(menu)) {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    json_error(format!("recipe not found: {menu}")),
+                ));
+            }
+        }
         let recipe = ScaledRecipe::scaled(
             cookcli_core::RecipeSource::Path(name.as_str().into()),
             entry.scale.unwrap_or(1.0),
@@ -111,6 +130,7 @@ pub async fn shopping_list(
                 // Only what was chosen, below.
                 include_optional: false,
                 confined: true,
+                within: entry.menu.as_deref(),
             },
             &mut ingredients,
         )
@@ -693,20 +713,35 @@ async fn compact_after_remove(state: &AppState, store: &ShoppingListStore) {
     }
 }
 
-/// The free-hand items on the list: lines no recipe put there, such as the
-/// ingredients written straight into a menu whose days were added.
+/// A free-hand item as `extra_items` answers it: the stored line and the
+/// text the add field shows to edit it.
+#[derive(Debug, Serialize)]
+pub struct ExtraItem {
+    #[serde(flatten)]
+    item: FreeHandItem,
+    edit_text: String,
+}
+
+/// The free-hand items on the list: lines no recipe put there, such as items
+/// typed into the add field or the ingredients written straight into a menu
+/// whose days were added.
 pub async fn get_extra_items(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<FreeHandItem>>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Vec<ExtraItem>>, (StatusCode, Json<serde_json::Value>)> {
     let store = ShoppingListStore::new(&state.base_path);
     let items = store.load_free_hand().map_err(|e| {
         tracing::error!("Failed to load shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
-    Ok(Json(items))
+    Ok(Json(
+        items
+            .into_iter()
+            .map(|item| ExtraItem {
+                edit_text: item.edit_text(),
+                item,
+            })
+            .collect(),
+    ))
 }
 
 pub async fn remove_extra_item(
@@ -717,10 +752,7 @@ pub async fn remove_extra_item(
     let store = ShoppingListStore::new(&state.base_path);
     store.remove_free_hand(&payload).map_err(|e| {
         tracing::error!("Failed to remove from shopping list: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
     })?;
     activity::record(
         &viewer,
@@ -733,6 +765,239 @@ pub async fn remove_extra_item(
     compact_after_remove(&state, &store).await;
 
     Ok(StatusCode::OK)
+}
+
+/// The most lines one request may carry, and the longest line.
+const MAX_TYPED_LINES: usize = 200;
+const MAX_TYPED_LINE_CHARS: usize = 500;
+
+type JsonError = (StatusCode, Json<serde_json::Value>);
+
+fn bad_request(message: &str) -> JsonError {
+    (StatusCode::BAD_REQUEST, json_error(message))
+}
+
+fn check_lines(lines: &[String]) -> Result<(), JsonError> {
+    if lines.len() > MAX_TYPED_LINES {
+        return Err(bad_request("too many lines"));
+    }
+    if lines
+        .iter()
+        .any(|line| line.chars().count() > MAX_TYPED_LINE_CHARS)
+    {
+        return Err(bad_request("a line is too long"));
+    }
+    Ok(())
+}
+
+/// What `recognize` and `add_items` take: typed lines, or pasted text
+/// (`recognize` only) to be split into lines.
+#[derive(Debug, Deserialize)]
+pub struct TypedLinesRequest {
+    #[serde(default)]
+    lines: Option<Vec<String>>,
+    #[serde(default)]
+    text: Option<String>,
+}
+
+/// One line as `recognize` reads it. `name` is `""` for a line with no name.
+#[derive(Debug, Serialize)]
+pub struct RecognizedLine {
+    name: String,
+    quantity: Option<String>,
+    chip: Option<String>,
+    category: Option<String>,
+    edit_text: String,
+}
+
+impl From<Option<TypedItem>> for RecognizedLine {
+    fn from(typed: Option<TypedItem>) -> Self {
+        match typed {
+            Some(t) => Self {
+                name: t.item.name,
+                quantity: t.item.quantity,
+                chip: t.chip,
+                category: t.category,
+                edit_text: t.edit_text,
+            },
+            None => Self {
+                name: String::new(),
+                quantity: None,
+                chip: None,
+                category: None,
+                edit_text: String::new(),
+            },
+        }
+    }
+}
+
+/// Read typed lines as the add field would store them, without writing
+/// anything: the amount chip and the paste preview.
+pub async fn recognize_typed_lines(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<TypedLinesRequest>,
+) -> Result<Json<Vec<RecognizedLine>>, JsonError> {
+    let aisle_content = read_aisle_file(&state);
+    let aisle = cooklang::aisle::parse_lenient(&aisle_content)
+        .output()
+        .cloned();
+    let aisle = aisle.as_ref();
+    match (payload.lines, payload.text) {
+        (Some(lines), None) => {
+            check_lines(&lines)?;
+            Ok(Json(
+                lines
+                    .iter()
+                    .map(|line| read_typed_line(line, aisle).into())
+                    .collect(),
+            ))
+        }
+        (None, Some(text)) => {
+            if text.chars().count() > MAX_TYPED_LINES * MAX_TYPED_LINE_CHARS {
+                return Err(bad_request("the text is too long"));
+            }
+            let typed = read_typed_text(&text, aisle);
+            if typed.len() > MAX_TYPED_LINES {
+                return Err(bad_request("too many lines"));
+            }
+            Ok(Json(typed.into_iter().map(|t| Some(t).into()).collect()))
+        }
+        _ => Err(bad_request("send either lines or text")),
+    }
+}
+
+/// A typed item as written, with the row it landed on.
+#[derive(Debug, Serialize)]
+pub struct WrittenItem {
+    name: String,
+    quantity: Option<String>,
+    row: String,
+}
+
+/// Untick `rows` that are ticked: there is more to buy. Under the checked
+/// log's lock, as `uncheck_shopping_item`.
+async fn untick_rows(state: &AppState, store: &ShoppingListStore, rows: &[String]) {
+    let _guard = state.checked_log_lock.lock().await;
+    let checked = match store.checked_set() {
+        Ok(checked) => checked,
+        Err(e) => {
+            tracing::warn!("Could not read the ticks to untick added items: {:?}", e);
+            return;
+        }
+    };
+    for row in rows {
+        if checked.contains(&row.to_lowercase()) {
+            if let Err(e) = store.uncheck(row) {
+                tracing::warn!("Could not untick {row}: {:?}", e);
+            }
+        }
+    }
+}
+
+/// Add typed lines to the list as free-hand items.
+pub async fn add_typed_items(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(payload): Json<TypedLinesRequest>,
+) -> Result<Json<serde_json::Value>, JsonError> {
+    let lines = payload.lines.ok_or_else(|| bad_request("send lines"))?;
+    check_lines(&lines)?;
+    let aisle_content = read_aisle_file(&state);
+    let aisle = cooklang::aisle::parse_lenient(&aisle_content)
+        .output()
+        .cloned();
+    let typed: Vec<TypedItem> = lines
+        .iter()
+        .filter_map(|line| read_typed_line(line, aisle.as_ref()))
+        .collect();
+    if typed.is_empty() {
+        return Err(bad_request("nothing to add"));
+    }
+    let store = ShoppingListStore::new(&state.base_path);
+    let written = store
+        .add_typed(typed.iter().map(|t| t.item.clone()).collect())
+        .map_err(|e| {
+            tracing::error!("Failed to add to shopping list: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
+        })?;
+    let rows: Vec<String> = typed.iter().map(|t| t.row.clone()).collect();
+    untick_rows(&state, &store, &rows).await;
+    let names: Vec<String> = typed
+        .iter()
+        .map(|t| activity::quoted(&t.item.spec()).to_string())
+        .collect();
+    activity::record(
+        &viewer,
+        format_args!("added {} to the shopping list", names.join(", ")),
+    );
+    // `add_typed` writes back one item for every item it was given: like
+    // `read_typed_line`, it drops only empty names, and none reach it here.
+    debug_assert_eq!(written.len(), rows.len());
+    let added: Vec<WrittenItem> = written
+        .into_iter()
+        .zip(rows)
+        .map(|(item, row)| WrittenItem {
+            name: item.name,
+            quantity: item.quantity,
+            row,
+        })
+        .collect();
+    Ok(Json(serde_json::json!({ "added": added })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EditExtraItemRequest {
+    name: String,
+    #[serde(default)]
+    quantity: Option<String>,
+    line: String,
+}
+
+/// Replace one free-hand item with what an edited line says.
+pub async fn edit_extra_item(
+    State(state): State<Arc<AppState>>,
+    Extension(viewer): Extension<Viewer>,
+    Json(payload): Json<EditExtraItemRequest>,
+) -> Result<Json<WrittenItem>, JsonError> {
+    check_lines(std::slice::from_ref(&payload.line))?;
+    let old = FreeHandItem {
+        name: payload.name,
+        quantity: payload.quantity,
+    };
+    let aisle_content = read_aisle_file(&state);
+    let aisle = cooklang::aisle::parse_lenient(&aisle_content)
+        .output()
+        .cloned();
+    let typed = edited_item(&old, &payload.line, aisle.as_ref())
+        .ok_or_else(|| bad_request("the item needs a name"))?;
+    let store = ShoppingListStore::new(&state.base_path);
+    let written = store
+        .replace_free_hand(&old, typed.item.clone(), !typed.keeps_quantity)
+        .map_err(|e| {
+            tracing::error!("Failed to edit shopping list item: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, json_error(e))
+        })?;
+    let Some(written) = written else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            json_error("the item is no longer on the list"),
+        ));
+    };
+    untick_rows(&state, &store, std::slice::from_ref(&typed.row)).await;
+    activity::record(
+        &viewer,
+        format_args!(
+            "changed {} to {} on the shopping list",
+            activity::quoted(&old.spec()),
+            activity::quoted(&typed.item.spec())
+        ),
+    );
+    compact_after_remove(&state, &store).await;
+    Ok(Json(WrittenItem {
+        name: written.name,
+        quantity: written.quantity,
+        row: typed.row,
+    }))
 }
 
 pub async fn clear_shopping_list(
@@ -876,7 +1141,8 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     let mut add = |path: &str,
                    scale: f64,
                    included: Option<&[String]>,
-                   selections: &[OptionalSelection]|
+                   selections: &[OptionalSelection],
+                   menu: Option<&str>|
      -> anyhow::Result<()> {
         // `.shopping-list` is a file, and one written before these endpoints
         // checked what they stored can still hold a path that leaves the
@@ -900,6 +1166,8 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 included_references: included,
                 include_optional: false,
                 confined: true,
+                // Only a menu path that could be a recipe here is looked up.
+                within: menu.filter(|menu| crate::util::is_safe_relative_path(menu)),
             },
             &mut list,
         )
@@ -910,13 +1178,14 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
 
     for item in &items {
         if let Some(recipes) = &item.recipes {
-            // Menu/plan entry — expand each nested recipe.
+            // Menu/plan entry — expand each nested recipe, as part of it.
             for recipe in recipes {
                 add(
                     &recipe.path,
                     recipe.scale,
                     recipe.included_references.as_deref(),
                     &recipe.optional_ingredients,
+                    Some(&item.path),
                 )?;
             }
         } else {
@@ -925,6 +1194,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
                 item.scale,
                 item.included_references.as_deref(),
                 &item.optional_ingredients,
+                None,
             )?;
         }
     }
@@ -932,8 +1202,7 @@ fn aggregate_current_ingredient_names(state: &AppState) -> anyhow::Result<Vec<St
     // Free-hand items are ticked like any other ingredient, so a tick on
     // them survives the compaction too.
     for item in store.load_free_hand()? {
-        add_extra_item(&item.spec(), &mut list.required)
-            .with_context(|| format!("aggregating free-hand item {}", item.spec()))?;
+        add_free_hand_item(&item, &mut list.required);
     }
 
     // The page lists, and so ticks, each ingredient under the name the aisle

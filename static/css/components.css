@@ -911,4 +911,17 @@
         .plan-add,
         .plan-line-button { width: 36px; height: 36px; }
     }
+
+    /* A row just added from the add field: tinted for 2 s, then fading. */
+    .row-flashable {
+        transition: background-color 0.5s ease-out;
+    }
+    .row-flash {
+        background-color: var(--accent-soft);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .row-flashable {
+            transition: none;
+        }
+    }
 }

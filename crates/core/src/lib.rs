@@ -47,6 +47,7 @@ pub use parser::{
 /// `cooklang` dependency, which could otherwise resolve to a different
 /// version and fail to unify.
 pub use cooklang;
+pub use cooklang_ingredient_parser;
 
 /// The `cooklang-find` crate this library was built against.
 ///
