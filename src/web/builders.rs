@@ -1342,6 +1342,36 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
     Some(count)
 }
 
+/// File names, in order of preference, of the picture shown on a folder's card.
+///
+/// `folder.jpg` is the name Windows Explorer, Kodi and Plex already use for a
+/// folder's cover, so a collection may have one already. The extensions are the
+/// ones browsers show and `cook build` copies to a static site. Names match in
+/// any ASCII case, as Cooklang proposal 0032 has it: Windows Media Player
+/// writes `Folder.jpg`.
+const FOLDER_PICTURES: [&str; 4] = ["folder.jpg", "folder.jpeg", "folder.png", "folder.webp"];
+
+/// The picture to show on the card of the folder at `dir`, if it has one.
+///
+/// The folder is listed once and each name compared without regard to case,
+/// so the path keeps the file's own spelling, which a case-sensitive file
+/// system needs to serve it. Two files that differ only in case are settled
+/// by name, not by the order the listing happens to give.
+fn folder_picture(dir: &Utf8Path) -> Option<Utf8PathBuf> {
+    dir.read_dir_utf8()
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let rank = FOLDER_PICTURES
+                .iter()
+                .position(|name| entry.file_name().eq_ignore_ascii_case(name))?;
+            Some((rank, entry.into_path()))
+        })
+        .filter(|(_, path)| path.is_file())
+        .min()
+        .map(|(_, path)| path)
+}
+
 /// The URL a recipe's title or step picture is served at.
 ///
 /// An `http(s)` address from the metadata is passed through. A file becomes
@@ -1352,21 +1382,6 @@ fn count_recipes_tree(tree: &cooklang_find::RecipeTree) -> Option<usize> {
 /// end an attribute; `#` and `?`, which cut the URL short; `%`, which the
 /// server would decode. Encoded, it is inert wherever it lands, and those
 /// pictures load at all (#548).
-/// File names, tried in order, of the picture shown on a folder's card.
-///
-/// `folder.jpg` is the name Windows Explorer, Kodi and Plex already use for a
-/// folder's cover, so a collection may have one already. The extensions are the
-/// ones browsers show and `cook build` copies to a static site.
-const FOLDER_PICTURES: [&str; 4] = ["folder.jpg", "folder.jpeg", "folder.png", "folder.webp"];
-
-/// The picture to show on the card of the folder at `dir`, if it has one.
-fn folder_picture(dir: &Utf8Path) -> Option<camino::Utf8PathBuf> {
-    FOLDER_PICTURES
-        .iter()
-        .map(|name| dir.join(name))
-        .find(|path| path.is_file())
-}
-
 pub(crate) fn get_image_path(
     base_path: &Utf8Path,
     prefix: &str,
@@ -1456,6 +1471,28 @@ mod folder_picture_tests {
         std::fs::write(dir.join("folder.png"), b"").unwrap();
         std::fs::write(dir.join("folder.jpg"), b"").unwrap();
         assert_eq!(folder_picture(&dir), Some(dir.join("folder.jpg")));
+    }
+
+    #[test]
+    fn the_name_matches_in_any_case() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("Folder.JPG"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("Folder.JPG")));
+    }
+
+    #[test]
+    fn the_order_holds_whatever_the_case() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join("FOLDER.PNG"), b"").unwrap();
+        std::fs::write(dir.join("Folder.jpeg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), Some(dir.join("Folder.jpeg")));
+    }
+
+    #[test]
+    fn a_hidden_file_is_not_a_folder_picture() {
+        let (_tmp, dir) = dir();
+        std::fs::write(dir.join(".folder.jpg"), b"").unwrap();
+        assert_eq!(folder_picture(&dir), None);
     }
 
     #[test]
